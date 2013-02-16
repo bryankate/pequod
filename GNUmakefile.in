@@ -1,0 +1,174 @@
+### @configure_input@
+
+AR = ar
+CC = @CC@
+CXX = @CXX@
+
+CXXFLAGS = -W -Wall @CXXFLAGS@
+
+DEPSDIR := .deps
+DEPCFLAGS = -MD -MF $(DEPSDIR)/$*.d -MP
+top_srcdir = @top_srcdir@
+builddir = .
+
+SRCDIR = $(top_srcdir)/src
+OBJDIR = obj
+PROTOSRCDIR = $(top_srcdir)/proto
+PROTOGENDIR = $(OBJDIR)
+
+INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
+LIBS = -lboost_program_options-mt -lboost_thread-mt \
+	-lboost_system-mt -lboost_serialization-mt \
+	-lev -lprotobuf @MALLOC_LIBS@
+
+CXXFLAGS += -I/opt/local/include
+LDFLAGS += -L/usr/local/lib -L/opt/local/lib
+
+@DEFAULT_MALLOC_ASSIGNMENT@
+ifeq ($(shell uname), Darwin)
+  # turn off some warnings from clang regarding libev sources - very annoying
+  CXXFLAGS += -Wno-mismatched-tags -Wno-ambiguous-member-template
+ifndef DEFAULT_MALLOC
+  CXXFLAGS += -fno-builtin
+endif
+else
+ifndef DEFAULT_MALLOC
+  CXXFLAGS += -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free
+endif
+endif
+
+ifdef ITRACE
+  CXXFLAGS += -DIVAL_TRACE
+endif
+
+CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CXXFLAGS)
+CXXLINK = $(CXX) $(CXXFLAGS)
+
+
+all:    $(OBJDIR)/pqserver
+
+$(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h: $(PROTOSRCDIR)/%.proto \
+		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp
+	protoc --cpp_out=$(PROTOGENDIR) --python_out=exp -I$(PROTOSRCDIR) $<
+
+$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh: $(PROTOSRCDIR)/%.proto \
+		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp $(PROTOSRCDIR)/protox.pl
+	$(PROTOSRCDIR)/protox.pl --cpp_out=$(PROTOGENDIR) $<
+
+$(OBJDIR)/%.o: $(SRCDIR)/app/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: $(top_srcdir)/src/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
+
+COMMON_OBJS = \
+	$(OBJDIR)/str.o \
+	$(OBJDIR)/straccum.o \
+	$(OBJDIR)/string.o \
+	$(OBJDIR)/json.o \
+	$(OBJDIR)/msgpack.o \
+	$(OBJDIR)/compiler.o \
+	$(OBJDIR)/encoding.o \
+	$(OBJDIR)/hashallocator.o
+
+PQSERVER_OBJS = $(COMMON_OBJS) \
+	$(OBJDIR)/pqserver.o
+
+$(OBJDIR)/pqserver: $(PQSERVER_OBJS)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+# create files needed by exp/ directory
+$(OBJDIR)/gstore_server: $(PROTOGENDIR)/gstore.pb.h
+
+$(OBJDIR)/wikibot: $(COMMON_OBJS) $(OBJDIR)/wikibot.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/unit: $(COMMON_OBJS) $(OBJDIR)/unit.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/bench: $(COMMON_OBJS) $(OBJDIR)/bench.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/warehouse: $(COMMON_OBJS) $(OBJDIR)/warehouse.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/facebook: $(COMMON_OBJS) $(OBJDIR)/facebook.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/twitter: $(COMMON_OBJS) $(OBJDIR)/twitterapp.o $(OBJDIR)/twitter.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/closetwitter: $(COMMON_OBJS) $(OBJDIR)/twitterapp.o $(OBJDIR)/closetwitter.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/hackernews: $(COMMON_OBJS) $(OBJDIR)/hackernews.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/hackernews2: $(COMMON_OBJS) $(OBJDIR)/hackernews2.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/simplerhn: $(COMMON_OBJS) $(OBJDIR)/simplerhn.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/rtm1: $(COMMON_OBJS) $(OBJDIR)/rtm1.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/rtm2: $(COMMON_OBJS) $(OBJDIR)/rtm2.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/rtm3: $(COMMON_OBJS) $(OBJDIR)/rtm3.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/ydmao: $(COMMON_OBJS) $(OBJDIR)/ydmao.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/neha: $(COMMON_OBJS) $(OBJDIR)/neha.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/scanperf: $(COMMON_OBJS) $(OBJDIR)/scanperf.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/benchproto: $(COMMON_OBJS) $(OBJDIR)/benchproto.o $(OBJDIR)/micro1.pb.o $(OBJDIR)/micro2.px.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+$(OBJDIR)/benchproto.o: $(PROTOGENDIR)/micro1.pb.h $(PROTOGENDIR)/micro2.px.hh
+
+$(OBJDIR)/stamp $(DEPSDIR)/stamp:
+	mkdir -p $(dir $@)
+	touch $@
+
+config.h: stamp-h
+
+GNUmakefile: GNUmakefile.in config.status
+	CONFIG_FILES=$@ CONFIG_HEADERS= $(SHELL) ./config.status
+
+$(top_srcdir)/configure $(top_srcdir)/config.h.in: $(top_srcdir)/configure.ac
+	cd $(top_srcdir) && autoreconf -i && touch config.h.in
+
+config.status: $(top_srcdir)/configure
+	$(top_srcdir)/configure @ac_configure_args@
+
+stamp-h: $(top_srcdir)/config.h.in config.status
+	CONFIG_FILES= $(SHELL) ./config.status
+	echo > stamp-h
+
+clean:
+	rm -rf $(OBJDIR) $(DEPSDIR) $(GENDIR)
+
+distclean: clean
+	rm -rf config.* configure autom4te.* stamp-h
+
+DEPFILES := $(wildcard $(DEPSDIR)/*.d)
+ifneq ($(DEPFILES),)
+include $(DEPFILES)
+endif
+
+.PHONY: all clean distclean
+.PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
+	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh

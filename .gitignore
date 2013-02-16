@@ -1,0 +1,10 @@
+/.deps
+/GNUmakefile
+/autom4te.cache
+/config.h
+/config.h.in
+/config.log
+/config.status
+/configure
+/obj
+/stamp-h
