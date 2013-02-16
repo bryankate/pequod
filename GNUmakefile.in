@@ -80,6 +80,7 @@ COMMON_OBJS = \
 	$(OBJDIR)/hashallocator.o
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
+	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqserver.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS)
