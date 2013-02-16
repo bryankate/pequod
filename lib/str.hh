@@ -3,35 +3,37 @@
 #include "string_base.hh"
 #include <stdarg.h>
 #include <stdio.h>
-struct kvin;
 
-struct str : public String_base<str> {
-    typedef str substring_type;
+struct Str : public String_base<Str> {
+    typedef Str substring_type;
 
     const char *s;
     int len;
 
-    str()
+    Str()
 	: s(0), len(0) {
     }
     template <typename T>
-    str(const String_base<T> &x)
+    Str(const String_base<T> &x)
 	: s(x.data()), len(x.length()) {
     }
-    str(const char *s_)
+    Str(const char *s_)
 	: s(s_), len(strlen(s_)) {
     }
-    str(const char *s_, int len_)
+    Str(const char *s_, int len_)
 	: s(s_), len(len_) {
     }
-    str(const char *sbegin, const char *send)
-	: s(sbegin), len(send - sbegin) {
+    Str(const char *first, const char *last)
+	: s(first), len(last - first) {
     }
-    str(const uninitialized_type &unused) {
+    Str(const unsigned char *first, const unsigned char *last)
+	: s(reinterpret_cast<const char *>(first)), len(last - first) {
+    }
+    Str(const uninitialized_type &unused) {
 	(void) unused;
     }
 
-    static const str maxkey;
+    static const Str maxkey;
 
     void assign() {
 	s = 0;
@@ -58,23 +60,34 @@ struct str : public String_base<str> {
 	return len;
     }
 
-    str substring(const char *first, const char *last) const {
+    Str substring(const char *first, const char *last) const {
 	if (first <= last && first >= s && last <= s + len)
-	    return str(first, last);
+	    return Str(first, last);
 	else
-	    return str();
+	    return Str();
     }
-    str fast_substring(const char *first, const char *last) const {
+    Str substring(const unsigned char *first, const unsigned char *last) const {
+	const unsigned char *u = reinterpret_cast<const unsigned char*>(s);
+	if (first <= last && first >= u && last <= u + len)
+	    return Str(first, last);
+	else
+	    return Str();
+    }
+    Str fast_substring(const char *first, const char *last) const {
 	assert(begin() <= first && first <= last && last <= end());
-	return str(first, last);
+	return Str(first, last);
     }
-    str ltrim() const {
+    Str fast_substring(const unsigned char *first, const unsigned char *last) const {
+	assert(ubegin() <= first && first <= last && last <= uend());
+	return Str(first, last);
+    }
+    Str ltrim() const {
 	return String_generic::ltrim(*this);
     }
-    str rtrim() const {
+    Str rtrim() const {
 	return String_generic::rtrim(*this);
     }
-    str trim() const {
+    Str trim() const {
 	return String_generic::trim(*this);
     }
 
@@ -86,12 +99,12 @@ struct str : public String_base<str> {
 	return p == len && p != 0 ? x : -1;
     }
 
-    static str snprintf(char *buf, size_t size, const char *fmt, ...) {
+    static Str snprintf(char *buf, size_t size, const char *fmt, ...) {
 	va_list val;
 	va_start(val, fmt);
 	int n = vsnprintf(buf, size, fmt, val);
 	va_end(val);
-	return str(buf, n);
+	return Str(buf, n);
     }
 };
 
@@ -121,11 +134,9 @@ struct inline_string : public String_base<inline_string> {
 	return r;
     }
     template <typename ALLOC>
-    static inline_string *allocate(const str &s, ALLOC &ti) {
+    static inline_string *allocate(Str s, ALLOC &ti) {
 	return allocate(s.s, s.len, ti);
     }
-    template <typename ALLOC>
-    static inline_string *allocate_read(struct kvin *kvin, ALLOC &ti);
     template <typename ALLOC>
     void deallocate(ALLOC &ti) {
 	ti.deallocate(this, size());

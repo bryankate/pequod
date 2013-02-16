@@ -97,7 +97,7 @@ class msgpack_compact_unparser {
         memcpy(s, data, len);
         return s + len;
     }
-    inline uint8_t* unparse(uint8_t* s, str x) {
+    inline uint8_t* unparse(uint8_t* s, Str x) {
         return unparse(s, x.data(), x.length());
     }
     inline uint8_t* unparse(uint8_t* s, const String& x) {
@@ -194,7 +194,7 @@ class msgpack_fast_unparser {
         memcpy(s, data, len);
         return s + len;
     }
-    inline uint8_t* unparse(uint8_t* s, str x) {
+    inline uint8_t* unparse(uint8_t* s, Str x) {
         return unparse(s, x.data(), x.length());
     }
     inline uint8_t* unparse(uint8_t* s, const String& x) {
@@ -271,7 +271,7 @@ class msgpack_parser {
         s_ += 9;
         return *this;
     }
-    msgpack_parser& parse(str& x);
+    msgpack_parser& parse(Str& x);
     msgpack_parser& parse(String& x);
     template <typename T> msgpack_parser& parse(::std::vector<T>& x);
   private:

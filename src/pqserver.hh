@@ -6,7 +6,6 @@
 
 namespace pq {
 namespace bi = boost::intrusive;
-
 typedef bi::set_base_hook<bi::link_mode<bi::normal_link>,
 			  bi::optimize_size<true> > pequod_set_base_hook;
 typedef bi::set_member_hook<bi::link_mode<bi::normal_link>,
@@ -37,14 +36,14 @@ struct DatumCompare {
     inline bool operator()(const Datum& a, const String_base<T>& b) const {
 	return a.key() < b;
     }
-    inline bool operator()(const Datum& a, str b) const {
+    inline bool operator()(const Datum& a, Str b) const {
 	return a.key() < b;
     }
     template <typename T>
     inline bool operator()(const String_base<T>& a, const Datum& b) const {
 	return a < b.key();
     }
-    inline bool operator()(str a, const Datum& b) const {
+    inline bool operator()(Str a, const Datum& b) const {
 	return a < b.key();
     }
 };

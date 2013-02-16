@@ -124,7 +124,7 @@ int Json::ObjectJson::find_insert(const String &key, const Json &value)
     }
 }
 
-Json &Json::ObjectJson::get_insert(str key)
+Json &Json::ObjectJson::get_insert(Str key)
 {
     if (hash_.empty())
 	hash_.assign(8, -1);
@@ -148,7 +148,7 @@ Json &Json::ObjectJson::get_insert(str key)
     }
 }
 
-Json::size_type Json::ObjectJson::erase(str key)
+Json::size_type Json::ObjectJson::erase(Str key)
 {
     int *b = &hash_[bucket(key.data(), key.length())];
     while (*b >= 0 && os_[*b].v_.first != key)
@@ -445,7 +445,7 @@ const String &Json::hard_to_s() const
     }
 }
 
-const Json &Json::hard_get(str key) const
+const Json &Json::hard_get(Str key) const
 {
     ArrayJson *aj;
     JsonVector::size_type i;
