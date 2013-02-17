@@ -63,14 +63,15 @@ int main(int argc, char** argv) {
     };
     server.replace_range(keys, keys + sizeof(keys) / sizeof(keys[0]), values);
 
-    pq::Join j;
-    j.assign_parse("t|<u:5>|<t:10>|<f:5> f|<u>|<f> p|<f>|<t>");
-    j.ref();
-    fprintf(stderr, "%s\n", j.unparse().c_str());
-
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    pq::Join j;
+    j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
+		   "f|<user_id>|<poster_id> "
+		   "p|<poster_id>|<time>");
+    j.ref();
 
     pq::JoinState* js = j.make_state();
     server.process_join(js, "t|00001|0000000001", "t|00001}");
