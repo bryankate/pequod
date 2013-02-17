@@ -23,11 +23,14 @@ struct Str : public String_base<Str> {
     Str(const char *s_, int len_)
 	: s(s_), len(len_) {
     }
+    Str(const unsigned char *s_, int len_)
+	: s(reinterpret_cast<const char*>(s_)), len(len_) {
+    }
     Str(const char *first, const char *last)
 	: s(first), len(last - first) {
     }
     Str(const unsigned char *first, const unsigned char *last)
-	: s(reinterpret_cast<const char *>(first)), len(last - first) {
+	: s(reinterpret_cast<const char*>(first)), len(last - first) {
     }
     Str(const uninitialized_type &unused) {
 	(void) unused;

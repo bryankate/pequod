@@ -1,5 +1,6 @@
 #include "pqjoin.hh"
 #include "hashtable.hh"
+#include "json.hh"
 namespace pq {
 
 bool Pattern::has_slot(int si) const {
@@ -20,10 +21,10 @@ void Pattern::append_literal(uint8_t ch) {
 void Pattern::append_slot(int si, int len) {
     assert(plen_ < pcap);
     assert(si >= 0 && si < slot_capacity);
-    int existing_len = has_slot(si) ? slotlen_[si] : 0;
-    assert(len == 0 || existing_len == 0 || len == existing_len);
-    len = len == 0 ? existing_len : len;
+    assert(!has_slot(si));
+    assert(len != 0);
     slotlen_[si] = len;
+    slotpos_[si] = klen_;
     pat_[plen_] = 128 + si;
     ++plen_;
     klen_ += len;
@@ -95,6 +96,91 @@ bool Join::assign_parse(Str str) {
 	    return false;
 	++npat_;
     }
+}
+
+JoinState::JoinState(Join* join)
+    : join_(join), joinpos_(0) {
+    join_->ref();
+    for (int i = 0; i < slot_capacity; ++i)
+	slotpos_[i] = slotlen_[i] = 0;
+}
+
+JoinState::JoinState(Join* join, const Match& m)
+    : join_(join), joinpos_(1) {
+    join_->ref();
+    assert(join_->size() > joinpos_ + 1);
+
+    int pos = 0;
+    for (int i = 0; i < slot_capacity; ++i) {
+	slotpos_[i] = pos;
+	if ((slotlen_[i] = m.slotlen(i)))
+	    memcpy(&slots_[pos], m.slot(i), slotlen_[i]);
+	pos += slotlen_[i];
+    }
+}
+
+JoinState* Join::make_state(const Match& m) const {
+    int pos = 0;
+    for (int i = 0; i < slot_capacity; ++i)
+	pos += m.slotlen(i);
+    char* js = new char[sizeof(JoinState) + ((pos + 7) & ~7)];
+    return new(js) JoinState(const_cast<Join*>(this), m);
+}
+
+JoinState::JoinState(const JoinState* js, const Match& m)
+    : join_(js->join_), joinpos_(js->joinpos_ + 1) {
+    assert(join_->size() > joinpos_ + 1);
+    join_->ref();
+
+    int pos = 0;
+    for (int i = 0; i < slot_capacity; ++i) {
+	slotpos_[i] = pos;
+	if ((slotlen_[i] = m.slotlen(i)))
+	    memcpy(&slots_[pos], m.slot(i), slotlen_[i]);
+	else if ((slotlen_[i] = js->slotlen(i)))
+	    memcpy(&slots_[pos], js->slot(i), slotlen_[i]);
+	pos += slotlen_[i];
+    }
+}
+
+JoinState* JoinState::make_state(const Match& m) const {
+    int pos = 0;
+    for (int i = 0; i < slot_capacity; ++i)
+	pos += (m.slotlen(i) ? m.slotlen(i) : slotlen_[i]);
+    char* js = new char[sizeof(JoinState) + ((pos + 7) & ~7)];
+    return new(js) JoinState(this, m);
+}
+
+Json Pattern::unparse_json() const {
+    Json j = Json::make_array();
+    const uint8_t* p = pat_;
+    while (p != pat_ + plen_) {
+	if (*p >= 128) {
+	    j.push_back(Json::make_array(*p - 127, slotlen_[*p - 128]));
+	    ++p;
+	} else {
+	    const uint8_t* pfirst = p;
+	    for (++p; p != pat_ + plen_ && *p < 128; ++p)
+		/* do nothing */;
+	    j.push_back(String(pfirst, p));
+	}
+    }
+    return j;
+}
+
+String Pattern::unparse() const {
+    return unparse_json().unparse();
+}
+
+Json Join::unparse_json() const {
+    Json j = Json::make_array();
+    for (int i = 0; i < npat_; ++i)
+	j.push_back(pat_[i].unparse_json());
+    return j;
+}
+
+String Join::unparse() const {
+    return unparse_json().unparse();
 }
 
 } // namespace

@@ -5,6 +5,7 @@
 #include "string.hh"
 
 namespace pq {
+class JoinState;
 namespace bi = boost::intrusive;
 typedef bi::set_base_hook<bi::link_mode<bi::normal_link>,
 			  bi::optimize_size<true> > pequod_set_base_hook;
@@ -49,15 +50,25 @@ struct DatumCompare {
 };
 
 class Server {
+    typedef bi::set<Datum> store_type;
+
   public:
     Server() {
     }
 
+    typedef store_type::const_iterator const_iterator;
+    inline const_iterator begin() const;
+    inline const_iterator end() const;
+    inline const_iterator find(Str str) const;
+    inline const_iterator lower_bound(Str str) const;
+
     template <typename I1, typename I2>
     void replace_range(I1 first_key, I1 last_key, I2 first_value);
 
+    void process_join(const JoinState* js, Str first, Str last);
+
   private:
-    bi::set<Datum> store_;
+    store_type store_;
 };
 
 inline bool operator<(const Datum& a, const Datum& b) {
@@ -116,6 +127,22 @@ void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
 	delete &*it.first;
 	++it.first;
     }
+}
+
+inline typename Server::const_iterator Server::begin() const {
+    return store_.begin();
+}
+
+inline typename Server::const_iterator Server::end() const {
+    return store_.end();
+}
+
+inline typename Server::const_iterator Server::find(Str str) const {
+    return store_.find(str, DatumCompare());
+}
+
+inline typename Server::const_iterator Server::lower_bound(Str str) const {
+    return store_.lower_bound(str, DatumCompare());
 }
 
 } // namespace
