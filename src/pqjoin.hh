@@ -8,6 +8,7 @@ class Json;
 class String;
 
 namespace pq {
+class Join;
 class JoinState;
 
 enum { slot_capacity = 5 };
@@ -35,7 +36,8 @@ class Pattern {
     inline int key_length() const;
     bool has_slot(int si) const;
 
-    inline bool match(Str s, Match& m) const;
+    inline bool match(Str str) const;
+    inline bool match(Str str, Match& m) const;
     inline bool match_complete(const Match& m) const;
     inline int first(uint8_t* s, const Match& m) const;
     inline int first(uint8_t* s, const JoinState* js, const Match& m) const;
@@ -54,6 +56,8 @@ class Pattern {
     uint8_t pat_[pcap];
     uint8_t slotlen_[slot_capacity];
     uint8_t slotpos_[slot_capacity];
+
+    friend class Join;
 };
 
 class Join {
@@ -65,6 +69,8 @@ class Join {
 
     inline int size() const;
     inline const Pattern& operator[](int i) const;
+    inline const Pattern& back() const;
+    inline void expand(uint8_t* out, Str str) const;
 
     inline JoinState* make_state() const;
     JoinState* make_state(const Match& m) const;
@@ -131,6 +137,20 @@ inline Pattern::Pattern()
 
 inline int Pattern::key_length() const {
     return klen_;
+}
+
+inline bool Pattern::match(Str str) const {
+    if (str.length() != key_length())
+	return false;
+    const uint8_t* ss = str.udata(), *ess = str.udata() + str.length();
+    for (const uint8_t* p = pat_; p != pat_ + plen_ && ss != ess; ++p)
+	if (*p < 128) {
+	    if (*ss != *p)
+		return false;
+	    ++ss;
+	} else
+	    ss += slotlen_[*p - 128];
+    return true;
 }
 
 inline bool Pattern::match(Str s, Match& m) const {
@@ -249,6 +269,20 @@ inline int Join::size() const {
 
 inline const Pattern& Join::operator[](int i) const {
     return pat_[i];
+}
+
+inline const Pattern& Join::back() const {
+    return pat_[npat_ - 1];
+}
+
+inline void Join::expand(uint8_t* s, Str str) const {
+    const Pattern& last = back();
+    const Pattern& first = pat_[0];
+    for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
+	if (*p >= 128)
+	    memcpy(s + first.slotpos_[*p - 128],
+		   str.udata() + last.slotpos_[*p - 128],
+		   last.slotlen_[*p - 128]);
 }
 
 inline JoinState::~JoinState() {

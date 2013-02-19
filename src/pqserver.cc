@@ -4,6 +4,42 @@
 
 namespace pq {
 
+ServerRange::ServerRange(const String& first, const String& last,
+			 Join* join, const Match& m)
+    : interval<String>(first, last), subtree_iend_(iend()),
+      join_(join), resultkey_(String::make_uninitialized((*join)[0].key_length())) {
+    join->back().first(resultkey_.mutable_udata(), m);
+}
+
+void ServerRange::insert(const Datum& d, Server& server) const {
+    if (join_->back().match(d.key())) {
+	join_->expand(resultkey_.mutable_udata(), d.key());
+	server.insert(resultkey_, d.value_);
+    }
+}
+
+void ServerRange::erase(const Datum& d, Server& server) const {
+    if (join_->back().match(d.key())) {
+	join_->expand(resultkey_.mutable_udata(), d.key());
+	server.erase(resultkey_);
+    }
+}
+
+void Server::insert(const String& key, const String& value) {
+    store_type::insert_commit_data cd;
+    auto p = store_.insert_check(key, DatumCompare(), cd);
+    if (p.second)
+	store_.insert_commit(*new Datum(key, value), cd);
+    else
+	p.first->value_ = value;
+}
+
+void Server::erase(const String& key) {
+    auto it = store_.find(key, DatumCompare());
+    if (it != store_.end())
+	store_.erase_and_dispose(it, DatumDispose());
+}
+
 void Server::process_join(const JoinState* js, Str first, Str last) {
     Match mf, ml;
     js->match(first, mf);

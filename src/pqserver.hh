@@ -3,9 +3,14 @@
 #include <boost/intrusive/set.hpp>
 #include "str.hh"
 #include "string.hh"
+#include "interval.hh"
 
 namespace pq {
 class JoinState;
+class Join;
+class Match;
+class Server;
+
 namespace bi = boost::intrusive;
 typedef bi::set_base_hook<bi::link_mode<bi::normal_link>,
 			  bi::optimize_size<true> > pequod_set_base_hook;
@@ -49,6 +54,30 @@ struct DatumCompare {
     }
 };
 
+struct DatumDispose {
+    inline void operator()(Datum* ptr) {
+	delete ptr;
+    }
+};
+
+class ServerRange : public interval<String> {
+  public:
+    enum range_type { source };
+    ServerRange(const String& first, const String& last,
+		Join* join, const Match& m);
+
+    inline const String& subtree_iend() const;
+    inline void set_subtree_iend(const String& subtree_iend);
+
+    void insert(const Datum& d, Server& server) const;
+    void erase(const Datum& d, Server& server) const;
+
+  private:
+    String subtree_iend_;
+    Join* join_;
+    mutable String resultkey_;
+};
+
 class Server {
     typedef bi::set<Datum> store_type;
 
@@ -61,6 +90,9 @@ class Server {
     inline const_iterator end() const;
     inline const_iterator find(Str str) const;
     inline const_iterator lower_bound(Str str) const;
+
+    void insert(const String& key, const String& value);
+    void erase(const String& key);
 
     template <typename I1, typename I2>
     void replace_range(I1 first_key, I1 last_key, I2 first_value);
@@ -143,6 +175,14 @@ inline typename Server::const_iterator Server::find(Str str) const {
 
 inline typename Server::const_iterator Server::lower_bound(Str str) const {
     return store_.lower_bound(str, DatumCompare());
+}
+
+inline const String& ServerRange::subtree_iend() const {
+    return subtree_iend_;
+}
+
+inline void ServerRange::set_subtree_iend(const String& subtree_iend) {
+    subtree_iend_ = subtree_iend;
 }
 
 } // namespace
