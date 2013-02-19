@@ -4,6 +4,7 @@
 #include "str.hh"
 #include "string.hh"
 #include "interval.hh"
+#include "interval_tree.hh"
 
 namespace pq {
 class JoinState;
@@ -60,28 +61,69 @@ struct DatumDispose {
     }
 };
 
+typedef bi::set<Datum> ServerStore;
+
 class ServerRange : public interval<String> {
   public:
-    enum range_type { source };
-    ServerRange(const String& first, const String& last,
+    enum range_type { copy = 1, sink = 2 };
+    ServerRange(const String& first, const String& last, range_type type,
 		Join* join, const Match& m);
 
+    inline range_type type() const;
     inline const String& subtree_iend() const;
     inline void set_subtree_iend(const String& subtree_iend);
 
-    void insert(const Datum& d, Server& server) const;
-    void erase(const Datum& d, Server& server) const;
+    enum notify_type {
+	notify_erase = -1, notify_update = 0, notify_insert = 1
+    };
+    void notify(const Datum* d, int notifier, Server& server) const;
 
+    friend std::ostream& operator<<(std::ostream&, const ServerRange&);
+
+    rblinks<ServerRange> rblinks_;
   private:
+    range_type type_;
     String subtree_iend_;
     Join* join_;
     mutable String resultkey_;
 };
 
-class Server {
-    typedef bi::set<Datum> store_type;
-
+class ServerRangeSet {
   public:
+    inline ServerRangeSet(Server* store, Str first, Str last, int types);
+    inline ServerRangeSet(Server* store, int types);
+
+    void push_back(ServerRange* r);
+
+    inline void notify(const Datum* d, int notifier);
+
+    friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
+
+  private:
+    enum { rangecap = 5 };
+    int nr_;
+    int sw_;
+    ServerRange* r_[rangecap];
+    Server* server_;
+    Str first_;
+    Str last_;
+    int types_;
+
+    void hard_visit(const Datum* datum);
+};
+
+class ServerRangeCollector {
+  public:
+    inline ServerRangeCollector(ServerRangeSet& srs);
+    inline void operator()(ServerRange& r);
+  private:
+    ServerRangeSet* srs_;
+};
+
+class Server {
+  public:
+    typedef ServerStore store_type;
+
     Server() {
     }
 
@@ -99,8 +141,11 @@ class Server {
 
     void process_join(const JoinState* js, Str first, Str last);
 
+    inline void add_copy(Str first, Str last, Join* j, const Match& m);
+
   private:
     store_type store_;
+    interval_tree<ServerRange> ranges_;
 };
 
 inline bool operator<(const Datum& a, const Datum& b) {
@@ -127,40 +172,6 @@ inline bool operator==(const String_base<T>& a, const Datum& b) {
     return a == b.key();
 }
 
-template <typename I1, typename I2>
-void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
-#if 0
-    auto it = store_.bounded_range(*first_key, *last_key, DatumCompare(),
-				   true, false);
-#else
-    auto it = std::make_pair(store_.lower_bound(*first_key, DatumCompare()),
-			     store_.lower_bound(*last_key, DatumCompare()));
-#endif
-    while (first_key != last_key && it.first != it.second) {
-	int cmp = it.first->key().compare(*first_key);
-	if (cmp > 0) {
-	    Datum* d = new Datum(*first_key, *first_value);
-	    (void) store_.insert(it.first, *d);
-	    ++first_key, ++first_value;
-	} else if (cmp == 0) {
-	    it.first->value_ = *first_value;
-	    ++first_key, ++first_value;
-	} else {
-	    delete &*it.first;
-	    ++it.first;
-	}
-    }
-    while (first_key != last_key) {
-	Datum* d = new Datum(*first_key, *first_value);
-	(void) store_.insert(it.first, *d);
-	++first_key, ++first_value;
-    }
-    while (it.first != it.second) {
-	delete &*it.first;
-	++it.first;
-    }
-}
-
 inline typename Server::const_iterator Server::begin() const {
     return store_.begin();
 }
@@ -183,6 +194,89 @@ inline const String& ServerRange::subtree_iend() const {
 
 inline void ServerRange::set_subtree_iend(const String& subtree_iend) {
     subtree_iend_ = subtree_iend;
+}
+
+inline ServerRange::range_type ServerRange::type() const {
+    return type_;
+}
+
+inline ServerRangeSet::ServerRangeSet(Server* server, Str first, Str last,
+				      int types)
+    : nr_(0), sw_(0), server_(server), first_(first), last_(last),
+      types_(types) {
+}
+
+inline ServerRangeSet::ServerRangeSet(Server* server, int types)
+    : nr_(0), sw_(0), server_(server), types_(types) {
+}
+
+inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
+    if (sw_ != 0)
+	hard_visit(datum);
+    for (int i = 0; i != nr_; ++i)
+	if (r_[i])
+	    r_[i]->notify(datum, notifier, *server_);
+}
+
+inline ServerRangeCollector::ServerRangeCollector(ServerRangeSet& srs)
+    : srs_(&srs) {
+}
+
+inline void ServerRangeCollector::operator()(ServerRange& r) {
+    srs_->push_back(&r);
+}
+
+inline void Server::add_copy(Str first, Str last, Join* join,
+			     const Match& m) {
+    ServerRange* r = new ServerRange(first, last, ServerRange::copy, join, m);
+    ranges_.insert(r);
+}
+
+template <typename I1, typename I2>
+void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
+#if 0
+    auto it = store_.bounded_range(*first_key, *last_key, DatumCompare(),
+				   true, false);
+#else
+    auto it = std::make_pair(store_.lower_bound(*first_key, DatumCompare()),
+			     store_.lower_bound(*last_key, DatumCompare()));
+#endif
+    ServerRangeSet srs(this, *first_key, *last_key, ServerRange::copy);
+    ranges_.visit_overlaps(interval<Str>(*first_key, *last_key),
+			   ServerRangeCollector(srs));
+
+    while (first_key != last_key && it.first != it.second) {
+	int cmp = it.first->key().compare(*first_key);
+	Datum* d;
+	if (cmp > 0) {
+	    d = new Datum(*first_key, *first_value);
+	    (void) store_.insert(it.first, *d);
+	} else if (cmp == 0) {
+	    d = it.first.operator->();
+	    d->value_ = *first_value;
+	    ++it.first;
+	} else {
+	    d = it.first.operator->();
+	    it.first = store_.erase(it.first);
+	}
+	srs.notify(d, cmp);
+	if (cmp >= 0)
+	    ++first_key, ++first_value;
+	if (cmp < 0)
+	    delete d;
+    }
+    while (first_key != last_key) {
+	Datum* d = new Datum(*first_key, *first_value);
+	(void) store_.insert(it.first, *d);
+	srs.notify(d, 1);
+	++first_key, ++first_value;
+    }
+    while (it.first != it.second) {
+	Datum* d = it.first.operator->();
+	it.first = store_.erase(it.first);
+	srs.notify(d, -1);
+	delete d;
+    }
 }
 
 } // namespace

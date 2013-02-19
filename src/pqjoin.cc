@@ -3,6 +3,19 @@
 #include "json.hh"
 namespace pq {
 
+std::ostream& operator<<(std::ostream& stream, const Match& m) {
+    stream << "{";
+    const char* sep = "";
+    for (int i = 0; i != slot_capacity; ++i)
+	if (m.slotlen(i)) {
+	    stream << sep << i << ": ";
+	    stream.write(reinterpret_cast<const char*>(m.slot(i)),
+			 m.slotlen(i));
+	    sep = ", ";
+	}
+    return stream << "}";
+}
+
 bool Pattern::has_slot(int si) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p == 128 + si)

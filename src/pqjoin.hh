@@ -21,6 +21,8 @@ class Match {
     inline const uint8_t* slot(int i) const;
     inline void set_slot(int i, const uint8_t* data, int len);
 
+    friend std::ostream& operator<<(std::ostream&, const Match&);
+
   private:
     uint8_t slotlen_[(slot_capacity + 3) & ~3];
     const uint8_t* slot_[slot_capacity];
@@ -42,6 +44,7 @@ class Pattern {
     inline int first(uint8_t* s, const Match& m) const;
     inline int first(uint8_t* s, const JoinState* js, const Match& m) const;
     inline int last(uint8_t* s, const Match& m) const;
+    inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int> &slotmap);
     bool assign_parse(Str str);
@@ -250,6 +253,19 @@ inline int Pattern::last(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
+inline void Pattern::expand(uint8_t* s, const Match& m) const {
+    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
+	if (*p < 128) {
+	    *s = *p;
+	    ++s;
+	} else {
+	    int slotlen = m.slotlen(*p - 128);
+	    if (slotlen)
+		memcpy(s, m.slot(*p - 128), slotlen);
+	    s += slotlen_[*p - 128];
+	}
+}
+
 inline Join::Join()
     : npat_(0), refcount_(0) {
 }
@@ -315,6 +331,8 @@ inline void JoinState::match(Str s, Match& m) const {
 inline JoinState* Join::make_state() const {
     return new JoinState(const_cast<Join*>(this));
 }
+
+std::ostream& operator<<(std::ostream&, const Match&);
 
 } // namespace
 #endif
