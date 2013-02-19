@@ -3,6 +3,17 @@
 #include "json.hh"
 namespace pq {
 
+Match& Match::operator&=(const Match& m) {
+    for (int i = 0; i != slot_capacity; ++i) {
+        int l = 0;
+        while (l != ms_.slotlen_[i] && l != m.ms_.slotlen_[i]
+               && slot_[i][l] == m.slot_[i][l])
+            ++l;
+        ms_.slotlen_[i] = l;
+    }
+    return *this;
+}
+
 std::ostream& operator<<(std::ostream& stream, const Match& m) {
     stream << "{";
     const char* sep = "";
@@ -109,59 +120,6 @@ bool Join::assign_parse(Str str) {
 	    return false;
 	++npat_;
     }
-}
-
-JoinState::JoinState(Join* join)
-    : join_(join), joinpos_(0) {
-    join_->ref();
-    for (int i = 0; i < slot_capacity; ++i)
-	slotpos_[i] = slotlen_[i] = 0;
-}
-
-JoinState::JoinState(Join* join, const Match& m)
-    : join_(join), joinpos_(1) {
-    join_->ref();
-    assert(join_->size() > joinpos_ + 1);
-
-    int pos = 0;
-    for (int i = 0; i < slot_capacity; ++i) {
-	slotpos_[i] = pos;
-	if ((slotlen_[i] = m.slotlen(i)))
-	    memcpy(&slots_[pos], m.slot(i), slotlen_[i]);
-	pos += slotlen_[i];
-    }
-}
-
-JoinState* Join::make_state(const Match& m) const {
-    int pos = 0;
-    for (int i = 0; i < slot_capacity; ++i)
-	pos += m.slotlen(i);
-    char* js = new char[sizeof(JoinState) + ((pos + 7) & ~7)];
-    return new(js) JoinState(const_cast<Join*>(this), m);
-}
-
-JoinState::JoinState(const JoinState* js, const Match& m)
-    : join_(js->join_), joinpos_(js->joinpos_ + 1) {
-    assert(join_->size() > joinpos_ + 1);
-    join_->ref();
-
-    int pos = 0;
-    for (int i = 0; i < slot_capacity; ++i) {
-	slotpos_[i] = pos;
-	if ((slotlen_[i] = m.slotlen(i)))
-	    memcpy(&slots_[pos], m.slot(i), slotlen_[i]);
-	else if ((slotlen_[i] = js->slotlen(i)))
-	    memcpy(&slots_[pos], js->slot(i), slotlen_[i]);
-	pos += slotlen_[i];
-    }
-}
-
-JoinState* JoinState::make_state(const Match& m) const {
-    int pos = 0;
-    for (int i = 0; i < slot_capacity; ++i)
-	pos += (m.slotlen(i) ? m.slotlen(i) : slotlen_[i]);
-    char* js = new char[sizeof(JoinState) + ((pos + 7) & ~7)];
-    return new(js) JoinState(this, m);
 }
 
 Json Pattern::unparse_json() const {

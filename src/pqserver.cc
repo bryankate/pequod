@@ -5,6 +5,12 @@
 namespace pq {
 
 ServerRange::ServerRange(const String& first, const String& last, range_type type,
+			 Join* join)
+    : interval<String>(first, last), type_(type), subtree_iend_(iend()),
+      join_(join) {
+}
+
+ServerRange::ServerRange(const String& first, const String& last, range_type type,
 			 Join* join, const Match& m)
     : interval<String>(first, last), type_(type), subtree_iend_(iend()),
       join_(join), resultkey_(String::make_uninitialized((*join)[0].key_length())) {
@@ -24,10 +30,65 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     }
 }
 
+void ServerRange::validate(Str first, Str last, Server& server) {
+    if (type_ == joinsink) {
+        std::cerr << "validating @" << (void*) join_ << " for [" << first << ", " << last << "\n";
+        Match mf, ml;
+        (*join_)[0].match(first, mf);
+        (*join_)[0].match(last, ml);
+        std::cerr << "match " << mf << ", " << ml << "\n";
+        validate(mf, ml, 1, server);
+        server.add_validjoin(first, last, join_);
+    }
+}
+
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
+    uint8_t kf[128], kl[128];
+    int kflen = (*join_)[joinpos].first(kf, mf);
+    int kllen = (*join_)[joinpos].last(kl, ml);
+
+    std::cerr << "match " << mf << " [" << Str(kf, kflen) << "], " << ml
+              << " [" << Str(kl, kllen) << "]\n";
+    auto it = server.lower_bound(Str(kf, kflen));
+    auto ilast = server.lower_bound(Str(kl, kllen));
+
+    Match mk(mf);
+    mk &= ml;
+    Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
+
+    for (; it != ilast; ++it) {
+	if (it->key().length() != (*join_)[joinpos].key_length())
+            continue;
+        std::cerr << "{{match " << mf << "}}\n";
+        // XXX PERFORMANCE can prob figure out ahead of time whether this
+        // match is simple/necessary
+        if ((*join_)[joinpos].match(it->key(), mk)) {
+            if (joinpos + 1 == join_->size()) {
+                kflen = (*join_)[0].first(kf, mk);
+                std::cerr << "insert " << Str(kf, kflen) << "\n";
+                // XXX PERFORMANCE can prob figure out ahead of time whether
+                // this insert is simple
+                server.insert(Str(kf, kflen), it->value_);
+            } else {
+                (*join_)[joinpos].match(it->key(), mf);
+                (*join_)[joinpos].match(it->key(), ml);
+                validate(mf, ml, joinpos + 1, server);
+                mf.restore(mfstate);
+                ml.restore(mlstate);
+            }
+        }
+        mk.restore(mkstate);
+    }
+}
+
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     stream << "{" << (const interval<String>&) r;
     if (r.type_ == ServerRange::copy)
 	stream << ": copy -> " << r.resultkey_;
+    else if (r.type_ == ServerRange::joinsink)
+        stream << ": joinsink @" << (void*) r.join_;
+    else if (r.type_ == ServerRange::validjoin)
+        stream << ": validjoin @" << (void*) r.join_;
     else
 	stream << ": ??";
     return stream << "}";
@@ -65,6 +126,29 @@ void ServerRangeSet::hard_visit(const Datum* datum) {
 		r_[i] = 0;
 		sw_ &= ~(1 << i);
 	    }
+}
+
+void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
+    Str last_valid = first_;
+    for (int i = 0; i != ts; ++i)
+        if (r_[i] && r_[i]->type() == ServerRange::validjoin
+            && r_[i]->join() == jr->join()) {
+            if (sw_ == 0)
+                return;
+            if (last_valid < r_[i]->ibegin())
+                jr->validate(last_valid, r_[i]->ibegin(), *server_);
+            last_valid = r_[i]->iend();
+        }
+    if (last_valid < last_)
+        jr->validate(last_valid, last_, *server_);
+}
+
+void ServerRangeSet::validate() {
+    std::cerr << *this << "\n";
+    int ts = total_size();
+    for (int i = 0; i != nr_; ++i)
+        if (r_[i]->type() == ServerRange::joinsink)
+            validate_join(r_[i], ts);
 }
 
 std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
@@ -108,41 +192,6 @@ void Server::erase(const String& key) {
     }
 }
 
-void Server::process_join(const JoinState* js, Str first, Str last) {
-    Match mf, ml;
-    js->match(first, mf);
-    js->match(last, ml);
-
-    const Join& join = js->join();
-    int pattern = js->joinpos() + 1;
-    uint8_t kf[128], kl[128];
-    int kflen = join[pattern].first(kf, mf);
-    int kllen = join[pattern].last(kl, ml);
-
-    auto it = store_.lower_bound(Str(kf, kflen), DatumCompare());
-    auto ilast = store_.lower_bound(Str(kl, kllen), DatumCompare());
-    store_type::iterator iinsert;
-    bool iinsert_valid = false;
-    for (; it != ilast; ++it) {
-	Match m;
-	if (it->key().length() != join[pattern].key_length()
-	    || !join[pattern].match(it->key(), m))
-	    continue;
-	if (pattern + 1 == join.size()) {
-	    kflen = join[0].first(kf, js, m);
-	    Datum* d = new Datum(Str(kf, kflen), it->value_);
-	    if (iinsert_valid)
-		iinsert = store_.insert(iinsert, *d);
-	    else
-		iinsert = store_.insert(*d).first;
-	} else {
-	    JoinState* njs = js->make_state(m);
-	    process_join(njs, first, last);
-	    delete njs;
-	}
-    }
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -176,9 +225,9 @@ int main(int argc, char** argv) {
 		   "f|<user_id>|<poster_id> "
 		   "p|<poster_id>|<time>");
     j.ref();
+    server.add_join("t|", "t}", &j);
 
-    pq::JoinState* js = j.make_state();
-    server.process_join(js, "t|00001|0000000001", "t|00001}");
+    server.validate("t|00001|0000000001", "t|00001}");
 
     std::cerr << "After processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)

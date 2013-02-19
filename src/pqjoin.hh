@@ -9,22 +9,31 @@ class String;
 
 namespace pq {
 class Join;
-class JoinState;
 
 enum { slot_capacity = 5 };
 
 class Match {
   public:
+    class state {
+      private:
+        uint8_t slotlen_[(slot_capacity + 3) & ~3];
+        friend class Match;
+    };
+
     inline Match();
 
     inline int slotlen(int i) const;
     inline const uint8_t* slot(int i) const;
     inline void set_slot(int i, const uint8_t* data, int len);
+    Match& operator&=(const Match& m);
+
+    inline const state& save() const;
+    inline void restore(const state& state);
 
     friend std::ostream& operator<<(std::ostream&, const Match&);
 
   private:
-    uint8_t slotlen_[(slot_capacity + 3) & ~3];
+    state ms_;
     const uint8_t* slot_[slot_capacity];
 };
 
@@ -42,7 +51,6 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     inline bool match_complete(const Match& m) const;
     inline int first(uint8_t* s, const Match& m) const;
-    inline int first(uint8_t* s, const JoinState* js, const Match& m) const;
     inline int last(uint8_t* s, const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
@@ -75,9 +83,6 @@ class Join {
     inline const Pattern& back() const;
     inline void expand(uint8_t* out, Str str) const;
 
-    inline JoinState* make_state() const;
-    JoinState* make_state(const Match& m) const;
-
     bool assign_parse(Str str);
 
     Json unparse_json() const;
@@ -90,39 +95,13 @@ class Join {
     int refcount_;
 };
 
-class JoinState {
-  public:
-    inline ~JoinState();
-
-    inline const Join& join() const;
-    inline int joinpos() const;
-
-    inline int slotlen(int i) const;
-    inline const uint8_t* slot(int i) const;
-    inline void match(Str s, Match& m) const;
-
-    JoinState* make_state(const Match& m) const;
-
-  private:
-    Join* join_;
-    int joinpos_;
-    uint8_t slotpos_[(slot_capacity + 3) & ~3];
-    uint8_t slotlen_[(slot_capacity + 3) & ~3];
-    uint8_t slots_[0];
-
-    JoinState(Join* join);
-    JoinState(Join* join, const Match& m);
-    JoinState(const JoinState* js, const Match& m);
-    friend class Join;
-};
-
 
 inline Match::Match() {
-    memset(slotlen_, 0, sizeof(slotlen_));
+    memset(ms_.slotlen_, 0, sizeof(ms_.slotlen_));
 }
 
 inline int Match::slotlen(int i) const {
-    return slotlen_[i];
+    return ms_.slotlen_[i];
 }
 
 inline const uint8_t* Match::slot(int i) const {
@@ -131,7 +110,15 @@ inline const uint8_t* Match::slot(int i) const {
 
 inline void Match::set_slot(int i, const uint8_t* data, int len) {
     slot_[i] = data;
-    slotlen_[i] = len;
+    ms_.slotlen_[i] = len;
+}
+
+inline const Match::state& Match::save() const {
+    return ms_;
+}
+
+inline void Match::restore(const state& state) {
+    ms_ = state;
 }
 
 inline Pattern::Pattern()
@@ -202,27 +189,6 @@ inline int Pattern::first(uint8_t* s, const Match& m) const {
 		s += slotlen;
 	    }
 	    if (slotlen != slotlen_[*p - 128])
-		break;
-	}
-    return s - first;
-}
-
-inline int Pattern::first(uint8_t* s, const JoinState* js,
-			  const Match& m) const {
-    uint8_t* first = s;
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int sl1 = js->slotlen(*p - 128), sl2 = m.slotlen(*p - 128);
-	    if (sl2 > sl1) {
-		memcpy(s, m.slot(*p - 128), sl2);
-		sl1 = sl2;
-	    } else if (sl1 > 0)
-		memcpy(s, js->slot(*p - 128), sl1);
-	    s += sl1;
-	    if (sl1 != slotlen_[*p - 128])
 		break;
 	}
     return s - first;
@@ -299,37 +265,6 @@ inline void Join::expand(uint8_t* s, Str str) const {
 	    memcpy(s + first.slotpos_[*p - 128],
 		   str.udata() + last.slotpos_[*p - 128],
 		   last.slotlen_[*p - 128]);
-}
-
-inline JoinState::~JoinState() {
-    join_->deref();
-}
-
-inline const Join& JoinState::join() const {
-    return *join_;
-}
-
-inline int JoinState::joinpos() const {
-    return joinpos_;
-}
-
-inline int JoinState::slotlen(int i) const {
-    return slotlen_[i];
-}
-
-inline const uint8_t* JoinState::slot(int i) const {
-    return slots_ + slotpos_[i];
-}
-
-inline void JoinState::match(Str s, Match& m) const {
-    (*join_)[0].match(s, m);
-    for (int i = 0; i < slot_capacity; ++i)
-	if (slotlen(i) > m.slotlen(i))
-	    m.set_slot(i, slot(i), slotlen(i));
-}
-
-inline JoinState* Join::make_state() const {
-    return new JoinState(const_cast<Join*>(this));
 }
 
 std::ostream& operator<<(std::ostream&, const Match&);

@@ -7,7 +7,6 @@
 #include "interval_tree.hh"
 
 namespace pq {
-class JoinState;
 class Join;
 class Match;
 class Server;
@@ -65,11 +64,16 @@ typedef bi::set<Datum> ServerStore;
 
 class ServerRange : public interval<String> {
   public:
-    enum range_type { copy = 1, sink = 2 };
+    enum range_type {
+        copy = 1, joinsink = 2, validjoin = 4
+    };
+    ServerRange(const String& first, const String& last, range_type type,
+                Join* join = 0);
     ServerRange(const String& first, const String& last, range_type type,
 		Join* join, const Match& m);
 
     inline range_type type() const;
+    inline Join* join() const;
     inline const String& subtree_iend() const;
     inline void set_subtree_iend(const String& subtree_iend);
 
@@ -77,6 +81,7 @@ class ServerRange : public interval<String> {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
     void notify(const Datum* d, int notifier, Server& server) const;
+    void validate(Str first, Str last, Server& server);
 
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
 
@@ -86,6 +91,8 @@ class ServerRange : public interval<String> {
     String subtree_iend_;
     Join* join_;
     mutable String resultkey_;
+
+    void validate(Match& mf, Match& ml, int joinpos, Server& server);
 };
 
 class ServerRangeSet {
@@ -96,6 +103,7 @@ class ServerRangeSet {
     void push_back(ServerRange* r);
 
     inline void notify(const Datum* d, int notifier);
+    void validate();
 
     friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
 
@@ -109,7 +117,9 @@ class ServerRangeSet {
     Str last_;
     int types_;
 
+    inline int total_size() const;
     void hard_visit(const Datum* datum);
+    void validate_join(ServerRange* jr, int ts);
 };
 
 class ServerRangeCollector {
@@ -139,9 +149,11 @@ class Server {
     template <typename I1, typename I2>
     void replace_range(I1 first_key, I1 last_key, I2 first_value);
 
-    void process_join(const JoinState* js, Str first, Str last);
-
     inline void add_copy(Str first, Str last, Join* j, const Match& m);
+    inline void add_join(Str first, Str last, Join* j);
+    inline void add_validjoin(Str first, Str last, Join* j);
+
+    inline void validate(Str first, Str last);
 
   private:
     store_type store_;
@@ -200,6 +212,10 @@ inline ServerRange::range_type ServerRange::type() const {
     return type_;
 }
 
+inline Join* ServerRange::join() const {
+    return join_;
+}
+
 inline ServerRangeSet::ServerRangeSet(Server* server, Str first, Str last,
 				      int types)
     : nr_(0), sw_(0), server_(server), first_(first), last_(last),
@@ -218,6 +234,10 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 	    r_[i]->notify(datum, notifier, *server_);
 }
 
+inline int ServerRangeSet::total_size() const {
+    return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
+}
+
 inline ServerRangeCollector::ServerRangeCollector(ServerRangeSet& srs)
     : srs_(&srs) {
 }
@@ -229,6 +249,16 @@ inline void ServerRangeCollector::operator()(ServerRange& r) {
 inline void Server::add_copy(Str first, Str last, Join* join,
 			     const Match& m) {
     ServerRange* r = new ServerRange(first, last, ServerRange::copy, join, m);
+    ranges_.insert(r);
+}
+
+inline void Server::add_join(Str first, Str last, Join* join) {
+    ServerRange* r = new ServerRange(first, last, ServerRange::joinsink, join);
+    ranges_.insert(r);
+}
+
+inline void Server::add_validjoin(Str first, Str last, Join* join) {
+    ServerRange* r = new ServerRange(first, last, ServerRange::validjoin, join);
     ranges_.insert(r);
 }
 
@@ -277,6 +307,14 @@ void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
 	srs.notify(d, -1);
 	delete d;
     }
+}
+
+inline void Server::validate(Str first, Str last) {
+    ServerRangeSet srs(this, first, last,
+                       ServerRange::joinsink | ServerRange::validjoin);
+    ranges_.visit_overlaps(interval<Str>(first, last),
+                           ServerRangeCollector(srs));
+    srs.validate();
 }
 
 } // namespace
