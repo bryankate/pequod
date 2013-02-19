@@ -6,9 +6,10 @@
 #include "compiler.hh"
 #include "local_stack.hh"
 // LLRB 2-3 tree a la Sedgewick
+// Intrusive
 
 template <typename T> class rbnode;
-template <typename T, typename Compare, typename Reshape, typename Allocator> class rbtree;
+template <typename T, typename Compare, typename Reshape> class rbtree;
 namespace rbpriv {
 template <typename T, typename Compare, typename Reshape> class rbrep1;
 }
@@ -63,10 +64,8 @@ class rbnode : public T {
     rbnode(const rbnode<T> &x);
     rbnode<T> &operator=(const rbnode<T> &x);
     template <typename TT> friend class rbnodeptr;
-    template <typename TT, typename CC, typename RR, typename AA>
-    friend class rbtree;
-    template <typename TT, typename CC, typename RR, bool multimap>
-    friend class rbpriv::rbrep1;
+    template <typename TT, typename CC, typename RR> friend class rbtree;
+    template <typename TT, typename CC, typename RR> friend class rbpriv::rbrep1;
 };
 
 namespace rbpriv {
@@ -86,12 +85,6 @@ struct rbreshape : private Reshape {
     inline void operator()(rbnode<T> *n);
 };
 
-template <typename Allocator>
-struct rballocator : private Allocator {
-    inline rballocator(const Allocator &allocator);
-    inline Allocator &allocator();
-};
-
 template <typename T>
 struct rbrep0 {
     rbnode<T> *root_;
@@ -105,31 +98,19 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
     inline rbrep1(const Compare &compare, const Reshape &reshape);
     rbnodeptr<T> insert_node(rbnodeptr<T> np, rbnode<T> *x);
 };
-
-template <typename T, typename Compare, typename Reshape, typename Allocator>
-struct rbrep2 : public rbrep1<T, Compare, Reshape>,
-		public rballocator<Allocator> {
-    typedef rbrep1<T, Compare, Reshape> rbrep1_type;
-    typedef rballocator<Allocator> rballocator_type;
-    inline rbrep2(const Compare &compare, const Reshape &reshape,
-		  const Allocator &allocator);
-};
 } // namespace rbpriv
 
 template <typename T, typename Compare = default_comparator<T>,
-	  typename Reshape = do_nothing,
-	  typename Allocator = std::allocator<rbnode<T> > >
+	  typename Reshape = do_nothing>
 class rbtree {
   public:
     typedef rbnode<T> value_type;
     typedef Compare value_compare;
     typedef Reshape reshape_type;
-    typedef Allocator allocator_type;
     typedef rbnode<T> node_type;
 
     inline rbtree(const value_compare &compare = value_compare(),
-		  const reshape_type &reshape = reshape_type(),
-		  const allocator_type &allocator = allocator_type());
+		  const reshape_type &reshape = reshape_type());
     ~rbtree();
 
     inline node_type *root();
@@ -137,25 +118,22 @@ class rbtree {
     template <typename X> inline node_type *find(const X &x);
     template <typename X> inline const node_type *find(const X &x) const;
 
-    inline void clear();
+    inline void insert(node_type* n);
 
-    inline node_type *insert(const T &x);
-    inline node_type *insert(T &&x);
-    template <typename... Args> inline node_type *insert(Args&&... args);
-    template <typename X> inline node_type &operator[](const X &x);
+    inline void erase(node_type* x);
+    inline void erase_and_dispose(node_type* x);
+    template <typename Disposer>
+    inline void erase_and_dispose(node_type* x, Disposer d);
 
-    inline void erase(node_type *x);
-
-    template <typename TT, typename CC, typename RR, typename AA>
-    friend std::ostream &operator<<(std::ostream &s, const rbtree<TT, CC, RR, AA> &tree);
+    template <typename TT, typename CC, typename RR>
+    friend std::ostream &operator<<(std::ostream &s, const rbtree<TT, CC, RR> &tree);
 
   private:
-    rbpriv::rbrep2<T, Compare, Reshape, Allocator> r_;
+    rbpriv::rbrep1<T, Compare, Reshape> r_;
 
-    void free_node(rbnode<T> *x);
-    template <typename X> rbnode<T> *find_or_insert_node(const X &ctor);
-    rbnodeptr<T> unlink_min(rbnodeptr<T> np, rbnode<T> **min);
-    rbnodeptr<T> delete_node(rbnodeptr<T> np, rbnode<T> *victim);
+    //template <typename X> rbnode<T> *find_or_insert_node(const X& ctor);
+    rbnodeptr<T> unlink_min(rbnodeptr<T> np, rbnode<T>** min);
+    rbnodeptr<T> delete_node(rbnodeptr<T> np, rbnode<T>* victim);
 };
 
 template <typename T>
@@ -329,55 +307,26 @@ inline rbreshape<Reshape, T> &rbreshape<Reshape, T>::reshape() {
     return *this;
 }
 
-template <typename Allocator>
-inline rballocator<Allocator>::rballocator(const Allocator &allocator)
-    : Allocator(allocator) {
-}
-
-template <typename Allocator>
-inline Allocator &rballocator<Allocator>::allocator() {
-    return *this;
-}
-
 template <typename T, typename C, typename R>
 inline rbrep1<T, C, R>::rbrep1(const C &compare, const R &reshape)
     : rbcompare_type(compare), rbreshape_type(reshape) {
     this->root_ = 0;
 }
-
-template <typename T, typename C, typename R, typename A>
-inline rbrep2<T, C, R, A>::rbrep2(const C &compare, const R &reshape,
-				  const A &allocator)
-    : rbrep1_type(compare, reshape), rballocator_type(allocator) {
-}
 } // namespace rbpriv
 
-template <typename T, typename C, typename R, typename A>
-inline rbtree<T, C, R, A>::rbtree(const value_compare &compare,
-				  const reshape_type &reshape,
-				  const allocator_type &allocator)
-    : r_(compare, reshape, allocator) {
+template <typename T, typename C, typename R>
+inline rbtree<T, C, R>::rbtree(const value_compare &compare,
+			       const reshape_type &reshape)
+    : r_(compare, reshape) {
 }
 
-template <typename T, typename C, typename R, typename A>
-rbtree<T, C, R, A>::~rbtree() {
-    if (r_.root_)
-	free_node(r_.root_);
-}
-
-template <typename T, typename C, typename R, typename A>
-void rbtree<T, C, R, A>::free_node(rbnode<T> *x) {
-    if (rbnodeptr<T> c = x->c_[0])
-	free_node(c.node());
-    if (rbnodeptr<T> c = x->c_[1])
-	free_node(c.node());
-    r_.allocator().destroy(x);
-    r_.allocator().deallocate(x, 1);
+template <typename T, typename C, typename R>
+rbtree<T, C, R>::~rbtree() {
 }
 
 namespace rbpriv {
 template <typename T, typename C, typename R>
-rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, rbnode<T> *x) {
+rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, rbnode<T>* x) {
     if (!np) {
 	this->reshape()(x);
 	return rbnodeptr<T>(x, true);
@@ -393,14 +342,15 @@ rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, rbnode<T> *x) {
 }
 } // namespace rbpriv
 
-template <typename T, typename C, typename R, typename A>
+#if 0
+template <typename T, typename C, typename R>
 template <typename X>
-rbnode<T> *rbtree<T, C, R, A>::find_or_insert_node(const X &args) {
+rbnode<T> *rbtree<T, C, R>::find_or_insert_node(const X &args) {
     local_stack<uintptr_t, 40> stack;
 
     rbnodeptr<T> np = rbnodeptr<T>(r_.root_, false);
     while (np) {
-	rbnode<T> *n = np.node();
+	rbnode<T>* n = np.node();
 	int cmp = r_.compare(args, *n);
 	if (cmp == 0)
 	    return n;
@@ -424,9 +374,10 @@ rbnode<T> *rbtree<T, C, R, A>::find_or_insert_node(const X &args) {
     r_.root_ = np.node();
     return result;
 }
+#endif
 
-template <typename T, typename C, typename R, typename A>
-rbnodeptr<T> rbtree<T, C, R, A>::unlink_min(rbnodeptr<T> np, rbnode<T> **min) {
+template <typename T, typename C, typename R>
+rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, rbnode<T> **min) {
     rbnode<T> *n = np.node();
     if (!n->c_[0]) {
 	*min = n;
@@ -440,8 +391,8 @@ rbnodeptr<T> rbtree<T, C, R, A>::unlink_min(rbnodeptr<T> np, rbnode<T> **min) {
     return np.fixup(r_.reshape());
 }
 
-template <typename T, typename C, typename R, typename A>
-rbnodeptr<T> rbtree<T, C, R, A>::delete_node(rbnodeptr<T> np, rbnode<T> *victim) {
+template <typename T, typename C, typename R>
+rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, rbnode<T> *victim) {
     // XXX will break tree if nothing is removed
     rbnode<T> *n = np.node();
     int cmp = r_.compare(*victim, *n);
@@ -457,11 +408,8 @@ rbnodeptr<T> rbtree<T, C, R, A>::delete_node(rbnodeptr<T> np, rbnode<T> *victim)
 	    n = np.node();
 	    cmp = r_.compare(*victim, *n);
 	}
-	if (cmp == 0 && !n->c_[1]) {
-	    r_.allocator().destroy(n);
-	    r_.allocator().deallocate(n, 1);
+	if (cmp == 0 && !n->c_[1])
 	    return rbnodeptr<T>();
-	}
 	if (!n->c_[1].red() && !n->c_[1].node()->c_[0].red()) {
 	    np = np.move_red_right(r_.reshape());
 	    if (np.node() != n) {
@@ -475,21 +423,19 @@ rbnodeptr<T> rbtree<T, C, R, A>::delete_node(rbnodeptr<T> np, rbnode<T> *victim)
 	    min->c_[0] = n->c_[0];
 	    min->c_[1] = n->c_[1];
 	    np = rbnodeptr<T>(min, np.red());
-	    r_.allocator().destroy(n);
-	    r_.allocator().deallocate(n, 1);
 	} else
 	    n->c_[1] = delete_node(n->c_[1], victim);
     }
     return np.fixup(r_.reshape());
 }
 
-template <typename T, typename C, typename R, typename A>
-inline rbnode<T> *rbtree<T, C, R, A>::root() {
+template <typename T, typename C, typename R>
+inline rbnode<T> *rbtree<T, C, R>::root() {
     return r_.root_;
 }
 
-template <typename T, typename C, typename R, typename A> template <typename X>
-inline rbnode<T> *rbtree<T, C, R, A>::find(const X &x) {
+template <typename T, typename C, typename R> template <typename X>
+inline rbnode<T> *rbtree<T, C, R>::find(const X &x) {
     rbnode<T> *n = r_.root_;
     while (n) {
 	int cmp = r_.compare(x, *n);
@@ -503,51 +449,31 @@ inline rbnode<T> *rbtree<T, C, R, A>::find(const X &x) {
     return n;
 }
 
-template <typename T, typename C, typename R, typename A> template <typename X>
-inline const rbnode<T> *rbtree<T, C, R, A>::find(const X &x) const {
-    return const_cast<rbtree<T, C, R, A> *>(this)->find(x);
+template <typename T, typename C, typename R> template <typename X>
+inline const rbnode<T> *rbtree<T, C, R>::find(const X &x) const {
+    return const_cast<rbtree<T, C, R> *>(this)->find(x);
 }
 
-template <typename T, typename C, typename R, typename A>
-inline rbnode<T> *rbtree<T, C, R, A>::insert(const T &x) {
-    rbnode<T> *n = r_.allocator().allocate(1);
-    r_.allocator().construct(n, x);
-    r_.root_ = r_.insert_node(r_.root_, n).node();
-    return n;
+template <typename T, typename C, typename R>
+inline void rbtree<T, C, R>::insert(rbnode<T>* node) {
+    r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), node).node();
 }
 
-template <typename T, typename C, typename R, typename A>
-inline rbnode<T> *rbtree<T, C, R, A>::insert(T &&x) {
-    rbnode<T> *n = r_.allocator().allocate(1);
-    r_.allocator().construct(n, std::move(x));
-    r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), n).node();
-    return n;
-}
-
-template <typename T, typename C, typename R, typename A>
-template <typename... Args>
-inline rbnode<T> *rbtree<T, C, R, A>::insert(Args&&... args) {
-    rbnode<T> *n = r_.allocator().allocate(1);
-    r_.allocator().construct(n, std::forward<Args>(args)...);
-    r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), n).node();
-    return n;
-}
-
-template <typename T, typename C, typename R, typename A> template <typename X>
-inline rbnode<T> &rbtree<T, C, R, A>::operator[](const X &args) {
-    return *find_or_insert_node(args);
-}
-
-template <typename T, typename C, typename R, typename A>
-inline void rbtree<T, C, R, A>::erase(rbnode<T> *node) {
+template <typename T, typename C, typename R>
+inline void rbtree<T, C, R>::erase(rbnode<T>* node) {
     r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
 }
 
-template <typename T, typename C, typename R, typename A>
-inline void rbtree<T, C, R, A>::clear() {
-    if (r_.root_)
-	free_node(r_.root_);
-    r_.root_ = 0;
+template <typename T, typename C, typename R>
+inline void rbtree<T, C, R>::erase_and_dispose(rbnode<T> *node) {
+    r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    delete node;
+}
+
+template <typename T, typename C, typename R> template <typename Disposer>
+inline void rbtree<T, C, R>::erase_and_dispose(rbnode<T> *node, Disposer d) {
+    r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    d(node);
 }
 
 template <typename T>
@@ -559,8 +485,8 @@ void rbnode<T>::output(std::ostream &s, bool color, int indent) const {
 	c_[1].node()->output(s, c_[1].red(), indent + 2);
 }
 
-template <typename T, typename C, typename R, typename A>
-std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R, A> &tree) {
+template <typename T, typename C, typename R>
+std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     if (tree.r_.root_)
 	tree.r_.root_->output(s, false, 0);
     else

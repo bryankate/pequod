@@ -1,7 +1,7 @@
-#include "config.h"
 #include <iostream>
-#include "xinterval.hh"
-#include "xintervaltree.hh"
+#include "rb.hh"
+#include "interval.hh"
+#include "interval_tree.hh"
 
 template <typename T>
 class wrapper {
@@ -126,6 +126,9 @@ struct int_interval : public interval<int> {
     int_interval(const interval<int> &x)
 	: interval<int>(x), subtree_iend_(x.iend()) {
     }
+    int_interval(int first, int last)
+	: interval<int>(first, last), subtree_iend_(iend()) {
+    }
     int subtree_iend() const {
 	return subtree_iend_;
     }
@@ -135,8 +138,8 @@ struct int_interval : public interval<int> {
 };
 
 int main(int argc, char **argv) {
-    if (0) {
-	const int N = 5000;
+    if (1) {
+	const int N = 50000;
 	rbtree<wrapper<int> > tree;
 	int *x = new int[N];
 	for (int i = 0; i < N; ++i)
@@ -145,7 +148,7 @@ int main(int argc, char **argv) {
 	    int j = random() % (N - i);
 	    int val = x[j];
 	    x[j] = x[N - i - 1];
-	    tree.insert(wrapper<int>(val));
+	    tree.insert(new rbnode<wrapper<int> >(val));
 	}
 	std::cerr << tree << "\n\n";
 	for (int i = 0; i < N; ++i)
@@ -154,8 +157,8 @@ int main(int argc, char **argv) {
 	    int j = random() % (N - i);
 	    int val = x[j];
 	    x[j] = x[N - i - 1];
-	    tree.erase(tree.find(wrapper<int>(val)));
-	    if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
+	    tree.erase_and_dispose(tree.find(wrapper<int>(val)));
+	    //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
 	}
 	std::cerr << tree << "\n\n";
 	delete[] x;
@@ -163,31 +166,24 @@ int main(int argc, char **argv) {
 
     {
 	rbtree<wrapper<int> > tree;
-	tree.insert(wrapper<int>(0));
-	auto x = tree.insert(wrapper<int>(1));
-	tree.insert(wrapper<int>(0));
-	tree.insert(wrapper<int>(-2));
-	auto y = tree.insert(wrapper<int>(0));
+	tree.insert(new rbnode<wrapper<int> >(0));
+	auto x = new rbnode<wrapper<int> >(1);
+	tree.insert(x);
+	tree.insert(new rbnode<wrapper<int> >(0));
+	tree.insert(new rbnode<wrapper<int> >(-2));
+	auto y = new rbnode<wrapper<int> >(0);
+	tree.insert(y);
 	std::cerr << tree << "\n";
-	tree.erase(x);
+	tree.erase_and_dispose(x);
 	std::cerr << tree << "\n";
-	tree.erase(y);
-	std::cerr << tree << "\n";
-    }
-
-    {
-	rbtree<semipair<int, int>, compare_first> tree;
-	tree[0] = std::make_pair(0, 2);
-	tree[1] = std::make_pair(1, 3);
-	tree[1].second = 4;
-	tree[-1].second = 5;
+	tree.erase_and_dispose(y);
 	std::cerr << tree << "\n";
     }
 
     interval_tree<int_interval> tree;
     for (int i = 0; i < 100; ++i) {
 	int a = random() % 1000;
-	tree.insert(interval<int>(a, a + random() % 200));
+	tree.insert(new rbnode<int_interval>(a, a + random() % 200));
     }
     std::cerr << tree << "\n\n";
     tree.visit_overlaps(40, print);

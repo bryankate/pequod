@@ -38,7 +38,7 @@ struct interval_rb_reshaper {
     }
 };
 
-template <typename T, typename A = std::allocator<rbnode<T> > >
+template <typename T>
 class interval_tree {
   public:
     typedef rbnode<T> value_type;
@@ -46,17 +46,14 @@ class interval_tree {
 
     inline interval_tree();
 
-    template <typename X> inline value_type *find(const X &i);
-    template <typename X> inline const value_type *find(const X &i) const;
+    template <typename X> inline value_type* find(const X &i);
+    template <typename X> inline const value_type* find(const X &i) const;
 
-    inline value_type *insert(const T &x);
-    inline value_type *insert(T &&x);
-    template <typename... Args> inline value_type *insert(Args&&... args);
-    template <typename I> inline value_type &operator[](const I &x);
+    inline void insert(value_type* x);
 
-    inline void erase(value_type *x);
-
-    inline void clear();
+    inline void erase(value_type* x);
+    inline void erase_and_dispose(value_type* x);
+    template <typename Dispose> inline void erase_and_dispose(value_type* x, Dispose d);
 
     template <typename F>
     inline size_t visit_contains(const endpoint_type &x, const F &f);
@@ -76,10 +73,10 @@ class interval_tree {
     template <typename I, typename F>
     inline size_t visit_overlaps(const I &x, F &f);
 
-    template <typename TT, typename AA> friend std::ostream &operator<<(std::ostream &s, const interval_tree<TT, AA> &x);
+    template <typename TT> friend std::ostream &operator<<(std::ostream &s, const interval_tree<TT> &x);
 
   private:
-    rbtree<T, interval_comparator, interval_rb_reshaper, A> t_;
+    rbtree<T, interval_comparator, interval_rb_reshaper> t_;
 
     template <typename F>
     static size_t visit_contains(value_type *node, const endpoint_type &x, F &f);
@@ -89,52 +86,42 @@ class interval_tree {
     static size_t visit_overlaps(value_type *node, const I &x, F &f);
 };
 
-template <typename T, typename A>
-inline interval_tree<T, A>::interval_tree() {
+template <typename T>
+inline interval_tree<T>::interval_tree() {
 }
 
-template <typename T, typename A> template <typename X>
-inline rbnode<T> *interval_tree<T, A>::find(const X &i) {
+template <typename T> template <typename X>
+inline rbnode<T> *interval_tree<T>::find(const X &i) {
     return t_.find(i);
 }
 
-template <typename T, typename A> template <typename X>
-inline const rbnode<T> *interval_tree<T, A>::find(const X &i) const {
+template <typename T> template <typename X>
+inline const rbnode<T> *interval_tree<T>::find(const X &i) const {
     return t_.find(i);
 }
 
-template <typename T, typename A>
-inline rbnode<T> *interval_tree<T, A>::insert(const T &x) {
-    return t_.insert(x);
+template <typename T>
+inline void interval_tree<T>::insert(value_type* node) {
+    return t_.insert(node);
 }
 
-template <typename T, typename A>
-inline rbnode<T> *interval_tree<T, A>::insert(T &&x) {
-    return t_.insert(std::move(x));
+template <typename T>
+inline void interval_tree<T>::erase(rbnode<T>* node) {
+    t_.erase(node);
 }
 
-template <typename T, typename A> template <typename... Args>
-inline rbnode<T> *interval_tree<T, A>::insert(Args&&... args) {
-    return t_.insert(std::forward<Args>(args)...);
+template <typename T>
+inline void interval_tree<T>::erase_and_dispose(rbnode<T>* node) {
+    t_.erase_and_dispose(node);
 }
 
-template <typename T, typename A> template <typename I>
-inline rbnode<T> &interval_tree<T, A>::operator[](const I &x) {
-    return t_[x];
+template <typename T> template <typename Disposer>
+inline void interval_tree<T>::erase_and_dispose(rbnode<T>* node, Disposer d) {
+    t_.erase_and_dispose(node, d);
 }
 
-template <typename T, typename A>
-inline void interval_tree<T, A>::erase(rbnode<T> *x) {
-    t_.erase(x);
-}
-
-template <typename T, typename A>
-inline void interval_tree<T, A>::clear() {
-    t_.clear();
-}
-
-template <typename T, typename A> template <typename F>
-size_t interval_tree<T, A>::visit_contains(value_type *node,
+template <typename T> template <typename F>
+size_t interval_tree<T>::visit_contains(value_type *node,
 				   	   const endpoint_type &x, F &f) {
     local_stack<uintptr_t, 40> stack;
     value_type *next;
@@ -165,34 +152,34 @@ size_t interval_tree<T, A>::visit_contains(value_type *node,
     }
 }
 
-template <typename T, typename A> template <typename F>
-inline size_t interval_tree<T, A>::visit_contains(const endpoint_type &x,
+template <typename T> template <typename F>
+inline size_t interval_tree<T>::visit_contains(const endpoint_type &x,
 					       const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_contains(t_.root(), x, realf);
 }
 
-template <typename T, typename A> template <typename F>
-inline size_t interval_tree<T, A>::visit_contains(const endpoint_type &x,
+template <typename T> template <typename F>
+inline size_t interval_tree<T>::visit_contains(const endpoint_type &x,
 				   	          F &f) {
     return visit_contains(t_.root(), x, f);
 }
 
-template <typename T, typename A> template <typename F>
-inline size_t interval_tree<T, A>::visit_overlaps(const endpoint_type &x,
+template <typename T> template <typename F>
+inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x,
 					          const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_contains(t_.root(), x, realf);
 }
 
-template <typename T, typename A> template <typename F>
-inline size_t interval_tree<T, A>::visit_overlaps(const endpoint_type &x,
+template <typename T> template <typename F>
+inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x,
 					          F &f) {
     return visit_contains(t_.root(), x, f);
 }
 
-template <typename T, typename A> template <typename I, typename F>
-size_t interval_tree<T, A>::visit_overlaps(value_type *node, const I &x, F &f) {
+template <typename T> template <typename I, typename F>
+size_t interval_tree<T>::visit_overlaps(value_type *node, const I &x, F &f) {
     local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
@@ -222,19 +209,19 @@ size_t interval_tree<T, A>::visit_overlaps(value_type *node, const I &x, F &f) {
     }
 }
 
-template <typename T, typename A> template <typename I, typename F>
-inline size_t interval_tree<T, A>::visit_overlaps(const I &x, const F &f) {
+template <typename T> template <typename I, typename F>
+inline size_t interval_tree<T>::visit_overlaps(const I &x, const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_overlaps(t_.root(), x, realf);
 }
 
-template <typename T, typename A> template <typename I, typename F>
-inline size_t interval_tree<T, A>::visit_overlaps(const I &x, F &f) {
+template <typename T> template <typename I, typename F>
+inline size_t interval_tree<T>::visit_overlaps(const I &x, F &f) {
     return visit_overlaps(t_.root(), x, f);
 }
 
-template <typename T, typename A> template <typename I, typename F>
-size_t interval_tree<T, A>::visit_contains(value_type *node, const I &x, F &f) {
+template <typename T> template <typename I, typename F>
+size_t interval_tree<T>::visit_contains(value_type *node, const I &x, F &f) {
     local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
@@ -264,19 +251,19 @@ size_t interval_tree<T, A>::visit_contains(value_type *node, const I &x, F &f) {
     }
 }
 
-template <typename T, typename A> template <typename I, typename F>
-inline size_t interval_tree<T, A>::visit_contains(const I &x, const F &f) {
+template <typename T> template <typename I, typename F>
+inline size_t interval_tree<T>::visit_contains(const I &x, const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_contains(t_.root(), x, realf);
 }
 
-template <typename T, typename A> template <typename I, typename F>
-inline size_t interval_tree<T, A>::visit_contains(const I &x, F &f) {
+template <typename T> template <typename I, typename F>
+inline size_t interval_tree<T>::visit_contains(const I &x, F &f) {
     return visit_contains(t_.root(), x, f);
 }
 
-template <typename T, typename A>
-std::ostream &operator<<(std::ostream &s, const interval_tree<T, A> &tree) {
+template <typename T>
+std::ostream &operator<<(std::ostream &s, const interval_tree<T> &tree) {
     return s << tree.t_;
 }
 

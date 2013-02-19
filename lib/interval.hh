@@ -26,9 +26,6 @@ class interval {
     inline bool overlaps(const T &x) const;
     inline bool overlaps(const interval<T> &x) const;
 
-    template <typename TT>
-    friend std::ostream &operator<<(std::ostream &s, const interval<TT> &x);
-
   private:
     T ibegin_;
     T iend_;
