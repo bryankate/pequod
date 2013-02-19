@@ -29,10 +29,10 @@ struct interval_comparator {
 
 struct interval_rb_reshaper {
     template <typename T>
-    inline void operator()(rbnode<T> *n) {
+    inline void operator()(T* n) {
 	n->set_subtree_iend(n->iend());
 	for (int i = 0; i < 2; ++i)
-	    if (rbnode<T> *x = n->child(i))
+	    if (T* x = n->rblinks_.c_[i].node())
 		if (n->subtree_iend() < x->subtree_iend())
 		    n->set_subtree_iend(x->subtree_iend());
     }
@@ -41,7 +41,7 @@ struct interval_rb_reshaper {
 template <typename T>
 class interval_tree {
   public:
-    typedef rbnode<T> value_type;
+    typedef T value_type;
     typedef typename T::endpoint_type endpoint_type;
 
     inline interval_tree();
@@ -91,12 +91,12 @@ inline interval_tree<T>::interval_tree() {
 }
 
 template <typename T> template <typename X>
-inline rbnode<T> *interval_tree<T>::find(const X &i) {
+inline T* interval_tree<T>::find(const X &i) {
     return t_.find(i);
 }
 
 template <typename T> template <typename X>
-inline const rbnode<T> *interval_tree<T>::find(const X &i) const {
+inline const T* interval_tree<T>::find(const X &i) const {
     return t_.find(i);
 }
 
@@ -106,23 +106,23 @@ inline void interval_tree<T>::insert(value_type* node) {
 }
 
 template <typename T>
-inline void interval_tree<T>::erase(rbnode<T>* node) {
+inline void interval_tree<T>::erase(T* node) {
     t_.erase(node);
 }
 
 template <typename T>
-inline void interval_tree<T>::erase_and_dispose(rbnode<T>* node) {
+inline void interval_tree<T>::erase_and_dispose(T* node) {
     t_.erase_and_dispose(node);
 }
 
 template <typename T> template <typename Disposer>
-inline void interval_tree<T>::erase_and_dispose(rbnode<T>* node, Disposer d) {
+inline void interval_tree<T>::erase_and_dispose(T* node, Disposer d) {
     t_.erase_and_dispose(node, d);
 }
 
 template <typename T> template <typename F>
 size_t interval_tree<T>::visit_contains(value_type *node,
-				   	   const endpoint_type &x, F &f) {
+					const endpoint_type &x, F &f) {
     local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
@@ -130,7 +130,7 @@ size_t interval_tree<T>::visit_contains(value_type *node,
 	return count;
 
  left:
-    while ((next = node->child(0)) && x < next->subtree_iend()) {
+    while ((next = node->rblinks_.c_[0].node()) && x < next->subtree_iend()) {
 	stack.push(reinterpret_cast<uintptr_t>(node));
 	node = next;
     }
@@ -141,7 +141,7 @@ size_t interval_tree<T>::visit_contains(value_type *node,
 	++count;
     }
 
-    if (!(x < node->ibegin()) && (node = node->child(1)))
+    if (!(x < node->ibegin()) && (node = node->rblinks_.c_[1].node()))
 	goto left;
     else if (stack.empty())
 	return count;
@@ -187,7 +187,7 @@ size_t interval_tree<T>::visit_overlaps(value_type *node, const I &x, F &f) {
 	return count;
 
  left:
-    while ((next = node->child(0)) && x.ibegin() < next->subtree_iend()) {
+    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend()) {
 	stack.push(reinterpret_cast<uintptr_t>(node));
 	node = next;
     }
@@ -198,7 +198,7 @@ size_t interval_tree<T>::visit_overlaps(value_type *node, const I &x, F &f) {
 	++count;
     }
 
-    if (node->ibegin() < x.iend() && (node = node->child(1)))
+    if (node->ibegin() < x.iend() && (node = node->rblinks_.c_[1].node()))
 	goto left;
     else if (stack.empty())
 	return count;
@@ -229,7 +229,7 @@ size_t interval_tree<T>::visit_contains(value_type *node, const I &x, F &f) {
 	return count;
 
  left:
-    while ((next = node->child(0)) && x.ibegin() < next->subtree_iend()) {
+    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend()) {
 	stack.push(reinterpret_cast<uintptr_t>(node));
 	node = next;
     }
@@ -240,7 +240,7 @@ size_t interval_tree<T>::visit_contains(value_type *node, const I &x, F &f) {
 	++count;
     }
 
-    if (node->ibegin() < x.iend() && (node = node->child(1)))
+    if (node->ibegin() < x.iend() && (node = node->rblinks_.c_[1].node()))
 	goto left;
     else if (stack.empty())
 	return count;

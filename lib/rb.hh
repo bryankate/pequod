@@ -20,15 +20,14 @@ class rbnodeptr {
     typedef bool (rbnodeptr<T>::*unspecified_bool_type)() const;
 
     inline rbnodeptr();
-    inline rbnodeptr(rbnode<T> *x, bool color);
+    inline rbnodeptr(T* x, bool color);
     explicit inline rbnodeptr(uintptr_t ivalue);
 
     inline operator unspecified_bool_type() const;
     inline bool operator!() const;
     inline uintptr_t ivalue() const;
 
-    inline rbnode<T> *node() const;
-    inline rbnodeptr<T> childptr(bool isright) const;
+    inline T* node() const;
 
     inline bool red() const;
     inline rbnodeptr<T> change_color(bool color) const;
@@ -43,29 +42,19 @@ class rbnodeptr {
     template <typename F> inline rbnodeptr<T> move_red_right(F &f) const;
     template <typename F> inline rbnodeptr<T> fixup(F &f) const;
 
+    void output(std::ostream& s, int indent) const;
+
   private:
     uintptr_t x_;
 };
 
 template <typename T>
-class rbnode : public T {
+class rblinks {
   public:
-    template <typename... Args> inline rbnode(Args&&... args);
-    inline rbnode(const T &x);
-    inline rbnode(T &&x);
-    inline rbnode<T> *child(bool isright) const;
-    inline void output(std::ostream &s, bool color, int indent) const;
-
-    inline rbnode<T> &operator=(const T &x); // slice assignment
-
-  private:
+    T* child(bool right) const {
+	return c_[right].node();
+    }
     rbnodeptr<T> c_[2];
-
-    rbnode(const rbnode<T> &x);
-    rbnode<T> &operator=(const rbnode<T> &x);
-    template <typename TT> friend class rbnodeptr;
-    template <typename TT, typename CC, typename RR> friend class rbtree;
-    template <typename TT, typename CC, typename RR> friend class rbpriv::rbrep1;
 };
 
 namespace rbpriv {
@@ -82,12 +71,12 @@ template <typename Reshape, typename T>
 struct rbreshape : private Reshape {
     inline rbreshape(const Reshape &reshape);
     inline rbreshape<Reshape, T> &reshape();
-    inline void operator()(rbnode<T> *n);
+    inline void operator()(T* n);
 };
 
 template <typename T>
 struct rbrep0 {
-    rbnode<T> *root_;
+    T* root_;
 };
 
 template <typename T, typename Compare, typename Reshape>
@@ -96,7 +85,7 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
     typedef rbcompare<Compare> rbcompare_type;
     typedef rbreshape<Reshape, T> rbreshape_type;
     inline rbrep1(const Compare &compare, const Reshape &reshape);
-    rbnodeptr<T> insert_node(rbnodeptr<T> np, rbnode<T> *x);
+    rbnodeptr<T> insert_node(rbnodeptr<T> np, T* x);
 };
 } // namespace rbpriv
 
@@ -104,10 +93,10 @@ template <typename T, typename Compare = default_comparator<T>,
 	  typename Reshape = do_nothing>
 class rbtree {
   public:
-    typedef rbnode<T> value_type;
+    typedef T value_type;
     typedef Compare value_compare;
     typedef Reshape reshape_type;
-    typedef rbnode<T> node_type;
+    typedef T node_type;
 
     inline rbtree(const value_compare &compare = value_compare(),
 		  const reshape_type &reshape = reshape_type());
@@ -132,8 +121,8 @@ class rbtree {
     rbpriv::rbrep1<T, Compare, Reshape> r_;
 
     //template <typename X> rbnode<T> *find_or_insert_node(const X& ctor);
-    rbnodeptr<T> unlink_min(rbnodeptr<T> np, rbnode<T>** min);
-    rbnodeptr<T> delete_node(rbnodeptr<T> np, rbnode<T>* victim);
+    rbnodeptr<T> unlink_min(rbnodeptr<T> np, T** min);
+    rbnodeptr<T> delete_node(rbnodeptr<T> np, T* victim);
 };
 
 template <typename T>
@@ -142,7 +131,7 @@ inline rbnodeptr<T>::rbnodeptr()
 }
 
 template <typename T>
-inline rbnodeptr<T>::rbnodeptr(rbnode<T> *x, bool color)
+inline rbnodeptr<T>::rbnodeptr(T* x, bool color)
     : x_(reinterpret_cast<uintptr_t>(x) | color) {
 }
 
@@ -167,8 +156,8 @@ inline uintptr_t rbnodeptr<T>::ivalue() const {
 }
 
 template <typename T>
-inline rbnode<T> *rbnodeptr<T>::node() const {
-    return reinterpret_cast<rbnode<T> *>(x_ & ~uintptr_t(1));
+inline T* rbnodeptr<T>::node() const {
+    return reinterpret_cast<T*>(x_ & ~uintptr_t(1));
 }
 
 template <typename T>
@@ -188,11 +177,11 @@ inline rbnodeptr<T> rbnodeptr<T>::reverse_color() const {
 
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::rotate(bool isright, F &f) const {
-    rbnodeptr<T> x = node()->c_[!isright];
-    node()->c_[!isright] = x.node()->c_[isright];
+    rbnodeptr<T> x = node()->rblinks_.c_[!isright];
+    node()->rblinks_.c_[!isright] = x.node()->rblinks_.c_[isright];
     f(node());
     bool old_color = red();
-    x.node()->c_[isright] = change_color(true);
+    x.node()->rblinks_.c_[isright] = change_color(true);
     f(x.node());
     return x.change_color(old_color);
 }
@@ -209,16 +198,16 @@ inline rbnodeptr<T> rbnodeptr<T>::rotate_right(F &f) const {
 
 template <typename T>
 inline rbnodeptr<T> rbnodeptr<T>::flip() const {
-    node()->c_[0] = node()->c_[0].reverse_color();
-    node()->c_[1] = node()->c_[1].reverse_color();
+    node()->rblinks_.c_[0] = node()->rblinks_.c_[0].reverse_color();
+    node()->rblinks_.c_[1] = node()->rblinks_.c_[1].reverse_color();
     return reverse_color();
 }
 
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::move_red_left(F &f) const {
     rbnodeptr<T> x = flip();
-    if (x.node()->c_[1].node()->c_[0].red()) {
-	x.node()->c_[1] = x.node()->c_[1].rotate_right(f);
+    if (x.node()->rblinks_.c_[1].node()->rblinks_.c_[0].red()) {
+	x.node()->rblinks_.c_[1] = x.node()->rblinks_.c_[1].rotate_right(f);
 	x = x.rotate_left(f);
 	return x.flip();
     } else
@@ -228,7 +217,7 @@ inline rbnodeptr<T> rbnodeptr<T>::move_red_left(F &f) const {
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::move_red_right(F &f) const {
     rbnodeptr x = flip();
-    if (x.node()->c_[0].node()->c_[0].red()) {
+    if (x.node()->rblinks_.child(0)->rblinks_.c_[0].red()) {
 	x = x.rotate_right(f);
 	return x.flip();
     } else
@@ -239,39 +228,13 @@ template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::fixup(F &f) const {
     rbnodeptr<T> x = *this;
     f(x.node());
-    if (x.node()->c_[1].red())
+    if (x.node()->rblinks_.c_[1].red())
 	x = x.rotate_left(f);
-    if (x.node()->c_[0].red() && x.node()->c_[0].node()->c_[0].red())
+    if (x.node()->rblinks_.c_[0].red() && x.node()->rblinks_.c_[0].node()->rblinks_.c_[0].red())
 	x = x.rotate_right(f);
-    if (x.node()->c_[0].red() && x.node()->c_[1].red())
+    if (x.node()->rblinks_.c_[0].red() && x.node()->rblinks_.c_[1].red())
 	x = x.flip();
     return x;
-}
-
-template <typename T> template<typename... Args>
-inline rbnode<T>::rbnode(Args&&... args)
-    : T(std::forward<Args>(args)...) {
-}
-
-template <typename T>
-inline rbnode<T>::rbnode(const T &x)
-    : T(x) {
-}
-
-template <typename T>
-inline rbnode<T>::rbnode(T &&x)
-    : T(std::move(x)) {
-}
-
-template <typename T>
-inline rbnode<T> *rbnode<T>::child(bool isright) const {
-    return c_[isright].node();
-}
-
-template <typename T>
-inline rbnode<T> &rbnode<T>::operator=(const T &x) {
-    T::operator=(x);
-    return *this;
 }
 
 namespace rbpriv {
@@ -293,12 +256,12 @@ inline int rbcompare<Compare>::compare(const A &a, const B &b) const {
 }
 
 template <typename Reshape, typename T>
-inline rbreshape<Reshape, T>::rbreshape(const Reshape &reshape)
+inline rbreshape<Reshape, T>::rbreshape(const Reshape& reshape)
     : Reshape(reshape) {
 }
 
 template <typename Reshape, typename T>
-inline void rbreshape<Reshape, T>::operator()(rbnode<T> *n) {
+inline void rbreshape<Reshape, T>::operator()(T* n) {
     static_cast<Reshape &>(*this)(n);
 }
 
@@ -326,18 +289,18 @@ rbtree<T, C, R>::~rbtree() {
 
 namespace rbpriv {
 template <typename T, typename C, typename R>
-rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, rbnode<T>* x) {
+rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, T* x) {
     if (!np) {
 	this->reshape()(x);
 	return rbnodeptr<T>(x, true);
     }
 
-    rbnode<T> *n = np.node();
+    T* n = np.node();
     int cmp = this->compare(*x, *n);
     if (cmp == 0)
 	cmp = (x < n ? -1 : 1);
 
-    n->c_[cmp > 0] = insert_node(n->c_[cmp > 0], x);
+    n->rblinks_.c_[cmp > 0] = insert_node(n->rblinks_.c_[cmp > 0], x);
     return np.fixup(this->reshape());
 }
 } // namespace rbpriv
@@ -355,7 +318,7 @@ rbnode<T> *rbtree<T, C, R>::find_or_insert_node(const X &args) {
 	if (cmp == 0)
 	    return n;
 	stack.push(np.ivalue() | (cmp > 0 ? 4 : 0));
-	np = n->c_[cmp > 0];
+	np = n->rblinks_.c_[cmp > 0];
     }
 
     rbnode<T> *result = r_.allocator().allocate(1);
@@ -366,7 +329,7 @@ rbnode<T> *rbtree<T, C, R>::find_or_insert_node(const X &args) {
     while (stack.size()) {
 	bool child = stack.top() & 4;
 	rbnodeptr<T> pnp(stack.top() & ~uintptr_t(4));
-	pnp.node()->c_[child] = np;
+	pnp.node()->rblinks_.c_[child] = np;
 	np = pnp.fixup(r_.reshape());
 	stack.pop();
     }
@@ -377,40 +340,40 @@ rbnode<T> *rbtree<T, C, R>::find_or_insert_node(const X &args) {
 #endif
 
 template <typename T, typename C, typename R>
-rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, rbnode<T> **min) {
-    rbnode<T> *n = np.node();
-    if (!n->c_[0]) {
+rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, T** min) {
+    T* n = np.node();
+    if (!n->rblinks_.c_[0]) {
 	*min = n;
 	return rbnodeptr<T>();
     }
-    if (!n->c_[0].red() && !n->c_[0].node()->c_[0].red()) {
+    if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].node()->rblinks_.c_[0].red()) {
 	np = np.move_red_left(r_.reshape());
 	n = np.node();
     }
-    n->c_[0] = unlink_min(n->c_[0], min);
+    n->rblinks_.c_[0] = unlink_min(n->rblinks_.c_[0], min);
     return np.fixup(r_.reshape());
 }
 
 template <typename T, typename C, typename R>
-rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, rbnode<T> *victim) {
+rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
     // XXX will break tree if nothing is removed
-    rbnode<T> *n = np.node();
+    T* n = np.node();
     int cmp = r_.compare(*victim, *n);
     if (cmp < 0) {
-	if (!n->c_[0].red() && !n->c_[0].node()->c_[0].red()) {
+	if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].node()->rblinks_.c_[0].red()) {
 	    np = np.move_red_left(r_.reshape());
 	    n = np.node();
 	}
-	n->c_[0] = delete_node(n->c_[0], victim);
+	n->rblinks_.c_[0] = delete_node(n->rblinks_.c_[0], victim);
     } else {
-	if (n->c_[0].red()) {
+	if (n->rblinks_.c_[0].red()) {
 	    np = np.rotate_right(r_.reshape());
 	    n = np.node();
 	    cmp = r_.compare(*victim, *n);
 	}
-	if (cmp == 0 && !n->c_[1])
+	if (cmp == 0 && !n->rblinks_.c_[1])
 	    return rbnodeptr<T>();
-	if (!n->c_[1].red() && !n->c_[1].node()->c_[0].red()) {
+	if (!n->rblinks_.c_[1].red() && !n->rblinks_.c_[1].node()->rblinks_.c_[0].red()) {
 	    np = np.move_red_right(r_.reshape());
 	    if (np.node() != n) {
 		n = np.node();
@@ -418,79 +381,79 @@ rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, rbnode<T> *victim) {
 	    }
 	}
 	if (cmp == 0) {
-	    rbnode<T> *min;
-	    n->c_[1] = unlink_min(n->c_[1], &min);
-	    min->c_[0] = n->c_[0];
-	    min->c_[1] = n->c_[1];
+	    T* min;
+	    n->rblinks_.c_[1] = unlink_min(n->rblinks_.c_[1], &min);
+	    min->rblinks_.c_[0] = n->rblinks_.c_[0];
+	    min->rblinks_.c_[1] = n->rblinks_.c_[1];
 	    np = rbnodeptr<T>(min, np.red());
 	} else
-	    n->c_[1] = delete_node(n->c_[1], victim);
+	    n->rblinks_.c_[1] = delete_node(n->rblinks_.c_[1], victim);
     }
     return np.fixup(r_.reshape());
 }
 
 template <typename T, typename C, typename R>
-inline rbnode<T> *rbtree<T, C, R>::root() {
+inline T* rbtree<T, C, R>::root() {
     return r_.root_;
 }
 
 template <typename T, typename C, typename R> template <typename X>
-inline rbnode<T> *rbtree<T, C, R>::find(const X &x) {
-    rbnode<T> *n = r_.root_;
+inline T* rbtree<T, C, R>::find(const X &x) {
+    T* n = r_.root_;
     while (n) {
 	int cmp = r_.compare(x, *n);
 	if (cmp < 0)
-	    n = n->c_[0].node();
+	    n = n->rblinks_.c_[0].node();
 	else if (cmp == 0)
 	    break;
 	else
-	    n = n->c_[1].node();
+	    n = n->rblinks_.c_[1].node();
     }
     return n;
 }
 
 template <typename T, typename C, typename R> template <typename X>
-inline const rbnode<T> *rbtree<T, C, R>::find(const X &x) const {
+inline const T* rbtree<T, C, R>::find(const X &x) const {
     return const_cast<rbtree<T, C, R> *>(this)->find(x);
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::insert(rbnode<T>* node) {
+inline void rbtree<T, C, R>::insert(T* node) {
     r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), node).node();
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::erase(rbnode<T>* node) {
+inline void rbtree<T, C, R>::erase(T* node) {
     r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::erase_and_dispose(rbnode<T> *node) {
+inline void rbtree<T, C, R>::erase_and_dispose(T* node) {
     r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
     delete node;
 }
 
 template <typename T, typename C, typename R> template <typename Disposer>
-inline void rbtree<T, C, R>::erase_and_dispose(rbnode<T> *node, Disposer d) {
+inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
     r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
     d(node);
 }
 
 template <typename T>
-void rbnode<T>::output(std::ostream &s, bool color, int indent) const {
-    if (c_[0])
-	c_[0].node()->output(s, c_[0].red(), indent + 2);
-    s << std::setw(indent) << "" << (T &) *this << " @" << (void *) this << (color ? " red" : "") << std::endl;
-    if (c_[1])
-	c_[1].node()->output(s, c_[1].red(), indent + 2);
+void rbnodeptr<T>::output(std::ostream &s, int indent) const {
+    if (node()->rblinks_.c_[0])
+	node()->rblinks_.c_[0].output(s, indent + 2);
+    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "") << std::endl;
+    if (node()->rblinks_.c_[1])
+	node()->rblinks_.c_[1].output(s, indent + 2);
 }
 
 template <typename T, typename C, typename R>
 std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     if (tree.r_.root_)
-	tree.r_.root_->output(s, false, 0);
+	rbnodeptr<T>(tree.r_.root_, false).output(s, 0);
     else
-	s << "<empty>";
+	s << "<empty>\n";
     return s;
 }
 

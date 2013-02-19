@@ -4,48 +4,49 @@
 #include "interval_tree.hh"
 
 template <typename T>
-class wrapper {
+class rbwrapper : public T {
   public:
-    inline wrapper(const T &x)
-	: x_(x) {
+    template <typename... Args> inline rbwrapper(Args&&... args)
+	: T(std::forward<Args>(args)...) {
     }
-    inline wrapper(T &&x) noexcept
-	: x_(std::move(x)) {
+    inline rbwrapper(const T& x)
+	: T(x) {
     }
-    inline T &value() {
-	return x_;
+    inline rbwrapper(T&& x) noexcept
+	: T(std::move(x)) {
     }
-    inline const T &value() const {
-	return x_;
-    }
-    inline operator T &() {
-	return x_;
-    }
-    inline operator const T &() const {
-	return x_;
-    }
-    inline wrapper<T> &operator=(const T &x) {
-	x_ = x;
+    inline const T& value() const {
 	return *this;
     }
-    inline wrapper<T> &operator=(T &&x) {
-	x_ = std::move(x);
-	return *this;
-    }
-  private:
-    T x_;
+    rblinks<rbwrapper<T> > rblinks_;
 };
 
-template <typename T>
-class default_comparator<wrapper<T> > {
+template <> class rbwrapper<int> {
   public:
-    inline int operator()(const wrapper<T> &a, const wrapper<T> &b) const {
+    template <typename... Args> inline rbwrapper(int x)
+	: x_(x) {
+    }
+    inline int value() const {
+	return x_;
+    }
+    int x_;
+    rblinks<rbwrapper<int> > rblinks_;
+};
+
+std::ostream& operator<<(std::ostream& s, rbwrapper<int> x) {
+    return s << x.value();
+}
+
+template <typename T>
+class default_comparator<rbwrapper<T> > {
+  public:
+    inline int operator()(const rbwrapper<T> &a, const rbwrapper<T> &b) const {
 	return default_compare(a.value(), b.value());
     }
-    inline int operator()(const wrapper<T> &a, const T &b) const {
+    inline int operator()(const rbwrapper<T> &a, const T &b) const {
 	return default_compare(a.value(), b);
     }
-    inline int operator()(const T &a, const wrapper<T> &b) const {
+    inline int operator()(const T &a, const rbwrapper<T> &b) const {
 	return default_compare(a, b.value());
     }
     inline int operator()(const T &a, const T &b) const {
@@ -140,7 +141,7 @@ struct int_interval : public interval<int> {
 int main(int argc, char **argv) {
     if (1) {
 	const int N = 50000;
-	rbtree<wrapper<int> > tree;
+	rbtree<rbwrapper<int> > tree;
 	int *x = new int[N];
 	for (int i = 0; i < N; ++i)
 	    x[i] = i;
@@ -148,7 +149,7 @@ int main(int argc, char **argv) {
 	    int j = random() % (N - i);
 	    int val = x[j];
 	    x[j] = x[N - i - 1];
-	    tree.insert(new rbnode<wrapper<int> >(val));
+	    tree.insert(new rbwrapper<int>(val));
 	}
 	std::cerr << tree << "\n\n";
 	for (int i = 0; i < N; ++i)
@@ -157,7 +158,7 @@ int main(int argc, char **argv) {
 	    int j = random() % (N - i);
 	    int val = x[j];
 	    x[j] = x[N - i - 1];
-	    tree.erase_and_dispose(tree.find(wrapper<int>(val)));
+	    tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
 	    //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
 	}
 	std::cerr << tree << "\n\n";
@@ -165,13 +166,13 @@ int main(int argc, char **argv) {
     }
 
     {
-	rbtree<wrapper<int> > tree;
-	tree.insert(new rbnode<wrapper<int> >(0));
-	auto x = new rbnode<wrapper<int> >(1);
+	rbtree<rbwrapper<int> > tree;
+	tree.insert(new rbwrapper<int>(0));
+	auto x = new rbwrapper<int>(1);
 	tree.insert(x);
-	tree.insert(new rbnode<wrapper<int> >(0));
-	tree.insert(new rbnode<wrapper<int> >(-2));
-	auto y = new rbnode<wrapper<int> >(0);
+	tree.insert(new rbwrapper<int>(0));
+	tree.insert(new rbwrapper<int>(-2));
+	auto y = new rbwrapper<int>(0);
 	tree.insert(y);
 	std::cerr << tree << "\n";
 	tree.erase_and_dispose(x);
@@ -180,10 +181,10 @@ int main(int argc, char **argv) {
 	std::cerr << tree << "\n";
     }
 
-    interval_tree<int_interval> tree;
+    interval_tree<rbwrapper<int_interval> > tree;
     for (int i = 0; i < 100; ++i) {
 	int a = random() % 1000;
-	tree.insert(new rbnode<int_interval>(a, a + random() % 200));
+	tree.insert(new rbwrapper<int_interval>(a, a + random() % 200));
     }
     std::cerr << tree << "\n\n";
     tree.visit_overlaps(40, print);
