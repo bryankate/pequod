@@ -295,7 +295,7 @@ void twitter_run(pq::Server& server, uint32_t nusers) {
 
 int main(int argc, char** argv) {
 #if 1
-    simple()
+    simple();
 #else
     pq::Server server;
     uint32_t nusers = twitter_populate(server);

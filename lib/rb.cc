@@ -196,6 +196,10 @@ struct rbtree_with_print {
     inline void phase(int ph) {
         if (ph != 2)
             std::cerr << tree << "\n\n";
+        else {
+            for (auto it = tree.lower_bound(rbwrapper<int>(5)); it != tree.lower_bound(rbwrapper<int>(10)); ++it)
+                std::cerr << it->value() << "\n";
+        }
     }
 };
 

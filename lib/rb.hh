@@ -67,6 +67,7 @@ struct rbcompare : private Compare {
     inline int compare(const rbnode<T> &a, const rbnode<T> &b) const;
     template <typename A, typename B>
     inline int compare(const A &a, const B &b) const;
+    inline Compare& get_compare() const;
 };
 
 template <typename Reshape, typename T>
@@ -91,6 +92,38 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
 };
 } // namespace rbpriv
 
+template <typename T>
+class rbalgorithms {
+  public:
+    static inline T* next_node(T* n);
+    static inline T* prev_node(T* n);
+    static inline T* step_node(T* n, bool forward);
+    static inline T* edge_node(T* n, bool forward);
+};
+
+template <typename T>
+class rbiterator {
+  public:
+    inline rbiterator();
+    inline rbiterator(T* n);
+
+    template <typename TT>
+    friend inline bool operator==(rbiterator<TT> a, rbiterator<TT> b);
+    template <typename TT>
+    friend inline bool operator!=(rbiterator<TT> a, rbiterator<TT> b);
+
+    inline void operator++(int);
+    inline void operator++();
+    inline void operator--(int);
+    inline void operator--();
+
+    inline T& operator*() const;
+    inline T* operator->() const;
+
+  private:
+    T* n_;
+};
+
 template <typename T, typename Compare = default_comparator<T>,
 	  typename Reshape = do_nothing>
 class rbtree {
@@ -105,6 +138,16 @@ class rbtree {
     ~rbtree();
 
     inline node_type *root();
+
+    typedef rbiterator<T> iterator;
+    inline iterator begin() const;
+    inline iterator end() const;
+    inline iterator lower_bound(const value_type& x) const;
+    template <typename K, typename Comp>
+    inline iterator lower_bound(const K& key, Comp compare) const;
+    inline iterator upper_bound(const value_type& x) const;
+    template <typename K, typename Comp>
+    inline iterator upper_bound(const K& key, Comp compare) const;
 
     template <typename X> inline node_type *find(const X &x);
     template <typename X> inline const node_type *find(const X &x) const;
@@ -126,6 +169,15 @@ class rbtree {
     //template <typename X> rbnode<T> *find_or_insert_node(const X& ctor);
     rbnodeptr<T> unlink_min(rbnodeptr<T> np, T** min);
     rbnodeptr<T> delete_node(rbnodeptr<T> np, T* victim);
+
+    template <typename K, typename Comp>
+    inline iterator lower_bound(const K& key, Comp& compare, bool) const;
+    template <typename K, typename Comp>
+    inline iterator lower_bound(const K& key, Comp& compare, int) const;
+    template <typename K, typename Comp>
+    inline iterator upper_bound(const K& key, Comp& compare, bool) const;
+    template <typename K, typename Comp>
+    inline iterator upper_bound(const K& key, Comp& compare, int) const;
 };
 
 template <typename T>
@@ -251,7 +303,7 @@ inline rbcompare<Compare>::rbcompare(const Compare &compare)
 
 template <typename Compare> template <typename T>
 inline int rbcompare<Compare>::compare(const rbnode<T> &a,
-				       const rbnode<T> &b) const {
+                                       const rbnode<T> &b) const {
     int cmp = this->operator()(a, b);
     return cmp ? cmp : default_compare(&a, &b);
 }
@@ -281,6 +333,12 @@ inline rbrep1<T, C, R>::rbrep1(const C &compare, const R &reshape)
     : rbcompare_type(compare), rbreshape_type(reshape) {
     this->root_ = 0;
 }
+
+template <typename Compare>
+inline Compare& rbcompare<Compare>::get_compare() const {
+    return *const_cast<Compare*>(static_cast<const Compare*>(this));
+}
+
 } // namespace rbpriv
 
 template <typename T, typename C, typename R>
@@ -488,6 +546,168 @@ int rbtree<T, C, R>::check() const {
     if (r_.root_)
         rbnodeptr<T>(r_.root_, false).check(0, 0, black_height);
     return black_height;
+}
+
+template <typename T>
+inline T* rbalgorithms<T>::edge_node(T* n, bool forward) {
+    while (n->rblinks_.c_[forward])
+        n = n->rblinks_.c_[forward].node();
+    return n;
+}
+
+template <typename T>
+inline T* rbalgorithms<T>::step_node(T* n, bool forward) {
+    if (n->rblinks_.c_[forward])
+        n = edge_node(n->rblinks_.c_[forward].node(), !forward);
+    else {
+        T* prev;
+        do {
+            prev = n;
+            n = n->rblinks_.p_;
+        } while (n && n->rblinks_.c_[!forward].node() != prev);
+    }
+    return n;
+}
+
+template <typename T>
+inline T* rbalgorithms<T>::next_node(T* n) {
+    return step_node(n, true);
+}
+
+template <typename T>
+inline T* rbalgorithms<T>::prev_node(T* n) {
+    return step_node(n, false);
+}
+
+template <typename T>
+inline rbiterator<T>::rbiterator() {
+}
+
+template <typename T>
+inline rbiterator<T>::rbiterator(T* n)
+    : n_(n) {
+}
+
+template <typename T>
+inline void rbiterator<T>::operator++(int) {
+    n_ = rbalgorithms<T>::next_node(n_);
+}
+
+template <typename T>
+inline void rbiterator<T>::operator++() {
+    n_ = rbalgorithms<T>::next_node(n_);
+}
+
+template <typename T>
+inline void rbiterator<T>::operator--(int) {
+    n_ = rbalgorithms<T>::prev_node(n_);
+}
+
+template <typename T>
+inline void rbiterator<T>::operator--() {
+    n_ = rbalgorithms<T>::prev_node(n_);
+}
+
+template <typename T>
+inline T& rbiterator<T>::operator*() const {
+    return *n_;
+}
+
+template <typename T>
+inline T* rbiterator<T>::operator->() const {
+    return n_;
+}
+
+template <typename T>
+inline bool operator==(rbiterator<T> a, rbiterator<T> b) {
+    return a.operator->() == b.operator->();
+}
+
+template <typename T>
+inline bool operator!=(rbiterator<T> a, rbiterator<T> b) {
+    return a.operator->() != b.operator->();
+}
+
+template <typename T, typename R, typename A>
+rbiterator<T> rbtree<T, R, A>::begin() const {
+    return rbiterator<T>(r_.root_ ? rbalgorithms<T>::edge_node(r_.root_, false) : 0);
+}
+
+template <typename T, typename R, typename A>
+rbiterator<T> rbtree<T, R, A>::end() const {
+    return rbiterator<T>(0);
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        bool cmp = compare(*n, key);
+        if (!cmp)
+            bound = n;
+        n = n->rblinks_.c_[cmp].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, int) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        int cmp = compare(*n, key);
+        if (cmp >= 0)
+            bound = n;
+        n = n->rblinks_.c_[cmp < 0].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp compare) const {
+    return lower_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+}
+
+template <typename T, typename R, typename A>
+inline rbiterator<T> rbtree<T, R, A>::lower_bound(const value_type& x) const {
+    return lower_bound(x, r_.get_compare(), 0);
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, bool) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        bool cmp = compare(key, *n);
+        if (cmp)
+            bound = n;
+        n = n->rblinks_.c_[!cmp].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, int) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        int cmp = compare(key, *n);
+        if (cmp < 0)
+            bound = n;
+        n = n->rblinks_.c_[cmp >= 0].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp compare) const {
+    return upper_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+}
+
+template <typename T, typename R, typename A>
+inline rbiterator<T> rbtree<T, R, A>::upper_bound(const value_type& x) const {
+    return lower_bound(x, r_.get_compare(), 0);
 }
 
 #endif
