@@ -1,4 +1,6 @@
 #include <iostream>
+#include <string.h>
+#include <boost/intrusive/set.hpp>
 #include "rb.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
@@ -138,31 +140,106 @@ struct int_interval : public interval<int> {
     }
 };
 
+template <typename G>
+void grow_and_shrink(G& tree, int N) {
+    int *x = new int[N];
+    for (int i = 0; i < N; ++i)
+        x[i] = i;
+    for (int i = 0; i < N; ++i) {
+        int j = random() % (N - i);
+        int val = x[j];
+        x[j] = x[N - i - 1];
+        tree.insert(val);
+    }
+    tree.phase(1);
+    for (int i = 0; i < N; ++i)
+        x[i] = i;
+    for (int i = 0; i < N; ++i) {
+        int j = random() % (N - i);
+        int val = x[j];
+        x[j] = x[N - i - 1];
+        tree.find_and_erase(val);
+        //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
+    }
+    tree.phase(2);
+    delete[] x;
+}
+
+struct rbtree_with_print {
+    rbtree<rbwrapper<int> > tree;
+    inline void insert(int val) {
+        tree.insert(new rbwrapper<int>(val));
+    }
+    inline void find_and_erase(int val) {
+        tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+    }
+    inline void phase(int ph) {
+        std::cerr << tree << "\n\n";
+    }
+};
+
+struct rbtree_without_print {
+    rbtree<rbwrapper<int> > tree;
+    inline void insert(int val) {
+        tree.insert(new rbwrapper<int>(val));
+    }
+    inline void find_and_erase(int val) {
+        tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+    }
+    inline void phase(int) {
+    }
+};
+
+namespace bi = boost::intrusive;
+struct boost_set_without_print {
+    struct node : public bi::set_base_hook<bi::optimize_size<true> > {
+        int value;
+        node(int x)
+            : value(x) {
+        }
+        bool operator<(const node& x) const {
+            return value < x.value;
+        }
+    };
+    struct node_comparator {
+        bool operator()(int a, const node& b) {
+            return a < b.value;
+        }
+        bool operator()(const node& a, int b) {
+            return a.value < b;
+        }
+    };
+    struct node_disposer {
+        void operator()(node* n) {
+            delete n;
+        }
+    };
+    bi::set<node> tree;
+    inline void insert(int val) {
+        tree.insert(*new node(val));
+    }
+    inline void find_and_erase(int val) {
+        tree.erase_and_dispose(tree.find(node(val)), node_disposer());
+    }
+    inline void phase(int) {
+    }
+};
+
 int main(int argc, char **argv) {
-    if (1) {
-	const int N = 50000;
-	rbtree<rbwrapper<int> > tree;
-	int *x = new int[N];
-	for (int i = 0; i < N; ++i)
-	    x[i] = i;
-	for (int i = 0; i < N; ++i) {
-	    int j = random() % (N - i);
-	    int val = x[j];
-	    x[j] = x[N - i - 1];
-	    tree.insert(new rbwrapper<int>(val));
-	}
-	std::cerr << tree << "\n\n";
-	for (int i = 0; i < N; ++i)
-	    x[i] = i;
-	for (int i = 0; i < N; ++i) {
-	    int j = random() % (N - i);
-	    int val = x[j];
-	    x[j] = x[N - i - 1];
-	    tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
-	    //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
-	}
-	std::cerr << tree << "\n\n";
-	delete[] x;
+    if (argc > 1 && strcmp(argv[1], "-b") == 0) {
+        boost_set_without_print tree;
+        grow_and_shrink(tree, 100000);
+        exit(0);
+    } else if (argc > 1 && strcmp(argv[1], "-p") == 0) {
+        rbtree_without_print tree;
+        grow_and_shrink(tree, 100000);
+        exit(0);
+    } else if (argc > 1) {
+        fprintf(stderr, "Usage: ./a.out [-b|-p]\n");
+        exit(1);
+    } else {
+        rbtree_with_print tree;
+        grow_and_shrink(tree, 50000);
     }
 
     {
