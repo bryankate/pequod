@@ -211,6 +211,7 @@ struct rbtree_without_print {
         tree.find(rbwrapper<int>(val));
     }
     inline void phase(int) {
+        tree.check();
     }
 };
 

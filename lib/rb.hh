@@ -42,6 +42,7 @@ class rbnodeptr {
     template <typename F> inline rbnodeptr<T> move_red_right(F &f) const;
     template <typename F> inline rbnodeptr<T> fixup(F &f) const;
 
+    void check(T* parent, int this_black_height, int& black_height) const;
     void output(std::ostream& s, int indent) const;
 
   private:
@@ -114,6 +115,7 @@ class rbtree {
     template <typename Disposer>
     inline void erase_and_dispose(node_type* x, Disposer d);
 
+    int check() const;
     template <typename TT, typename CC, typename RR>
     friend std::ostream &operator<<(std::ostream &s, const rbtree<TT, CC, RR> &tree);
 
@@ -455,6 +457,32 @@ std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     else
 	s << "<empty>\n";
     return s;
+}
+
+template <typename T>
+void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height) const {
+    (void) parent;
+    if (red())
+        assert(!node()->rblinks_.c_[0].red() && !node()->rblinks_.c_[1].red());
+    else {
+        assert(node()->rblinks_.c_[0].red() || !node()->rblinks_.c_[1].red());
+        ++this_black_height;
+    }
+    for (int i = 0; i < 2; ++i)
+        if (node()->rblinks_.c_[i])
+            node()->rblinks_.c_[i].check(node(), this_black_height, black_height);
+        else if (black_height == -1)
+            black_height = this_black_height;
+        else
+            assert(black_height == this_black_height);
+}
+
+template <typename T, typename C, typename R>
+int rbtree<T, C, R>::check() const {
+    int black_height = -1;
+    if (r_.root_)
+        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height);
+    return black_height;
 }
 
 #endif
