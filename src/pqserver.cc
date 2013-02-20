@@ -220,24 +220,16 @@ void twitter_populate(pq::Server& server) {
 int main(int argc, char** argv) {
     pq::Server server;
 
-    const char *keys[] = {
-	"f|00001|00002",
-	"f|00001|10000",
-	"p|00002|0000000000",
-	"p|00002|0000000001",
-	"p|00002|0000000022",
-	"p|10000|0000000010",
-	"p|10000|0000000018"
-    }, *values[] = {
-	"1",
-	"1",
-	"Should not appear",
-	"Hello,",
-	"Which is awesome",
-	"My name is",
-	"Jennifer Jones"
+    std::pair<const char*, const char*> values[] = {
+	{"f|00001|00002", "1"},
+	{"f|00001|10000", "1"},
+	{"p|00002|0000000000", "Should not appear"},
+	{"p|00002|0000000001", "Hello,"},
+	{"p|00002|0000000022", "Which is awesome"},
+	{"p|10000|0000000010", "My name is"},
+	{"p|10000|0000000018", "Jennifer Jones"}
     };
-    server.replace_range(keys, keys + sizeof(keys) / sizeof(keys[0]), values);
+    server.replace_range("f|00001", "p}", values, values + sizeof(values) / sizeof(values[0]));
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)

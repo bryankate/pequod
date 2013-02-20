@@ -146,8 +146,8 @@ class Server {
     void insert(const String& key, const String& value);
     void erase(const String& key);
 
-    template <typename I1, typename I2>
-    void replace_range(I1 first_key, I1 last_key, I2 first_value);
+    template <typename I>
+    void replace_range(Str first, Str last, I first_value, I last_value);
 
     inline void add_copy(Str first, Str last, Join* j, const Match& m);
     inline void add_join(Str first, Str last, Join* j);
@@ -262,28 +262,26 @@ inline void Server::add_validjoin(Str first, Str last, Join* join) {
     ranges_.insert(r);
 }
 
-template <typename I1, typename I2>
-void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
+template <typename I>
+void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 #if 0
-    auto it = store_.bounded_range(*first_key, *last_key, DatumCompare(),
-				   true, false);
+    auto it = store_.bounded_range(first, last, DatumCompare(), true, false);
 #else
-    auto it = std::make_pair(store_.lower_bound(*first_key, DatumCompare()),
-			     store_.lower_bound(*last_key, DatumCompare()));
+    auto it = std::make_pair(store_.lower_bound(first, DatumCompare()),
+			     store_.lower_bound(last, DatumCompare()));
 #endif
-    ServerRangeSet srs(this, *first_key, *last_key, ServerRange::copy);
-    ranges_.visit_overlaps(interval<Str>(*first_key, *last_key),
-			   ServerRangeCollector(srs));
+    ServerRangeSet srs(this, first, last, ServerRange::copy);
+    ranges_.visit_overlaps(interval<Str>(first, last), ServerRangeCollector(srs));
 
-    while (first_key != last_key && it.first != it.second) {
-	int cmp = it.first->key().compare(*first_key);
+    while (first_value != last_value && it.first != it.second) {
+	int cmp = it.first->key().compare(first_value->first);
 	Datum* d;
 	if (cmp > 0) {
-	    d = new Datum(*first_key, *first_value);
+	    d = new Datum(first_value->first, first_value->second);
 	    (void) store_.insert(it.first, *d);
 	} else if (cmp == 0) {
 	    d = it.first.operator->();
-	    d->value_ = *first_value;
+	    d->value_ = first_value->second;
 	    ++it.first;
 	} else {
 	    d = it.first.operator->();
@@ -291,15 +289,15 @@ void Server::replace_range(I1 first_key, I1 last_key, I2 first_value) {
 	}
 	srs.notify(d, cmp);
 	if (cmp >= 0)
-	    ++first_key, ++first_value;
+	    ++first_value;
 	if (cmp < 0)
 	    delete d;
     }
-    while (first_key != last_key) {
-	Datum* d = new Datum(*first_key, *first_value);
+    while (first_value != last_value) {
+	Datum* d = new Datum(first_value->first, first_value->second);
 	(void) store_.insert(it.first, *d);
 	srs.notify(d, 1);
-	++first_key, ++first_value;
+	++first_value;
     }
     while (it.first != it.second) {
 	Datum* d = it.first.operator->();
