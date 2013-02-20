@@ -55,6 +55,7 @@ class rblinks {
     T* child(bool right) const {
 	return c_[right].node();
     }
+    T* p_;
     rbnodeptr<T> c_[2];
 };
 
@@ -86,7 +87,7 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
     typedef rbcompare<Compare> rbcompare_type;
     typedef rbreshape<Reshape, T> rbreshape_type;
     inline rbrep1(const Compare &compare, const Reshape &reshape);
-    rbnodeptr<T> insert_node(rbnodeptr<T> np, T* x);
+    rbnodeptr<T> insert_node(rbnodeptr<T> np, T* x, T* p);
 };
 } // namespace rbpriv
 
@@ -180,10 +181,13 @@ inline rbnodeptr<T> rbnodeptr<T>::reverse_color() const {
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::rotate(bool isright, F &f) const {
     rbnodeptr<T> x = node()->rblinks_.c_[!isright];
-    node()->rblinks_.c_[!isright] = x.node()->rblinks_.c_[isright];
+    if ((node()->rblinks_.c_[!isright] = x.node()->rblinks_.c_[isright]))
+        x.node()->rblinks_.c_[isright].node()->rblinks_.p_ = node();
     f(node());
     bool old_color = red();
     x.node()->rblinks_.c_[isright] = change_color(true);
+    x.node()->rblinks_.p_ = node()->rblinks_.p_;
+    node()->rblinks_.p_ = x.node();
     f(x.node());
     return x.change_color(old_color);
 }
@@ -291,8 +295,9 @@ rbtree<T, C, R>::~rbtree() {
 
 namespace rbpriv {
 template <typename T, typename C, typename R>
-rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, T* x) {
+rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, T* x, T* p) {
     if (!np) {
+        x->rblinks_.p_ = p;
 	this->reshape()(x);
 	return rbnodeptr<T>(x, true);
     }
@@ -302,7 +307,7 @@ rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, T* x) {
     if (cmp == 0)
 	cmp = (x < n ? -1 : 1);
 
-    n->rblinks_.c_[cmp > 0] = insert_node(n->rblinks_.c_[cmp > 0], x);
+    n->rblinks_.c_[cmp > 0] = insert_node(n->rblinks_.c_[cmp > 0], x, n);
     return np.fixup(this->reshape());
 }
 } // namespace rbpriv
@@ -421,7 +426,7 @@ inline const T* rbtree<T, C, R>::find(const X &x) const {
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::insert(T* node) {
-    r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), node).node();
+    r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), node, 0).node();
 }
 
 template <typename T, typename C, typename R>
@@ -461,7 +466,7 @@ std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
 
 template <typename T>
 void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height) const {
-    (void) parent;
+    assert(node()->rblinks_.p_ == parent);
     if (red())
         assert(!node()->rblinks_.c_[0].red() && !node()->rblinks_.c_[1].red());
     else {
