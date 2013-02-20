@@ -102,19 +102,23 @@ class Json { public:
     bool to_i(long long &x) const;
     bool to_i(unsigned long long &x) const;
     inline long as_i() const;
+    inline long as_i(long default_value) const;
 
     double to_d() const;
     inline bool to_d(double &x) const;
     inline double as_d() const;
+    inline double as_d(double default_value) const;
 
     inline bool to_b() const;
     inline bool to_b(bool &x) const;
     inline bool as_b() const;
+    inline bool as_b(bool default_value) const;
 
     inline const String &to_s() const;
     inline bool to_s(Str &x) const;
     inline bool to_s(String &x) const;
-    inline const String &as_s() const;
+    inline const String& as_s() const;
+    inline const String& as_s(const String& default_value) const;
     inline const char *c_str() const;
 
     // Object methods
@@ -838,6 +842,9 @@ class Json_proxy_base {
     long as_i() const {
 	return cvalue().as_i();
     }
+    long as_i(long default_value) const {
+	return cvalue().as_i(default_value);
+    }
     double to_d() const {
 	return cvalue().to_d();
     }
@@ -847,6 +854,9 @@ class Json_proxy_base {
     double as_d() const {
 	return cvalue().as_d();
     }
+    double as_d(double default_value) const {
+	return cvalue().as_d(default_value);
+    }
     bool to_b() const {
 	return cvalue().to_b();
     }
@@ -855,6 +865,9 @@ class Json_proxy_base {
     }
     bool as_b() const {
 	return cvalue().as_b();
+    }
+    bool as_b(bool default_value) const {
+	return cvalue().as_b(default_value);
     }
     const String &to_s() const {
 	return cvalue().to_s();
@@ -867,6 +880,9 @@ class Json_proxy_base {
     }
     const String &as_s() const {
 	return cvalue().as_s();
+    }
+    const String& as_s(const String& default_value) const {
+	return cvalue().as_s(default_value);
     }
     const char *c_str() const {
 	return cvalue().c_str();
@@ -1490,6 +1506,14 @@ inline long Json::as_i() const {
 	return hard_as_i();
 }
 
+/** @brief Return the integer value of this numeric Json or @a default_value. */
+inline long Json::as_i(long default_value) const {
+    if (_type != j_int && _type != j_double)
+        return default_value;
+    else
+        return as_i();
+}
+
 /** @brief Extract this numeric Json's value into @a x.
     @param[out] x value storage
     @return True iff is_number().
@@ -1509,6 +1533,14 @@ inline bool Json::to_d(double &x) const {
 inline double Json::as_d() const {
     assert(_type == j_double || _type == j_int);
     return to_d();
+}
+
+/** @brief Return the double value of this numeric Json or @a default_value. */
+inline double Json::as_d(double default_value) const {
+    if (_type != j_int && _type != j_double)
+        return default_value;
+    else
+        return to_d();
 }
 
 /** @brief Return this Json converted to a boolean.
@@ -1544,6 +1576,14 @@ inline bool Json::to_b(bool &x) const {
 inline bool Json::as_b() const {
     assert(_type == j_bool);
     return _str[0] == 't';
+}
+
+/** @brief Return the boolean value of this numeric Json or @a default_value. */
+inline bool Json::as_b(bool default_value) const {
+    if (_type != j_bool)
+        return default_value;
+    else
+        return _str[0] == 't';
 }
 
 /** @brief Return this Json converted to a string.
@@ -1592,6 +1632,14 @@ inline bool Json::to_s(String &x) const {
 inline const String &Json::as_s() const {
     assert(_type == j_string);
     return _str;
+}
+
+/** @brief Return the value of this string Json or @a default_value. */
+inline const String& Json::as_s(const String& default_value) const {
+    if (_type != j_string)
+        return default_value;
+    else
+        return _str;
 }
 
 /** @brief Return to_s().c_str(). */
