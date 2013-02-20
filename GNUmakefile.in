@@ -81,7 +81,8 @@ COMMON_OBJS = \
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
-	$(OBJDIR)/pqserver.o
+	$(OBJDIR)/pqserver.o \
+	$(OBJDIR)/pqtwitter.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)

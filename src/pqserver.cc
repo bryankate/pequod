@@ -1,8 +1,12 @@
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "json.hh"
+#include "pqtwitter.hh"
+#include <boost/random/random_number_generator.hpp>
 
 namespace pq {
+
+// XXX check circular expansion
 
 ServerRange::ServerRange(const String& first, const String& last, range_type type,
 			 Join* join)
@@ -14,7 +18,6 @@ ServerRange::ServerRange(const String& first, const String& last, range_type typ
 			 Join* join, const Match& m)
     : interval<String>(first, last), type_(type), subtree_iend_(iend()),
       join_(join), resultkey_(String::make_uninitialized((*join)[0].key_length())) {
-    std::cerr << "Creating range, match is " << m << "\n";
     (*join)[0].expand(resultkey_.mutable_udata(), m);
 }
 
@@ -22,7 +25,6 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (type_ == copy && join_->back().match(d->key())) {
 	join_->expand(resultkey_.mutable_udata(), d->key());
-	std::cerr << "Notifying " << resultkey_ << "\n";
 	if (notifier >= 0)
 	    server.insert(resultkey_, d->value_);
 	else
@@ -32,11 +34,9 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 
 void ServerRange::validate(Str first, Str last, Server& server) {
     if (type_ == joinsink) {
-        std::cerr << "validating @" << (void*) join_ << " for [" << first << ", " << last << "\n";
         Match mf, ml;
         (*join_)[0].match(first, mf);
         (*join_)[0].match(last, ml);
-        std::cerr << "match " << mf << ", " << ml << "\n";
         validate(mf, ml, 1, server);
         server.add_validjoin(first, last, join_);
     }
@@ -46,9 +46,6 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     uint8_t kf[128], kl[128];
     int kflen = (*join_)[joinpos].first(kf, mf);
     int kllen = (*join_)[joinpos].last(kl, ml);
-
-    std::cerr << "match " << mf << " [" << Str(kf, kflen) << "], " << ml
-              << " [" << Str(kl, kllen) << "]\n";
 
     if (joinpos + 1 == join_->size())
         server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
@@ -69,9 +66,8 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
         if ((*join_)[joinpos].match(it->key(), mk)) {
             if (joinpos + 1 == join_->size()) {
                 kflen = (*join_)[0].first(kf, mk);
-                std::cerr << "insert " << Str(kf, kflen) << "\n";
                 // XXX PERFORMANCE can prob figure out ahead of time whether
-                // this insert is simple
+                // this insert is simple (no notifies)
                 server.insert(Str(kf, kflen), it->value_);
             } else {
                 (*join_)[joinpos].match(it->key(), mf);
@@ -198,6 +194,29 @@ void Server::erase(const String& key) {
 
 } // namespace
 
+
+void twitter_populate(pq::Server& server) {
+    boost::mt19937 gen;
+    gen.seed(0);
+    pq::TwitterPopulator tp{Json()};
+
+    tp.create_subscriptions(gen);
+    char buf[128];
+    for (auto& x : tp.subscriptions()) {
+        sprintf(buf, "s|%05d|%05d", x.first, x.second);
+        server.insert(Str(buf, 13), Str("1", 1));
+    }
+
+    for (uint32_t i = 0; i != tp.nusers(); ++i)
+        for (int p = 0; p != 10; ++p) {
+            auto post = tp.random_post(gen);
+            sprintf(buf, "p|%05d|%010llu", i, post.first);
+            server.insert(Str(buf, 18), post.second);
+        }
+
+    tp.print_subscription_statistics(std::cerr);
+}
+
 int main(int argc, char** argv) {
     pq::Server server;
 
@@ -244,4 +263,6 @@ int main(int argc, char** argv) {
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    twitter_populate(server);
 }
