@@ -49,6 +49,10 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
 
     std::cerr << "match " << mf << " [" << Str(kf, kflen) << "], " << ml
               << " [" << Str(kl, kllen) << "]\n";
+
+    if (joinpos + 1 == join_->size())
+        server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
+
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
 
@@ -131,7 +135,8 @@ void ServerRangeSet::hard_visit(const Datum* datum) {
 void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
     Str last_valid = first_;
     for (int i = 0; i != ts; ++i)
-        if (r_[i] && r_[i]->type() == ServerRange::validjoin
+        if (r_[i]
+            && r_[i]->type() == ServerRange::validjoin
             && r_[i]->join() == jr->join()) {
             if (sw_ == 0)
                 return;
@@ -144,9 +149,8 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
 }
 
 void ServerRangeSet::validate() {
-    std::cerr << *this << "\n";
     int ts = total_size();
-    for (int i = 0; i != nr_; ++i)
+    for (int i = 0; i != ts; ++i)
         if (r_[i]->type() == ServerRange::joinsink)
             validate_join(r_[i], ts);
 }
@@ -234,12 +238,6 @@ int main(int argc, char** argv) {
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 
     server.insert("p|10000|0000000021", "(Jennifer Jones has a secret)");
-
-    pq::Match m;
-    j[0].match("t|00001|", m);
-    server.add_copy("p|10000|", "p|10000}", &j, m);
-    server.add_copy("p|00002|", "p|00002}", &j, m);
-
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
 
