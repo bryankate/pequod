@@ -152,6 +152,9 @@ void grow_and_shrink(G& tree, int N) {
         tree.insert(val);
     }
     tree.phase(1);
+    for (int i = 0; i < 4 * N; ++i)
+        tree.find(random() % N);
+    tree.phase(2);
     for (int i = 0; i < N; ++i)
         x[i] = i;
     for (int i = 0; i < N; ++i) {
@@ -161,7 +164,7 @@ void grow_and_shrink(G& tree, int N) {
         tree.find_and_erase(val);
         //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
     }
-    tree.phase(2);
+    tree.phase(3);
     delete[] x;
 }
 
@@ -173,8 +176,11 @@ struct rbtree_with_print {
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
     }
+    inline void find(int val) {
+    }
     inline void phase(int ph) {
-        std::cerr << tree << "\n\n";
+        if (ph != 2)
+            std::cerr << tree << "\n\n";
     }
 };
 
@@ -185,6 +191,9 @@ struct rbtree_without_print {
     }
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+    }
+    inline void find(int val) {
+        tree.find(rbwrapper<int>(val));
     }
     inline void phase(int) {
     }
@@ -220,6 +229,9 @@ struct boost_set_without_print {
     }
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(node(val)), node_disposer());
+    }
+    inline void find(int val) {
+        tree.find(node(val));
     }
     inline void phase(int) {
     }
