@@ -4,6 +4,8 @@
 #include "rb.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
+#include <sys/time.h>
+#include <sys/resource.h>
 
 template <typename T>
 class rbwrapper : public T {
@@ -142,21 +144,27 @@ struct int_interval : public interval<int> {
 
 template <typename G>
 void grow_and_shrink(G& tree, int N) {
+    struct rusage ru[6];
     int *x = new int[N];
     for (int i = 0; i < N; ++i)
         x[i] = i;
+    getrusage(RUSAGE_SELF, &ru[0]);
     for (int i = 0; i < N; ++i) {
         int j = random() % (N - i);
         int val = x[j];
         x[j] = x[N - i - 1];
         tree.insert(val);
     }
+    getrusage(RUSAGE_SELF, &ru[1]);
     tree.phase(1);
+    getrusage(RUSAGE_SELF, &ru[2]);
     for (int i = 0; i < 4 * N; ++i)
         tree.find(random() % N);
+    getrusage(RUSAGE_SELF, &ru[3]);
     tree.phase(2);
     for (int i = 0; i < N; ++i)
         x[i] = i;
+    getrusage(RUSAGE_SELF, &ru[4]);
     for (int i = 0; i < N; ++i) {
         int j = random() % (N - i);
         int val = x[j];
@@ -164,8 +172,15 @@ void grow_and_shrink(G& tree, int N) {
         tree.find_and_erase(val);
         //if (i % 1000 == 999) std::cerr << "\n\n" << i << "\n" << tree << "\n\n";
     }
+    getrusage(RUSAGE_SELF, &ru[5]);
     tree.phase(3);
     delete[] x;
+    for (int i = 5; i > 0; --i)
+        timersub(&ru[i].ru_utime, &ru[i-1].ru_utime, &ru[i].ru_utime);
+    fprintf(stderr, "time: insert %ld.%06ld  find %ld.%06ld  remove %ld.%06ld\n",
+            long(ru[1].ru_utime.tv_sec), long(ru[1].ru_utime.tv_usec),
+            long(ru[3].ru_utime.tv_sec), long(ru[3].ru_utime.tv_usec),
+            long(ru[5].ru_utime.tv_sec), long(ru[5].ru_utime.tv_usec));
 }
 
 struct rbtree_with_print {
@@ -176,7 +191,7 @@ struct rbtree_with_print {
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
     }
-    inline void find(int val) {
+    inline void find(int) {
     }
     inline void phase(int ph) {
         if (ph != 2)
@@ -240,11 +255,11 @@ struct boost_set_without_print {
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "-b") == 0) {
         boost_set_without_print tree;
-        grow_and_shrink(tree, 100000);
+        grow_and_shrink(tree, 1000000);
         exit(0);
     } else if (argc > 1 && strcmp(argv[1], "-p") == 0) {
         rbtree_without_print tree;
-        grow_and_shrink(tree, 100000);
+        grow_and_shrink(tree, 1000000);
         exit(0);
     } else if (argc > 1) {
         fprintf(stderr, "Usage: ./a.out [-b|-p]\n");

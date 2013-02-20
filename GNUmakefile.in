@@ -86,6 +86,10 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/rbtest: $(OBJDIR)/rb.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
 # create files needed by exp/ directory
 $(OBJDIR)/gstore_server: $(PROTOGENDIR)/gstore.pb.h
 
