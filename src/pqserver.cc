@@ -60,7 +60,6 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     for (; it != ilast; ++it) {
 	if (it->key().length() != (*join_)[joinpos].key_length())
             continue;
-        std::cerr << "{{match " << mf << "}}\n";
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
         if ((*join_)[joinpos].match(it->key(), mk)) {
@@ -195,29 +194,7 @@ void Server::erase(const String& key) {
 } // namespace
 
 
-void twitter_populate(pq::Server& server) {
-    boost::mt19937 gen;
-    gen.seed(0);
-    pq::TwitterPopulator tp{Json()};
-
-    tp.create_subscriptions(gen);
-    char buf[128];
-    for (auto& x : tp.subscriptions()) {
-        sprintf(buf, "s|%05d|%05d", x.first, x.second);
-        server.insert(Str(buf, 13), Str("1", 1));
-    }
-
-    for (uint32_t i = 0; i != tp.nusers(); ++i)
-        for (int p = 0; p != 10; ++p) {
-            auto post = tp.random_post(gen);
-            sprintf(buf, "p|%05d|%010llu", i, post.first);
-            server.insert(Str(buf, 18), post.second);
-        }
-
-    tp.print_subscription_statistics(std::cerr);
-}
-
-int main(int argc, char** argv) {
+void simple() {
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -255,6 +232,73 @@ int main(int argc, char** argv) {
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+}
 
-    twitter_populate(server);
+uint32_t twitter_populate(pq::Server& server) {
+    boost::mt19937 gen;
+    gen.seed(0);
+    pq::TwitterPopulator tp{Json().set("shape", 8)};
+
+    tp.create_subscriptions(gen);
+    char buf[128];
+    for (auto& x : tp.subscriptions()) {
+        sprintf(buf, "s|%05d|%05d", x.first, x.second);
+        server.insert(Str(buf, 13), Str("1", 1));
+    }
+
+    for (uint32_t i = 0; i != tp.nusers(); ++i)
+        for (int p = 0; p != 10; ++p) {
+            auto post = tp.random_post(gen);
+            sprintf(buf, "p|%05d|%010llu", i, post.first);
+            server.insert(Str(buf, 18), post.second);
+        }
+
+    tp.print_subscription_statistics(std::cerr);
+
+    pq::Join* j = new pq::Join;
+    j->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
+                    "s|<user_id>|<poster_id> "
+                    "p|<poster_id>|<time>");
+    server.add_join("t|", "t}", j);
+
+    return tp.nusers();
+}
+
+void twitter_run(pq::Server& server, uint32_t nusers) {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+
+    uint32_t time = 1000000000;
+    uint32_t* load_times = new uint32_t[nusers];
+    for (uint32_t i = 0; i != nusers; ++i)
+        load_times[i] = 0;
+    char buf1[128], buf2[128];
+
+    while (time != 1020000000) {
+        uint32_t u = rng(nusers);
+        uint32_t a = rng(100);
+        if (a == 0) {
+            sprintf(buf1, "p|%05d|%010d", u, time);
+            server.insert(Str(buf1, 18), "?!?#*");
+        } else {
+            uint32_t tx = load_times[u];
+            if (!tx || a == 1)
+                tx = time - 32000;
+            sprintf(buf1, "t|%05d|%010d", u, tx);
+            sprintf(buf2, "t|%05d}", u);
+            server.validate(Str(buf1, 18), Str(buf2, 8));
+        }
+        ++time;
+    }
+}
+
+int main(int argc, char** argv) {
+#if 1
+    simple()
+#else
+    pq::Server server;
+    uint32_t nusers = twitter_populate(server);
+    twitter_run(server, nusers);
+#endif
 }

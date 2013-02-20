@@ -89,10 +89,10 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
         acc(num_followers[i]);
 
     stream << "USERS HAVE # SUBSCRIBERS:\n"
-           << "  zero: " << (std::upper_bound(num_followers, num_followers + nusers_, 0) - num_followers) << "\n"
-           << "  mean: " << mean(acc) << "\n"
+           << "  zero: " << (std::upper_bound(num_followers, num_followers + nusers_, 0) - num_followers)
+           << "  mean: " << mean(acc)
            << "  sdev: " << sqrt(variance(acc)) << "\n"
-           << "  order: [min " << num_followers[0]
+           << "  min " << num_followers[0]
            << ", 1% " << num_followers[(int) (0.01 * nusers_)]
            << ", 10% " << num_followers[(int) (0.10 * nusers_)]
            << ", 25% " << num_followers[(int) (0.25 * nusers_)]
@@ -100,7 +100,7 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
            << ", 75% " << num_followers[(int) (0.75 * nusers_)]
            << ", 90% " << num_followers[(int) (0.90 * nusers_)]
            << ", 99% " << num_followers[(int) (0.99 * nusers_)]
-           << ", max " << num_followers[nusers_ - 1] << "]\n";
+           << ", max " << num_followers[nusers_ - 1] << "\n";
 
     delete[] num_followers;
 }
