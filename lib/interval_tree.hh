@@ -123,17 +123,14 @@ inline void interval_tree<T>::erase_and_dispose(T* node, Disposer d) {
 template <typename T> template <typename F>
 size_t interval_tree<T>::visit_contains(value_type *node,
 					const endpoint_type &x, F &f) {
-    local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
     if (!node)
 	return count;
 
  left:
-    while ((next = node->rblinks_.c_[0].node()) && x < next->subtree_iend()) {
-	stack.push(reinterpret_cast<uintptr_t>(node));
+    while ((next = node->rblinks_.c_[0].node()) && x < next->subtree_iend())
 	node = next;
-    }
 
  middle:
     if (node->contains(x)) {
@@ -141,56 +138,51 @@ size_t interval_tree<T>::visit_contains(value_type *node,
 	++count;
     }
 
-    if (!(x < node->ibegin()) && (node = node->rblinks_.c_[1].node()))
+    if (!(x < node->ibegin()) && (next = node->rblinks_.c_[1].node())) {
+        node = next;
 	goto left;
-    else if (stack.empty())
-	return count;
-    else {
-	node = reinterpret_cast<value_type *>(stack.top());
-	stack.pop();
-	goto middle;
+    } else {
+        do {
+            next = node;
+            if (!(node = node->rblinks_.p_))
+                return count;
+        } while (node->rblinks_.c_[1].node() == next);
+        goto middle;
     }
 }
 
 template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_contains(const endpoint_type &x,
-					       const F &f) {
+inline size_t interval_tree<T>::visit_contains(const endpoint_type &x, const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_contains(t_.root(), x, realf);
 }
 
 template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_contains(const endpoint_type &x,
-				   	          F &f) {
+inline size_t interval_tree<T>::visit_contains(const endpoint_type &x, F &f) {
     return visit_contains(t_.root(), x, f);
 }
 
 template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x,
-					          const F &f) {
+inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x, const F &f) {
     typename std::decay<F>::type realf(f);
     return visit_contains(t_.root(), x, realf);
 }
 
 template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x,
-					          F &f) {
+inline size_t interval_tree<T>::visit_overlaps(const endpoint_type &x, F &f) {
     return visit_contains(t_.root(), x, f);
 }
 
 template <typename T> template <typename I, typename F>
 size_t interval_tree<T>::visit_overlaps(value_type *node, const I &x, F &f) {
-    local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
     if (!node)
 	return count;
 
  left:
-    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend()) {
-	stack.push(reinterpret_cast<uintptr_t>(node));
+    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend())
 	node = next;
-    }
 
  middle:
     if (node->overlaps(x)) {
@@ -198,14 +190,16 @@ size_t interval_tree<T>::visit_overlaps(value_type *node, const I &x, F &f) {
 	++count;
     }
 
-    if (node->ibegin() < x.iend() && (node = node->rblinks_.c_[1].node()))
+    if (node->ibegin() < x.iend() && (next = node->rblinks_.c_[1].node())) {
+        node = next;
 	goto left;
-    else if (stack.empty())
-	return count;
-    else {
-	node = reinterpret_cast<value_type *>(stack.top());
-	stack.pop();
-	goto middle;
+    } else {
+        do {
+            next = node;
+            if (!(node = node->rblinks_.p_))
+                return count;
+        } while (node->rblinks_.c_[1].node() == next);
+        goto middle;
     }
 }
 
@@ -222,17 +216,14 @@ inline size_t interval_tree<T>::visit_overlaps(const I &x, F &f) {
 
 template <typename T> template <typename I, typename F>
 size_t interval_tree<T>::visit_contains(value_type *node, const I &x, F &f) {
-    local_stack<uintptr_t, 40> stack;
     value_type *next;
     size_t count = 0;
     if (!node)
 	return count;
 
  left:
-    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend()) {
-	stack.push(reinterpret_cast<uintptr_t>(node));
+    while ((next = node->rblinks_.c_[0].node()) && x.ibegin() < next->subtree_iend())
 	node = next;
-    }
 
  middle:
     if (node->contains(x)) {
@@ -240,14 +231,16 @@ size_t interval_tree<T>::visit_contains(value_type *node, const I &x, F &f) {
 	++count;
     }
 
-    if (node->ibegin() < x.iend() && (node = node->rblinks_.c_[1].node()))
+    if (node->ibegin() < x.iend() && (next = node->rblinks_.c_[1].node())) {
+        node = next;
 	goto left;
-    else if (stack.empty())
-	return count;
-    else {
-	node = reinterpret_cast<value_type *>(stack.top());
-	stack.pop();
-	goto middle;
+    } else {
+        do {
+            next = node;
+            if (!(node = node->rblinks_.p_))
+                return count;
+        } while (node->rblinks_.c_[1].node() == next);
+        goto middle;
     }
 }
 
