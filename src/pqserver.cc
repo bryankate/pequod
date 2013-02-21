@@ -11,10 +11,16 @@ namespace pq {
 
 // XXX check circular expansion
 
-ServerRange::ServerRange(const String& first, const String& last,
-			 range_type type, Join* join)
-    : interval<String>(first, last), type_(type), subtree_iend_(iend()),
-      join_(join) {
+inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
+    : ibegin_len_(first.length()), iend_len_(last.length()),
+      subtree_iend_(keys_ + ibegin_len_, iend_len_), type_(type), join_(join) {
+    memcpy(keys_, first.data(), first.length());
+    memcpy(keys_ + ibegin_len_, last.data(), last.length());
+}
+
+ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join) {
+    char* buf = new char[sizeof(ServerRange) + first.length() + last.length()];
+    return new(buf) ServerRange(first, last, type, join);
 }
 
 void ServerRange::add_sink(const Match& m) {
@@ -176,7 +182,7 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
 	    it->add_sink(m);
 	    return;
 	}
-    ServerRange* r = new ServerRange(first, last, ServerRange::copy, join);
+    ServerRange* r = ServerRange::make(first, last, ServerRange::copy, join);
     r->add_sink(m);
     source_ranges_.insert(r);
 }
@@ -193,7 +199,7 @@ void Server::insert(const String& key, const String& value) {
 	d->value_ = value;
     }
 
-    for (auto it = source_ranges_.begin_contains(key);
+    for (auto it = source_ranges_.begin_contains(Str(key));
 	 it != source_ranges_.end(); ++it)
         if (it->type() == ServerRange::copy)
             it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
@@ -205,7 +211,7 @@ void Server::erase(const String& key) {
 	Datum* d = it.operator->();
 	store_.erase(it);
 
-        for (auto it = source_ranges_.begin_contains(key);
+        for (auto it = source_ranges_.begin_contains(Str(key));
 	     it != source_ranges_.end(); ++it)
             if (it->type() == ServerRange::copy)
                 it->notify(d, ServerRange::notify_erase, *this);

@@ -64,18 +64,21 @@ struct DatumDispose {
 
 typedef bi::set<Datum> ServerStore;
 
-class ServerRange : public interval<String> {
+class ServerRange {
   public:
     enum range_type {
         copy = 1, joinsink = 2, validjoin = 4
     };
-    ServerRange(const String& first, const String& last, range_type type,
-                Join* join = 0);
+    static ServerRange* make(Str first, Str last, range_type type, Join *join = 0);
+
+    typedef Str endpoint_type;
+    inline Str ibegin() const;
+    inline Str iend() const;
+    inline Str subtree_iend() const;
+    inline void set_subtree_iend(Str subtree_iend);
 
     inline range_type type() const;
     inline Join* join() const;
-    inline const String& subtree_iend() const;
-    inline void set_subtree_iend(const String& subtree_iend);
 
     void add_sink(const Match& m);
 
@@ -87,14 +90,20 @@ class ServerRange : public interval<String> {
 
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
 
+  private:
+    int ibegin_len_;
+    int iend_len_;
+    Str subtree_iend_;
+  public:
     rblinks<ServerRange> rblinks_;
-
   private:
     range_type type_;
-    String subtree_iend_;
     Join* join_;
     mutable local_vector<String, 4> resultkeys_;
+    char keys_[0];
 
+    inline ServerRange(Str first, Str last, range_type type, Join* join);
+    ~ServerRange() = default;
     void validate(Match& mf, Match& ml, int joinpos, Server& server);
 };
 
@@ -200,11 +209,19 @@ inline typename Server::const_iterator Server::lower_bound(Str str) const {
     return store_.lower_bound(str, DatumCompare());
 }
 
-inline const String& ServerRange::subtree_iend() const {
+inline Str ServerRange::ibegin() const {
+    return Str(keys_, ibegin_len_);
+}
+
+inline Str ServerRange::iend() const {
+    return Str(keys_ + ibegin_len_, iend_len_);
+}
+
+inline Str ServerRange::subtree_iend() const {
     return subtree_iend_;
 }
 
-inline void ServerRange::set_subtree_iend(const String& subtree_iend) {
+inline void ServerRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
@@ -239,12 +256,12 @@ inline int ServerRangeSet::total_size() const {
 }
 
 inline void Server::add_join(Str first, Str last, Join* join) {
-    ServerRange* r = new ServerRange(first, last, ServerRange::joinsink, join);
+    ServerRange* r = ServerRange::make(first, last, ServerRange::joinsink, join);
     sink_ranges_.insert(r);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {
-    ServerRange* r = new ServerRange(first, last, ServerRange::validjoin, join);
+    ServerRange* r = ServerRange::make(first, last, ServerRange::validjoin, join);
     sink_ranges_.insert(r);
 }
 
