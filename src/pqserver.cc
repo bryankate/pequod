@@ -5,7 +5,7 @@
 #include "clp.h"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
-#include <sys/time.h>
+#include "time.hh"
 
 namespace pq {
 
@@ -323,10 +323,9 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
     }
 
     getrusage(RUSAGE_SELF, &ru[1]);
-    timersub(&ru[1].ru_utime, &ru[0].ru_utime, &ru[1].ru_utime);
     Json stats = Json().set("nposts", npost).set("nfull", nfull)
 	.set("nupdate", nupdate).set("nposts_read", nread)
-	.set("time", ru[1].ru_utime.tv_sec + (double) ru[1].ru_utime.tv_usec/1e6);
+	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
     stats.merge(server.stats());
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] load_times;
