@@ -290,6 +290,7 @@ void twitter_populate(pq::Server& server, pq::TwitterPopulator& tp) {
         server.insert(Str(buf, 13), Str("1", 1));
     }
 
+#if 0
     for (uint32_t u = 0; u != tp.nusers(); ++u)
         for (int p = 0; p != 10; ++p) {
             auto post = tp.random_post(gen);
@@ -297,6 +298,7 @@ void twitter_populate(pq::Server& server, pq::TwitterPopulator& tp) {
             if (p == 9 && u % 1000 == 0)
                 fprintf(stderr, "%u/%u ", u, tp.nusers());
         }
+#endif
 
     tp.print_subscription_statistics(std::cout);
 
@@ -317,6 +319,8 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
 
     uint32_t time = 1000000000;
     uint32_t nusers = tp.nusers();
+    uint32_t post_end_time = time + nusers * 5;
+    uint32_t end_time = post_end_time + 1000000;
     uint32_t* load_times = new uint32_t[nusers];
     for (uint32_t i = 0; i != nusers; ++i)
         load_times[i] = 0;
@@ -325,10 +329,10 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
     size_t nread = 0;
     getrusage(RUSAGE_SELF, &ru[0]);
 
-    while (time != 1001000000) {
+    while (time != end_time) {
         uint32_t u = rng(nusers);
         uint32_t a = rng(100);
-        if (a < 2) {
+        if (time < post_end_time || a < 2) {
             twitter_post(server, tp, u, time, "?!?#*");
             ++npost;
         } else {
