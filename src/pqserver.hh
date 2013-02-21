@@ -153,7 +153,8 @@ class Server {
 
   private:
     store_type store_;
-    interval_tree<ServerRange> ranges_;
+    interval_tree<ServerRange> source_ranges_;
+    interval_tree<ServerRange> sink_ranges_;
 };
 
 inline bool operator<(const Datum& a, const Datum& b) {
@@ -237,17 +238,17 @@ inline int ServerRangeSet::total_size() const {
 inline void Server::add_copy(Str first, Str last, Join* join,
 			     const Match& m) {
     ServerRange* r = new ServerRange(first, last, ServerRange::copy, join, m);
-    ranges_.insert(r);
+    source_ranges_.insert(r);
 }
 
 inline void Server::add_join(Str first, Str last, Join* join) {
     ServerRange* r = new ServerRange(first, last, ServerRange::joinsink, join);
-    ranges_.insert(r);
+    sink_ranges_.insert(r);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {
     ServerRange* r = new ServerRange(first, last, ServerRange::validjoin, join);
-    ranges_.insert(r);
+    sink_ranges_.insert(r);
 }
 
 template <typename I>
@@ -259,8 +260,8 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 			     store_.lower_bound(last, DatumCompare()));
 #endif
     ServerRangeSet srs(this, first, last, ServerRange::copy);
-    for (auto it = ranges_.begin_overlaps(interval<Str>(first, last));
-	 it != ranges_.end(); ++it)
+    for (auto it = source_ranges_.begin_overlaps(interval<Str>(first, last));
+	 it != source_ranges_.end(); ++it)
 	srs.push_back(it.operator->());
 
     while (first_value != last_value && it.first != it.second) {
@@ -300,8 +301,8 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 inline void Server::validate(Str first, Str last) {
     ServerRangeSet srs(this, first, last,
                        ServerRange::joinsink | ServerRange::validjoin);
-    for (auto it = ranges_.begin_overlaps(interval<Str>(first, last));
-	 it != ranges_.end(); ++it)
+    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
+	 it != sink_ranges_.end(); ++it)
 	srs.push_back(it.operator->());
     srs.validate();
 }

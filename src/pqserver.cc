@@ -176,7 +176,8 @@ void Server::insert(const String& key, const String& value) {
 	d->value_ = value;
     }
 
-    for (auto it = ranges_.begin_contains(key); it != ranges_.end(); ++it)
+    for (auto it = source_ranges_.begin_contains(key);
+	 it != source_ranges_.end(); ++it)
         if (it->type() == ServerRange::copy)
             it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
@@ -187,7 +188,8 @@ void Server::erase(const String& key) {
 	Datum* d = it.operator->();
 	store_.erase(it);
 
-        for (auto it = ranges_.begin_contains(key); it != ranges_.end(); ++it)
+        for (auto it = source_ranges_.begin_contains(key);
+	     it != source_ranges_.end(); ++it)
             if (it->type() == ServerRange::copy)
                 it->notify(d, ServerRange::notify_erase, *this);
 
@@ -197,7 +199,8 @@ void Server::erase(const String& key) {
 
 Json Server::stats() const {
     return Json().set("store_size", store_.size())
-	.set("ranges_size", ranges_.size());
+	.set("source_ranges_size", source_ranges_.size())
+	.set("sink_ranges_size", sink_ranges_.size());
 }
 
 } // namespace
