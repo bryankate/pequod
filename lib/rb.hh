@@ -42,6 +42,7 @@ class rbnodeptr {
     template <typename F> inline rbnodeptr<T> move_red_right(F &f) const;
     template <typename F> inline rbnodeptr<T> fixup(F &f) const;
 
+    size_t size() const;
     void check(T* parent, int this_black_height, int& black_height) const;
     void output(std::ostream& s, int indent) const;
 
@@ -138,6 +139,8 @@ class rbtree {
     ~rbtree();
 
     inline node_type *root();
+
+    inline size_t size() const;
 
     typedef rbiterator<T> iterator;
     inline iterator begin() const;
@@ -520,6 +523,17 @@ std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     else
 	s << "<empty>\n";
     return s;
+}
+
+template <typename T>
+size_t rbnodeptr<T>::size() const {
+    return 1 + (node()->rblinks_.c_[0] ? node()->rblinks_.c_[0].size() : 0)
+	+ (node()->rblinks_.c_[1] ? node()->rblinks_.c_[1].size() : 0);
+}
+
+template <typename T, typename C, typename R>
+inline size_t rbtree<T, C, R>::size() const {
+    return r_.root_ ? rbnodeptr<T>(r_.root_, false).size() : 0;
 }
 
 template <typename T>

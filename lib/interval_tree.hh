@@ -51,6 +51,8 @@ class interval_tree {
 
     inline interval_tree();
 
+    inline size_t size() const;
+
     template <typename X> inline value_type* find(const X &i);
     template <typename X> inline const value_type* find(const X &i) const;
 
@@ -106,6 +108,11 @@ class interval_tree {
 
 template <typename T>
 inline interval_tree<T>::interval_tree() {
+}
+
+template <typename T>
+inline size_t interval_tree<T>::size() const {
+    return t_.size();
 }
 
 template <typename T> template <typename X>
