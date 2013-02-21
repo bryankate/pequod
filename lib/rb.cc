@@ -1,3 +1,4 @@
+#define INTERVAL_TREE_DEBUG 1
 #include <iostream>
 #include <string.h>
 #include <boost/intrusive/set.hpp>
@@ -142,6 +143,10 @@ struct int_interval : public interval<int> {
     }
 };
 
+std::ostream& operator<<(std::ostream& s, const rbwrapper<int_interval>& x) {
+    return s << "[" << x.ibegin() << ", " << x.iend() << ") ..." << x.subtree_iend();
+}
+
 template <typename G>
 void grow_and_shrink(G& tree, int N) {
     struct rusage ru[6];
@@ -271,7 +276,7 @@ int main(int argc, char **argv) {
         exit(1);
     } else {
         rbtree_with_print tree;
-        grow_and_shrink(tree, 50000);
+        //grow_and_shrink(tree, 50000);
     }
 
     {

@@ -145,6 +145,12 @@ inline void interval_tree<T>::erase_and_dispose(T* node, Disposer d) {
     t_.erase_and_dispose(node, d);
 }
 
+#if INTERVAL_TREE_DEBUG
+# define IDEBUG(...) std::cerr << __VA_ARGS__
+#else
+# define IDEBUG(...)
+#endif
+
 template <typename I>
 struct interval_interval_contains_predicate {
     const I& x_;
@@ -152,12 +158,15 @@ struct interval_interval_contains_predicate {
         : x_(x) {
     }
     template <typename T> bool check(T* node) {
+	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
         return node->contains(x_);
     }
     template <typename T> bool visit_subtree(T* node) {
+	IDEBUG("visit_subtree[" << x_.ibegin() << "] " << node->subtree_iend() << "\n");
         return x_.ibegin() < node->subtree_iend();
     }
     template <typename T> bool visit_right(T* node) {
+	IDEBUG("visit_right[" << x_.iend() << "] " << node->ibegin() << "\n");
         return node->ibegin() < x_.iend();
     }
 };
@@ -169,12 +178,15 @@ struct interval_interval_overlaps_predicate {
         : x_(x) {
     }
     template <typename T> bool check(T* node) {
+	IDEBUG("check_overlaps[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
         return node->overlaps(x_);
     }
     template <typename T> bool visit_subtree(T* node) {
+	IDEBUG("visit_subtree[" << x_.ibegin() << "] " << node->subtree_iend() << "\n");
         return x_.ibegin() < node->subtree_iend();
     }
     template <typename T> bool visit_right(T* node) {
+	IDEBUG("visit_right[" << x_.iend() << "] " << node->ibegin() << "\n");
         return node->ibegin() < x_.iend();
     }
 };
@@ -186,15 +198,20 @@ struct interval_endpoint_contains_predicate {
         : x_(x) {
     }
     template <typename T> bool check(T* node) {
+	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
         return node->contains(x_);
     }
     template <typename T> bool visit_subtree(T* node) {
+	IDEBUG("visit_subtree[" << x_ << "] " << node->subtree_iend() << "\n");
         return x_ < node->subtree_iend();
     }
     template <typename T> bool visit_right(T* node) {
+	IDEBUG("visit_right[" << x_ << "] " << node->ibegin() << "\n");
         return !(x_ < node->ibegin());
     }
 };
+
+#undef IDEBUG
 
 template <typename T, typename P>
 class interval_contains_iterator {
@@ -246,17 +263,19 @@ void interval_contains_iterator<T, P>::advance(bool first) {
     if (first)
         goto first;
     do {
-        if (predicate_.visit_right(node_) && (next = node_->rblinks_.c_[1].node())) {
+        if ((next = node_->rblinks_.c_[1].node())) {
             node_ = next;
         first:
-            while ((next = node_->rblinks_.c_[0].node()) && predicate_.visit_subtree(next))
+            while ((next = node_->rblinks_.c_[0].node())
+		   && predicate_.visit_subtree(next))
                 node_ = next;
         } else {
             do {
                 next = node_;
                 if (!(node_ = node_->rblinks_.p_))
                     return;
-            } while (node_->rblinks_.c_[1].node() == next);
+            } while (node_->rblinks_.c_[1].node() == next
+		     || !predicate_.visit_right(node_));
         }
     } while (!predicate_.check(node_));
 }
@@ -309,7 +328,8 @@ size_t interval_tree<T>::visit_overlaps(value_type* node, P predicate, F& f) {
 	return count;
 
  left:
-    while ((next = node->rblinks_.c_[0].node()) && predicate.visit_subtree(next))
+    while ((next = node->rblinks_.c_[0].node())
+	   && predicate.visit_subtree(next))
 	node = next;
 
  middle:
