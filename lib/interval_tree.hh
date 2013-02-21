@@ -38,6 +38,11 @@ struct interval_rb_reshaper {
     }
 };
 
+template <typename I> struct interval_interval_contains_predicate;
+template <typename I> struct interval_interval_overlaps_predicate;
+template <typename X> struct interval_endpoint_contains_predicate;
+template <typename T, typename P> class interval_contains_iterator;
+
 template <typename T>
 class interval_tree {
   public:
@@ -55,6 +60,28 @@ class interval_tree {
     inline void erase_and_dispose(value_type* x);
     template <typename Dispose> inline void erase_and_dispose(value_type* x, Dispose d);
 
+    typedef rbiterator<T> iterator;
+    inline iterator begin() const;
+    inline iterator end() const;
+
+    template <typename I>
+    inline interval_contains_iterator<T, interval_interval_contains_predicate<I> >
+      contains_begin(const I& x);
+    template <typename I>
+    inline interval_contains_iterator<T, interval_interval_contains_predicate<I> >
+      contains_end(const I& x);
+    inline interval_contains_iterator<T, interval_endpoint_contains_predicate<endpoint_type> >
+      contains_begin(const endpoint_type& x);
+    template <typename I>
+    inline interval_contains_iterator<T, interval_endpoint_contains_predicate<endpoint_type> >
+      contains_end(const endpoint_type& x);
+    template <typename I>
+    inline interval_contains_iterator<T, interval_interval_overlaps_predicate<I> >
+      overlaps_begin(const I& x);
+    template <typename I>
+    inline interval_contains_iterator<T, interval_interval_overlaps_predicate<I> >
+      overlaps_end(const I& x);
+
     template <typename F>
     inline size_t visit_contains(const endpoint_type &x, const F &f);
     template <typename F>
@@ -63,11 +90,6 @@ class interval_tree {
     inline size_t visit_contains(const I &x, const F &f);
     template <typename I, typename F>
     inline size_t visit_contains(const I &x, F &f);
-
-    template <typename F>
-    inline size_t visit_overlaps(const endpoint_type &x, const F &f);
-    template <typename F>
-    inline size_t visit_overlaps(const endpoint_type &x, F &f);
     template <typename I, typename F>
     inline size_t visit_overlaps(const I &x, const F &f);
     template <typename I, typename F>
@@ -150,10 +172,10 @@ struct interval_interval_overlaps_predicate {
     }
 };
 
-template <typename I>
+template <typename X>
 struct interval_endpoint_contains_predicate {
-    const I& x_;
-    interval_endpoint_contains_predicate(const I& x)
+    const X& x_;
+    interval_endpoint_contains_predicate(const X& x)
         : x_(x) {
     }
     template <typename T> bool check(T* node) {
@@ -166,6 +188,111 @@ struct interval_endpoint_contains_predicate {
         return !(x_ < node->ibegin());
     }
 };
+
+template <typename T, typename P>
+class interval_contains_iterator {
+  public:
+    interval_contains_iterator() {
+    }
+    interval_contains_iterator(T* root, const P& predicate)
+        : node_(root), predicate_(predicate) {
+        if (node_)
+            advance(true);
+    }
+
+    inline bool operator==(const interval_contains_iterator<T, P>& x) {
+        return node_ == x.node_;
+    }
+    template <typename X> inline bool operator==(const X& x) {
+        return node_ == x.operator->();
+    }
+    inline bool operator!=(const interval_contains_iterator<T, P>& x) {
+        return node_ != x.node_;
+    }
+    template <typename X> inline bool operator!=(const X& x) {
+        return node_ != x.operator->();
+    }
+
+    void operator++() {
+        advance(false);
+    }
+    void operator++(int) {
+        advance(false);
+    }
+
+    T& operator*() const {
+        return *node_;
+    }
+    T* operator->() const {
+        return node_;
+    }
+  private:
+    T* node_;
+    P predicate_;
+
+    void advance(bool first);
+};
+
+template <typename T, typename P>
+void interval_contains_iterator<T, P>::advance(bool first) {
+    T* next;
+    if (first)
+        goto first;
+    do {
+        if (predicate_.visit_right(node_) && (next = node_->rblinks_.c_[1].node())) {
+            node_ = next;
+        first:
+            while ((next = node_->rblinks_.c_[0].node()) && predicate_.visit_subtree(next))
+                node_ = next;
+        } else {
+            do {
+                next = node_;
+                if (!(node_ = node_->rblinks_.p_))
+                    return;
+            } while (node_->rblinks_.c_[1].node() == next);
+        }
+    } while (!predicate_.check(node_));
+}
+
+template <typename T>
+inline typename interval_tree<T>::iterator interval_tree<T>::begin() const {
+    return t_.begin();
+}
+
+template <typename T>
+inline typename interval_tree<T>::iterator interval_tree<T>::end() const {
+    return t_.end();
+}
+
+template <typename T> template <typename X>
+interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::contains_begin(const X& x) {
+    return interval_contains_iterator<T, interval_interval_contains_predicate<X> >(t_.root(), x);
+}
+
+template <typename T> template <typename X>
+interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::contains_end(const X& x) {
+    return interval_contains_iterator<T, interval_interval_contains_predicate<X> >(0, x);
+}
+
+template <typename T>
+interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::contains_begin(const endpoint_type& x) {
+    return interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> >(t_.root(), x);
+}
+
+template <typename T> template <typename X>
+interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::contains_end(const endpoint_type& x) {
+    return interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> >(0, x);
+}
+
+template <typename T> template <typename X>
+interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::overlaps_begin(const X& x) {
+    return interval_contains_iterator<T, interval_interval_overlaps_predicate<X> >(t_.root(), x);
+}
+
+template <typename T> template <typename X>
+interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::overlaps_end(const X& x) {
+    return interval_contains_iterator<T, interval_interval_overlaps_predicate<X> >(0, x);
+}
 
 template <typename T> template <typename P, typename F>
 size_t interval_tree<T>::visit_overlaps(value_type* node, P predicate, F& f) {
@@ -205,17 +332,6 @@ inline size_t interval_tree<T>::visit_contains(const endpoint_type& x, const F& 
 
 template <typename T> template <typename F>
 inline size_t interval_tree<T>::visit_contains(const endpoint_type& x, F& f) {
-    return visit_overlaps(t_.root(), interval_endpoint_contains_predicate<endpoint_type>(x), f);
-}
-
-template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_overlaps(const endpoint_type& x, const F& f) {
-    typename std::decay<F>::type realf(f);
-    return visit_overlaps(t_.root(), interval_endpoint_contains_predicate<endpoint_type>(x), realf);
-}
-
-template <typename T> template <typename F>
-inline size_t interval_tree<T>::visit_overlaps(const endpoint_type& x, F& f) {
     return visit_overlaps(t_.root(), interval_endpoint_contains_predicate<endpoint_type>(x), f);
 }
 

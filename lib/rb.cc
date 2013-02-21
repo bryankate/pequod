@@ -296,7 +296,11 @@ int main(int argc, char **argv) {
 	tree.insert(new rbwrapper<int_interval>(a, a + random() % 200));
     }
     std::cerr << tree << "\n\n";
-    tree.visit_overlaps(40, print);
+    tree.visit_contains(40, print);
+    for (auto it = tree.contains_begin(40); it != tree.end(); ++it)
+        std::cerr << "... " << *it << "\n";
     std::cerr << "\n";
     tree.visit_overlaps(interval<int>(10, 30), print);
+    for (auto it = tree.overlaps_begin(interval<int>(10, 30)); it != tree.end(); ++it)
+        std::cerr << "... " << *it << "\n";
 }
