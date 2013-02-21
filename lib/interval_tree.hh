@@ -66,21 +66,21 @@ class interval_tree {
 
     template <typename I>
     inline interval_contains_iterator<T, interval_interval_contains_predicate<I> >
-      contains_begin(const I& x);
+      begin_contains(const I& x);
     template <typename I>
     inline interval_contains_iterator<T, interval_interval_contains_predicate<I> >
-      contains_end(const I& x);
+      end_contains(const I& x);
     inline interval_contains_iterator<T, interval_endpoint_contains_predicate<endpoint_type> >
-      contains_begin(const endpoint_type& x);
+      begin_contains(const endpoint_type& x);
     template <typename I>
     inline interval_contains_iterator<T, interval_endpoint_contains_predicate<endpoint_type> >
-      contains_end(const endpoint_type& x);
+      end_contains(const endpoint_type& x);
     template <typename I>
     inline interval_contains_iterator<T, interval_interval_overlaps_predicate<I> >
-      overlaps_begin(const I& x);
+      begin_overlaps(const I& x);
     template <typename I>
     inline interval_contains_iterator<T, interval_interval_overlaps_predicate<I> >
-      overlaps_end(const I& x);
+      end_overlaps(const I& x);
 
     template <typename F>
     inline size_t visit_contains(const endpoint_type &x, const F &f);
@@ -265,32 +265,32 @@ inline typename interval_tree<T>::iterator interval_tree<T>::end() const {
 }
 
 template <typename T> template <typename X>
-interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::contains_begin(const X& x) {
+interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::begin_contains(const X& x) {
     return interval_contains_iterator<T, interval_interval_contains_predicate<X> >(t_.root(), x);
 }
 
 template <typename T> template <typename X>
-interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::contains_end(const X& x) {
+interval_contains_iterator<T, interval_interval_contains_predicate<X> > interval_tree<T>::end_contains(const X& x) {
     return interval_contains_iterator<T, interval_interval_contains_predicate<X> >(0, x);
 }
 
 template <typename T>
-interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::contains_begin(const endpoint_type& x) {
+interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::begin_contains(const endpoint_type& x) {
     return interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> >(t_.root(), x);
 }
 
 template <typename T> template <typename X>
-interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::contains_end(const endpoint_type& x) {
+interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> > interval_tree<T>::end_contains(const endpoint_type& x) {
     return interval_contains_iterator<T, interval_endpoint_contains_predicate<typename T::endpoint_type> >(0, x);
 }
 
 template <typename T> template <typename X>
-interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::overlaps_begin(const X& x) {
+interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::begin_overlaps(const X& x) {
     return interval_contains_iterator<T, interval_interval_overlaps_predicate<X> >(t_.root(), x);
 }
 
 template <typename T> template <typename X>
-interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::overlaps_end(const X& x) {
+interval_contains_iterator<T, interval_interval_overlaps_predicate<X> > interval_tree<T>::end_overlaps(const X& x) {
     return interval_contains_iterator<T, interval_interval_overlaps_predicate<X> >(0, x);
 }
 

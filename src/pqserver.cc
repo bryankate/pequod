@@ -175,7 +175,7 @@ void Server::insert(const String& key, const String& value) {
 	d->value_ = value;
     }
 
-    for (auto it = ranges_.contains_begin(key); it != ranges_.end(); ++it)
+    for (auto it = ranges_.begin_contains(key); it != ranges_.end(); ++it)
         if (it->type() == ServerRange::copy)
             it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
@@ -186,7 +186,7 @@ void Server::erase(const String& key) {
 	Datum* d = it.operator->();
 	store_.erase(it);
 
-        for (auto it = ranges_.contains_begin(key); it != ranges_.end(); ++it)
+        for (auto it = ranges_.begin_contains(key); it != ranges_.end(); ++it)
             if (it->type() == ServerRange::copy)
                 it->notify(d, ServerRange::notify_erase, *this);
 
