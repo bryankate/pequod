@@ -3,6 +3,8 @@
 #include "json.hh"
 #include "pqtwitter.hh"
 #include <boost/random/random_number_generator.hpp>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 namespace pq {
 
@@ -234,10 +236,21 @@ void simple() {
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 }
 
-uint32_t twitter_populate(pq::Server& server) {
+void twitter_post(pq::Server& server, pq::TwitterPopulator& tp,
+                  uint32_t u, uint32_t time, Str value) {
+    char buf[128];
+    sprintf(buf, "p|%05d|%010u", u, time);
+    server.insert(Str(buf, 18), value);
+    if (tp.push())
+        for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
+            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+            server.insert(Str(buf, 24), value);
+        }
+}
+
+void twitter_populate(pq::Server& server, pq::TwitterPopulator& tp) {
     boost::mt19937 gen;
     gen.seed(0);
-    pq::TwitterPopulator tp{Json().set("shape", 8)};
 
     tp.create_subscriptions(gen);
     char buf[128];
@@ -246,51 +259,70 @@ uint32_t twitter_populate(pq::Server& server) {
         server.insert(Str(buf, 13), Str("1", 1));
     }
 
-    for (uint32_t i = 0; i != tp.nusers(); ++i)
+    for (uint32_t u = 0; u != tp.nusers(); ++u)
         for (int p = 0; p != 10; ++p) {
             auto post = tp.random_post(gen);
-            sprintf(buf, "p|%05d|%010llu", i, post.first);
-            server.insert(Str(buf, 18), post.second);
+            twitter_post(server, tp, u, post.first, post.second);
+            if (p == 9 && u % 1000 == 0)
+                fprintf(stderr, "%u/%u ", u, tp.nusers());
         }
 
-    tp.print_subscription_statistics(std::cerr);
+    tp.print_subscription_statistics(std::cout);
 
-    pq::Join* j = new pq::Join;
-    j->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
-                    "s|<user_id>|<poster_id> "
-                    "p|<poster_id>|<time>");
-    server.add_join("t|", "t}", j);
-
-    return tp.nusers();
+    if (!tp.push()) {
+        pq::Join* j = new pq::Join;
+        j->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
+                        "s|<user_id>|<poster_id> "
+                        "p|<poster_id>|<time>");
+        server.add_join("t|", "t}", j);
+    }
 }
 
-void twitter_run(pq::Server& server, uint32_t nusers) {
+void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
     boost::mt19937 gen;
     gen.seed(13918);
     boost::random_number_generator<boost::mt19937> rng(gen);
+    struct rusage ru[2];
 
     uint32_t time = 1000000000;
+    uint32_t nusers = tp.nusers();
     uint32_t* load_times = new uint32_t[nusers];
     for (uint32_t i = 0; i != nusers; ++i)
         load_times[i] = 0;
     char buf1[128], buf2[128];
+    uint32_t npost = 0, nfull = 0, nupdate = 0;
+    size_t nread = 0;
+    getrusage(RUSAGE_SELF, &ru[0]);
 
-    while (time != 1002000000) {
+    while (time != 1001000000) {
         uint32_t u = rng(nusers);
         uint32_t a = rng(100);
-        if (a == 0) {
-            sprintf(buf1, "p|%05d|%010d", u, time);
-            server.insert(Str(buf1, 18), "?!?#*");
+        if (a < 2) {
+            twitter_post(server, tp, u, time, "?!?#*");
+            ++npost;
         } else {
             uint32_t tx = load_times[u];
-            if (!tx || a == 1)
+            if (!tx || a < 3) {
                 tx = time - 32000;
+                ++nfull;
+            } else
+                ++nupdate;
             sprintf(buf1, "t|%05d|%010d", u, tx);
             sprintf(buf2, "t|%05d}", u);
             server.validate(Str(buf1, 18), Str(buf2, 8));
+            nread += server.count(Str(buf1, 18), Str(buf2, 8));
+            load_times[u] = time;
         }
         ++time;
     }
+
+    getrusage(RUSAGE_SELF, &ru[1]);
+    timersub(&ru[1].ru_utime, &ru[0].ru_utime, &ru[1].ru_utime);
+    printf("{\"npost\":%u,\"nfull\":%u,\"nupdate\":%u,\"nposts_read\":%zd,\n"
+           "  \"time\":%g}\n",
+           npost, nfull, nupdate, nread,
+           ru[1].ru_utime.tv_sec + (double) ru[1].ru_utime.tv_usec / 1e6);
+    delete[] load_times;
 }
 
 int main(int argc, char** argv) {
@@ -298,7 +330,9 @@ int main(int argc, char** argv) {
     simple();
 #else
     pq::Server server;
-    uint32_t nusers = twitter_populate(server);
-    twitter_run(server, nusers);
+    pq::TwitterPopulator tp{Json().set("shape", 8)
+            .set("push", argc > 1 && strcmp(argv[1], "--push") == 0)};
+    twitter_populate(server, tp);
+    twitter_run(server, tp);
 #endif
 }

@@ -154,6 +154,7 @@ class Server {
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
+    inline size_t count(Str first, Str last);
 
   private:
     store_type store_;
@@ -313,6 +314,10 @@ inline void Server::validate(Str first, Str last) {
     ranges_.visit_overlaps(interval<Str>(first, last),
                            ServerRangeCollector(srs));
     srs.validate();
+}
+
+inline size_t Server::count(Str first, Str last) {
+    return std::distance(lower_bound(first), lower_bound(last));
 }
 
 } // namespace

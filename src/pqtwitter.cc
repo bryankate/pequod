@@ -9,6 +9,7 @@ const char TwitterPopulator::tweet_data[] = "...................................
 
 TwitterPopulator::TwitterPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
+      push_(param["push"].as_b(false)),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),
@@ -55,6 +56,7 @@ void TwitterPopulator::create_subscriptions(generator_type& gen) {
     uint32_t* subvec = new uint32_t[(nusers_ + 31) / 32];
     rng_type rng(gen);
     subs_.clear();
+    std::vector<std::pair<uint32_t, uint32_t> > followers;
 
     for (uint32_t i = 0; i != nusers_; ++i) {
 	memset(subvec, 0, sizeof(uint32_t) * ((nusers_ + 31) / 32));
@@ -66,12 +68,27 @@ void TwitterPopulator::create_subscriptions(generator_type& gen) {
 		other = std::upper_bound(sub_prob, sub_prob + nusers_, gen()) - sub_prob;
 	    } while (subvec[other / 32] & (1U << (other % 32)));
             subs_.push_back(std::make_pair(i, other));
+            followers.push_back(std::make_pair(other, i));
             subvec[other / 32] |= 1U << (other % 32);
         }
     }
 
     delete[] sub_prob;
     delete[] subvec;
+
+    followers_.clear();
+    followers_.reserve(followers.size());
+    follower_ptrs_.clear();
+    follower_ptrs_.reserve(nusers_ + 1);
+
+    std::sort(followers.begin(), followers.end());
+    for (auto& sub : followers) {
+        while (follower_ptrs_.size() < sub.first)
+            follower_ptrs_.push_back(followers_.size());
+        followers_.push_back(sub.second);
+    }
+    while (follower_ptrs_.size() <= nusers_)
+        follower_ptrs_.push_back(followers_.size());
 }
 
 
