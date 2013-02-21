@@ -143,7 +143,8 @@ struct interval_interval_contains_predicate {
     }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
-        return node->contains(x_);
+        // XXX should allow selection
+        return interval<typename T::endpoint_type>::contains(node->ibegin(), node->iend(), x_.ibegin(), x_.iend());
     }
     template <typename T> bool visit_subtree(T* node) {
 	IDEBUG("visit_subtree[" << x_.ibegin() << "] " << node->subtree_iend() << "\n");
@@ -163,7 +164,8 @@ struct interval_interval_overlaps_predicate {
     }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_overlaps[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
-        return node->overlaps(x_);
+        // XXX should allow selection
+        return interval<typename T::endpoint_type>::overlaps(node->ibegin(), node->iend(), x_.ibegin(), x_.iend());
     }
     template <typename T> bool visit_subtree(T* node) {
 	IDEBUG("visit_subtree[" << x_.ibegin() << "] " << node->subtree_iend() << "\n");
@@ -183,7 +185,8 @@ struct interval_endpoint_contains_predicate {
     }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
-        return node->contains(x_);
+        // XXX should allow selection
+        return interval<typename T::endpoint_type>::contains(node->ibegin(), node->iend(), x_);
     }
     template <typename T> bool visit_subtree(T* node) {
 	IDEBUG("visit_subtree[" << x_ << "] " << node->subtree_iend() << "\n");

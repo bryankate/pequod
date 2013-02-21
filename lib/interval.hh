@@ -21,12 +21,21 @@ class interval {
     inline bool operator!() const;
     inline bool empty() const;
 
+    static inline bool contains(const T& ibegin, const T& iend, const T& x);
+    template <typename X>
+    static inline bool contains(const T& ibegin, const T& iend,
+                                const X& xbegin, const X& xend);
+    template <typename X>
+    static inline bool overlaps(const T& ibegin, const T& iend,
+                                const X& xbegin, const X& xend);
+
     inline bool contains(const T& x) const;
     inline bool contains(const interval<T>& x) const;
     template <typename X> inline bool contains(const interval<X>& x) const;
-    inline bool overlaps(const T& x) const;
+    template <typename X> inline bool contains(const X& xbegin, const X& xend) const;
     inline bool overlaps(const interval<T>& x) const;
     template <typename X> inline bool overlaps(const interval<X>& x) const;
+    template <typename X> inline bool overlaps(const X& xbegin, const X& xend) const;
 
   private:
     T ibegin_;
@@ -80,33 +89,45 @@ inline bool interval<T>::empty() const {
 }
 
 template <typename T>
-inline bool interval<T>::overlaps(const interval<T> &x) const {
-    return x.ibegin() < iend() && ibegin() < x.iend();
+inline bool interval<T>::contains(const T& ibegin, const T& iend, const T& x) {
+    return !(x < ibegin) && x < iend;
 }
 
 template <typename T> template <typename X>
-inline bool interval<T>::overlaps(const interval<X> &x) const {
-    return x.ibegin() < iend() && ibegin() < x.iend();
-}
-
-template <typename T>
-inline bool interval<T>::overlaps(const T &x) const {
-    return !(x < ibegin()) && x < iend();
-}
-
-template <typename T>
-inline bool interval<T>::contains(const interval<T> &x) const {
-    return !(x.ibegin() < ibegin() || iend() < x.iend());
+inline bool interval<T>::contains(const T& ibegin, const T& iend,
+                                  const X& xbegin, const X& xend) {
+    return !(xbegin < ibegin || iend < xend);
 }
 
 template <typename T> template <typename X>
-inline bool interval<T>::contains(const interval<X> &x) const {
-    return !(x.ibegin() < ibegin() || iend() < x.iend());
+inline bool interval<T>::overlaps(const T& ibegin, const T& iend,
+                                  const X& xbegin, const X& xend) {
+    return xbegin < iend && ibegin < xend;
 }
 
 template <typename T>
 inline bool interval<T>::contains(const T &x) const {
-    return overlaps(x);
+    return contains(ibegin(), iend(), x);
+}
+
+template <typename T>
+inline bool interval<T>::contains(const interval<T> &x) const {
+    return contains(ibegin(), iend(), x.ibegin(), x.iend());
+}
+
+template <typename T> template <typename X>
+inline bool interval<T>::contains(const interval<X> &x) const {
+    return contains(ibegin(), iend(), x.ibegin(), x.iend());
+}
+
+template <typename T>
+inline bool interval<T>::overlaps(const interval<T> &x) const {
+    return overlaps(ibegin(), iend(), x.ibegin(), x.iend());
+}
+
+template <typename T> template <typename X>
+inline bool interval<T>::overlaps(const interval<X> &x) const {
+    return overlaps(ibegin(), iend(), x.ibegin(), x.iend());
 }
 
 template <typename T>
