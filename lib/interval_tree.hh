@@ -274,8 +274,13 @@ void interval_contains_iterator<T, P>::advance(bool first) {
                 next = node_;
                 if (!(node_ = node_->rblinks_.p_))
                     return;
-            } while (node_->rblinks_.c_[1].node() == next
-		     || !predicate_.visit_right(node_));
+            } while (node_->rblinks_.c_[1].node() == next);
+	    // Since the interval tree is arranged by increasing ibegin(),
+	    // the first time we encounter !visit_right(), we are done.
+	    if (!predicate_.visit_right(node_)) {
+		node_ = 0;
+		return;
+	    }
         }
     } while (!predicate_.check(node_));
 }
