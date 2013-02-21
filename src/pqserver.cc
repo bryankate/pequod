@@ -2,6 +2,7 @@
 #include "pqjoin.hh"
 #include "json.hh"
 #include "pqtwitter.hh"
+#include "clp.h"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
 #include <sys/time.h>
@@ -325,13 +326,31 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
     delete[] load_times;
 }
 
+static Clp_Option options[] = {
+    { "push", 'p', 1000, 0, Clp_Negate },
+    { "nusers", 'n', 1001, Clp_ValInt, 0 },
+    { "shape", 0, 1002, Clp_ValDouble, 0 }
+};
+
 int main(int argc, char** argv) {
+    Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
+    Json tp_param = Json().set("shape", 8).set("nusers", 5000);
+    while (Clp_Next(clp) != Clp_Done) {
+	if (clp->option->long_name == String("push"))
+	    tp_param.set("push", !clp->negated);
+	else if (clp->option->long_name == String("nusers"))
+	    tp_param.set("nusers", clp->val.i);
+	else if (clp->option->long_name == String("shape"))
+	    tp_param.set("shape", clp->val.d);
+	else
+	    exit(1);
+    }
+
 #if 0
     simple();
 #else
     pq::Server server;
-    pq::TwitterPopulator tp{Json().set("shape", 8)
-            .set("push", argc > 1 && strcmp(argv[1], "--push") == 0)};
+    pq::TwitterPopulator tp(tp_param);
     twitter_populate(server, tp);
     twitter_run(server, tp);
 #endif

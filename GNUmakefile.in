@@ -61,6 +61,9 @@ $(OBJDIR)/%.o: $(SRCDIR)/app/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
+$(OBJDIR)/%.o: $(top_srcdir)/lib/%.c config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
 $(OBJDIR)/%.o: $(top_srcdir)/src/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
@@ -77,7 +80,8 @@ COMMON_OBJS = \
 	$(OBJDIR)/msgpack.o \
 	$(OBJDIR)/compiler.o \
 	$(OBJDIR)/encoding.o \
-	$(OBJDIR)/hashallocator.o
+	$(OBJDIR)/hashallocator.o \
+	$(OBJDIR)/clp.o
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
