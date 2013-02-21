@@ -5,6 +5,7 @@
 #include "string.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
+class Json;
 
 namespace pq {
 class Join;
@@ -155,6 +156,8 @@ class Server {
 
     inline void validate(Str first, Str last);
     inline size_t count(Str first, Str last);
+
+    Json stats() const;
 
   private:
     store_type store_;

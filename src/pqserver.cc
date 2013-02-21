@@ -195,6 +195,11 @@ void Server::erase(const String& key) {
     }
 }
 
+Json Server::stats() const {
+    return Json().set("store_size", store_.size())
+	.set("ranges_size", ranges_.size());
+}
+
 } // namespace
 
 
@@ -319,10 +324,11 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
 
     getrusage(RUSAGE_SELF, &ru[1]);
     timersub(&ru[1].ru_utime, &ru[0].ru_utime, &ru[1].ru_utime);
-    printf("{\"npost\":%u,\"nfull\":%u,\"nupdate\":%u,\"nposts_read\":%zd,\n"
-           "  \"time\":%g}\n",
-           npost, nfull, nupdate, nread,
-           ru[1].ru_utime.tv_sec + (double) ru[1].ru_utime.tv_usec / 1e6);
+    Json stats = Json().set("nposts", npost).set("nfull", nfull)
+	.set("nupdate", nupdate).set("nposts_read", nread)
+	.set("time", ru[1].ru_utime.tv_sec + (double) ru[1].ru_utime.tv_usec/1e6);
+    stats.merge(server.stats());
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] load_times;
 }
 
