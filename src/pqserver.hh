@@ -5,6 +5,7 @@
 #include "string.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
+#include "local_vector.hh"
 class Json;
 
 namespace pq {
@@ -70,13 +71,13 @@ class ServerRange : public interval<String> {
     };
     ServerRange(const String& first, const String& last, range_type type,
                 Join* join = 0);
-    ServerRange(const String& first, const String& last, range_type type,
-		Join* join, const Match& m);
 
     inline range_type type() const;
     inline Join* join() const;
     inline const String& subtree_iend() const;
     inline void set_subtree_iend(const String& subtree_iend);
+
+    void add_sink(const Match& m);
 
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
@@ -87,11 +88,12 @@ class ServerRange : public interval<String> {
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
 
     rblinks<ServerRange> rblinks_;
+
   private:
     range_type type_;
     String subtree_iend_;
     Join* join_;
-    mutable String resultkey_;
+    mutable local_vector<String, 4> resultkeys_;
 
     void validate(Match& mf, Match& ml, int joinpos, Server& server);
 };
@@ -142,7 +144,7 @@ class Server {
     template <typename I>
     void replace_range(Str first, Str last, I first_value, I last_value);
 
-    inline void add_copy(Str first, Str last, Join* j, const Match& m);
+    void add_copy(Str first, Str last, Join* j, const Match& m);
     inline void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
@@ -150,6 +152,7 @@ class Server {
     inline size_t count(Str first, Str last);
 
     Json stats() const;
+    void print(std::ostream& stream);
 
   private:
     store_type store_;
@@ -233,12 +236,6 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 
 inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
-}
-
-inline void Server::add_copy(Str first, Str last, Join* join,
-			     const Match& m) {
-    ServerRange* r = new ServerRange(first, last, ServerRange::copy, join, m);
-    source_ranges_.insert(r);
 }
 
 inline void Server::add_join(Str first, Str last, Join* join) {

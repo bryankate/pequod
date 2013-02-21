@@ -11,27 +11,28 @@ namespace pq {
 
 // XXX check circular expansion
 
-ServerRange::ServerRange(const String& first, const String& last, range_type type,
-			 Join* join)
+ServerRange::ServerRange(const String& first, const String& last,
+			 range_type type, Join* join)
     : interval<String>(first, last), type_(type), subtree_iend_(iend()),
       join_(join) {
 }
 
-ServerRange::ServerRange(const String& first, const String& last, range_type type,
-			 Join* join, const Match& m)
-    : interval<String>(first, last), type_(type), subtree_iend_(iend()),
-      join_(join), resultkey_(String::make_uninitialized((*join)[0].key_length())) {
-    (*join)[0].expand(resultkey_.mutable_udata(), m);
+void ServerRange::add_sink(const Match& m) {
+    assert(join_ && type_ == copy);
+    resultkeys_.push_back(String::make_uninitialized((*join_)[0].key_length()));
+    (*join_)[0].expand(resultkeys_.back().mutable_udata(), m);
 }
 
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (type_ == copy && join_->back().match(d->key())) {
-	join_->expand(resultkey_.mutable_udata(), d->key());
-	if (notifier >= 0)
-	    server.insert(resultkey_, d->value_);
-	else
-	    server.erase(resultkey_);
+	for (auto& s : resultkeys_) {
+	    join_->expand(s.mutable_udata(), d->key());
+	    if (notifier >= 0)
+		server.insert(s, d->value_);
+	    else
+		server.erase(s);
+	}
     }
 }
 
@@ -85,9 +86,11 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
 
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     stream << "{" << (const interval<String>&) r;
-    if (r.type_ == ServerRange::copy)
-	stream << ": copy -> " << r.resultkey_;
-    else if (r.type_ == ServerRange::joinsink)
+    if (r.type_ == ServerRange::copy) {
+	stream << ": copy ->";
+	for (auto s : r.resultkeys_)
+	    stream << " " << s;
+    } else if (r.type_ == ServerRange::joinsink)
         stream << ": joinsink @" << (void*) r.join_;
     else if (r.type_ == ServerRange::validjoin)
         stream << ": validjoin @" << (void*) r.join_;
@@ -164,6 +167,20 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
     return stream << "]";
 }
 
+void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
+    for (auto it = source_ranges_.begin_contains(make_interval(first, last));
+	 it != source_ranges_.end(); ++it)
+	if (it->type() == ServerRange::copy && it->join() == join) {
+	    // XXX may copy too much. This will not actually cause visible
+	    // bugs I think?, but will grow the store
+	    it->add_sink(m);
+	    return;
+	}
+    ServerRange* r = new ServerRange(first, last, ServerRange::copy, join);
+    r->add_sink(m);
+    source_ranges_.insert(r);
+}
+
 void Server::insert(const String& key, const String& value) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
@@ -201,6 +218,11 @@ Json Server::stats() const {
     return Json().set("store_size", store_.size())
 	.set("source_ranges_size", source_ranges_.size())
 	.set("sink_ranges_size", sink_ranges_.size());
+}
+
+void Server::print(std::ostream& stream) {
+    stream << source_ranges_;
+    stream << sink_ranges_;
 }
 
 } // namespace
@@ -361,5 +383,6 @@ int main(int argc, char** argv) {
     pq::TwitterPopulator tp(tp_param);
     twitter_populate(server, tp);
     twitter_run(server, tp);
+    //server.print(std::cout);
 #endif
 }
