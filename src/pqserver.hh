@@ -123,14 +123,6 @@ class ServerRangeSet {
     void validate_join(ServerRange* jr, int ts);
 };
 
-class ServerRangeCollector {
-  public:
-    inline ServerRangeCollector(ServerRangeSet& srs);
-    inline void operator()(ServerRange& r);
-  private:
-    ServerRangeSet* srs_;
-};
-
 class Server {
   public:
     typedef ServerStore store_type;
@@ -242,14 +234,6 @@ inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
 }
 
-inline ServerRangeCollector::ServerRangeCollector(ServerRangeSet& srs)
-    : srs_(&srs) {
-}
-
-inline void ServerRangeCollector::operator()(ServerRange& r) {
-    srs_->push_back(&r);
-}
-
 inline void Server::add_copy(Str first, Str last, Join* join,
 			     const Match& m) {
     ServerRange* r = new ServerRange(first, last, ServerRange::copy, join, m);
@@ -275,7 +259,9 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 			     store_.lower_bound(last, DatumCompare()));
 #endif
     ServerRangeSet srs(this, first, last, ServerRange::copy);
-    ranges_.visit_overlaps(interval<Str>(first, last), ServerRangeCollector(srs));
+    for (auto it = ranges_.begin_overlaps(interval<Str>(first, last));
+	 it != ranges_.end(); ++it)
+	srs.push_back(it.operator->());
 
     while (first_value != last_value && it.first != it.second) {
 	int cmp = it.first->key().compare(first_value->first);
@@ -314,8 +300,9 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 inline void Server::validate(Str first, Str last) {
     ServerRangeSet srs(this, first, last,
                        ServerRange::joinsink | ServerRange::validjoin);
-    ranges_.visit_overlaps(interval<Str>(first, last),
-                           ServerRangeCollector(srs));
+    for (auto it = ranges_.begin_overlaps(interval<Str>(first, last));
+	 it != ranges_.end(); ++it)
+	srs.push_back(it.operator->());
     srs.validate();
 }
 
