@@ -162,9 +162,6 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
 }
 
 void Server::insert(const String& key, const String& value) {
-    ServerRangeSet srs(this, ServerRange::copy);
-    ranges_.visit_contains(key, ServerRangeCollector(srs));
-
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -175,18 +172,22 @@ void Server::insert(const String& key, const String& value) {
 	d = p.first.operator->();
 	d->value_ = value;
     }
-    srs.notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update);
+
+    for (auto it = ranges_.contains_begin(key); it != ranges_.end(); ++it)
+        if (it->type() == ServerRange::copy)
+            it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
 
 void Server::erase(const String& key) {
-    ServerRangeSet srs(this, ServerRange::copy);
-    ranges_.visit_contains(key, ServerRangeCollector(srs));
-
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end()) {
 	Datum* d = it.operator->();
 	store_.erase(it);
-	srs.notify(d, ServerRange::notify_erase);
+
+        for (auto it = ranges_.contains_begin(key); it != ranges_.end(); ++it)
+            if (it->type() == ServerRange::copy)
+                it->notify(d, ServerRange::notify_erase, *this);
+
 	delete d;
     }
 }
@@ -225,7 +226,6 @@ void simple() {
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 
-    server.insert("p|10000|0000000021", "(Jennifer Jones has a secret)");
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
 
@@ -275,7 +275,7 @@ void twitter_run(pq::Server& server, uint32_t nusers) {
         load_times[i] = 0;
     char buf1[128], buf2[128];
 
-    while (time != 1020000000) {
+    while (time != 1002000000) {
         uint32_t u = rng(nusers);
         uint32_t a = rng(100);
         if (a == 0) {
@@ -294,7 +294,7 @@ void twitter_run(pq::Server& server, uint32_t nusers) {
 }
 
 int main(int argc, char** argv) {
-#if 1
+#if 0
     simple();
 #else
     pq::Server server;
