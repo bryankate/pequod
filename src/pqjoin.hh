@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "str.hh"
+#include "string.hh"
 template <typename K, typename V> class HashTable;
 class Json;
 class String;
@@ -51,7 +52,9 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     inline bool match_complete(const Match& m) const;
     inline int first(uint8_t* s, const Match& m) const;
+    inline String first(const Match& m) const;
     inline int last(uint8_t* s, const Match& m) const;
+    inline String last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int> &slotmap);
@@ -83,6 +86,9 @@ class Join {
     inline const Pattern& back() const;
     inline void expand(uint8_t* out, Str str) const;
 
+    inline bool recursive() const;
+    inline void set_recursive();
+
     bool assign_parse(Str str);
 
     Json unparse_json() const;
@@ -91,6 +97,7 @@ class Join {
   private:
     enum { pcap = 5 };
     int npat_;
+    bool recursive_;
     Pattern pat_[pcap];
     int refcount_;
 };
@@ -194,6 +201,12 @@ inline int Pattern::first(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
+inline String Pattern::first(const Match& m) const {
+    String str = String::make_uninitialized(key_length());
+    int len = first(str.mutable_udata(), m);
+    return str.substring(0, len);
+}
+
 inline int Pattern::last(uint8_t* s, const Match& m) const {
     uint8_t* first = s;
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
@@ -219,6 +232,12 @@ inline int Pattern::last(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
+inline String Pattern::last(const Match& m) const {
+    String str = String::make_uninitialized(key_length());
+    int len = last(str.mutable_udata(), m);
+    return str.substring(0, len);
+}
+
 inline void Pattern::expand(uint8_t* s, const Match& m) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
@@ -233,7 +252,7 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), refcount_(0) {
+    : npat_(0), recursive_(false), refcount_(0) {
 }
 
 inline void Join::ref() {
@@ -247,6 +266,14 @@ inline void Join::deref() {
 
 inline int Join::size() const {
     return npat_;
+}
+
+inline bool Join::recursive() const {
+    return recursive_;
+}
+
+inline void Join::set_recursive() {
+    recursive_ = true;
 }
 
 inline const Pattern& Join::operator[](int i) const {

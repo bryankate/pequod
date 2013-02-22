@@ -67,13 +67,14 @@ typedef bi::set<Datum> ServerStore;
 class ServerRange {
   public:
     enum range_type {
-        copy = 1, joinsink = 2, validjoin = 4
+        copy = 1, joinsink = 2, validjoin = 4, joinsource = 8
     };
     static ServerRange* make(Str first, Str last, range_type type, Join *join = 0);
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
     inline Str iend() const;
+    inline ::interval<Str> interval() const;
     inline Str subtree_iend() const;
     inline void set_subtree_iend(Str subtree_iend);
 
@@ -147,14 +148,14 @@ class Server {
     inline const_iterator find(Str str) const;
     inline const_iterator lower_bound(Str str) const;
 
-    void insert(const String& key, const String& value);
-    void erase(const String& key);
+    void insert(const String& key, const String& value, bool notify);
+    void erase(const String& key, bool notify);
 
     template <typename I>
     void replace_range(Str first, Str last, I first_value, I last_value);
 
     void add_copy(Str first, Str last, Join* j, const Match& m);
-    inline void add_join(Str first, Str last, Join* j);
+    void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
@@ -167,6 +168,7 @@ class Server {
     store_type store_;
     interval_tree<ServerRange> source_ranges_;
     interval_tree<ServerRange> sink_ranges_;
+    interval_tree<ServerRange> join_ranges_;
 };
 
 inline bool operator<(const Datum& a, const Datum& b) {
@@ -217,6 +219,10 @@ inline Str ServerRange::iend() const {
     return Str(keys_ + ibegin_len_, iend_len_);
 }
 
+inline interval<Str> ServerRange::interval() const {
+    return make_interval(ibegin(), iend());
+}
+
 inline Str ServerRange::subtree_iend() const {
     return subtree_iend_;
 }
@@ -253,11 +259,6 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 
 inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
-}
-
-inline void Server::add_join(Str first, Str last, Join* join) {
-    ServerRange* r = ServerRange::make(first, last, ServerRange::joinsink, join);
-    sink_ranges_.insert(r);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {

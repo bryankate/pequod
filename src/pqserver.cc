@@ -35,9 +35,9 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0)
-		server.insert(s, d->value_);
+		server.insert(s, d->value_, join_->recursive());
 	    else
-		server.erase(s);
+		server.erase(s, join_->recursive());
 	}
     }
 }
@@ -77,7 +77,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
                 kflen = (*join_)[0].first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
-                server.insert(Str(kf, kflen), it->value_);
+                server.insert(Str(kf, kflen), it->value_, join_->recursive());
             } else {
                 (*join_)[joinpos].match(it->key(), mf);
                 (*join_)[joinpos].match(it->key(), ml);
@@ -187,7 +187,35 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
     source_ranges_.insert(r);
 }
 
-void Server::insert(const String& key, const String& value) {
+void Server::add_join(Str first, Str last, Join* join) {
+    // track full ranges used for join and copy
+    // XXX could do a more precise job if that was ever warranted
+    std::vector<ServerRange*> ranges;
+    ranges.push_back(ServerRange::make(first, last,
+				       ServerRange::joinsink, join));
+    for (int i = 1; i != join->size(); ++i)
+	ranges.push_back(ServerRange::make((*join)[i].first(Match()),
+					   (*join)[i].last(Match()),
+					   ServerRange::joinsource, join));
+    for (auto r : ranges)
+	join_ranges_.insert(r);
+
+    // check for recursion
+    for (auto it = join_ranges_.begin_overlaps(ranges[0]->interval());
+	 it != join_ranges_.end(); ++it)
+	if (it->type() == ServerRange::joinsource)
+	    join->set_recursive();
+    for (int i = 1; i != join->size(); ++i)
+	for (auto it = join_ranges_.begin_overlaps(ranges[i]->interval());
+	     it != join_ranges_.end(); ++it)
+	    if (it->type() == ServerRange::joinsink)
+		it->join()->set_recursive();
+
+    sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
+					  join));
+}
+
+void Server::insert(const String& key, const String& value, bool notify) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -199,22 +227,24 @@ void Server::insert(const String& key, const String& value) {
 	d->value_ = value;
     }
 
-    for (auto it = source_ranges_.begin_contains(Str(key));
-	 it != source_ranges_.end(); ++it)
-        if (it->type() == ServerRange::copy)
-            it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
+    if (notify)
+	for (auto it = source_ranges_.begin_contains(Str(key));
+	     it != source_ranges_.end(); ++it)
+	    if (it->type() == ServerRange::copy)
+		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
 
-void Server::erase(const String& key) {
+void Server::erase(const String& key, bool notify) {
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end()) {
 	Datum* d = it.operator->();
 	store_.erase(it);
 
-        for (auto it = source_ranges_.begin_contains(Str(key));
-	     it != source_ranges_.end(); ++it)
-            if (it->type() == ServerRange::copy)
-                it->notify(d, ServerRange::notify_erase, *this);
+	if (notify)
+	    for (auto it = source_ranges_.begin_contains(Str(key));
+		 it != source_ranges_.end(); ++it)
+		if (it->type() == ServerRange::copy)
+		    it->notify(d, ServerRange::notify_erase, *this);
 
 	delete d;
     }
@@ -265,8 +295,8 @@ void simple() {
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 
-    server.insert("p|10000|0000000022", "This should appear in t|00001");
-    server.insert("p|00002|0000000023", "As should this");
+    server.insert("p|10000|0000000022", "This should appear in t|00001", true);
+    server.insert("p|00002|0000000023", "As should this", true);
 
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -277,11 +307,11 @@ void twitter_post(pq::Server& server, pq::TwitterPopulator& tp,
                   uint32_t u, uint32_t time, Str value) {
     char buf[128];
     sprintf(buf, "p|%05d|%010u", u, time);
-    server.insert(Str(buf, 18), value);
+    server.insert(Str(buf, 18), value, true);
     if (tp.push())
         for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
             sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-            server.insert(Str(buf, 24), value);
+            server.insert(Str(buf, 24), value, false);
         }
 }
 
@@ -293,7 +323,7 @@ void twitter_populate(pq::Server& server, pq::TwitterPopulator& tp) {
     char buf[128];
     for (auto& x : tp.subscriptions()) {
         sprintf(buf, "s|%05d|%05d", x.first, x.second);
-        server.insert(Str(buf, 13), Str("1", 1));
+        server.insert(Str(buf, 13), Str("1", 1), true);
     }
 
 #if 0
