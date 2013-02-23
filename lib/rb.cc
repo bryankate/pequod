@@ -202,16 +202,16 @@ void fuzz(G& tree, int N) {
             //std::cerr << "find " << which << "\n";
             auto n = tree.find(which);
             assert(n ? in[which] : !in[which]);
-        } else if (!in[which]) {
+        } else if (!in[which] || (op < 7 && in[which] < 5)) {
             //std::cerr << "insert " << which << "\n";
-            assert(!tree.find(which));
+            assert(!!in[which] == !!tree.find(which));
             tree.insert(which);
-            in[which] = 1;
+            ++in[which];
         } else {
             //std::cerr << "erase " << which << "\n";
             assert(tree.find(which));
             tree.find_and_erase(which);
-            in[which] = 0;
+            --in[which];
         }
         tree.phase(0);
     }

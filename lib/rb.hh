@@ -558,10 +558,13 @@ template <typename T> template <typename C>
 void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
                          T* root, C& compare) const {
     rbcheck_assert(node()->rblinks_.p_ == parent);
-    if (parent && parent->rblinks_.c_[0].node() == node())
-        rbcheck_assert(compare(*node(), *parent) < 0);
-    else if (parent)
-        rbcheck_assert(compare(*node(), *parent) >= 0);
+    if (parent) {
+        int cmp = compare(*node(), *parent);
+        if (parent->rblinks_.c_[0].node() == node())
+            rbcheck_assert(cmp < 0 || (cmp == 0 && node() < parent));
+        else
+            rbcheck_assert(cmp > 0 || (cmp == 0 && node() > parent));
+    }
     if (red())
         rbcheck_assert(!child(false).red() && !child(true).red());
     else {
