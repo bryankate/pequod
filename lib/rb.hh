@@ -440,8 +440,7 @@ template <typename T, typename C, typename R>
 rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
     // XXX will break tree if nothing is removed
     T* n = np.node();
-    int cmp = r_.compare(*victim, *n);
-    if (cmp < 0) {
+    if (r_.compare(*victim, *n) < 0) {
 	if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].child(false).red()) {
 	    np = np.move_red_left(r_.reshape());
 	    n = np.node();
@@ -451,18 +450,15 @@ rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
 	if (n->rblinks_.c_[0].red()) {
 	    np = np.rotate_right(r_.reshape());
 	    n = np.node();
-	    cmp = r_.compare(*victim, *n);
 	}
-	if (cmp == 0 && !n->rblinks_.c_[1])
+        if (victim == n && !n->rblinks_.c_[1])
 	    return rbnodeptr<T>();
 	if (!n->rblinks_.c_[1].red() && !n->rblinks_.c_[1].child(false).red()) {
 	    np = np.move_red_right(r_.reshape());
-	    if (np.node() != n) {
+	    if (np.node() != n)
 		n = np.node();
-		cmp = r_.compare(*victim, *n);
-	    }
 	}
-	if (cmp == 0) {
+	if (victim == n) {
 	    T* min;
 	    n->rblinks_.c_[1] = unlink_min(n->rblinks_.c_[1], &min);
 	    min->rblinks_ = n->rblinks_;
