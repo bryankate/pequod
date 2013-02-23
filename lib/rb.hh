@@ -45,8 +45,10 @@ class rbnodeptr {
     template <typename F> inline rbnodeptr<T> fixup(F &f) const;
 
     size_t size() const;
-    void check(T* parent, int this_black_height, int& black_height) const;
-    void output(std::ostream& s, int indent) const;
+    template <typename C>
+    void check(T* parent, int this_black_height, int& black_height,
+               T* root, C& compare) const;
+    void output(std::ostream& s, int indent, T* highlight) const;
 
   private:
     uintptr_t x_;
@@ -520,18 +522,22 @@ inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
 }
 
 template <typename T>
-void rbnodeptr<T>::output(std::ostream &s, int indent) const {
+void rbnodeptr<T>::output(std::ostream &s, int indent, T* highlight) const {
     if (node()->rblinks_.c_[0])
-	node()->rblinks_.c_[0].output(s, indent + 2);
-    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "") << std::endl;
+	node()->rblinks_.c_[0].output(s, indent + 2, highlight);
+    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "");
+    if (highlight && highlight == node())
+        s << " ******  p@" << (void*) node()->rblinks_.p_ << "\n";
+    else
+        s << "\n";
     if (node()->rblinks_.c_[1])
-	node()->rblinks_.c_[1].output(s, indent + 2);
+	node()->rblinks_.c_[1].output(s, indent + 2, highlight);
 }
 
 template <typename T, typename C, typename R>
 std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     if (tree.r_.root_)
-	rbnodeptr<T>(tree.r_.root_, false).output(s, 0);
+	rbnodeptr<T>(tree.r_.root_, false).output(s, 0, 0);
     else
 	s << "<empty>\n";
     return s;
@@ -548,29 +554,40 @@ inline size_t rbtree<T, C, R>::size() const {
     return r_.root_ ? rbnodeptr<T>(r_.root_, false).size() : 0;
 }
 
-template <typename T>
-void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height) const {
-    assert(node()->rblinks_.p_ == parent);
+#define rbcheck_assert(x) do { if (!(x)) { rbnodeptr<T>(root, false).output(std::cerr, 0, node()); assert(x); } } while (0)
+
+template <typename T> template <typename C>
+void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
+                         T* root, C& compare) const {
+    rbcheck_assert(node()->rblinks_.p_ == parent);
+    if (parent && parent->rblinks_.c_[0].node() == node())
+        rbcheck_assert(compare(*node(), *parent) < 0);
+    else if (parent)
+        rbcheck_assert(compare(*node(), *parent) >= 0);
     if (red())
-        assert(!child(false).red() && !child(true).red());
+        rbcheck_assert(!child(false).red() && !child(true).red());
     else {
-        assert(child(false).red() || !child(true).red());
+        rbcheck_assert(child(false).red() || !child(true).red());
         ++this_black_height;
     }
     for (int i = 0; i < 2; ++i)
         if (child(i))
-            child(i).check(node(), this_black_height, black_height);
+            child(i).check(node(), this_black_height, black_height,
+                           root, compare);
         else if (black_height == -1)
             black_height = this_black_height;
         else
             assert(black_height == this_black_height);
 }
 
+#undef rbcheck_assert
+
 template <typename T, typename C, typename R>
 int rbtree<T, C, R>::check() const {
     int black_height = -1;
     if (r_.root_)
-        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height);
+        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height,
+                                            r_.root_, r_.get_compare());
     return black_height;
 }
 

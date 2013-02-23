@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string.h>
 #include <boost/intrusive/set.hpp>
+#include <boost/random.hpp>
 #include "rb.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
@@ -188,6 +189,34 @@ void grow_and_shrink(G& tree, int N) {
             long(ru[5].ru_utime.tv_sec), long(ru[5].ru_utime.tv_usec));
 }
 
+template <typename G>
+void fuzz(G& tree, int N) {
+    boost::mt19937 gen;
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    const int SZ = 5000;
+    int in[SZ];
+    memset(in, 0, sizeof(in));
+    for (int i = 0; i < N; ++i) {
+        int op = rng(8), which = rng(SZ);
+        if (op < 5) {
+            //std::cerr << "find " << which << "\n";
+            auto n = tree.find(which);
+            assert(n ? in[which] : !in[which]);
+        } else if (!in[which]) {
+            //std::cerr << "insert " << which << "\n";
+            assert(!tree.find(which));
+            tree.insert(which);
+            in[which] = 1;
+        } else {
+            //std::cerr << "erase " << which << "\n";
+            assert(tree.find(which));
+            tree.find_and_erase(which);
+            in[which] = 0;
+        }
+        tree.phase(0);
+    }
+}
+
 struct rbtree_with_print {
     rbtree<rbwrapper<int> > tree;
     inline void insert(int val) {
@@ -216,11 +245,12 @@ struct rbtree_without_print {
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
     }
-    inline void find(int val) {
-        tree.find(rbwrapper<int>(val));
+    inline rbwrapper<int>* find(int val) {
+        return tree.find(rbwrapper<int>(val));
     }
     inline void phase(int) {
         tree.check();
+        //std::cout << tree << "\n";
     }
 };
 
@@ -271,8 +301,12 @@ int main(int argc, char **argv) {
         rbtree_without_print tree;
         grow_and_shrink(tree, 1000000);
         exit(0);
+    } else if (argc > 1 && strcmp(argv[1], "-f") == 0) {
+        rbtree_without_print tree;
+        fuzz(tree, 1000000);
+        exit(0);
     } else if (argc > 1) {
-        fprintf(stderr, "Usage: ./a.out [-b|-p]\n");
+        fprintf(stderr, "Usage: ./a.out [-b|-p|-f]\n");
         exit(1);
     } else {
         rbtree_with_print tree;
