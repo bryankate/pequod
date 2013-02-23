@@ -465,8 +465,10 @@ rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
 	if (cmp == 0) {
 	    T* min;
 	    n->rblinks_.c_[1] = unlink_min(n->rblinks_.c_[1], &min);
-	    min->rblinks_.c_[0] = n->rblinks_.c_[0];
-	    min->rblinks_.c_[1] = n->rblinks_.c_[1];
+	    min->rblinks_ = n->rblinks_;
+            for (int i = 0; i < 2; ++i)
+                if (min->rblinks_.c_[i])
+                    min->rblinks_.c_[i].parent() = min;
 	    np = rbnodeptr<T>(min, np.red());
 	} else
 	    n->rblinks_.c_[1] = delete_node(n->rblinks_.c_[1], victim);
