@@ -91,13 +91,16 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
 }
 
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
-    stream << "{" << (const interval<String>&) r;
+    stream << "{" << "[" << r.ibegin() << ", " << r.iend() << ")";
     if (r.type_ == ServerRange::copy) {
 	stream << ": copy ->";
 	for (auto s : r.resultkeys_)
 	    stream << " " << s;
-    } else if (r.type_ == ServerRange::joinsink)
+    }
+    else if (r.type_ == ServerRange::joinsink)
         stream << ": joinsink @" << (void*) r.join_;
+    else if (r.type_ == ServerRange::joinsource)
+            stream << ": joinsource @" << (void*) r.join_;
     else if (r.type_ == ServerRange::validjoin)
         stream << ": validjoin @" << (void*) r.join_;
     else
@@ -257,8 +260,9 @@ Json Server::stats() const {
 }
 
 void Server::print(std::ostream& stream) {
-    stream << source_ranges_;
-    stream << sink_ranges_;
+    stream << "sources:" << std::endl << source_ranges_;
+    stream << "sinks:" << std::endl << sink_ranges_;
+    stream << "joins:" << std::endl << join_ranges_;
 }
 
 } // namespace
@@ -301,6 +305,8 @@ void simple() {
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    server.print(std::cout);
 }
 
 void twitter_post(pq::Server& server, pq::TwitterPopulator& tp,
@@ -416,9 +422,8 @@ int main(int argc, char** argv) {
 	    exit(1);
     }
 
-#if 0
     simple();
-#else
+#if 0
     pq::Server server;
     pq::TwitterPopulator tp(tp_param);
     twitter_populate(server, tp);
