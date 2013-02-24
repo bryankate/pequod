@@ -2,6 +2,7 @@
 #include "pqjoin.hh"
 #include "json.hh"
 #include "pqtwitter.hh"
+#include "pqfacebook.hh"
 #include "clp.h"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
@@ -395,14 +396,94 @@ void twitter_run(pq::Server& server, pq::TwitterPopulator& tp) {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] load_times;
 }
+void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
+                  uint32_t u, uint32_t p, Str value) {
+    char buf[128];
+    sprintf(buf, "l|%06d|%06d", u, p);
+    server.insert(Str(buf, 15), value, true);
+    if (fp.push())
+          std::cerr << "NOT IMPLEMENTED" << std::endl;
+//        for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
+//            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+//            server.insert(Str(buf, 24), value, false);
+//        }
+}
+
+void facebook_populate(pq::Server& server, pq::FacebookPopulator& fp) {
+    boost::mt19937 gen;
+    gen.seed(0);
+
+    fp.populate_likes(gen);
+    fp.generate_friends(gen);
+    fp.nusers();
+    for (auto& x : fp.get_base_data()) {
+        server.insert(x.first, Str("1", 1), true);
+    }
+    fp.report_counts(std::cout);
+
+    if (!fp.push()) {
+        pq::Join* j = new pq::Join;
+        j->assign_parse("c|<user_id:6>|<page_id:6>|<fuser_id:6> "
+                        "l|<fuser_id>|<page_id> "
+                        "f|<user_id>|<fuser_id>");
+        server.add_join("c|", "c}", j);
+    }
+}
+
+void facebook_run(pq::Server& server, pq::FacebookPopulator& fp) {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    struct rusage ru[2];
+
+    uint32_t time = 10000000;
+    uint32_t nusers = fp.nusers();
+    uint32_t npages = fp.npages();
+    uint32_t post_end_time = time + nusers * 5;
+    uint32_t end_time = post_end_time + 10000;
+    uint32_t* load_times = new uint32_t[nusers];
+    for (uint32_t i = 0; i != nusers; ++i)
+        load_times[i] = 0;
+    char buf1[128], buf2[128];
+    uint32_t nlike = 0;
+    size_t nvisit = 0;
+    getrusage(RUSAGE_SELF, &ru[0]);
+
+    while (time != end_time) {
+        uint32_t u = rng(nusers); 
+        uint32_t p = rng(npages);
+        uint32_t l = rng(100);
+        // u should always visit p
+        sprintf(buf1, "c|%06d|%06d", u, p);
+        sprintf(buf2, "c|%06d|%06d}", u, p);
+        server.validate(Str(buf1, 15), Str(buf2, 16));
+        nvisit += server.count(Str(buf1, 15), Str(buf2, 16));
+        load_times[u] = time;
+        // 3% u should also like the page
+        if (l < 3) {
+           facebook_like(server, fp, u, p, "1");
+           ++nlike;
+        }
+        ++time;
+    }
+
+    getrusage(RUSAGE_SELF, &ru[1]);
+    Json stats = Json().set("nlikes", nlike)
+	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    stats.merge(server.stats());
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    delete[] load_times;
+}
 
 static Clp_Option options[] = {
     { "push", 'p', 1000, 0, Clp_Negate },
     { "nusers", 'n', 1001, Clp_ValInt, 0 },
-    { "shape", 0, 1002, Clp_ValDouble, 0 }
+    { "facebook", 'f', 1002, 0, Clp_Negate },
+    { "shape", 0, 1003, Clp_ValDouble, 0 }
 };
 
 int main(int argc, char** argv) {
+    bool facebook = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("shape", 8).set("nusers", 5000);
     while (Clp_Next(clp) != Clp_Done) {
@@ -412,17 +493,41 @@ int main(int argc, char** argv) {
 	    tp_param.set("nusers", clp->val.i);
 	else if (clp->option->long_name == String("shape"))
 	    tp_param.set("shape", clp->val.d);
+	else if (clp->option->long_name == String("facebook")){
+            facebook = true;
+            break;    
+        }
 	else
 	    exit(1);
+    }
+    Json fp_param = Json().set("shape", 5);
+    if (facebook) {
+        while (Clp_Next(clp) != Clp_Done) {
+	    if (clp->option->long_name == String("push"))
+	        fp_param.set("push", !clp->negated);
+            else if (clp->option->long_name == String("nusers"))
+	        fp_param.set("nusers", clp->val.i);
+	    else if (clp->option->long_name == String("shape"))
+                fp_param.set("shape", clp->val.d);
+	    else
+	        exit(1);
+        }
     }
 
 #if 0
     simple();
 #else
     pq::Server server;
-    pq::TwitterPopulator tp(tp_param);
-    twitter_populate(server, tp);
-    twitter_run(server, tp);
+    if (!facebook){
+        pq::TwitterPopulator tp(tp_param);
+        twitter_populate(server, tp);
+        twitter_run(server, tp);
+    } else {
+        //server.print(std::cout);
+        pq::FacebookPopulator fp(fp_param);
+        facebook_populate(server, fp);
+        facebook_run(server, fp);
+    }
     //server.print(std::cout);
 #endif
 }
