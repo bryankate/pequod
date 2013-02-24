@@ -269,6 +269,7 @@ void Server::print(std::ostream& stream) {
 
 
 void simple() {
+    std::cerr << "SIMPLE" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -306,7 +307,59 @@ void simple() {
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 
-    server.print(std::cout);
+    server.print(std::cerr);
+    std::cerr << std::endl;
+}
+
+void recursive() {
+    std::cerr << "RECURSIVE" << std::endl;
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+        {"a|00001|00002", "1"},
+        {"b|00002|0000000001", "b1"},
+        {"b|00002|0000000002", "b2"},
+        {"d|00003|00001", "1"}
+    };
+    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+
+    std::cerr << "Before processing join:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    pq::Join j1;
+    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
+                    "a|<a_id>|<b_id> "
+                    "b|<b_id>|<time>");
+    j1.ref();
+    server.add_join("c|", "c}", &j1);
+    server.validate("c|00001|0000000001", "c|00001}");
+
+    std::cerr << "After processing join:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    pq::Join j2;
+    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
+                    "d|<d_id>|<a_id:5> "
+                    "c|<a_id>|<time>|<b_id>");
+    j2.ref();
+    server.add_join("e|", "e}", &j2);
+    server.validate("e|00003|0000000001", "e|00003}");
+
+    std::cerr << "After processing recursive join:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003", true);
+    server.insert("b|00002|0000002000", "As should this", true);
+
+    std::cerr << "After processing inserts:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    server.print(std::cerr);
+    std::cerr << std::endl;
 }
 
 void twitter_post(pq::Server& server, pq::TwitterPopulator& tp,
@@ -422,8 +475,10 @@ int main(int argc, char** argv) {
 	    exit(1);
     }
 
-    simple();
 #if 0
+//    simple();
+    recursive(); // TODO: core dump if called after simple()!
+#else
     pq::Server server;
     pq::TwitterPopulator tp(tp_param);
     twitter_populate(server, tp);
