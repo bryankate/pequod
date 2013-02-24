@@ -28,6 +28,8 @@ class rbnodeptr {
     inline uintptr_t ivalue() const;
 
     inline T* node() const;
+    inline rbnodeptr<T>& child(bool isright) const;
+    inline T*& parent() const;
 
     inline bool red() const;
     inline rbnodeptr<T> change_color(bool color) const;
@@ -43,8 +45,10 @@ class rbnodeptr {
     template <typename F> inline rbnodeptr<T> fixup(F &f) const;
 
     size_t size() const;
-    void check(T* parent, int this_black_height, int& black_height) const;
-    void output(std::ostream& s, int indent) const;
+    template <typename C>
+    void check(T* parent, int this_black_height, int& black_height,
+               T* root, C& compare) const;
+    void output(std::ostream& s, int indent, T* highlight) const;
 
   private:
     uintptr_t x_;
@@ -172,6 +176,7 @@ class rbtree {
     //template <typename X> rbnode<T> *find_or_insert_node(const X& ctor);
     rbnodeptr<T> unlink_min(rbnodeptr<T> np, T** min);
     rbnodeptr<T> delete_node(rbnodeptr<T> np, T* victim);
+    T* delete_node(T* victim);
 
     template <typename K, typename Comp>
     inline iterator lower_bound(const K& key, Comp& compare, bool) const;
@@ -219,6 +224,16 @@ inline T* rbnodeptr<T>::node() const {
 }
 
 template <typename T>
+inline rbnodeptr<T>& rbnodeptr<T>::child(bool isright) const {
+    return node()->rblinks_.c_[isright];
+}
+
+template <typename T>
+inline T*& rbnodeptr<T>::parent() const {
+    return node()->rblinks_.p_;
+}
+
+template <typename T>
 inline bool rbnodeptr<T>::red() const {
     return x_ & 1;
 }
@@ -235,14 +250,14 @@ inline rbnodeptr<T> rbnodeptr<T>::reverse_color() const {
 
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::rotate(bool isright, F &f) const {
-    rbnodeptr<T> x = node()->rblinks_.c_[!isright];
-    if ((node()->rblinks_.c_[!isright] = x.node()->rblinks_.c_[isright]))
-        x.node()->rblinks_.c_[isright].node()->rblinks_.p_ = node();
+    rbnodeptr<T> x = child(!isright);
+    if ((child(!isright) = x.child(isright)))
+        x.child(isright).parent() = node();
     f(node());
     bool old_color = red();
-    x.node()->rblinks_.c_[isright] = change_color(true);
-    x.node()->rblinks_.p_ = node()->rblinks_.p_;
-    node()->rblinks_.p_ = x.node();
+    x.child(isright) = change_color(true);
+    x.parent() = parent();
+    parent() = x.node();
     f(x.node());
     return x.change_color(old_color);
 }
@@ -259,16 +274,16 @@ inline rbnodeptr<T> rbnodeptr<T>::rotate_right(F &f) const {
 
 template <typename T>
 inline rbnodeptr<T> rbnodeptr<T>::flip() const {
-    node()->rblinks_.c_[0] = node()->rblinks_.c_[0].reverse_color();
-    node()->rblinks_.c_[1] = node()->rblinks_.c_[1].reverse_color();
+    child(false) = child(false).reverse_color();
+    child(true) = child(true).reverse_color();
     return reverse_color();
 }
 
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::move_red_left(F &f) const {
     rbnodeptr<T> x = flip();
-    if (x.node()->rblinks_.c_[1].node()->rblinks_.c_[0].red()) {
-	x.node()->rblinks_.c_[1] = x.node()->rblinks_.c_[1].rotate_right(f);
+    if (x.child(true).child(false).red()) {
+	x.child(true) = x.child(true).rotate_right(f);
 	x = x.rotate_left(f);
 	return x.flip();
     } else
@@ -278,7 +293,7 @@ inline rbnodeptr<T> rbnodeptr<T>::move_red_left(F &f) const {
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::move_red_right(F &f) const {
     rbnodeptr x = flip();
-    if (x.node()->rblinks_.child(0)->rblinks_.c_[0].red()) {
+    if (x.child(false).child(false).red()) {
 	x = x.rotate_right(f);
 	return x.flip();
     } else
@@ -289,11 +304,11 @@ template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::fixup(F &f) const {
     rbnodeptr<T> x = *this;
     f(x.node());
-    if (x.node()->rblinks_.c_[1].red())
+    if (x.child(true).red())
 	x = x.rotate_left(f);
-    if (x.node()->rblinks_.c_[0].red() && x.node()->rblinks_.c_[0].node()->rblinks_.c_[0].red())
+    if (x.child(false).red() && x.child(false).child(false).red())
 	x = x.rotate_right(f);
-    if (x.node()->rblinks_.c_[0].red() && x.node()->rblinks_.c_[1].red())
+    if (x.child(false).red() && x.child(true).red())
 	x = x.flip();
     return x;
 }
@@ -414,7 +429,7 @@ rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, T** min) {
 	*min = n;
 	return rbnodeptr<T>();
     }
-    if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].node()->rblinks_.c_[0].red()) {
+    if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].child(false).red()) {
 	np = np.move_red_left(r_.reshape());
 	n = np.node();
     }
@@ -425,39 +440,87 @@ rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, T** min) {
 template <typename T, typename C, typename R>
 rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
     // XXX will break tree if nothing is removed
-    T* n = np.node();
-    int cmp = r_.compare(*victim, *n);
-    if (cmp < 0) {
-	if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].node()->rblinks_.c_[0].red()) {
+    if (r_.compare(*victim, *np.node()) < 0) {
+	if (!np.child(false).red() && !np.child(false).child(false).red())
 	    np = np.move_red_left(r_.reshape());
-	    n = np.node();
-	}
-	n->rblinks_.c_[0] = delete_node(n->rblinks_.c_[0], victim);
+	np.child(false) = delete_node(np.child(false), victim);
     } else {
-	if (n->rblinks_.c_[0].red()) {
+	if (np.child(false).red())
 	    np = np.rotate_right(r_.reshape());
-	    n = np.node();
-	    cmp = r_.compare(*victim, *n);
-	}
-	if (cmp == 0 && !n->rblinks_.c_[1])
+        if (victim == np.node() && !np.child(true))
 	    return rbnodeptr<T>();
-	if (!n->rblinks_.c_[1].red() && !n->rblinks_.c_[1].node()->rblinks_.c_[0].red()) {
+	if (!np.child(true).red() && !np.child(true).child(false).red())
 	    np = np.move_red_right(r_.reshape());
-	    if (np.node() != n) {
-		n = np.node();
-		cmp = r_.compare(*victim, *n);
-	    }
-	}
-	if (cmp == 0) {
+	if (victim == np.node()) {
 	    T* min;
-	    n->rblinks_.c_[1] = unlink_min(n->rblinks_.c_[1], &min);
-	    min->rblinks_.c_[0] = n->rblinks_.c_[0];
-	    min->rblinks_.c_[1] = n->rblinks_.c_[1];
+	    np.child(true) = unlink_min(np.child(true), &min);
+	    min->rblinks_ = np.node()->rblinks_;
+            for (int i = 0; i < 2; ++i)
+                if (min->rblinks_.c_[i])
+                    min->rblinks_.c_[i].parent() = min;
 	    np = rbnodeptr<T>(min, np.red());
 	} else
-	    n->rblinks_.c_[1] = delete_node(n->rblinks_.c_[1], victim);
+	    np.child(true) = delete_node(np.child(true), victim);
     }
     return np.fixup(r_.reshape());
+}
+
+template <typename T, typename C, typename R>
+T* rbtree<T, C, R>::delete_node(T* victim) {
+    // construct path to root
+    local_stack<T*, (sizeof(size_t) << 2)> stk;
+    for (T* n = victim; n; n = n->rblinks_.p_)
+        stk.push(n);
+
+    // work backwards
+    int si = stk.size() - 1;
+    rbnodeptr<T> np(stk[si], false), repl;
+    size_t childtrack = 0, redtrack = 0;
+    while (1) {
+        bool direction;
+        if (si && np.child(false).node() == stk[si-1]) {
+            if (!np.child(false).red() && !np.child(false).child(false).red())
+                np = np.move_red_left(r_.reshape());
+            direction = false;
+        } else {
+            if (np.child(false).red())
+                np = np.rotate_right(r_.reshape());
+            if (victim == np.node() && !np.child(true)) {
+                repl = rbnodeptr<T>();
+                break;
+            }
+            if (!np.child(true).red() && !np.child(true).child(false).red())
+                np = np.move_red_right(r_.reshape());
+            if (victim == np.node()) {
+                T* min;
+                np.child(true) = unlink_min(np.child(true), &min);
+                min->rblinks_ = np.node()->rblinks_;
+                for (int i = 0; i < 2; ++i)
+                    if (min->rblinks_.c_[i])
+                        min->rblinks_.c_[i].parent() = min;
+                repl = rbnodeptr<T>(min, np.red()).fixup(r_.reshape());
+                break;
+            }
+            direction = true;
+        }
+        childtrack = (childtrack << 1) | direction;
+        redtrack = (redtrack << 1) | np.red();
+        np = np.child(direction);
+        if (np.node() != stk[si])
+            --si;
+    }
+
+    // now work up
+    if (T* p = np.parent())
+        do {
+            p->rblinks_.c_[childtrack & 1] = repl;
+            repl = rbnodeptr<T>(p, redtrack & 1);
+            repl = repl.fixup(r_.reshape());
+            childtrack >>= 1;
+            redtrack >>= 1;
+            p = repl.parent();
+        } while (p);
+    return repl.node();
 }
 
 template <typename T, typename C, typename R>
@@ -492,34 +555,41 @@ inline void rbtree<T, C, R>::insert(T* node) {
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::erase(T* node) {
-    r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    r_.root_ = delete_node(node);
 }
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::erase_and_dispose(T* node) {
-    r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    r_.root_ = delete_node(node);
     delete node;
 }
 
 template <typename T, typename C, typename R> template <typename Disposer>
 inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
-    r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
+    r_.root_ = delete_node(node);
     d(node);
 }
 
 template <typename T>
-void rbnodeptr<T>::output(std::ostream &s, int indent) const {
+void rbnodeptr<T>::output(std::ostream &s, int indent, T* highlight) const {
     if (node()->rblinks_.c_[0])
-	node()->rblinks_.c_[0].output(s, indent + 2);
-    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "") << std::endl;
+	node()->rblinks_.c_[0].output(s, indent + 2, highlight);
+    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "");
+    if (highlight && highlight == node())
+        s << " ******  p@" << (void*) node()->rblinks_.p_ << "\n";
+    else
+        s << "\n";
     if (node()->rblinks_.c_[1])
-	node()->rblinks_.c_[1].output(s, indent + 2);
+	node()->rblinks_.c_[1].output(s, indent + 2, highlight);
 }
 
 template <typename T, typename C, typename R>
 std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
     if (tree.r_.root_)
-	rbnodeptr<T>(tree.r_.root_, false).output(s, 0);
+	rbnodeptr<T>(tree.r_.root_, false).output(s, 0, 0);
     else
 	s << "<empty>\n";
     return s;
@@ -527,8 +597,8 @@ std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
 
 template <typename T>
 size_t rbnodeptr<T>::size() const {
-    return 1 + (node()->rblinks_.c_[0] ? node()->rblinks_.c_[0].size() : 0)
-	+ (node()->rblinks_.c_[1] ? node()->rblinks_.c_[1].size() : 0);
+    return 1 + (child(false) ? child(false).size() : 0)
+	+ (child(true) ? child(true).size() : 0);
 }
 
 template <typename T, typename C, typename R>
@@ -536,29 +606,43 @@ inline size_t rbtree<T, C, R>::size() const {
     return r_.root_ ? rbnodeptr<T>(r_.root_, false).size() : 0;
 }
 
-template <typename T>
-void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height) const {
-    assert(node()->rblinks_.p_ == parent);
+#define rbcheck_assert(x) do { if (!(x)) { rbnodeptr<T>(root, false).output(std::cerr, 0, node()); assert(x); } } while (0)
+
+template <typename T> template <typename C>
+void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
+                         T* root, C& compare) const {
+    rbcheck_assert(node()->rblinks_.p_ == parent);
+    if (parent) {
+        int cmp = compare(*node(), *parent);
+        if (parent->rblinks_.c_[0].node() == node())
+            rbcheck_assert(cmp < 0 || (cmp == 0 && node() < parent));
+        else
+            rbcheck_assert(cmp > 0 || (cmp == 0 && node() > parent));
+    }
     if (red())
-        assert(!node()->rblinks_.c_[0].red() && !node()->rblinks_.c_[1].red());
+        rbcheck_assert(!child(false).red() && !child(true).red());
     else {
-        assert(node()->rblinks_.c_[0].red() || !node()->rblinks_.c_[1].red());
+        rbcheck_assert(child(false).red() || !child(true).red());
         ++this_black_height;
     }
     for (int i = 0; i < 2; ++i)
-        if (node()->rblinks_.c_[i])
-            node()->rblinks_.c_[i].check(node(), this_black_height, black_height);
+        if (child(i))
+            child(i).check(node(), this_black_height, black_height,
+                           root, compare);
         else if (black_height == -1)
             black_height = this_black_height;
         else
             assert(black_height == this_black_height);
 }
 
+#undef rbcheck_assert
+
 template <typename T, typename C, typename R>
 int rbtree<T, C, R>::check() const {
     int black_height = -1;
     if (r_.root_)
-        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height);
+        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height,
+                                            r_.root_, r_.get_compare());
     return black_height;
 }
 
