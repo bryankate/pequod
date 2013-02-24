@@ -8,6 +8,7 @@
 #include "interval_tree.hh"
 #include <sys/time.h>
 #include <sys/resource.h>
+static bool print_actions;
 
 template <typename T>
 class rbwrapper : public T {
@@ -199,21 +200,26 @@ void fuzz(G& tree, int N) {
     for (int i = 0; i < N; ++i) {
         int op = rng(8), which = rng(SZ);
         if (op < 5) {
-            //std::cerr << "find " << which << "\n";
+            if (print_actions)
+                std::cerr << "find " << which << "\n";
             auto n = tree.find(which);
             assert(n ? in[which] : !in[which]);
         } else if (!in[which] || (op < 7 && in[which] < 5)) {
-            //std::cerr << "insert " << which << "\n";
+            if (print_actions)
+                std::cerr << "insert " << which << "\n";
             assert(!!in[which] == !!tree.find(which));
             tree.insert(which);
             ++in[which];
         } else {
-            //std::cerr << "erase " << which << "\n";
+            if (print_actions)
+                std::cerr << "erase " << which << "\n";
             assert(tree.find(which));
             tree.find_and_erase(which);
             --in[which];
         }
         tree.phase(0);
+        if (i % 1000 == 0 && i && !print_actions)
+            std::cerr << ".";
     }
 }
 
