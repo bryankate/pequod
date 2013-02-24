@@ -439,35 +439,27 @@ rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, T** min) {
 template <typename T, typename C, typename R>
 rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
     // XXX will break tree if nothing is removed
-    T* n = np.node();
-    if (r_.compare(*victim, *n) < 0) {
-	if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].child(false).red()) {
+    if (r_.compare(*victim, *np.node()) < 0) {
+	if (!np.child(false).red() && !np.child(false).child(false).red())
 	    np = np.move_red_left(r_.reshape());
-	    n = np.node();
-	}
-	n->rblinks_.c_[0] = delete_node(n->rblinks_.c_[0], victim);
+	np.child(false) = delete_node(np.child(false), victim);
     } else {
-	if (n->rblinks_.c_[0].red()) {
+	if (np.child(false).red())
 	    np = np.rotate_right(r_.reshape());
-	    n = np.node();
-	}
-        if (victim == n && !n->rblinks_.c_[1])
+        if (victim == np.node() && !np.child(true))
 	    return rbnodeptr<T>();
-	if (!n->rblinks_.c_[1].red() && !n->rblinks_.c_[1].child(false).red()) {
+	if (!np.child(true).red() && !np.child(true).child(false).red())
 	    np = np.move_red_right(r_.reshape());
-	    if (np.node() != n)
-		n = np.node();
-	}
-	if (victim == n) {
+	if (victim == np.node()) {
 	    T* min;
-	    n->rblinks_.c_[1] = unlink_min(n->rblinks_.c_[1], &min);
-	    min->rblinks_ = n->rblinks_;
+	    np.child(true) = unlink_min(np.child(true), &min);
+	    min->rblinks_ = np.node()->rblinks_;
             for (int i = 0; i < 2; ++i)
                 if (min->rblinks_.c_[i])
                     min->rblinks_.c_[i].parent() = min;
 	    np = rbnodeptr<T>(min, np.red());
 	} else
-	    n->rblinks_.c_[1] = delete_node(n->rblinks_.c_[1], victim);
+	    np.child(true) = delete_node(np.child(true), victim);
     }
     return np.fixup(r_.reshape());
 }
