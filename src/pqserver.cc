@@ -534,17 +534,19 @@ void facebook_run(pq::Server& server, pq::FacebookPopulator& fp) {
     delete[] load_times;
 }
 
+
 static Clp_Option options[] = {
     { "push", 'p', 1000, 0, Clp_Negate },
     { "nusers", 'n', 1001, Clp_ValInt, 0 },
     { "facebook", 'f', 1002, 0, Clp_Negate },
-    { "shape", 0, 1003, Clp_ValDouble, 0 }
+    { "shape", 0, 1003, Clp_ValDouble, 0 },
+    { "listen", 'l', 1004, Clp_ValInt, Clp_Optional }
 };
 
-enum { mode_unknown, mode_twitter, mode_facebook };
+enum { mode_unknown, mode_twitter, mode_facebook, mode_listen };
 
 int main(int argc, char** argv) {
-    int mode = mode_unknown;
+    int mode = mode_unknown, listen_port = 8000;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     while (Clp_Next(clp) != Clp_Done) {
@@ -558,7 +560,11 @@ int main(int argc, char** argv) {
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
             mode = mode_twitter;
-	else
+        else if (clp->option->long_name == String("listen")) {
+            mode = mode_listen;
+            if (clp->have_val)
+                listen_port = clp->val.i;
+        } else
 	    exit(1);
     }
 
@@ -567,7 +573,10 @@ int main(int argc, char** argv) {
     recursive(); // TODO: core dump if called after simple()!
 #else
     pq::Server server;
-    if (mode == mode_twitter || mode == mode_unknown) {
+    if (mode == mode_listen) {
+        extern void server_loop(int port, pq::Server& server);
+        server_loop(listen_port, server);
+    } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);

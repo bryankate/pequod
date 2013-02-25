@@ -21,7 +21,7 @@ LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
 	-lev -lprotobuf @MALLOC_LIBS@
 
-CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/tamer/tamer
+CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
 
 @DEFAULT_MALLOC_ASSIGNMENT@
@@ -44,6 +44,7 @@ endif
 CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
 
+TAMER = tamer/compiler/tamer
 LIBTAMER = tamer/tamer/.libs/libtamer.a
 
 
@@ -57,9 +58,6 @@ $(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh: $(PROTOSRCDIR)/%.proto \
 		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp $(PROTOSRCDIR)/protox.pl
 	$(PROTOSRCDIR)/protox.pl --cpp_out=$(PROTOGENDIR) $<
 
-$(OBJDIR)/%.o: $(SRCDIR)/app/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
-	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
-
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
@@ -71,6 +69,9 @@ $(OBJDIR)/%.o: $(top_srcdir)/src/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
+	$(TAMER) $< > $@
 
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 
@@ -89,7 +90,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
-	$(OBJDIR)/pqfacebook.o
+	$(OBJDIR)/pqfacebook.o \
+	$(OBJDIR)/pqserverloop.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)

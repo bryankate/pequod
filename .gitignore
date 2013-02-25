@@ -1,3 +1,6 @@
+gmon.out
+perf.data
+
 /.deps
 /GNUmakefile
 /autom4te.cache
