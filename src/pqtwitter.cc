@@ -88,7 +88,7 @@ void TwitterPopulator::create_subscriptions(generator_type& gen) {
 
     std::sort(followers.begin(), followers.end());
     for (auto& sub : followers) {
-        while (follower_ptrs_.size() < sub.first)
+        while (follower_ptrs_.size() <= sub.first)
             follower_ptrs_.push_back(followers_.size());
         followers_.push_back(sub.second);
     }
