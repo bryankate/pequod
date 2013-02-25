@@ -6,6 +6,7 @@
 
 struct Str : public String_base<Str> {
     typedef Str substring_type;
+    typedef Str argument_type;
 
     const char *s;
     int len;

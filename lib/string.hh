@@ -11,6 +11,7 @@
 class String : public String_base<String> {
   public:
     typedef String substring_type;
+    typedef const String& argument_type;
 
     inline STRING_CONSTEXPR String();
     inline String(const String &x);
