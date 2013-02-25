@@ -192,4 +192,5 @@ always:
 
 .PHONY: all clean distclean always
 .PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
-	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh
+	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh \
+	$(OBJ)/%.cc
