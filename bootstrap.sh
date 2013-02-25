@@ -5,6 +5,6 @@ if [ ! -f tamer/boostrap.sh ]; then
     git submodule update
 fi
 
-{ cd tamer; ./bootstrap.sh; }
+( cd tamer; ./bootstrap.sh )
 
 autoreconf -i
