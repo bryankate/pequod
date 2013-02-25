@@ -1,9 +1,13 @@
 #include "pqtwitter.hh"
+#include "json.hh"
+#include "pqjoin.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 #include <math.h>
+#include <sys/resource.h>
+#include "time.hh"
 namespace pq {
 const char TwitterPopulator::tweet_data[] = "................................................................................................................................................................";
 
@@ -122,5 +126,98 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
     delete[] num_followers;
 }
 
+
+void TwitterRunner::post(uint32_t u, uint32_t time, Str value) {
+    char buf[128];
+    sprintf(buf, "p|%05d|%010u", u, time);
+    server_.insert(Str(buf, 18), value, true);
+    if (tp_.push())
+        for (auto it = tp_.begin_followers(u);
+             it != tp_.end_followers(u); ++it) {
+            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+            server_.insert(Str(buf, 24), value, false);
+        }
 }
 
+void TwitterRunner::populate() {
+    boost::mt19937 gen;
+    gen.seed(0);
+
+    tp_.create_subscriptions(gen);
+    char buf[128];
+    for (auto& x : tp_.subscriptions()) {
+        sprintf(buf, "s|%05d|%05d", x.first, x.second);
+        server_.insert(Str(buf, 13), Str("1", 1), true);
+    }
+
+#if 0
+    for (uint32_t u = 0; u != tp_.nusers(); ++u)
+        for (int p = 0; p != 10; ++p) {
+            auto post = tp_.random_post(gen);
+            post(u, post.first, post.second);
+            if (p == 9 && u % 1000 == 0)
+                fprintf(stderr, "%u/%u ", u, tp_.nusers());
+        }
+#endif
+
+    tp_.print_subscription_statistics(std::cout);
+
+    if (!tp_.push()) {
+        pq::Join* j = new pq::Join;
+        j->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
+                        "s|<user_id>|<poster_id> "
+                        "p|<poster_id>|<time>");
+        server_.add_join("t|", "t}", j);
+    }
+}
+
+void TwitterRunner::run() {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    struct rusage ru[2];
+
+    uint32_t time = 1000000000;
+    uint32_t nusers = tp_.nusers();
+    uint32_t post_end_time = time + nusers * 5;
+    uint32_t end_time = post_end_time + 1000000;
+    uint32_t* load_times = new uint32_t[nusers];
+    for (uint32_t i = 0; i != nusers; ++i)
+        load_times[i] = 0;
+    char buf1[128], buf2[128];
+    uint32_t npost = 0, nfull = 0, nupdate = 0;
+    size_t nread = 0;
+    getrusage(RUSAGE_SELF, &ru[0]);
+
+    while (time != end_time) {
+        uint32_t u = rng(nusers);
+        uint32_t a = rng(100);
+        if (time < post_end_time || a < 2) {
+            post(u, time, "?!?#*");
+            ++npost;
+        } else {
+            uint32_t tx = load_times[u];
+            if (!tx || a < 3) {
+                tx = time - 32000;
+                ++nfull;
+            } else
+                ++nupdate;
+            sprintf(buf1, "t|%05d|%010d", u, tx);
+            sprintf(buf2, "t|%05d}", u);
+            server_.validate(Str(buf1, 18), Str(buf2, 8));
+            nread += server_.count(Str(buf1, 18), Str(buf2, 8));
+            load_times[u] = time;
+        }
+        ++time;
+    }
+
+    getrusage(RUSAGE_SELF, &ru[1]);
+    Json stats = Json().set("nposts", npost).set("nfull", nfull)
+	.set("nupdate", nupdate).set("nposts_read", nread)
+	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    stats.merge(server_.stats());
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    delete[] load_times;
+}
+
+}

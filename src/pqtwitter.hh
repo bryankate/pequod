@@ -5,7 +5,7 @@
 #include <vector>
 #include <iostream>
 #include <stdint.h>
-#include "json.hh"
+#include "pqserver.hh"
 namespace pq {
 
 class TwitterPopulator {
@@ -48,6 +48,20 @@ class TwitterPopulator {
     uint32_t* subscribe_probabilities(generator_type& gen);
 };
 
+class TwitterRunner {
+  public:
+    TwitterRunner(Server& server, TwitterPopulator& tp);
+
+    void populate();
+    void run();
+
+  private:
+    Server& server_;
+    TwitterPopulator& tp_;
+
+    void post(uint32_t u, uint32_t time, Str value);
+};
+
 inline uint32_t TwitterPopulator::nusers() const {
     return nusers_;
 }
@@ -74,6 +88,10 @@ inline const uint32_t* TwitterPopulator::end_followers(uint32_t user) const {
 
 inline std::pair<uint32_t, Str> TwitterPopulator::random_post(generator_type& gen) const {
     return std::make_pair(1000000000U - gen() % 65536, Str(tweet_data, 140 - gen() % 140));
+}
+
+inline TwitterRunner::TwitterRunner(Server& server, TwitterPopulator& tp)
+    : server_(server), tp_(tp) {
 }
 
 } // namespace pq
