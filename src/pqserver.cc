@@ -561,20 +561,22 @@ int main(int argc, char** argv) {
 	else
 	    exit(1);
     }
-    if (!tp_param.count("shape"))
-        tp_param.set("shape", mode == mode_facebook ? 5 : 8);
 
 #if 0
 //    simple();
     recursive(); // TODO: core dump if called after simple()!
 #else
     pq::Server server;
-    if (mode == mode_twitter) {
+    if (mode == mode_twitter || mode == mode_unknown) {
+        if (!tp_param.count("shape"))
+            tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
         twitter_populate(server, tp);
         twitter_run(server, tp);
     } else {
         //server.print(std::cout);
+        if (!tp_param.count("shape"))
+            tp_param.set("shape", 5);
         pq::FacebookPopulator fp(tp_param);
         facebook_populate(server, fp);
         facebook_run(server, fp);
