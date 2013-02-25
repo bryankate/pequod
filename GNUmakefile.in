@@ -44,6 +44,8 @@ endif
 CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
 
+LIBTAMER = tamer/tamer/.libs/libtamer.a
+
 
 all:    $(OBJDIR)/pqserver
 
@@ -89,8 +91,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqfacebook.o
 
-$(OBJDIR)/pqserver: $(PQSERVER_OBJS)
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+$(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
+	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rb.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
@@ -150,6 +152,9 @@ $(OBJDIR)/benchproto: $(COMMON_OBJS) $(OBJDIR)/benchproto.o $(OBJDIR)/micro1.pb.
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 $(OBJDIR)/benchproto.o: $(PROTOGENDIR)/micro1.pb.h $(PROTOGENDIR)/micro2.px.hh
 
+tamer/compiler/tamer $(LIBTAMER): tamer/config.status always
+	cd tamer && $(MAKE) compiler tamer
+
 $(OBJDIR)/stamp $(DEPSDIR)/stamp:
 	mkdir -p $(dir $@)
 	touch $@
@@ -180,6 +185,9 @@ ifneq ($(DEPFILES),)
 include $(DEPFILES)
 endif
 
-.PHONY: all clean distclean
+always:
+	@:
+
+.PHONY: all clean distclean always
 .PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
 	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh

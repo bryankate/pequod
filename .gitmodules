@@ -1,0 +1,3 @@
+[submodule "tamer"]
+	path = tamer
+	url = git://github.com/kohler/tamer.git

@@ -1,9 +1,12 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT([pequod], [0.1])
+AC_CONFIG_AUX_DIR(tamer)
 AC_PREREQ(2.60)
+
+AC_INIT([pequod], [0.1])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([GNUmakefile])
+AC_CONFIG_SUBDIRS([tamer])
 AC_SUBST(ac_configure_args)
 
 ac_user_cxx=${CXX+y}
@@ -11,6 +14,7 @@ ac_user_cxxflags=${CXXFLAGS+y}
 
 AC_PROG_CC
 AC_PROG_CXX
+AC_PROG_INSTALL
 AC_LANG_CPLUSPLUS
 
 AC_C_BIGENDIAN([AC_DEFINE([ENDIAN_BIG], [1], [big endian])],
