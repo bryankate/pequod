@@ -14,6 +14,7 @@ const char TwitterPopulator::tweet_data[] = "...................................
 TwitterPopulator::TwitterPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
       push_(param["push"].as_b(false)),
+      log_(param["log"].as_b(false)),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),
@@ -148,6 +149,8 @@ void TwitterRunner::populate() {
     for (auto& x : tp_.subscriptions()) {
         sprintf(buf, "s|%05d|%05d", x.first, x.second);
         server_.insert(Str(buf, 13), Str("1", 1), true);
+        if (tp_.log())
+            printf("subscribe %.13s\n", buf);
     }
 
 #if 0
@@ -193,6 +196,8 @@ void TwitterRunner::run() {
         uint32_t u = rng(nusers);
         uint32_t a = rng(100);
         if (time < post_end_time || a < 2) {
+            if (tp_.log())
+                printf("%d: post p|%05d|%010d\n", time, u, time);
             post(u, time, "?!?#*");
             ++npost;
         } else {
@@ -205,7 +210,14 @@ void TwitterRunner::run() {
             sprintf(buf1, "t|%05d|%010d", u, tx);
             sprintf(buf2, "t|%05d}", u);
             server_.validate(Str(buf1, 18), Str(buf2, 8));
-            nread += server_.count(Str(buf1, 18), Str(buf2, 8));
+            if (tp_.log()) {
+                std::cout << time << ": scan [" << buf1 << "," << buf2 << ")\n";
+                auto bit = server_.lower_bound(Str(buf1, 18)),
+                    eit = server_.lower_bound(Str(buf2, 8));
+                for (; bit != eit; ++bit, ++nread)
+                    std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+            } else
+                nread += server_.count(Str(buf1, 18), Str(buf2, 8));
             load_times[u] = time;
         }
         ++time;

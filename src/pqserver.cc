@@ -448,7 +448,8 @@ static Clp_Option options[] = {
     { "nusers", 'n', 1001, Clp_ValInt, 0 },
     { "facebook", 'f', 1002, 0, Clp_Negate },
     { "shape", 0, 1003, Clp_ValDouble, 0 },
-    { "listen", 'l', 1004, Clp_ValInt, Clp_Optional }
+    { "listen", 'l', 1004, Clp_ValInt, Clp_Optional },
+    { "log", 0, 1005, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_facebook, mode_listen };
@@ -472,7 +473,9 @@ int main(int argc, char** argv) {
             mode = mode_listen;
             if (clp->have_val)
                 listen_port = clp->val.i;
-        } else
+        } else if (clp->option->long_name == String("log"))
+            tp_param.set("log", !clp->negated);
+        else
 	    exit(1);
     }
 

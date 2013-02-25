@@ -31,6 +31,9 @@ class Datum : public pequod_set_base_hook {
     const String& key() const {
 	return key_;
     }
+    const String& value() const {
+        return value_;
+    }
 
   private:
     String key_;

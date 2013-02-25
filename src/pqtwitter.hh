@@ -18,6 +18,7 @@ class TwitterPopulator {
     inline uint32_t nusers() const;
     inline void set_nusers(uint32_t n);
     inline bool push() const;
+    inline bool log() const;
 
     void create_subscriptions(generator_type& gen);
     void print_subscription_statistics(std::ostream& stream) const;
@@ -30,6 +31,7 @@ class TwitterPopulator {
   private:
     uint32_t nusers_;
     bool push_;
+    bool log_;
     uint32_t min_followers_;
     uint32_t min_subs_;
     uint32_t max_subs_;
@@ -72,6 +74,10 @@ inline void TwitterPopulator::set_nusers(uint32_t n) {
 
 inline bool TwitterPopulator::push() const {
     return push_;
+}
+
+inline bool TwitterPopulator::log() const {
+    return log_;
 }
 
 inline const std::vector<std::pair<uint32_t, uint32_t> >& TwitterPopulator::subscriptions() const {
