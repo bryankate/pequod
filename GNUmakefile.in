@@ -21,7 +21,7 @@ LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
 	-lev -lprotobuf @MALLOC_LIBS@
 
-CXXFLAGS += -I/opt/local/include
+CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/tamer/tamer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
 
 @DEFAULT_MALLOC_ASSIGNMENT@

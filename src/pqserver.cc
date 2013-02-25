@@ -541,10 +541,12 @@ static Clp_Option options[] = {
     { "shape", 0, 1003, Clp_ValDouble, 0 }
 };
 
+enum { mode_unknown, mode_twitter, mode_facebook };
+
 int main(int argc, char** argv) {
-    bool facebook = false;
+    int mode = mode_unknown;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
-    Json tp_param = Json().set("shape", 8).set("nusers", 5000);
+    Json tp_param = Json().set("nusers", 5000);
     while (Clp_Next(clp) != Clp_Done) {
 	if (clp->option->long_name == String("push"))
 	    tp_param.set("push", !clp->negated);
@@ -552,39 +554,28 @@ int main(int argc, char** argv) {
 	    tp_param.set("nusers", clp->val.i);
 	else if (clp->option->long_name == String("shape"))
 	    tp_param.set("shape", clp->val.d);
-	else if (clp->option->long_name == String("facebook")){
-            facebook = true;
-            break;    
-        }
+	else if (clp->option->long_name == String("facebook"))
+            mode = mode_facebook;
+        else if (clp->option->long_name == String("twitter"))
+            mode = mode_twitter;
 	else
 	    exit(1);
     }
-    Json fp_param = Json().set("shape", 5);
-    if (facebook) {
-        while (Clp_Next(clp) != Clp_Done) {
-	    if (clp->option->long_name == String("push"))
-	        fp_param.set("push", !clp->negated);
-            else if (clp->option->long_name == String("nusers"))
-	        fp_param.set("nusers", clp->val.i);
-	    else if (clp->option->long_name == String("shape"))
-                fp_param.set("shape", clp->val.d);
-	    else
-	        exit(1);
-        }
-    }
+    if (!tp_param.count("shape"))
+        tp_param.set("shape", mode == mode_facebook ? 5 : 8);
 
 #if 0
 //    simple();
     recursive(); // TODO: core dump if called after simple()!
 #else
     pq::Server server;
-    if (!facebook){
+    if (mode == mode_twitter) {
         pq::TwitterPopulator tp(tp_param);
         twitter_populate(server, tp);
         twitter_run(server, tp);
     } else {
         //server.print(std::cout);
-        pq::FacebookPopulator fp(fp_param);
+        pq::FacebookPopulator fp(tp_param);
         facebook_populate(server, fp);
         facebook_run(server, fp);
     }
