@@ -334,11 +334,6 @@ void recursive() {
                     "b|<b_id>|<time>");
     j1.ref();
     server.add_join("c|", "c}", &j1);
-    server.validate("c|00001|0000000001", "c|00001}");
-
-    std::cerr << "After processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
 
     pq::Join j2;
     j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
@@ -346,6 +341,7 @@ void recursive() {
                     "c|<a_id>|<time>|<b_id>");
     j2.ref();
     server.add_join("e|", "e}", &j2);
+
     server.validate("e|00003|0000000001", "e|00003}");
 
     std::cerr << "After processing recursive join:\n";
