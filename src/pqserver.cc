@@ -61,6 +61,11 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     if (joinpos + 1 == join_->size())
         server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
 
+    // need to validate the source ranges in case they have not been
+    // expanded yet.
+    // XXX PERFORMANCE this is not always necessary
+    server.validate(Str(kf, kflen), Str(kl, kllen));
+
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
 
