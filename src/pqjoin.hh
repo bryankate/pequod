@@ -295,6 +295,7 @@ inline void Join::expand(uint8_t* s, Str str) const {
 }
 
 std::ostream& operator<<(std::ostream&, const Match&);
+std::ostream& operator<<(std::ostream&, const Join&);
 
 } // namespace
 #endif

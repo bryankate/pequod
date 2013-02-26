@@ -154,4 +154,8 @@ String Join::unparse() const {
     return unparse_json().unparse();
 }
 
+std::ostream& operator<<(std::ostream& stream, const Join& join) {
+    return stream << join.unparse();
+}
+
 } // namespace
