@@ -326,6 +326,7 @@ inline void Server::validate(Str first, Str last) {
 }
 
 inline size_t Server::count(Str first, Str last) {
+    validate(first, last);
     return std::distance(lower_bound(first), lower_bound(last));
 }
 

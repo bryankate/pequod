@@ -317,6 +317,53 @@ void simple() {
     std::cerr << std::endl;
 }
 
+void count() {
+    std::cerr << "COUNT" << std::endl;
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+        {"a|00001|00002", "1"},
+        {"b|00002|0000000001", "b1"},
+        {"b|00002|0000000002", "b2"},
+        {"b|00002|0000000010", "b3"},
+        {"b|00002|0000000020", "b4"},
+        {"b|00003|0000000002", "b5"},
+        {"d|00003|00001", "1"}
+    };
+    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+
+    std::cerr << "Before processing join:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+
+    pq::Join j1;
+    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
+                    "a|<a_id>|<b_id> "
+                    "b|<b_id>|<time>");
+    j1.ref();
+    server.add_join("c|", "c}", &j1);
+
+    pq::Join j2;
+    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
+                    "d|<d_id>|<a_id:5> "
+                    "c|<a_id>|<time>|<b_id>");
+    j2.ref();
+    server.add_join("e|", "e}", &j2);
+
+    std::cerr << std::endl << "e| count: " << server.count("e|", "e}") << std::endl << std::endl;
+
+    std::cerr << "After recursive count:\n";
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    server.print(std::cerr);
+    std::cerr << std::endl;
+
+    std::cerr << "b| count: " << server.count("b|", "b}") << std::endl;
+    std::cerr << "b|00002 count: " << server.count("b|00002|", "b|00002}") << std::endl;
+    std::cerr << "b|00002 subcount: " << server.count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
+    std::cerr << "c| count: " << server.count("c|", "c}") << std::endl << std::endl;
+}
+
 void recursive() {
     std::cerr << "RECURSIVE" << std::endl;
     pq::Server server;
@@ -482,7 +529,8 @@ int main(int argc, char** argv) {
 
 #if 0
 //    simple();
-    recursive(); // TODO: core dump if called after simple()!
+//    recursive(); // TODO: core dump if called after simple()!
+    count();
 #else
     pq::Server server;
     if (mode == mode_listen) {
