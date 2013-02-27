@@ -535,7 +535,7 @@ int main(int argc, char** argv) {
         simple();
         recursive();
         count();
-    }else if (mode == mode_listen) {
+    } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
     } else if (mode == mode_twitter || mode == mode_unknown) {
