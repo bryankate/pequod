@@ -273,7 +273,7 @@ void fuzz(G& tree, int N) {
                 std::cerr << "find " << which << "\n";
             auto n = tree.find(which);
             assert(n ? in[which] : !in[which]);
-        } else if (!in[which] || (op < 7 && in[which] < 5)) {
+        } else if (!in[which] || (op == 5 && in[which] < 4)) {
             if (print_actions)
                 std::cerr << "insert " << which << "\n";
             assert(!!in[which] == !!tree.find(which));
@@ -315,10 +315,14 @@ struct rbtree_with_print {
 struct rbtree_without_print {
     rbtree<rbwrapper<int> > tree;
     inline void insert(int val) {
+	//std::cerr << "insert " << val << "\n";
         tree.insert(new rbwrapper<int>(val));
+	//tree.check();
     }
     inline void find_and_erase(int val) {
+	//std::cerr << "erase " << val << "\n" << tree << "\n";
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+	//tree.check();
     }
     inline rbwrapper<int>* find(int val) {
         return tree.find(rbwrapper<int>(val));
