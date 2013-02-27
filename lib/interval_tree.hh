@@ -29,12 +29,13 @@ struct interval_comparator {
 
 struct interval_rb_reshaper {
     template <typename T>
-    inline void operator()(T* n) {
+    inline bool operator()(T* n) {
 	n->set_subtree_iend(n->iend());
 	for (int i = 0; i < 2; ++i)
 	    if (T* x = n->rblinks_.c_[i].node())
 		if (n->subtree_iend() < x->subtree_iend())
 		    n->set_subtree_iend(x->subtree_iend());
+        return true;
     }
 };
 

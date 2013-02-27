@@ -1,4 +1,6 @@
 #define INTERVAL_TREE_DEBUG 1
+#define rbaccount(x) ++rbaccount_##x
+unsigned long long rbaccount_rotation, rbaccount_flip, rbaccount_insert, rbaccount_erase;
 #include <iostream>
 #include <string.h>
 #include <boost/intrusive/set.hpp>
@@ -9,6 +11,67 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 static bool print_actions;
+
+#if 0
+// archive working iterative version of delete
+template <typename T, typename C, typename R>
+T* rbtree<T, C, R>::delete_node(T* victim) {
+    // construct path to root
+    local_stack<T*, (sizeof(size_t) << 2)> stk;
+    for (T* n = victim; n; n = n->rblinks_.p_)
+        stk.push(n);
+
+    // work backwards
+    int si = stk.size() - 1;
+    rbnodeptr<T> np(stk[si], false), repl;
+    size_t childtrack = 0, redtrack = 0;
+    while (1) {
+        bool direction;
+        if (si && np.child(false).node() == stk[si-1]) {
+            if (!np.child(false).red() && !np.child(false).child(false).red())
+                np = np.move_red_left(r_.reshape());
+            direction = false;
+        } else {
+            if (np.child(false).red())
+                np = np.rotate_right(r_.reshape());
+            if (victim == np.node() && !np.child(true)) {
+                repl = rbnodeptr<T>(0, false);
+                break;
+            }
+            if (!np.child(true).red() && !np.child(true).child(false).red())
+                np = np.move_red_right(r_.reshape());
+            if (victim == np.node()) {
+                T* min;
+                np.child(true) = unlink_min(np.child(true), &min);
+                min->rblinks_ = np.node()->rblinks_;
+                for (int i = 0; i < 2; ++i)
+                    if (min->rblinks_.c_[i])
+                        min->rblinks_.c_[i].parent() = min;
+                repl = rbnodeptr<T>(min, np.red()).fixup(r_.reshape());
+                break;
+            }
+            direction = true;
+        }
+        childtrack = (childtrack << 1) | direction;
+        redtrack = (redtrack << 1) | np.red();
+        np = np.child(direction);
+        if (np.node() != stk[si])
+            --si;
+    }
+
+    // now work up
+    if (T* p = np.parent())
+        do {
+            p->rblinks_.c_[childtrack & 1] = repl;
+            repl = rbnodeptr<T>(p, redtrack & 1);
+            repl = repl.fixup(r_.reshape());
+            childtrack >>= 1;
+            redtrack >>= 1;
+            p = repl.parent();
+        } while (p);
+    return repl.node();
+}
+#endif
 
 template <typename T>
 class rbwrapper : public T {
@@ -149,6 +212,12 @@ std::ostream& operator<<(std::ostream& s, const rbwrapper<int_interval>& x) {
     return s << "[" << x.ibegin() << ", " << x.iend() << ") ..." << x.subtree_iend();
 }
 
+void rbaccount_report() {
+    unsigned long long all = rbaccount_insert + rbaccount_erase;
+    fprintf(stderr, "{\"insert\":%llu,\"erase\":%llu,\"rotation_per_operation\":%g,\"flip_per_operation\":%g}\n",
+            rbaccount_insert, rbaccount_erase, (double) rbaccount_rotation / all, (double) rbaccount_flip / all);
+}
+
 template <typename G>
 void grow_and_shrink(G& tree, int N) {
     struct rusage ru[6];
@@ -204,7 +273,7 @@ void fuzz(G& tree, int N) {
                 std::cerr << "find " << which << "\n";
             auto n = tree.find(which);
             assert(n ? in[which] : !in[which]);
-        } else if (!in[which] || (op < 7 && in[which] < 5)) {
+        } else if (!in[which] || (op == 5 && in[which] < 4)) {
             if (print_actions)
                 std::cerr << "insert " << which << "\n";
             assert(!!in[which] == !!tree.find(which));
@@ -246,10 +315,14 @@ struct rbtree_with_print {
 struct rbtree_without_print {
     rbtree<rbwrapper<int> > tree;
     inline void insert(int val) {
+	//std::cerr << "insert " << val << "\n";
         tree.insert(new rbwrapper<int>(val));
+	//tree.check();
     }
     inline void find_and_erase(int val) {
+	//std::cerr << "erase " << val << "\n" << tree << "\n";
         tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+	//tree.check();
     }
     inline rbwrapper<int>* find(int val) {
         return tree.find(rbwrapper<int>(val));
@@ -306,10 +379,12 @@ int main(int argc, char **argv) {
     } else if (argc > 1 && strcmp(argv[1], "-p") == 0) {
         rbtree_without_print tree;
         grow_and_shrink(tree, 1000000);
+        rbaccount_report();
         exit(0);
     } else if (argc > 1 && strcmp(argv[1], "-f") == 0) {
         rbtree_without_print tree;
         fuzz(tree, 1000000);
+        rbaccount_report();
         exit(0);
     } else if (argc > 1) {
         fprintf(stderr, "Usage: ./a.out [-b|-p|-f]\n");

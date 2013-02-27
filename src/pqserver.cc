@@ -137,20 +137,23 @@ void ServerRangeSet::push_back(ServerRange* r) {
 	return;
 
     int i = nr_;
-    while (sw_ > (1 << i))
+    while (sw_ >= (1 << i))
 	++i;
     assert(i == 0 || !(r->ibegin() < r_[i - 1]->ibegin()));
     assert(i < rangecap);
 
     r_[i] = r;
-    ++nr_;
-
-    if (last_ && make_interval<Str>(first_, last_).overlaps(r_[i]->interval()))
+    if (last_ && first_ < r_[i]->ibegin())
 	sw_ |= 1 << i;
+    else if (last_ && r_[i]->iend() < last_) {
+	++nr_;
+	sw_ |= 1 << i;
+    } else
+	++nr_;
 }
 
 void ServerRangeSet::hard_visit(const Datum* datum) {
-    while (sw_ > (1 << nr_) && !(datum->key() < r_[nr_]->ibegin())) {
+    while (sw_ >= (1 << nr_) && !(datum->key() < r_[nr_]->ibegin())) {
 	if (!(r_[nr_]->iend() < last_))
 	    sw_ &= ~(1 << nr_);
 	++nr_;
@@ -527,6 +530,26 @@ void annotation() {
     std::cerr << std::endl << std::endl;
 }
 
+void srs() {
+    pq::Server server;
+    pq::ServerRangeSet srs(&server, "a001", "a}",
+                       pq::ServerRange::joinsink | pq::ServerRange::validjoin);
+
+    pq::Join j;
+    pq::ServerRange *r0 = pq::ServerRange::make("a", "a}", pq::ServerRange::joinsink, &j);
+    pq::ServerRange *r1 = pq::ServerRange::make("a003", "a005", pq::ServerRange::validjoin, &j);
+    pq::ServerRange *r2 = pq::ServerRange::make("a007", "a010", pq::ServerRange::validjoin, &j);
+
+    srs.push_back(r0);
+    srs.push_back(r1);
+    srs.push_back(r2);
+
+    // i expect nr_ == 3 and sw_ == 7?
+    // definitely not total_size of 1...
+    std::cerr << srs.total_size() << std::endl;
+    mandatory_assert(srs.total_size() == 3);
+}
+
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
                   uint32_t u, uint32_t p, Str value) {
     char buf[128];
@@ -581,7 +604,7 @@ void facebook_run(pq::Server& server, pq::FacebookPopulator& fp) {
     getrusage(RUSAGE_SELF, &ru[0]);
 
     while (time != end_time) {
-        uint32_t u = rng(nusers); 
+        uint32_t u = rng(nusers);
         uint32_t p = rng(npages);
         uint32_t l = rng(100);
         // u should always visit p
@@ -652,6 +675,7 @@ int main(int argc, char** argv) {
         recursive();
         count();
         annotation();
+        srs();
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);

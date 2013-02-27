@@ -107,6 +107,19 @@ struct do_nothing {
     }
 };
 
+/** @brief Function object that always returns false. */
+struct return_false {
+    bool operator()() const {
+        return false;
+    }
+    template <typename T> bool operator()(T) const {
+        return false;
+    }
+    template <typename... T> bool operator()(T...) const {
+        return false;
+    }
+};
+
 /** @brief Default comparison function object.
 
     Function object returns negative if a < b, positive if b < a, and zero
