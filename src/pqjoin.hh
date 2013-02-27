@@ -63,6 +63,8 @@ class Pattern {
     Json unparse_json() const;
     String unparse() const;
 
+    friend std::ostream& operator<<(std::ostream&, const Pattern&);
+
   private:
     enum { pcap = 12 };
     uint8_t plen_;
@@ -288,7 +290,7 @@ inline void Join::expand(uint8_t* s, Str str) const {
     const Pattern& last = back();
     const Pattern& first = pat_[0];
     for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
-	if (*p >= 128)
+	if (*p >= 128 && first.has_slot(*p - 128))
 	    memcpy(s + first.slotpos_[*p - 128],
 		   str.udata() + last.slotpos_[*p - 128],
 		   last.slotlen_[*p - 128]);

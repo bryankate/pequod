@@ -143,6 +143,24 @@ String Pattern::unparse() const {
     return unparse_json().unparse();
 }
 
+std::ostream& operator<<(std::ostream& stream, const Pattern& m) {
+    stream << "{";
+    const uint8_t* p = m.pat_;
+    while (p != m.pat_ + m.plen_) {
+        if (*p >= 128) {
+            stream << "<pos: " << (int)m.slotpos_[*p - 128]
+                   << " len: " << (int)m.slotlen_[*p - 128] << ">";
+            ++p;
+        } else {
+            const uint8_t* pfirst = p;
+            for (++p; p != m.pat_ + m.plen_ && *p < 128; ++p)
+                /* do nothing */;
+            stream << String(pfirst, p);
+        }
+    }
+    return stream << "}";
+}
+
 Json Join::unparse_json() const {
     Json j = Json::make_array();
     for (int i = 0; i < npat_; ++i)
