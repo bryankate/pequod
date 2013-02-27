@@ -498,10 +498,10 @@ static Clp_Option options[] = {
     { "shape", 0, 1003, Clp_ValDouble, 0 },
     { "listen", 'l', 1004, Clp_ValInt, Clp_Optional },
     { "log", 0, 1005, 0, Clp_Negate },
-    { "recursive", 0, 1006, 0, 0 }
+    { "tests", 0, 1006, 0, 0 }
 };
 
-enum { mode_unknown, mode_twitter, mode_facebook, mode_listen, mode_recursive };
+enum { mode_unknown, mode_twitter, mode_facebook, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
     int mode = mode_unknown, listen_port = 8000;
@@ -518,8 +518,8 @@ int main(int argc, char** argv) {
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
             mode = mode_twitter;
-        else if (clp->option->long_name == String("recursive"))
-            mode = mode_recursive;
+        else if (clp->option->long_name == String("tests"))
+            mode = mode_tests;
         else if (clp->option->long_name == String("listen")) {
             mode = mode_listen;
             if (clp->have_val)
@@ -530,15 +530,12 @@ int main(int argc, char** argv) {
 	    exit(1);
     }
 
-#if 0
-//    simple();
-//    recursive(); // TODO: core dump if called after simple()!
-    count();
-#else
     pq::Server server;
-    if (mode == mode_recursive)
+    if (mode == mode_tests) {
+        simple();
         recursive();
-    else if (mode == mode_listen) {
+        count();
+    }else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
     } else if (mode == mode_twitter || mode == mode_unknown) {
@@ -557,5 +554,4 @@ int main(int argc, char** argv) {
         facebook_run(server, fp);
     }
     //server.print(std::cout);
-#endif
 }
