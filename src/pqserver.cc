@@ -6,6 +6,7 @@
 #include "clp.h"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
+#include <unistd.h>
 #include "time.hh"
 
 namespace pq {
@@ -14,9 +15,14 @@ namespace pq {
 
 inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
     : ibegin_len_(first.length()), iend_len_(last.length()),
-      subtree_iend_(keys_ + ibegin_len_, iend_len_), type_(type), join_(join) {
+      subtree_iend_(keys_ + ibegin_len_, iend_len_),
+      type_(type), join_(join), expires_at_(0) {
+
     memcpy(keys_, first.data(), first.length());
     memcpy(keys_ + ibegin_len_, last.data(), last.length());
+
+    if (join_->staleness())
+        expires_at_ = tstamp() + tous(join_->staleness());
 }
 
 ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join) {
@@ -49,7 +55,9 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         (*join_)[0].match(first, mf);
         (*join_)[0].match(last, ml);
         validate(mf, ml, 1, server);
-        server.add_validjoin(first, last, join_);
+
+        if (join_->maintained() || join_->staleness())
+            server.add_validjoin(first, last, join_);
     }
 }
 
@@ -63,7 +71,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     // XXX PERFORMANCE this is not always necessary
     server.validate(Str(kf, kflen), Str(kl, kllen));
 
-    if (joinpos + 1 == join_->size())
+    if (join_->maintained() && joinpos + 1 == join_->size())
         server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
 
     auto it = server.lower_bound(Str(kf, kflen));
@@ -107,8 +115,18 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
         stream << ": joinsink @" << (void*) r.join_;
     else if (r.type_ == ServerRange::joinsource)
             stream << ": joinsource @" << (void*) r.join_;
-    else if (r.type_ == ServerRange::validjoin)
-        stream << ": validjoin @" << (void*) r.join_;
+    else if (r.type_ == ServerRange::validjoin) {
+        stream << ": validjoin @" << (void*) r.join_ << ", expires: ";
+        if (r.expires_at_) {
+            uint64_t now = tstamp();
+            if (r.expired_at(now))
+                stream << "EXPIRED";
+            else
+                stream << "in " << fromus(r.expires_at_ - now) << " seconds";
+        }
+        else
+            stream << "NEVER";
+    }
     else
 	stream << ": ??";
     return stream << "}";
@@ -146,6 +164,7 @@ void ServerRangeSet::hard_visit(const Datum* datum) {
 }
 
 void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
+    uint64_t now = tstamp();
     Str last_valid = first_;
     for (int i = 0; i != ts; ++i)
         if (r_[i]
@@ -153,6 +172,11 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
             && r_[i]->join() == jr->join()) {
             if (sw_ == 0)
                 return;
+            if (r_[i]->expired_at(now)) {
+                // TODO: remove the expired validjoin from the server
+                // (and possibly this set if it will be used after this validation)
+                continue;
+            }
             if (last_valid < r_[i]->ibegin())
                 jr->validate(last_valid, r_[i]->ibegin(), *server_);
             last_valid = r_[i]->iend();
@@ -289,6 +313,7 @@ void simple() {
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     pq::Join j;
     j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
@@ -302,6 +327,7 @@ void simple() {
     std::cerr << "After processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     server.insert("p|10000|0000000022", "This should appear in t|00001", true);
     server.insert("p|00002|0000000023", "As should this", true);
@@ -309,6 +335,7 @@ void simple() {
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     server.print(std::cerr);
     std::cerr << std::endl;
@@ -376,6 +403,7 @@ void recursive() {
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
         std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -396,6 +424,7 @@ void recursive() {
     std::cerr << "After processing recursive join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
         std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003", true);
     server.insert("b|00002|0000002000", "As should this", true);
@@ -403,9 +432,99 @@ void recursive() {
     std::cerr << "After processing inserts:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
         std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
+}
 
+void annotation() {
+    std::cerr << "ANNOTATION" << std::endl;
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+        {"a|00001|00002", "1"},
+        {"b|00002|0000000001", "b1"},
+        {"b|00002|0000000002", "b2"},
+        {"d|00003|00004", "1"},
+        {"e|00004|0000000001", "e1"},
+        {"e|00004|0000000002", "e2"},
+        {"e|00004|0000000010", "e3"}
+    };
+    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+
+    pq::Join j1;
+    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
+                    "a|<a_id>|<b_id> "
+                    "b|<b_id>|<time>");
+    j1.ref();
+    // will validate join each time and not install autopush triggers
+    j1.set_maintained(false);
+    server.add_join("c|", "c}", &j1);
+
+    pq::Join j2;
+    j2.assign_parse("f|<d_id:5>|<time:10>|<e_id:5> "
+                    "d|<d_id>|<e_id> "
+                    "e|<e_id>|<time>");
+    j2.ref();
+    // will not re-validate join within T seconds of last validation
+    // for the requested range. the store will hold stale results
+    j2.set_staleness(0.5);
+    server.add_join("f|", "f}", &j2);
+
+    server.validate("c|00001|0000000001", "c|00001}");
+
+    // should NOT have a validrange for c|00001 or a copy for b|00002
+    std::cerr << "After validating [c|00001|0000000001, c|00001})" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
     server.print(std::cerr);
     std::cerr << std::endl;
+
+    // should NOT trigger the insertion of a new c|00001 key
+    server.insert("b|00002|0000000005", "b3", true);
+
+    std::cerr << "After inserting new b|00002 key" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
+
+    server.validate("f|00003|0000000001", "f|00003|0000000005");
+
+    // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
+    std::cerr << "After validating [f|00003|0000000001, f|00003|0000000005)" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    server.print(std::cerr);
+    std::cerr << std::endl;
+
+    server.insert("e|00004|0000000003", "e4", true);
+
+    // should NOT trigger the insertion of a new f|00003 key
+    std::cerr << "After inserting new e|00004 key" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
+
+    // should NOT re-validate the lower part of the range.
+    server.validate("f|00003|0000000001", "f|00003|0000000010");
+
+    // SHOULD have 2 validranges for f|00003 (that expire) but NO copies of e|00004
+    std::cerr << "After validating [f|00003|0000000001, f|00003|0000000010)" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    server.print(std::cerr);
+    std::cerr << std::endl;
+
+    sleep(1);
+
+    // SHOULD re-validate the whole range
+    server.validate("f|00003|0000000001", "f|00003|0000000010");
+
+    // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
+    // MIGHT have 2 expired validranges for f|00003 we implement cleanup of expired ranges
+    std::cerr << "After sleep and validating [f|00003|0000000001, f|00003|0000000010)" << std::endl;
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    server.print(std::cerr);
+    std::cerr << std::endl << std::endl;
 }
 
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
@@ -532,6 +651,7 @@ int main(int argc, char** argv) {
         simple();
         recursive();
         count();
+        annotation();
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);

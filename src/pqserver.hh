@@ -83,6 +83,7 @@ class ServerRange {
 
     inline range_type type() const;
     inline Join* join() const;
+    inline bool expired_at(uint64_t t) const;
 
     void add_sink(const Match& m);
 
@@ -103,6 +104,7 @@ class ServerRange {
   private:
     range_type type_;
     Join* join_;
+    uint64_t expires_at_;
     mutable local_vector<String, 4> resultkeys_;
     char keys_[0];
 
@@ -240,6 +242,10 @@ inline ServerRange::range_type ServerRange::type() const {
 
 inline Join* ServerRange::join() const {
     return join_;
+}
+
+inline bool ServerRange::expired_at(uint64_t t) const {
+    return expires_at_ && (expires_at_ < t);
 }
 
 inline ServerRangeSet::ServerRangeSet(Server* server, Str first, Str last,

@@ -90,6 +90,10 @@ class Join {
 
     inline bool recursive() const;
     inline void set_recursive();
+    inline bool maintained() const;
+    inline void set_maintained(bool m);
+    inline double staleness() const;
+    inline void set_staleness(double s);
 
     bool assign_parse(Str str);
 
@@ -99,7 +103,10 @@ class Join {
   private:
     enum { pcap = 5 };
     int npat_;
-    bool recursive_;
+    bool recursive_;    // if another join uses the output of this join as input
+    bool maintained_;   // if the output is kept up to date with changes to the input
+    double staleness_;  // validated ranges can be used in this time window.
+                        // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
     int refcount_;
 };
@@ -254,7 +261,8 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), recursive_(false), refcount_(0) {
+    : npat_(0), recursive_(false), maintained_(true),
+      staleness_(0), refcount_(0) {
 }
 
 inline void Join::ref() {
@@ -276,6 +284,27 @@ inline bool Join::recursive() const {
 
 inline void Join::set_recursive() {
     recursive_ = true;
+}
+
+inline bool Join::maintained() const {
+    return maintained_;
+}
+
+inline void Join::set_maintained(bool m) {
+    if (m && staleness_)
+        mandatory_assert(false && "We do not support temporary maintenance.");
+    maintained_ = m;
+}
+
+inline double Join::staleness() const {
+    return staleness_;
+}
+
+inline void Join::set_staleness(double s) {
+    if (!s)
+        mandatory_assert(false && "Cannot unset staleness.");
+    staleness_ = s;
+    maintained_ = false;
 }
 
 inline const Pattern& Join::operator[](int i) const {
