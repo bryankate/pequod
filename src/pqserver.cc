@@ -173,13 +173,13 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
         if (r_[i]
             && r_[i]->type() == ServerRange::validjoin
             && r_[i]->join() == jr->join()) {
-            if (sw_ == 0)
-                return;
             if (r_[i]->expired_at(now)) {
                 // TODO: remove the expired validjoin from the server
                 // (and possibly this set if it will be used after this validation)
                 continue;
             }
+            if (sw_ == 0)
+                return;
             if (last_valid < r_[i]->ibegin())
                 jr->validate(last_valid, r_[i]->ibegin(), *server_);
             last_valid = r_[i]->iend();
