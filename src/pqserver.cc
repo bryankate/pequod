@@ -125,13 +125,10 @@ void ServerRangeSet::push_back(ServerRange* r) {
     assert(i < rangecap);
 
     r_[i] = r;
-    if (last_ && first_ < r_[i]->ibegin())
+    ++nr_;
+
+    if (last_ && make_interval<Str>(first_, last_).overlaps(r_[i]->interval()))
 	sw_ |= 1 << i;
-    else if (last_ && r_[i]->iend() < last_) {
-	++nr_;
-	sw_ |= 1 << i;
-    } else
-	++nr_;
 }
 
 void ServerRangeSet::hard_visit(const Datum* datum) {
@@ -413,7 +410,7 @@ void recursive() {
 
 void srs() {
     pq::Server server;
-    pq::ServerRangeSet srs(&server, "a001", "a}",
+    pq::ServerRangeSet srs(&server, "a", "a}",
                        pq::ServerRange::joinsink | pq::ServerRange::validjoin);
 
     pq::Join j;
