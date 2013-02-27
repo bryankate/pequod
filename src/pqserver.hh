@@ -122,6 +122,7 @@ class ServerRangeSet {
     void validate();
 
     friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
+    inline int total_size() const;
 
   private:
     enum { rangecap = 5 };
@@ -133,7 +134,6 @@ class ServerRangeSet {
     Str last_;
     int types_;
 
-    inline int total_size() const;
     void hard_visit(const Datum* datum);
     void validate_join(ServerRange* jr, int ts);
 };
@@ -261,7 +261,7 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 }
 
 inline int ServerRangeSet::total_size() const {
-    return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
+    return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {

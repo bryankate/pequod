@@ -119,7 +119,7 @@ void ServerRangeSet::push_back(ServerRange* r) {
 	return;
 
     int i = nr_;
-    while (sw_ > (1 << i))
+    while (sw_ >= (1 << i))
 	++i;
     assert(i == 0 || !(r->ibegin() < r_[i - 1]->ibegin()));
     assert(i < rangecap);
@@ -135,7 +135,7 @@ void ServerRangeSet::push_back(ServerRange* r) {
 }
 
 void ServerRangeSet::hard_visit(const Datum* datum) {
-    while (sw_ > (1 << nr_) && !(datum->key() < r_[nr_]->ibegin())) {
+    while (sw_ >= (1 << nr_) && !(datum->key() < r_[nr_]->ibegin())) {
 	if (!(r_[nr_]->iend() < last_))
 	    sw_ &= ~(1 << nr_);
 	++nr_;
@@ -485,7 +485,7 @@ void facebook_run(pq::Server& server, pq::FacebookPopulator& fp) {
     getrusage(RUSAGE_SELF, &ru[0]);
 
     while (time != end_time) {
-        uint32_t u = rng(nusers); 
+        uint32_t u = rng(nusers);
         uint32_t p = rng(npages);
         uint32_t l = rng(100);
         // u should always visit p
@@ -555,6 +555,7 @@ int main(int argc, char** argv) {
         simple();
         recursive();
         count();
+        srs();
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
