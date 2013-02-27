@@ -8,7 +8,6 @@
 // LLRB 2-3 tree a la Sedgewick
 // Intrusive
 
-template <typename T> class rbnode;
 template <typename T, typename Compare, typename Reshape> class rbtree;
 namespace rbpriv {
 template <typename T, typename Compare, typename Reshape> class rbrep1;
@@ -19,7 +18,7 @@ class rbnodeptr {
   public:
     typedef bool (rbnodeptr<T>::*unspecified_bool_type)() const;
 
-    inline rbnodeptr();
+    rbnodeptr() = default;
     inline rbnodeptr(T* x, bool color);
     explicit inline rbnodeptr(uintptr_t ivalue);
 
@@ -57,9 +56,6 @@ class rbnodeptr {
 template <typename T>
 class rblinks {
   public:
-    T* child(bool right) const {
-	return c_[right].node();
-    }
     T* p_;
     rbnodeptr<T> c_[2];
 };
@@ -69,7 +65,7 @@ template <typename Compare>
 struct rbcompare : private Compare {
     inline rbcompare(const Compare &compare);
     template <typename T>
-    inline int compare(const rbnode<T> &a, const rbnode<T> &b) const;
+    inline int node_compare(const T& a, const T& b) const;
     template <typename A, typename B>
     inline int compare(const A &a, const B &b) const;
     inline Compare& get_compare() const;
@@ -78,7 +74,7 @@ struct rbcompare : private Compare {
 template <typename Reshape, typename T>
 struct rbreshape : private Reshape {
     inline rbreshape(const Reshape &reshape);
-    inline rbreshape<Reshape, T> &reshape();
+    inline rbreshape<Reshape, T>& reshape();
     inline void operator()(T* n);
 };
 
@@ -173,7 +169,6 @@ class rbtree {
   private:
     rbpriv::rbrep1<T, Compare, Reshape> r_;
 
-    //template <typename X> rbnode<T> *find_or_insert_node(const X& ctor);
     rbnodeptr<T> unlink_min(rbnodeptr<T> np, T** min);
     rbnodeptr<T> delete_node(rbnodeptr<T> np, T* victim);
     T* delete_node(T* victim);
@@ -187,11 +182,6 @@ class rbtree {
     template <typename K, typename Comp>
     inline iterator upper_bound(const K& key, Comp& compare, int) const;
 };
-
-template <typename T>
-inline rbnodeptr<T>::rbnodeptr()
-    : x_(0) {
-}
 
 template <typename T>
 inline rbnodeptr<T>::rbnodeptr(T* x, bool color)
@@ -315,19 +305,18 @@ inline rbnodeptr<T> rbnodeptr<T>::fixup(F &f) const {
 
 namespace rbpriv {
 template <typename Compare>
-inline rbcompare<Compare>::rbcompare(const Compare &compare)
+inline rbcompare<Compare>::rbcompare(const Compare& compare)
     : Compare(compare) {
 }
 
 template <typename Compare> template <typename T>
-inline int rbcompare<Compare>::compare(const rbnode<T> &a,
-                                       const rbnode<T> &b) const {
+inline int rbcompare<Compare>::node_compare(const T& a, const T& b) const {
     int cmp = this->operator()(a, b);
     return cmp ? cmp : default_compare(&a, &b);
 }
 
 template <typename Compare> template <typename A, typename B>
-inline int rbcompare<Compare>::compare(const A &a, const B &b) const {
+inline int rbcompare<Compare>::compare(const A& a, const B& b) const {
     return this->operator()(a, b);
 }
 
@@ -374,60 +363,24 @@ template <typename T, typename C, typename R>
 rbnodeptr<T> rbrep1<T, C, R>::insert_node(rbnodeptr<T> np, T* x, T* p) {
     if (!np) {
         x->rblinks_.p_ = p;
+	x->rblinks_.c_[0] = x->rblinks_.c_[1] = rbnodeptr<T>(0, false);
 	this->reshape()(x);
 	return rbnodeptr<T>(x, true);
     }
 
     T* n = np.node();
-    int cmp = this->compare(*x, *n);
-    if (cmp == 0)
-	cmp = (x < n ? -1 : 1);
-
+    int cmp = this->node_compare(*x, *n);
     n->rblinks_.c_[cmp > 0] = insert_node(n->rblinks_.c_[cmp > 0], x, n);
     return np.fixup(this->reshape());
 }
 } // namespace rbpriv
-
-#if 0
-template <typename T, typename C, typename R>
-template <typename X>
-rbnode<T> *rbtree<T, C, R>::find_or_insert_node(const X &args) {
-    local_stack<uintptr_t, 40> stack;
-
-    rbnodeptr<T> np = rbnodeptr<T>(r_.root_, false);
-    while (np) {
-	rbnode<T>* n = np.node();
-	int cmp = r_.compare(args, *n);
-	if (cmp == 0)
-	    return n;
-	stack.push(np.ivalue() | (cmp > 0 ? 4 : 0));
-	np = n->rblinks_.c_[cmp > 0];
-    }
-
-    rbnode<T> *result = r_.allocator().allocate(1);
-    r_.allocator().construct(result, args);
-    r_.reshape()(result);
-    np = rbnodeptr<T>(result, true);
-
-    while (stack.size()) {
-	bool child = stack.top() & 4;
-	rbnodeptr<T> pnp(stack.top() & ~uintptr_t(4));
-	pnp.node()->rblinks_.c_[child] = np;
-	np = pnp.fixup(r_.reshape());
-	stack.pop();
-    }
-
-    r_.root_ = np.node();
-    return result;
-}
-#endif
 
 template <typename T, typename C, typename R>
 rbnodeptr<T> rbtree<T, C, R>::unlink_min(rbnodeptr<T> np, T** min) {
     T* n = np.node();
     if (!n->rblinks_.c_[0]) {
 	*min = n;
-	return rbnodeptr<T>();
+	return rbnodeptr<T>(0, false);
     }
     if (!n->rblinks_.c_[0].red() && !n->rblinks_.c_[0].child(false).red()) {
 	np = np.move_red_left(r_.reshape());
@@ -448,7 +401,7 @@ rbnodeptr<T> rbtree<T, C, R>::delete_node(rbnodeptr<T> np, T* victim) {
 	if (np.child(false).red())
 	    np = np.rotate_right(r_.reshape());
         if (victim == np.node() && !np.child(true))
-	    return rbnodeptr<T>();
+	    return rbnodeptr<T>(0, false);
 	if (!np.child(true).red() && !np.child(true).child(false).red())
 	    np = np.move_red_right(r_.reshape());
 	if (victim == np.node()) {
@@ -486,7 +439,7 @@ T* rbtree<T, C, R>::delete_node(T* victim) {
             if (np.child(false).red())
                 np = np.rotate_right(r_.reshape());
             if (victim == np.node() && !np.child(true)) {
-                repl = rbnodeptr<T>();
+                repl = rbnodeptr<T>(0, false);
                 break;
             }
             if (!np.child(true).red() && !np.child(true).child(false).red())
@@ -529,22 +482,19 @@ inline T* rbtree<T, C, R>::root() {
 }
 
 template <typename T, typename C, typename R> template <typename X>
-inline T* rbtree<T, C, R>::find(const X &x) {
+inline T* rbtree<T, C, R>::find(const X& x) {
     T* n = r_.root_;
     while (n) {
 	int cmp = r_.compare(x, *n);
-	if (cmp < 0)
-	    n = n->rblinks_.c_[0].node();
-	else if (cmp == 0)
+	if (cmp == 0)
 	    break;
-	else
-	    n = n->rblinks_.c_[1].node();
+	n = n->rblinks_.c_[cmp > 0].node();
     }
     return n;
 }
 
 template <typename T, typename C, typename R> template <typename X>
-inline const T* rbtree<T, C, R>::find(const X &x) const {
+inline const T* rbtree<T, C, R>::find(const X& x) const {
     return const_cast<rbtree<T, C, R> *>(this)->find(x);
 }
 
@@ -575,23 +525,24 @@ inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
 
 template <typename T>
 void rbnodeptr<T>::output(std::ostream &s, int indent, T* highlight) const {
-    if (node()->rblinks_.c_[0])
-	node()->rblinks_.c_[0].output(s, indent + 2, highlight);
-    s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "");
-    if (highlight && highlight == node())
-        s << " ******  p@" << (void*) node()->rblinks_.p_ << "\n";
-    else
-        s << "\n";
-    if (node()->rblinks_.c_[1])
-	node()->rblinks_.c_[1].output(s, indent + 2, highlight);
+    if (!*this)
+	s << "<empty>\n";
+    else {
+	if (child(0))
+	    child(0).output(s, indent + 2, highlight);
+	s << std::setw(indent) << "" << (const T&) *node() << " @" << (void*) node() << (red() ? " red" : "");
+	if (highlight && highlight == node())
+	    s << " ******  p@" << (void*) node()->rblinks_.p_ << "\n";
+	else
+	    s << "\n";
+	if (child(1))
+	    child(1).output(s, indent + 2, highlight);
+    }
 }
 
 template <typename T, typename C, typename R>
 std::ostream &operator<<(std::ostream &s, const rbtree<T, C, R> &tree) {
-    if (tree.r_.root_)
-	rbnodeptr<T>(tree.r_.root_, false).output(s, 0, 0);
-    else
-	s << "<empty>\n";
+    rbnodeptr<T>(tree.r_.root_, false).output(s, 0, 0);
     return s;
 }
 
