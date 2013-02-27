@@ -1,4 +1,6 @@
 #define INTERVAL_TREE_DEBUG 1
+#define rbaccount(x) ++rbaccount_##x
+unsigned long long rbaccount_rotation, rbaccount_flip, rbaccount_insert, rbaccount_erase;
 #include <iostream>
 #include <string.h>
 #include <boost/intrusive/set.hpp>
@@ -147,6 +149,12 @@ struct int_interval : public interval<int> {
 
 std::ostream& operator<<(std::ostream& s, const rbwrapper<int_interval>& x) {
     return s << "[" << x.ibegin() << ", " << x.iend() << ") ..." << x.subtree_iend();
+}
+
+void rbaccount_report() {
+    unsigned long long all = rbaccount_insert + rbaccount_erase;
+    fprintf(stderr, "{\"insert\":%llu,\"erase\":%llu,\"rotation_per_operation\":%g,\"flip_per_operation\":%g}\n",
+            rbaccount_insert, rbaccount_erase, (double) rbaccount_rotation / all, (double) rbaccount_flip / all);
 }
 
 template <typename G>
@@ -306,10 +314,12 @@ int main(int argc, char **argv) {
     } else if (argc > 1 && strcmp(argv[1], "-p") == 0) {
         rbtree_without_print tree;
         grow_and_shrink(tree, 1000000);
+        rbaccount_report();
         exit(0);
     } else if (argc > 1 && strcmp(argv[1], "-f") == 0) {
         rbtree_without_print tree;
         fuzz(tree, 1000000);
+        rbaccount_report();
         exit(0);
     } else if (argc > 1) {
         fprintf(stderr, "Usage: ./a.out [-b|-p|-f]\n");

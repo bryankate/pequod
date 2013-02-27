@@ -5,6 +5,9 @@
 #include <iomanip>
 #include "compiler.hh"
 #include "local_stack.hh"
+#ifndef rbaccount
+# define rbaccount(x)
+#endif
 // LLRB 2-3 tree a la Sedgewick
 // Intrusive
 
@@ -240,6 +243,7 @@ inline rbnodeptr<T> rbnodeptr<T>::reverse_color() const {
 
 template <typename T> template <typename F>
 inline rbnodeptr<T> rbnodeptr<T>::rotate(bool isright, F &f) const {
+    rbaccount(rotation);
     rbnodeptr<T> x = child(!isright);
     if ((child(!isright) = x.child(isright)))
         x.child(isright).parent() = node();
@@ -264,6 +268,7 @@ inline rbnodeptr<T> rbnodeptr<T>::rotate_right(F &f) const {
 
 template <typename T>
 inline rbnodeptr<T> rbnodeptr<T>::flip() const {
+    rbaccount(flip);
     child(false) = child(false).reverse_color();
     child(true) = child(true).reverse_color();
     return reverse_color();
@@ -500,17 +505,20 @@ inline const T* rbtree<T, C, R>::find(const X& x) const {
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::insert(T* node) {
+    rbaccount(insert);
     r_.root_ = r_.insert_node(rbnodeptr<T>(r_.root_, false), node, 0).node();
 }
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::erase(T* node) {
+    rbaccount(erase);
     //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
     r_.root_ = delete_node(node);
 }
 
 template <typename T, typename C, typename R>
 inline void rbtree<T, C, R>::erase_and_dispose(T* node) {
+    rbaccount(erase);
     //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
     r_.root_ = delete_node(node);
     delete node;
@@ -518,6 +526,7 @@ inline void rbtree<T, C, R>::erase_and_dispose(T* node) {
 
 template <typename T, typename C, typename R> template <typename Disposer>
 inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
+    rbaccount(erase);
     //r_.root_ = delete_node(rbnodeptr<T>(r_.root_, false), node).node();
     r_.root_ = delete_node(node);
     d(node);
