@@ -121,6 +121,9 @@ class ServerRangeSet {
     inline void notify(const Datum* d, int notifier);
     void validate();
 
+    // NOTE: made public just for debugging
+    inline int total_size() const;
+
     friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
 
   private:
@@ -133,7 +136,6 @@ class ServerRangeSet {
     Str last_;
     int types_;
 
-    inline int total_size() const;
     void hard_visit(const Datum* datum);
     void validate_join(ServerRange* jr, int ts);
 };
