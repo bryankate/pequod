@@ -1,6 +1,7 @@
 #ifndef PEQUOD_SERVER_HH
 #define PEQUOD_SERVER_HH
 #include "pqdatum.hh"
+#include <tamer/tamer.hh>
 #include "interval_tree.hh"
 #include "local_vector.hh"
 #include "hashtable.hh"
@@ -11,6 +12,7 @@ class Json;
 
 namespace pq {
 namespace bi = boost::intrusive;
+using tamer::event;
 
 class ServerRange {
   public:
@@ -137,6 +139,9 @@ class Server {
     inline void modify(const String& key, const F& func);
     inline void erase(const String& key);
 
+    inline void insert(const String& key, const String& value, event<> e);
+    inline void erase(const String& key, event<> e);
+
 #if 0
     template <typename I>
     void replace_range(Str first, Str last, I first_value, I last_value);
@@ -148,6 +153,8 @@ class Server {
 
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
+
+    inline void validate(Str first, Str last, event<> e);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -297,6 +304,11 @@ inline void Server::insert(const String& key, const String& value) {
         make_table(tname).insert(key, value);
 }
 
+inline void Server::insert(const String& key, const String& value, event<> e) {
+    insert(key, value);
+    e();
+}
+
 template <typename F>
 inline void Server::modify(const String& key, const F& func) {
     if (Str tname = table_name(key))
@@ -307,6 +319,11 @@ inline void Server::erase(const String& key) {
     auto tit = tables_.find(table_name(Str(key)));
     if (tit)
         tit->erase(key);
+}
+
+inline void Server::erase(const String& key, event<> e) {
+    erase(key);
+    e();
 }
 
 inline void Server::add_copy(SourceRange* r) {
@@ -380,6 +397,11 @@ inline void Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).validate(first, last);
+}
+
+inline void Server::validate(Str first, Str last, event<> e) {
+    validate(first, last);
+    e();
 }
 
 inline size_t Server::validate_count(Str first, Str last) {

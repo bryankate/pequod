@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #include "pqtwitter.hh"
 #include "json.hh"
 #include "pqjoin.hh"
@@ -128,29 +129,37 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
 }
 
 
-void TwitterRunner::post(uint32_t u, uint32_t time, Str value) {
-    char buf[128];
-    sprintf(buf, "p|%05d|%010u", u, time);
-    server_.insert(Str(buf, 18), value);
-    if (tp_.push())
-        for (auto it = tp_.begin_followers(u);
-             it != tp_.end_followers(u); ++it) {
-            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-            server_.insert(Str(buf, 24), value);
-        }
+tamed void TwitterRunner::post(uint32_t u, uint32_t time, Str value,
+                               event<> e) {
+    tvars { char buf[128]; }
+    twait {
+        sprintf(buf, "p|%05d|%010u", u, time);
+        server_.insert(Str(buf, 18), value, make_event());
+        if (tp_.push())
+            for (auto it = tp_.begin_followers(u);
+                 it != tp_.end_followers(u); ++it) {
+                sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+                server_.insert(Str(buf, 24), value, make_event());
+            }
+    }
+    e();
 }
 
-void TwitterRunner::populate() {
-    boost::mt19937 gen;
+tamed void TwitterRunner::populate() {
+    tvars {
+        boost::mt19937 gen;
+        char buf[128];
+    }
     gen.seed(0);
-
     tp_.create_subscriptions(gen);
-    char buf[128];
-    for (auto& x : tp_.subscriptions()) {
-        sprintf(buf, "s|%05d|%05d", x.first, x.second);
-        server_.insert(Str(buf, 13), Str("1", 1));
-        if (tp_.log())
-            printf("subscribe %.13s\n", buf);
+
+    twait {
+        for (auto& x : tp_.subscriptions()) {
+            sprintf(buf, "s|%05d|%05d", x.first, x.second);
+            server_.insert(Str(buf, 13), Str("1", 1), make_event());
+            if (tp_.log())
+                printf("subscribe %.13s\n", buf);
+        }
     }
 
 #if 0
@@ -174,31 +183,33 @@ void TwitterRunner::populate() {
     }
 }
 
-void TwitterRunner::run() {
-    boost::mt19937 gen;
+tamed void TwitterRunner::run() {
+    tvars {
+        boost::mt19937 gen;
+        boost::random_number_generator<boost::mt19937> rng(gen);
+        struct rusage ru[2];
+        uint32_t time = 1000000000;
+        uint32_t nusers = this->tp_.nusers();
+        uint32_t post_end_time = time + nusers * 5;
+        uint32_t end_time = post_end_time + 1000000;
+        uint32_t* load_times = new uint32_t[nusers];
+        char buf1[128], buf2[128];
+        uint32_t npost = 0, nfull = 0, nupdate = 0, a, u;
+        size_t nread = 0;
+    }
     gen.seed(13918);
-    boost::random_number_generator<boost::mt19937> rng(gen);
-    struct rusage ru[2];
 
-    uint32_t time = 1000000000;
-    uint32_t nusers = tp_.nusers();
-    uint32_t post_end_time = time + nusers * 5;
-    uint32_t end_time = post_end_time + 1000000;
-    uint32_t* load_times = new uint32_t[nusers];
     for (uint32_t i = 0; i != nusers; ++i)
         load_times[i] = 0;
-    char buf1[128], buf2[128];
-    uint32_t npost = 0, nfull = 0, nupdate = 0;
-    size_t nread = 0;
     getrusage(RUSAGE_SELF, &ru[0]);
 
     while (time != end_time) {
-        uint32_t u = rng(nusers);
-        uint32_t a = rng(100);
+        u = rng(nusers);
+        a = rng(100);
         if (time < post_end_time || a < 2) {
             if (tp_.log())
                 printf("%d: post p|%05d|%010d\n", time, u, time);
-            post(u, time, "?!?#*");
+            twait { post(u, time, "?!?#*", make_event()); }
             ++npost;
         } else {
             uint32_t tx = load_times[u];

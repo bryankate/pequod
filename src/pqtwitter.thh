@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #ifndef PQTWITTER_HH
 #define PQTWITTER_HH 1
 #include <boost/random.hpp>
@@ -5,8 +6,10 @@
 #include <vector>
 #include <iostream>
 #include <stdint.h>
+#include <tamer/tamer.hh>
 #include "pqserver.hh"
 namespace pq {
+using tamer::event;
 
 class TwitterPopulator {
   public:
@@ -54,14 +57,14 @@ class TwitterRunner {
   public:
     TwitterRunner(Server& server, TwitterPopulator& tp);
 
-    void populate();
-    void run();
+    tamed void populate();
+    tamed void run();
 
   private:
     Server& server_;
     TwitterPopulator& tp_;
 
-    void post(uint32_t u, uint32_t time, Str value);
+    tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
 };
 
 inline uint32_t TwitterPopulator::nusers() const {

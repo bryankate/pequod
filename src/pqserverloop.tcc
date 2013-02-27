@@ -24,9 +24,5 @@ tamed void acceptor(tamer::fd listenfd) {
 } // namespace
 
 void server_loop(int port, pq::Server&) {
-    putenv("TAMER_NOLIBEVENT=1");
-    tamer::initialize();
     acceptor(tamer::tcp_listen(port));
-    tamer::loop();
-    tamer::cleanup();
 }

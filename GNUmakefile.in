@@ -75,6 +75,11 @@ $(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) $< > $@
 
+$(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
+	$(TAMER) $< > $@
+
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
+$(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 
 COMMON_OBJS = \

@@ -365,6 +365,9 @@ static Clp_Option options[] = {
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
+    putenv("TAMER_NOLIBEVENT=1");
+    tamer::initialize();
+
     int mode = mode_unknown, listen_port = 8000;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
@@ -422,4 +425,7 @@ int main(int argc, char** argv) {
         facebook_run(server, fp);
     }
     //server.print(std::cout);
+
+    tamer::loop();
+    tamer::cleanup();
 }
