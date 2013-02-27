@@ -78,7 +78,7 @@ template <typename Reshape, typename T>
 struct rbreshape : private Reshape {
     inline rbreshape(const Reshape &reshape);
     inline rbreshape<Reshape, T>& reshape();
-    inline void operator()(T* n);
+    inline bool operator()(T* n);
 };
 
 template <typename T>
@@ -129,7 +129,7 @@ class rbiterator {
 };
 
 template <typename T, typename Compare = default_comparator<T>,
-	  typename Reshape = do_nothing>
+	  typename Reshape = return_false>
 class rbtree {
   public:
     typedef T value_type;
@@ -330,8 +330,8 @@ inline rbreshape<Reshape, T>::rbreshape(const Reshape& reshape)
 }
 
 template <typename Reshape, typename T>
-inline void rbreshape<Reshape, T>::operator()(T* n) {
-    static_cast<Reshape &>(*this)(n);
+inline bool rbreshape<Reshape, T>::operator()(T* n) {
+    return static_cast<Reshape &>(*this)(n);
 }
 
 template <typename Reshape, typename T>
