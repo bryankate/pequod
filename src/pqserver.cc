@@ -125,10 +125,13 @@ void ServerRangeSet::push_back(ServerRange* r) {
     assert(i < rangecap);
 
     r_[i] = r;
-    ++nr_;
-
-    if (last_ && make_interval<Str>(first_, last_).overlaps(r_[i]->interval()))
+    if (last_ && first_ < r_[i]->ibegin())
 	sw_ |= 1 << i;
+    else if (last_ && r_[i]->iend() < last_) {
+	++nr_;
+	sw_ |= 1 << i;
+    } else
+	++nr_;
 }
 
 void ServerRangeSet::hard_visit(const Datum* datum) {
@@ -406,6 +409,26 @@ void recursive() {
 
     server.print(std::cerr);
     std::cerr << std::endl;
+}
+
+void srs() {
+    pq::Server server;
+    pq::ServerRangeSet srs(&server, "a001", "a}",
+                       pq::ServerRange::joinsink | pq::ServerRange::validjoin);
+
+    pq::Join j;
+    pq::ServerRange *r0 = pq::ServerRange::make("a", "a}", pq::ServerRange::joinsink, &j);
+    pq::ServerRange *r1 = pq::ServerRange::make("a003", "a005", pq::ServerRange::validjoin, &j);
+    pq::ServerRange *r2 = pq::ServerRange::make("a007", "a010", pq::ServerRange::validjoin, &j);
+
+    srs.push_back(r0);
+    srs.push_back(r1);
+    srs.push_back(r2);
+
+    // i expect nr_ == 3 and sw_ == 7?
+    // definitely not total_size of 1...
+    std::cerr << srs.total_size() << std::endl;
+    mandatory_assert(srs.total_size() == 3);
 }
 
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,

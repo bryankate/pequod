@@ -261,9 +261,7 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 }
 
 inline int ServerRangeSet::total_size() const {
-    // ffs_msb adds 1 to its output, so we need to add
-    // one to get the correct size when using the sw_ bitmask
-    return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) + 1 : nr_;
+    return sw_ ? 8 * sizeof(sw_) - ffs_msb((unsigned) sw_) : nr_;
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {
