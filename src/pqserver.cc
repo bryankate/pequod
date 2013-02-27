@@ -544,9 +544,6 @@ void srs() {
     srs.push_back(r1);
     srs.push_back(r2);
 
-    // i expect nr_ == 3 and sw_ == 7?
-    // definitely not total_size of 1...
-    std::cerr << srs.total_size() << std::endl;
     mandatory_assert(srs.total_size() == 3);
 }
 
