@@ -206,6 +206,14 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
     return stream << "]";
 }
 
+Table::Table(Str name)
+    : namelen_(name.length()) {
+    assert(namelen_ <= (int) sizeof(name_));
+    memcpy(name_, name.data(), namelen_);
+}
+
+const Table Table::empty_table{Str()};
+
 void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
     for (auto it = source_ranges_.begin_contains(make_interval(first, last));
 	 it != source_ranges_.end(); ++it)
@@ -250,12 +258,17 @@ void Server::add_join(Str first, Str last, Join* join) {
 }
 
 void Server::insert(const String& key, const String& value, bool notify) {
+    Str tname = table_name(key);
+    if (!tname)
+        return;
+    Table& t = add_table(tname);
+
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    auto p = t.store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
-	store_.insert_commit(*d, cd);
+	t.store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
 	d->value_ = value;
@@ -269,10 +282,14 @@ void Server::insert(const String& key, const String& value, bool notify) {
 }
 
 void Server::erase(const String& key, bool notify) {
-    auto it = store_.find(key, DatumCompare());
-    if (it != store_.end()) {
+    auto tit = tables_.find(table_name(Str(key)));
+    if (!tit)
+        return;
+
+    auto it = tit->store_.find(key, DatumCompare());
+    if (it != tit->store_.end()) {
 	Datum* d = it.operator->();
-	store_.erase(it);
+	tit->store_.erase(it);
 
 	if (notify)
 	    for (auto it = source_ranges_.begin_contains(Str(key));
@@ -285,7 +302,10 @@ void Server::erase(const String& key, bool notify) {
 }
 
 Json Server::stats() const {
-    return Json().set("store_size", store_.size())
+    size_t store_size = 0;
+    for (auto& t : tables_)
+        store_size += t.store_.size();
+    return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_.size())
 	.set("sink_ranges_size", sink_ranges_.size());
 }
