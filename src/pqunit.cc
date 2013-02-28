@@ -89,12 +89,12 @@ void count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    CHECK_EQ(server.validate_count("e|", "e}"), 4, "Count of recursive expansion failed.");
-    CHECK_EQ(server.validate_count("b|", "b}"), 5);
-    CHECK_EQ(server.validate_count("b|00002|", "b|00002}"), 4);
-    CHECK_EQ(server.validate_count("b|00002|0000000002", "b|00002|0000000015"), 2, "Wrong subrange count.");
-    CHECK_EQ(server.validate_count("c|", "c}"), 4);
-    CHECK_EQ(server.validate_count("j|", "j}"), 0);
+    CHECK_EQ(4, server.validate_count("e|", "e}"), "Count of recursive expansion failed.");
+    CHECK_EQ(5, server.validate_count("b|", "b}"));
+    CHECK_EQ(4, server.validate_count("b|00002|", "b|00002}"));
+    CHECK_EQ(2, server.validate_count("b|00002|0000000002", "b|00002|0000000015"), "Wrong subrange count.");
+    CHECK_EQ(4, server.validate_count("c|", "c}"));
+    CHECK_EQ(0, server.validate_count("j|", "j}"));
 }
 
 void recursive() {
@@ -250,7 +250,7 @@ void srs() {
     srs.push_back(r1);
     srs.push_back(r2);
 
-    CHECK_EQ(srs.total_size(), 3);
+    CHECK_EQ(3, srs.total_size());
 }
 
 void test_join1() {
