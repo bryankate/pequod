@@ -68,26 +68,38 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 	    auto name0 = s;
 	    while (s != str.uend() && *s != ':' && *s != '>')
 		++s;
-	    if (s == name0)
+	    if (s == name0) {
+                printf("assign_parse(): Malformed name\n");
 		return false;
+            }
 	    Str name(name0, s);
+            if (*s != ':' && slotmap.get(name) == -1) {
+                printf("assign_parse(): No length description for %s\n", name);
+		return false;
+            }
 	    // parse name description
 	    int len = 0;
-	    if (*s == ':' && (s + 1 == str.uend() || !isdigit(s[1])))
+	    if (*s == ':' && (s + 1 == str.uend() || !isdigit(s[1]))) {
+                printf("assign_parse(): Malformed length description\n");
 		return false;
+            }
 	    else if (*s == ':') {
 		len = s[1] - '0';
 		for (s += 2; s != str.uend() && isdigit(*s); ++s)
 		    len = 10 * len + *s - '0';
 	    }
-	    if (s == str.uend() || *s != '>')
+	    if (s == str.uend() || *s != '>') {
+                printf("assign_parse(): Bad end\n");
 		return false;
+            }
 	    ++s;
 	    // look up slot, maybe store it in map
 	    int slot = slotmap.get(name);
 	    if (slot == -1) {
-		if (len == 0 || slotmap.size() == slot_capacity)
+		if (len == 0 || slotmap.size() == slot_capacity) {
+                    printf("assign_parse(): Reached capacity %d\n", slot_capacity);
 		    return false;
+                }
 		slot = len + 256 * slotmap.size();
 		slotmap.set(name, slot);
 	    } else if (len != 0 && len != (slot & 255))

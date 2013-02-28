@@ -64,9 +64,10 @@ void HackernewsRunner::populate() {
         }
     }
     pq::Join* j = new pq::Join;
-    j->assign_parse("k|<author:5>|<aid:10>|<voter:5> "
-                    "a|<aid>|<author>|<idx>"
-                    "v|<aid>|<voter>");
+    bool valid = j->assign_parse("k|<author:5>|<aid:10>|<voter:5> "
+                                 "a|<aid>|<author>|<idx:5> "
+                                 "v|<aid>|<voter>");
+    mandatory_assert(valid && "Invalid join");
     server_.add_join("k|", "k}", j);
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes."<< std::endl;
