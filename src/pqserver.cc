@@ -408,7 +408,7 @@ int main(int argc, char** argv) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
-        pq::TwitterRunner tr(server, tp);
+        pq::TwitterRunner<pq::Server> tr(server, tp);
         tr.populate();
         tr.run();
     } else if (mode == mode_hn) {
