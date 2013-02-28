@@ -32,7 +32,7 @@ void HackernewsRunner::populate() {
     // author:aid, 0, author
     for (uint32_t aid = 0; aid < hp_.narticles(); aid++) {
         auto &art = hp_.articles()[aid];
-        sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, 0, art.first);
+        sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, art.first, 0);
         server_.insert(Str(buf, 24), Str("lalalalala", 10), true);
         if (hp_.log()) {
             printf("article %.24s\n", buf);
@@ -42,31 +42,31 @@ void HackernewsRunner::populate() {
         const uint32_t ncomment = rng(50);
         for (uint32_t j = 1; j <= ncomment; ++j) {
             const uint32_t commentor = rng(hp_.nusers());
-            sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, j, commentor);
+            sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, commentor, j);
             server_.insert(Str(buf, 25), Str("lalalalala", 10), true);
             if (hp_.log()) {
                 printf("  %.24s\n", buf);
             }
         }
 
-        // author:aid, 0, voter.  Need 0 to only join on a| keys which
-        // are articles, not comments.
+        // author:aid, voter.  Need 0 to only join on a| keys which
+        // are articles, not comments?
         const uint32_t nvote = rng(50);
         for (uint32_t j = 0; j < nvote; ++j) {
             nv++;
             hp_.vote(aid); // karma
             const uint32_t voter = rng(hp_.nusers());
-            sprintf(buf, "v|%05d%05d|%05d|%05d", art.first, aid, 0, voter);
-            server_.insert(Str(buf, 19), Str("1", 1), true);
+            sprintf(buf, "v|%05d%05d|%05d", art.first, aid, voter);
+            server_.insert(Str(buf, 13), Str("1", 1), true);
             if (hp_.log()) {
                 printf("vote %.24s\n", buf);
             }
         }
     }
     pq::Join* j = new pq::Join;
-    j->assign_parse("k|<author:5>|<voter:5> "
-                    "a|<aid>|<idx>|<author>"
-                    "v|<aid>|<idx>|<voter>");
+    j->assign_parse("k|<author:5>|<aid:10>|<voter:5> "
+                    "a|<aid>|<author>|<idx>"
+                    "v|<aid>|<voter>");
     server_.add_join("k|", "k}", j);
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes."<< std::endl;
