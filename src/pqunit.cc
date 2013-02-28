@@ -1,9 +1,10 @@
-#include "pqserver.hh"
-#include "pqjoin.hh"
-#include "json.hh"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <set>
+#include "pqserver.hh"
+#include "pqjoin.hh"
+#include "json.hh"
 #include "time.hh"
 #include "check.hh"
 
@@ -289,7 +290,7 @@ typedef void (*test_func)();
 std::vector<std::pair<String, test_func> > tests_;
 }
 
-void unit_tests() {
+void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
     ADD_TEST(pq::simple);
     ADD_TEST(pq::recursive);
@@ -297,9 +298,10 @@ void unit_tests() {
     ADD_TEST(pq::annotation);
     ADD_TEST(pq::srs);
     ADD_TEST(pq::test_join1);
-    for (auto& t : tests_) {
-        std::cerr << "Testing " << t.first << std::endl;
-        t.second();
-    }
+    for (auto& t : tests_)
+        if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
+            std::cerr << "Testing " << t.first << std::endl;
+            t.second();
+        }
     std::cerr << "PASS" << std::endl;
 }

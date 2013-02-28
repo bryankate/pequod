@@ -1,12 +1,13 @@
+#include <boost/random/random_number_generator.hpp>
+#include <sys/resource.h>
+#include <unistd.h>
+#include <set>
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "json.hh"
 #include "pqtwitter.hh"
 #include "pqfacebook.hh"
 #include "clp.h"
-#include <boost/random/random_number_generator.hpp>
-#include <sys/resource.h>
-#include <unistd.h>
 #include "time.hh"
 #include "check.hh"
 
@@ -415,6 +416,7 @@ int main(int argc, char** argv) {
     int mode = mode_unknown, listen_port = 8000;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
+    std::set<String> testcases;
     while (Clp_Next(clp) != Clp_Done) {
 	if (clp->option->long_name == String("push"))
 	    tp_param.set("push", !clp->negated);
@@ -435,13 +437,13 @@ int main(int argc, char** argv) {
         } else if (clp->option->long_name == String("log"))
             tp_param.set("log", !clp->negated);
         else
-	    exit(1);
+            testcases.insert(clp->vstr);
     }
 
     pq::Server server;
-    if (mode == mode_tests) {
-        extern void unit_tests();
-        unit_tests();
+    if (mode == mode_tests || !testcases.empty()) {
+        extern void unit_tests(const std::set<String> &);
+        unit_tests(testcases);
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
