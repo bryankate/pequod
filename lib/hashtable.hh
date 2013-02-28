@@ -208,10 +208,10 @@ class HashTable<T> {
     /** @brief Ensure an element with key @a key and return its iterator.
      *
      * If an element with @a key already exists in the table, then, like
-     * find(@a key), returns an iterator pointing at at element.  Otherwise,
+     * find(@a key), returns an iterator pointing at at element. Otherwise,
      * find_insert adds a new value T(@a key) to the table and returns its
-     * iterator.  The @a inserted reference parameter is set to true if the
-     * value was inserted.
+     * iterator. The @a inserted reference parameter is set to true if the
+     * value was inserted and false otherwise.
      *
      * @note find_insert() may rebalance the hash table, and thus invalidates
      * outstanding iterators.
@@ -232,6 +232,9 @@ class HashTable<T> {
      *
      * @sa find_insert(key_const_reference) */
     inline value_type &operator[](key_const_reference key);
+
+    inline value_type& get(key_const_reference key, value_type& default_value);
+    inline const value_type& get(key_const_reference key, const value_type& default_value) const;
 
     /** @brief Ensure an element with key @a value.hashkey() and return its iterator.
      *
@@ -898,13 +901,13 @@ HashTable_iterator<T> HashTable<T>::find_insert(key_const_reference key, bool &i
 template <typename T>
 HashTable_iterator<T> HashTable<T>::find_insert(key_const_reference key)
 {
-    typename rep_type::iterator i = _rep.find(key);
-    if (!i)
+    typename rep_type::iterator it = _rep.find(key);
+    if (!it)
 	if (elt *e = reinterpret_cast<elt *>(_alloc.allocate())) {
 	    new(reinterpret_cast<void *>(&e->v)) T(key);
-	    _rep.set(i, e, true);
+	    _rep.set(it, e, true);
 	}
-    return i;
+    return it;
 }
 
 template <typename T>
@@ -912,6 +915,22 @@ typename HashTable<T>::value_type &
 HashTable<T>::operator[](key_const_reference key)
 {
     return *find_insert(key);
+}
+
+template <typename T>
+typename HashTable<T>::value_type&
+HashTable<T>::get(key_const_reference key, value_type& default_value)
+{
+    typename rep_type::iterator it = _rep.find(key);
+    return it ? it->v : default_value;
+}
+
+template <typename T>
+const typename HashTable<T>::value_type&
+HashTable<T>::get(key_const_reference key, const value_type& default_value) const
+{
+    typename rep_type::const_iterator it = _rep.find(key);
+    return it ? it->v : default_value;
 }
 
 template <typename T>

@@ -92,7 +92,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqfacebook.o \
-	$(OBJDIR)/pqserverloop.o
+	$(OBJDIR)/pqserverloop.o \
+	$(OBJDIR)/pqunit.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)

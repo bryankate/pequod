@@ -7,7 +7,9 @@
 #include "clp.h"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
+#include <unistd.h>
 #include "time.hh"
+#include "check.hh"
 
 namespace pq {
 
@@ -15,9 +17,14 @@ namespace pq {
 
 inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
     : ibegin_len_(first.length()), iend_len_(last.length()),
-      subtree_iend_(keys_ + ibegin_len_, iend_len_), type_(type), join_(join) {
+      subtree_iend_(keys_ + ibegin_len_, iend_len_),
+      type_(type), join_(join), expires_at_(0) {
+
     memcpy(keys_, first.data(), first.length());
     memcpy(keys_ + ibegin_len_, last.data(), last.length());
+
+    if (join_->staleness())
+        expires_at_ = tstamp() + tous(join_->staleness());
 }
 
 ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join) {
@@ -27,13 +34,13 @@ ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join)
 
 void ServerRange::add_sink(const Match& m) {
     assert(join_ && type_ == copy);
-    resultkeys_.push_back(String::make_uninitialized((*join_)[0].key_length()));
-    (*join_)[0].expand(resultkeys_.back().mutable_udata(), m);
+    resultkeys_.push_back(String::make_uninitialized(join_->sink().key_length()));
+    join_->sink().expand(resultkeys_.back().mutable_udata(), m);
 }
 
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (type_ == copy && join_->back().match(d->key())) {
+    if (type_ == copy && join_->back_source().match(d->key())) {
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0)
@@ -47,24 +54,26 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 void ServerRange::validate(Str first, Str last, Server& server) {
     if (type_ == joinsink) {
         Match mf, ml;
-        (*join_)[0].match(first, mf);
-        (*join_)[0].match(last, ml);
-        validate(mf, ml, 1, server);
-        server.add_validjoin(first, last, join_);
+        join_->sink().match(first, mf);
+        join_->sink().match(last, ml);
+        validate(mf, ml, 0, server);
+
+        if (join_->maintained() || join_->staleness())
+            server.add_validjoin(first, last, join_);
     }
 }
 
 void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     uint8_t kf[128], kl[128];
-    int kflen = (*join_)[joinpos].first(kf, mf);
-    int kllen = (*join_)[joinpos].last(kl, ml);
+    int kflen = join_->source(joinpos).expand_first(kf, mf);
+    int kllen = join_->source(joinpos).expand_last(kl, ml);
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
     // XXX PERFORMANCE this is not always necessary
     server.validate(Str(kf, kflen), Str(kl, kllen));
 
-    if (joinpos + 1 == join_->size())
+    if (join_->maintained() && joinpos + 1 == join_->nsource())
         server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
 
     auto it = server.lower_bound(Str(kf, kflen));
@@ -75,19 +84,19 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
 
     for (; it != ilast; ++it) {
-	if (it->key().length() != (*join_)[joinpos].key_length())
+	if (it->key().length() != join_->source(joinpos).key_length())
             continue;
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
-        if ((*join_)[joinpos].match(it->key(), mk)) {
-            if (joinpos + 1 == join_->size()) {
-                kflen = (*join_)[0].first(kf, mk);
+        if (join_->source(joinpos).match(it->key(), mk)) {
+            if (joinpos + 1 == join_->nsource()) {
+                kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
                 server.insert(Str(kf, kflen), it->value_, join_->recursive());
             } else {
-                (*join_)[joinpos].match(it->key(), mf);
-                (*join_)[joinpos].match(it->key(), ml);
+                join_->source(joinpos).match(it->key(), mf);
+                join_->source(joinpos).match(it->key(), ml);
                 validate(mf, ml, joinpos + 1, server);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
@@ -108,8 +117,18 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
         stream << ": joinsink @" << (void*) r.join_;
     else if (r.type_ == ServerRange::joinsource)
             stream << ": joinsource @" << (void*) r.join_;
-    else if (r.type_ == ServerRange::validjoin)
-        stream << ": validjoin @" << (void*) r.join_;
+    else if (r.type_ == ServerRange::validjoin) {
+        stream << ": validjoin @" << (void*) r.join_ << ", expires: ";
+        if (r.expires_at_) {
+            uint64_t now = tstamp();
+            if (r.expired_at(now))
+                stream << "EXPIRED";
+            else
+                stream << "in " << fromus(r.expires_at_ - now) << " seconds";
+        }
+        else
+            stream << "NEVER";
+    }
     else
 	stream << ": ??";
     return stream << "}";
@@ -150,11 +169,17 @@ void ServerRangeSet::hard_visit(const Datum* datum) {
 }
 
 void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
+    uint64_t now = tstamp();
     Str last_valid = first_;
     for (int i = 0; i != ts; ++i)
         if (r_[i]
             && r_[i]->type() == ServerRange::validjoin
             && r_[i]->join() == jr->join()) {
+            if (r_[i]->expired_at(now)) {
+                // TODO: remove the expired validjoin from the server
+                // (and possibly this set if it will be used after this validation)
+                continue;
+            }
             if (sw_ == 0)
                 return;
             if (last_valid < r_[i]->ibegin())
@@ -183,6 +208,14 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
     return stream << "]";
 }
 
+Table::Table(Str name)
+    : namelen_(name.length()) {
+    assert(namelen_ <= (int) sizeof(name_));
+    memcpy(name_, name.data(), namelen_);
+}
+
+const Table Table::empty_table{Str()};
+
 void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
     for (auto it = source_ranges_.begin_contains(make_interval(first, last));
 	 it != source_ranges_.end(); ++it)
@@ -203,10 +236,11 @@ void Server::add_join(Str first, Str last, Join* join) {
     std::vector<ServerRange*> ranges;
     ranges.push_back(ServerRange::make(first, last,
 				       ServerRange::joinsink, join));
-    for (int i = 1; i != join->size(); ++i)
-	ranges.push_back(ServerRange::make((*join)[i].first(Match()),
-					   (*join)[i].last(Match()),
-					   ServerRange::joinsource, join));
+    for (int i = 0; i != join->nsource(); ++i)
+	ranges.push_back(ServerRange::make
+                         (join->source(i).expand_first(Match()),
+                          join->source(i).expand_last(Match()),
+                          ServerRange::joinsource, join));
     for (auto r : ranges)
 	join_ranges_.insert(r);
 
@@ -215,7 +249,7 @@ void Server::add_join(Str first, Str last, Join* join) {
 	 it != join_ranges_.end(); ++it)
 	if (it->type() == ServerRange::joinsource)
 	    join->set_recursive();
-    for (int i = 1; i != join->size(); ++i)
+    for (int i = 1; i != (int) ranges.size(); ++i)
 	for (auto it = join_ranges_.begin_overlaps(ranges[i]->interval());
 	     it != join_ranges_.end(); ++it)
 	    if (it->type() == ServerRange::joinsink)
@@ -226,12 +260,17 @@ void Server::add_join(Str first, Str last, Join* join) {
 }
 
 void Server::insert(const String& key, const String& value, bool notify) {
+    Str tname = table_name(key);
+    if (!tname)
+        return;
+    Table& t = add_table(tname);
+
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    auto p = t.store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
-	store_.insert_commit(*d, cd);
+	t.store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
 	d->value_ = value;
@@ -245,10 +284,14 @@ void Server::insert(const String& key, const String& value, bool notify) {
 }
 
 void Server::erase(const String& key, bool notify) {
-    auto it = store_.find(key, DatumCompare());
-    if (it != store_.end()) {
+    auto tit = tables_.find(table_name(Str(key)));
+    if (!tit)
+        return;
+
+    auto it = tit->store_.find(key, DatumCompare());
+    if (it != tit->store_.end()) {
 	Datum* d = it.operator->();
-	store_.erase(it);
+	tit->store_.erase(it);
 
 	if (notify)
 	    for (auto it = source_ranges_.begin_contains(Str(key));
@@ -261,7 +304,10 @@ void Server::erase(const String& key, bool notify) {
 }
 
 Json Server::stats() const {
-    return Json().set("store_size", store_.size())
+    size_t store_size = 0;
+    for (auto& t : tables_)
+        store_size += t.store_.size();
+    return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_.size())
 	.set("sink_ranges_size", sink_ranges_.size());
 }
@@ -273,164 +319,6 @@ void Server::print(std::ostream& stream) {
 }
 
 } // namespace
-
-
-void simple() {
-    std::cerr << "SIMPLE" << std::endl;
-    pq::Server server;
-
-    std::pair<const char*, const char*> values[] = {
-	{"f|00001|00002", "1"},
-	{"f|00001|10000", "1"},
-	{"p|00002|0000000000", "Should not appear"},
-	{"p|00002|0000000001", "Hello,"},
-	{"p|00002|0000000022", "Which is awesome"},
-	{"p|10000|0000000010", "My name is"},
-	{"p|10000|0000000018", "Jennifer Jones"}
-    };
-    server.replace_range("f|00001", "p}", values, values + sizeof(values) / sizeof(values[0]));
-
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    pq::Join j;
-    j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
-		   "f|<user_id>|<poster_id> "
-		   "p|<poster_id>|<time>");
-    j.ref();
-    server.add_join("t|", "t}", &j);
-
-    server.validate("t|00001|0000000001", "t|00001}");
-
-    std::cerr << "After processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    server.insert("p|10000|0000000022", "This should appear in t|00001", true);
-    server.insert("p|00002|0000000023", "As should this", true);
-
-    std::cerr << "After processing add_copy:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    server.print(std::cerr);
-    std::cerr << std::endl;
-}
-
-void count() {
-    std::cerr << "COUNT" << std::endl;
-    pq::Server server;
-
-    std::pair<const char*, const char*> values[] = {
-        {"a|00001|00002", "1"},
-        {"b|00002|0000000001", "b1"},
-        {"b|00002|0000000002", "b2"},
-        {"b|00002|0000000010", "b3"},
-        {"b|00002|0000000020", "b4"},
-        {"b|00003|0000000002", "b5"},
-        {"d|00003|00001", "1"}
-    };
-    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
-
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    pq::Join j1;
-    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
-                    "a|<a_id>|<b_id> "
-                    "b|<b_id>|<time>");
-    j1.ref();
-    server.add_join("c|", "c}", &j1);
-
-    pq::Join j2;
-    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
-                    "d|<d_id>|<a_id:5> "
-                    "c|<a_id>|<time>|<b_id>");
-    j2.ref();
-    server.add_join("e|", "e}", &j2);
-
-    std::cerr << std::endl << "e| count: " << server.count("e|", "e}") << std::endl << std::endl;
-
-    std::cerr << "After recursive count:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
-
-    std::cerr << "b| count: " << server.count("b|", "b}") << std::endl;
-    std::cerr << "b|00002 count: " << server.count("b|00002|", "b|00002}") << std::endl;
-    std::cerr << "b|00002 subcount: " << server.count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
-    std::cerr << "c| count: " << server.count("c|", "c}") << std::endl << std::endl;
-}
-
-void recursive() {
-    std::cerr << "RECURSIVE" << std::endl;
-    pq::Server server;
-
-    std::pair<const char*, const char*> values[] = {
-        {"a|00001|00002", "1"},
-        {"b|00002|0000000001", "b1"},
-        {"b|00002|0000000002", "b2"},
-        {"d|00003|00001", "1"}
-    };
-    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
-
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    pq::Join j1;
-    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
-                    "a|<a_id>|<b_id> "
-                    "b|<b_id>|<time>");
-    j1.ref();
-    server.add_join("c|", "c}", &j1);
-
-    pq::Join j2;
-    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
-                    "d|<d_id>|<a_id:5> "
-                    "c|<a_id>|<time>|<b_id>");
-    j2.ref();
-    server.add_join("e|", "e}", &j2);
-
-    server.validate("e|00003|0000000001", "e|00003}");
-
-    std::cerr << "After processing recursive join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003", true);
-    server.insert("b|00002|0000002000", "As should this", true);
-
-    std::cerr << "After processing inserts:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-
-    server.print(std::cerr);
-    std::cerr << std::endl;
-}
-
-void srs() {
-    pq::Server server;
-    pq::ServerRangeSet srs(&server, "a001", "a}",
-                       pq::ServerRange::joinsink | pq::ServerRange::validjoin);
-
-    pq::Join j;
-    pq::ServerRange *r0 = pq::ServerRange::make("a", "a}", pq::ServerRange::joinsink, &j);
-    pq::ServerRange *r1 = pq::ServerRange::make("a003", "a005", pq::ServerRange::validjoin, &j);
-    pq::ServerRange *r2 = pq::ServerRange::make("a007", "a010", pq::ServerRange::validjoin, &j);
-
-    srs.push_back(r0);
-    srs.push_back(r1);
-    srs.push_back(r2);
-
-    // i expect nr_ == 3 and sw_ == 7?
-    // definitely not total_size of 1...
-    std::cerr << srs.total_size() << std::endl;
-    mandatory_assert(srs.total_size() == 3);
-}
 
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
                   uint32_t u, uint32_t p, Str value) {
@@ -556,10 +444,8 @@ int main(int argc, char** argv) {
 
     pq::Server server;
     if (mode == mode_tests) {
-        simple();
-        recursive();
-        count();
-        srs();
+        extern void unit_tests();
+        unit_tests();
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);

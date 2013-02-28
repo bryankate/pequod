@@ -6,6 +6,8 @@
 #include "interval.hh"
 #include "interval_tree.hh"
 #include "local_vector.hh"
+#include "hashtable.hh"
+#include "pqbase.hh"
 class Json;
 
 namespace pq {
@@ -83,6 +85,7 @@ class ServerRange {
 
     inline range_type type() const;
     inline Join* join() const;
+    inline bool expired_at(uint64_t t) const;
 
     void add_sink(const Match& m);
 
@@ -103,6 +106,7 @@ class ServerRange {
   private:
     range_type type_;
     Join* join_;
+    uint64_t expires_at_;
     mutable local_vector<String, 4> resultkeys_;
     char keys_[0];
 
@@ -138,6 +142,33 @@ class ServerRangeSet {
     void validate_join(ServerRange* jr, int ts);
 };
 
+class Table : public pequod_set_base_hook {
+  public:
+    typedef ServerStore store_type;
+
+    Table(Str name);
+    static const Table empty_table;
+
+    typedef Str key_type;
+    typedef Str key_const_reference;
+    inline Str name() const;
+    inline Str hashkey() const;
+    inline Str key() const;
+
+    typedef store_type::const_iterator const_iterator;
+    inline const_iterator begin() const;
+    inline const_iterator end() const;
+
+  private:
+    store_type store_;
+    int namelen_;
+    char name_[32];
+  public:
+    pequod_set_member_hook member_hook_;
+
+    friend class Server;
+};
+
 class Server {
   public:
     typedef ServerStore store_type;
@@ -145,11 +176,14 @@ class Server {
     Server() {
     }
 
-    typedef store_type::const_iterator const_iterator;
+    class const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
-    inline const_iterator find(Str str) const;
-    inline const_iterator lower_bound(Str str) const;
+    inline store_type::const_iterator find(Str str) const;
+    inline store_type::const_iterator lower_bound(Str str) const;
+    inline size_t count(Str first, Str last) const;
+
+    Table& add_table(Str name);
 
     void insert(const String& key, const String& value, bool notify);
     void erase(const String& key, bool notify);
@@ -162,56 +196,79 @@ class Server {
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
-    inline size_t count(Str first, Str last);
+    inline size_t validate_count(Str first, Str last);
 
     Json stats() const;
     void print(std::ostream& stream);
 
   private:
-    store_type store_;
+    HashTable<Table> tables_;
+    bi::set<Table> tables_by_name_;
+    //store_type store_;
     interval_tree<ServerRange> source_ranges_;
     interval_tree<ServerRange> sink_ranges_;
     interval_tree<ServerRange> join_ranges_;
+    friend class const_iterator;
 };
 
 inline bool operator<(const Datum& a, const Datum& b) {
     return a.key() < b.key();
 }
-template <typename T>
-inline bool operator<(const Datum& a, const String_base<T>& b) {
-    return a.key() < b;
-}
-template <typename T>
-inline bool operator<(const String_base<T>& a, const Datum& b) {
-    return a < b.key();
-}
-
 inline bool operator==(const Datum& a, const Datum& b) {
     return a.key() == b.key();
 }
-template <typename T>
-inline bool operator==(const Datum& a, const String_base<T>& b) {
-    return a.key() == b;
-}
-template <typename T>
-inline bool operator==(const String_base<T>& a, const Datum& b) {
-    return a == b.key();
+inline bool operator>(const Datum& a, const Datum& b) {
+    return a.key() > b.key();
 }
 
-inline typename Server::const_iterator Server::begin() const {
+inline bool operator<(const Table& a, const Table& b) {
+    return a.key() < b.key();
+}
+inline bool operator==(const Table& a, const Table& b) {
+    return a.key() == b.key();
+}
+inline bool operator>(const Table& a, const Table& b) {
+    return a.key() > b.key();
+}
+
+inline Str Table::name() const {
+    return Str(name_, namelen_);
+}
+
+inline Str Table::hashkey() const {
+    return Str(name_, namelen_);
+}
+
+inline Str Table::key() const {
+    return Str(name_, namelen_);
+}
+
+inline Table::const_iterator Table::begin() const {
     return store_.begin();
 }
 
-inline typename Server::const_iterator Server::end() const {
+inline Table::const_iterator Table::end() const {
     return store_.end();
 }
 
-inline typename Server::const_iterator Server::find(Str str) const {
-    return store_.find(str, DatumCompare());
+inline Table& Server::add_table(Str name) {
+    bool inserted;
+    auto it = tables_.find_insert(name, inserted);
+    if (inserted)
+        tables_by_name_.insert(*it);
+    return *it;
 }
 
-inline typename Server::const_iterator Server::lower_bound(Str str) const {
-    return store_.lower_bound(str, DatumCompare());
+inline ServerStore::const_iterator Server::find(Str str) const {
+    return tables_.get(table_name(str), Table::empty_table).store_.find(str, DatumCompare());
+}
+
+inline ServerStore::const_iterator Server::lower_bound(Str str) const {
+    return tables_.get(table_name(str), Table::empty_table).store_.lower_bound(str, DatumCompare());
+}
+
+inline size_t Server::count(Str first, Str last) const {
+    return std::distance(lower_bound(first), lower_bound(last));
 }
 
 inline Str ServerRange::ibegin() const {
@@ -242,6 +299,10 @@ inline Join* ServerRange::join() const {
     return join_;
 }
 
+inline bool ServerRange::expired_at(uint64_t t) const {
+    return expires_at_ && (expires_at_ < t);
+}
+
 inline ServerRangeSet::ServerRangeSet(Server* server, Str first, Str last,
 				      int types)
     : nr_(0), sw_(0), server_(server), first_(first), last_(last),
@@ -269,6 +330,7 @@ inline void Server::add_validjoin(Str first, Str last, Join* join) {
     sink_ranges_.insert(r);
 }
 
+#if 0
 template <typename I>
 void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 #if 0
@@ -315,6 +377,7 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 	delete d;
     }
 }
+#endif
 
 inline void Server::validate(Str first, Str last) {
     ServerRangeSet srs(this, first, last,
@@ -325,9 +388,69 @@ inline void Server::validate(Str first, Str last) {
     srs.validate();
 }
 
-inline size_t Server::count(Str first, Str last) {
+inline size_t Server::validate_count(Str first, Str last) {
     validate(first, last);
-    return std::distance(lower_bound(first), lower_bound(last));
+    return count(first, last);
+}
+
+class Server::const_iterator {
+  public:
+    const_iterator() = default;
+
+    inline const Datum& operator*() const {
+        return *si_;
+    }
+    inline const Datum* operator->() const {
+        return si_.operator->();
+    }
+
+    inline void operator++() {
+        ++si_;
+        fix();
+    }
+
+    friend inline bool operator==(const const_iterator& a,
+                                  const const_iterator& b) {
+        return a.si_ == b.si_;
+    }
+    friend inline bool operator!=(const const_iterator& a,
+                                  const const_iterator& b) {
+        return a.si_ != b.si_;
+    }
+
+  private:
+    store_type::const_iterator si_;
+    bi::set<Table>::const_iterator ti_;
+    const Server* s_;
+    inline const_iterator(const Server* s, bool begin)
+        : ti_(begin ? s->tables_by_name_.begin() : s->tables_by_name_.end()),
+          s_(s) {
+        if (begin && ti_ != s->tables_by_name_.end()) {
+            si_ = ti_->begin();
+            fix();
+        } else
+            si_ = Table::empty_table.end();
+    }
+
+    inline void fix() {
+        while (si_ == ti_->end()) {
+            ++ti_;
+            if (ti_ == s_->tables_by_name_.end()) {
+                si_ = Table::empty_table.end();
+                break;
+            } else
+                si_ = ti_->begin();
+        }
+    }
+    friend class Server;
+};
+
+inline Server::const_iterator Server::begin() const {
+    return const_iterator(this, true);
+}
+
+inline Server::const_iterator Server::end() const {
+    return const_iterator(this, false);
 }
 
 } // namespace

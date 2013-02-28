@@ -51,10 +51,11 @@ class Pattern {
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
     inline bool match_complete(const Match& m) const;
-    inline int first(uint8_t* s, const Match& m) const;
-    inline String first(const Match& m) const;
-    inline int last(uint8_t* s, const Match& m) const;
-    inline String last(const Match& m) const;
+
+    inline int expand_first(uint8_t* s, const Match& m) const;
+    inline String expand_first(const Match& m) const;
+    inline int expand_last(uint8_t* s, const Match& m) const;
+    inline String expand_last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int> &slotmap);
@@ -83,13 +84,18 @@ class Join {
     inline void ref();
     inline void deref();
 
-    inline int size() const;
-    inline const Pattern& operator[](int i) const;
-    inline const Pattern& back() const;
+    inline int nsource() const;
+    inline const Pattern& sink() const;
+    inline const Pattern& source(int i) const;
+    inline const Pattern& back_source() const;
     inline void expand(uint8_t* out, Str str) const;
 
     inline bool recursive() const;
     inline void set_recursive();
+    inline bool maintained() const;
+    inline void set_maintained(bool m);
+    inline double staleness() const;
+    inline void set_staleness(double s);
 
     bool assign_parse(Str str);
 
@@ -99,7 +105,10 @@ class Join {
   private:
     enum { pcap = 5 };
     int npat_;
-    bool recursive_;
+    bool recursive_;    // if another join uses the output of this join as input
+    bool maintained_;   // if the output is kept up to date with changes to the input
+    double staleness_;  // validated ranges can be used in this time window.
+                        // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
     int refcount_;
 };
@@ -185,7 +194,7 @@ inline bool Pattern::match_complete(const Match& m) const {
     return true;
 }
 
-inline int Pattern::first(uint8_t* s, const Match& m) const {
+inline int Pattern::expand_first(uint8_t* s, const Match& m) const {
     uint8_t* first = s;
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
@@ -203,13 +212,13 @@ inline int Pattern::first(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
-inline String Pattern::first(const Match& m) const {
+inline String Pattern::expand_first(const Match& m) const {
     String str = String::make_uninitialized(key_length());
-    int len = first(str.mutable_udata(), m);
+    int len = expand_first(str.mutable_udata(), m);
     return str.substring(0, len);
 }
 
-inline int Pattern::last(uint8_t* s, const Match& m) const {
+inline int Pattern::expand_last(uint8_t* s, const Match& m) const {
     uint8_t* first = s;
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
@@ -234,9 +243,9 @@ inline int Pattern::last(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
-inline String Pattern::last(const Match& m) const {
+inline String Pattern::expand_last(const Match& m) const {
     String str = String::make_uninitialized(key_length());
-    int len = last(str.mutable_udata(), m);
+    int len = expand_last(str.mutable_udata(), m);
     return str.substring(0, len);
 }
 
@@ -254,7 +263,8 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), recursive_(false), refcount_(0) {
+    : npat_(0), recursive_(false), maintained_(true),
+      staleness_(0), refcount_(0) {
 }
 
 inline void Join::ref() {
@@ -266,8 +276,8 @@ inline void Join::deref() {
 	delete this;
 }
 
-inline int Join::size() const {
-    return npat_;
+inline int Join::nsource() const {
+    return npat_ - 1;
 }
 
 inline bool Join::recursive() const {
@@ -278,17 +288,42 @@ inline void Join::set_recursive() {
     recursive_ = true;
 }
 
-inline const Pattern& Join::operator[](int i) const {
-    return pat_[i];
+inline bool Join::maintained() const {
+    return maintained_;
 }
 
-inline const Pattern& Join::back() const {
+inline void Join::set_maintained(bool m) {
+    if (m && staleness_)
+        mandatory_assert(false && "We do not support temporary maintenance.");
+    maintained_ = m;
+}
+
+inline double Join::staleness() const {
+    return staleness_;
+}
+
+inline void Join::set_staleness(double s) {
+    if (!s)
+        mandatory_assert(false && "Cannot unset staleness.");
+    staleness_ = s;
+    maintained_ = false;
+}
+
+inline const Pattern& Join::sink() const {
+    return pat_[0];
+}
+
+inline const Pattern& Join::source(int i) const {
+    return pat_[i + 1];
+}
+
+inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
 }
 
 inline void Join::expand(uint8_t* s, Str str) const {
-    const Pattern& last = back();
-    const Pattern& first = pat_[0];
+    const Pattern& last = back_source();
+    const Pattern& first = sink();
     for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
 	if (*p >= 128 && first.has_slot(*p - 128))
 	    memcpy(s + first.slotpos_[*p - 128],
