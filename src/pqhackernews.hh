@@ -30,12 +30,12 @@ class HackernewsPopulator {
 
   private:
     bool log_;
-    std::vector<uint32_t> karma_;
     // article -> <author, ncomment>
     std::vector<std::pair<uint32_t, uint32_t> > articles_;
     // author -> karma
     size_t next_aid_;
     uint32_t nusers_;
+    std::vector<uint32_t> karma_;
     uint32_t narticles_;
 };
 
