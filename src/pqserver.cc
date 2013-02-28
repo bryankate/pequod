@@ -591,8 +591,6 @@ void test_join1() {
 
     server.insert("b|I0000|B0000", "b: real value", true);
     CHECK_EQ(size_t(1), server.count(begin, end));
-
-    std::cerr << "join1 passed" << std::endl;
 }
 
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
@@ -687,6 +685,9 @@ static Clp_Option options[] = {
 
 enum { mode_unknown, mode_twitter, mode_facebook, mode_listen, mode_tests };
 
+typedef void (*test_func)();
+std::vector<std::pair<String, test_func> > tests_;
+
 int main(int argc, char** argv) {
     int mode = mode_unknown, listen_port = 8000;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
@@ -716,12 +717,18 @@ int main(int argc, char** argv) {
 
     pq::Server server;
     if (mode == mode_tests) {
-        simple();
-        recursive();
-        count();
-        annotation();
-        srs();
-        test_join1();
+#define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
+        ADD_TEST(simple);
+        ADD_TEST(recursive);
+        ADD_TEST(count);
+        ADD_TEST(annotation);
+        ADD_TEST(srs);
+        ADD_TEST(test_join1);
+        for (auto& t : tests_) {
+            std::cerr << "Testing " << t.first << std::endl;
+            t.second();
+        }
+        std::cerr << "PASS" << std::endl;
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
