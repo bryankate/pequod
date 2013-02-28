@@ -8,7 +8,10 @@
 #include "time.hh"
 #include "check.hh"
 
-namespace pq {
+namespace  {
+
+typedef void (*test_func)();
+std::vector<std::pair<String, test_func> > tests_;
 
 void simple() {
     pq::Server server;
@@ -272,19 +275,14 @@ void test_join1() {
 
 } // namespace
 
-namespace {
-typedef void (*test_func)();
-std::vector<std::pair<String, test_func> > tests_;
-}
-
 void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
-    ADD_TEST(pq::simple);
-    ADD_TEST(pq::recursive);
-    ADD_TEST(pq::count);
-    ADD_TEST(pq::annotation);
-    ADD_TEST(pq::srs);
-    ADD_TEST(pq::test_join1);
+    ADD_TEST(simple);
+    ADD_TEST(recursive);
+    ADD_TEST(count);
+    ADD_TEST(annotation);
+    ADD_TEST(srs);
+    ADD_TEST(test_join1);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
