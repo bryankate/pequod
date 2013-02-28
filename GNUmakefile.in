@@ -91,7 +91,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqfacebook.o \
-	$(OBJDIR)/pqserverloop.o
+	$(OBJDIR)/pqserverloop.o \
+	$(OBJDIR)/pqunit.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
