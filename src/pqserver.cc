@@ -312,7 +312,8 @@ void simple() {
 	{"p|10000|0000000010", "My name is"},
 	{"p|10000|0000000018", "Jennifer Jones"}
     };
-    server.replace_range("f|00001", "p}", values, values + sizeof(values) / sizeof(values[0]));
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second, true);
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -358,7 +359,8 @@ void count() {
         {"b|00003|0000000002", "b5"},
         {"d|00003|00001", "1"}
     };
-    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second, true);
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -402,7 +404,8 @@ void recursive() {
         {"b|00002|0000000002", "b2"},
         {"d|00003|00001", "1"}
     };
-    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second, true);
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -452,7 +455,8 @@ void annotation() {
         {"e|00004|0000000002", "e2"},
         {"e|00004|0000000010", "e3"}
     };
-    server.replace_range("a|00001", "d}", values, values + sizeof(values) / sizeof(values[0]));
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second, true);
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
