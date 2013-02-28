@@ -90,6 +90,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
+	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o
 
