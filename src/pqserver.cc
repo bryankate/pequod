@@ -63,8 +63,8 @@ void ServerRange::validate(Str first, Str last, Server& server) {
 
 void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     uint8_t kf[128], kl[128];
-    int kflen = (*join_)[joinpos].first(kf, mf);
-    int kllen = (*join_)[joinpos].last(kl, ml);
+    int kflen = (*join_)[joinpos].expand_first(kf, mf);
+    int kllen = (*join_)[joinpos].expand_last(kl, ml);
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
@@ -88,7 +88,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
         // match is simple/necessary
         if ((*join_)[joinpos].match(it->key(), mk)) {
             if (joinpos + 1 == join_->size()) {
-                kflen = (*join_)[0].first(kf, mk);
+                kflen = (*join_)[0].expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
                 server.insert(Str(kf, kflen), it->value_, join_->recursive());
@@ -227,8 +227,8 @@ void Server::add_join(Str first, Str last, Join* join) {
     ranges.push_back(ServerRange::make(first, last,
 				       ServerRange::joinsink, join));
     for (int i = 1; i != join->size(); ++i)
-	ranges.push_back(ServerRange::make((*join)[i].first(Match()),
-					   (*join)[i].last(Match()),
+	ranges.push_back(ServerRange::make((*join)[i].expand_first(Match()),
+					   (*join)[i].expand_last(Match()),
 					   ServerRange::joinsource, join));
     for (auto r : ranges)
 	join_ranges_.insert(r);

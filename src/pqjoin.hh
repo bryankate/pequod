@@ -51,10 +51,11 @@ class Pattern {
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
     inline bool match_complete(const Match& m) const;
-    inline int first(uint8_t* s, const Match& m) const;
-    inline String first(const Match& m) const;
-    inline int last(uint8_t* s, const Match& m) const;
-    inline String last(const Match& m) const;
+
+    inline int expand_first(uint8_t* s, const Match& m) const;
+    inline String expand_first(const Match& m) const;
+    inline int expand_last(uint8_t* s, const Match& m) const;
+    inline String expand_last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int> &slotmap);
@@ -192,7 +193,7 @@ inline bool Pattern::match_complete(const Match& m) const {
     return true;
 }
 
-inline int Pattern::first(uint8_t* s, const Match& m) const {
+inline int Pattern::expand_first(uint8_t* s, const Match& m) const {
     uint8_t* first = s;
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
@@ -210,13 +211,13 @@ inline int Pattern::first(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
-inline String Pattern::first(const Match& m) const {
+inline String Pattern::expand_first(const Match& m) const {
     String str = String::make_uninitialized(key_length());
-    int len = first(str.mutable_udata(), m);
+    int len = expand_first(str.mutable_udata(), m);
     return str.substring(0, len);
 }
 
-inline int Pattern::last(uint8_t* s, const Match& m) const {
+inline int Pattern::expand_last(uint8_t* s, const Match& m) const {
     uint8_t* first = s;
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
@@ -241,9 +242,9 @@ inline int Pattern::last(uint8_t* s, const Match& m) const {
     return s - first;
 }
 
-inline String Pattern::last(const Match& m) const {
+inline String Pattern::expand_last(const Match& m) const {
     String str = String::make_uninitialized(key_length());
-    int len = last(str.mutable_udata(), m);
+    int len = expand_last(str.mutable_udata(), m);
     return str.substring(0, len);
 }
 
