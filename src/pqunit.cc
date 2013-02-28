@@ -11,7 +11,6 @@
 namespace pq {
 
 void simple() {
-    std::cerr << "SIMPLE" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -58,7 +57,6 @@ void simple() {
 }
 
 void count() {
-    std::cerr << "COUNT" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -72,10 +70,7 @@ void count() {
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second, true);
-
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -91,22 +86,15 @@ void count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    std::cerr << std::endl << "e| count: " << server.validate_count("e|", "e}") << std::endl << std::endl;
-
-    std::cerr << "After recursive count:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
-
-    std::cerr << "b| count: " << server.validate_count("b|", "b}") << std::endl;
-    std::cerr << "b|00002 count: " << server.validate_count("b|00002|", "b|00002}") << std::endl;
-    std::cerr << "b|00002 subcount: " << server.validate_count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
-    std::cerr << "c| count: " << server.validate_count("c|", "c}") << std::endl << std::endl;
+    CHECK_EQ(server.validate_count("e|", "e}"), 4, "Count of recursive expansion failed.");
+    CHECK_EQ(server.validate_count("b|", "b}"), 5);
+    CHECK_EQ(server.validate_count("b|00002|", "b|00002}"), 4);
+    CHECK_EQ(server.validate_count("b|00002|0000000002", "b|00002|0000000015"), 2, "Wrong subrange count.");
+    CHECK_EQ(server.validate_count("c|", "c}"), 4);
+    CHECK_EQ(server.validate_count("j|", "j}"), 0);
 }
 
 void recursive() {
-    std::cerr << "RECURSIVE" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -154,7 +142,6 @@ void recursive() {
 }
 
 void annotation() {
-    std::cerr << "ANNOTATION" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -260,7 +247,7 @@ void srs() {
     srs.push_back(r1);
     srs.push_back(r2);
 
-    mandatory_assert(srs.total_size() == 3);
+    CHECK_EQ(srs.total_size(), 3);
 }
 
 void test_join1() {

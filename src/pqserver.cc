@@ -7,6 +7,7 @@
 #include "json.hh"
 #include "pqtwitter.hh"
 #include "pqfacebook.hh"
+#include "pqhackernews.hh"
 #include "clp.h"
 #include "time.hh"
 #include "check.hh"
@@ -407,10 +408,11 @@ static Clp_Option options[] = {
     { "shape", 0, 1003, Clp_ValDouble, 0 },
     { "listen", 'l', 1004, Clp_ValInt, Clp_Optional },
     { "log", 0, 1005, 0, Clp_Negate },
-    { "tests", 0, 1006, 0, 0 }
+    { "tests", 0, 1006, 0, 0 },
+    { "hn", 'h', 1007, 0, Clp_Negate }
 };
 
-enum { mode_unknown, mode_twitter, mode_facebook, mode_listen, mode_tests };
+enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
     int mode = mode_unknown, listen_port = 8000;
@@ -428,6 +430,8 @@ int main(int argc, char** argv) {
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
             mode = mode_twitter;
+        else if (clp->option->long_name == String("hn"))
+            mode = mode_hn;
         else if (clp->option->long_name == String("tests"))
             mode = mode_tests;
         else if (clp->option->long_name == String("listen")) {
@@ -454,6 +458,11 @@ int main(int argc, char** argv) {
         pq::TwitterRunner tr(server, tp);
         tr.populate();
         tr.run();
+    } else if (mode == mode_hn) {
+        pq::HackernewsPopulator hp(tp_param);
+        pq::HackernewsRunner hr(server, hp);
+        hr.populate();
+        hr.run();
     } else {
         //server.print(std::cout);
         if (!tp_param.count("shape"))
