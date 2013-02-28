@@ -1,16 +1,19 @@
-#include "pqserver.hh"
-#include "pqjoin.hh"
-#include "json.hh"
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <set>
+#include "pqserver.hh"
+#include "pqjoin.hh"
+#include "json.hh"
 #include "time.hh"
 #include "check.hh"
 
-namespace pq {
+namespace  {
+
+typedef void (*test_func)();
+std::vector<std::pair<String, test_func> > tests_;
 
 void simple() {
-    std::cerr << "SIMPLE" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -57,7 +60,6 @@ void simple() {
 }
 
 void count() {
-    std::cerr << "COUNT" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -71,10 +73,7 @@ void count() {
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second, true);
-
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+    std::cerr << std::endl;
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -90,22 +89,15 @@ void count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    std::cerr << std::endl << "e| count: " << server.validate_count("e|", "e}") << std::endl << std::endl;
-
-    std::cerr << "After recursive count:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
-
-    std::cerr << "b| count: " << server.validate_count("b|", "b}") << std::endl;
-    std::cerr << "b|00002 count: " << server.validate_count("b|00002|", "b|00002}") << std::endl;
-    std::cerr << "b|00002 subcount: " << server.validate_count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
-    std::cerr << "c| count: " << server.validate_count("c|", "c}") << std::endl << std::endl;
+    CHECK_EQ(4, server.validate_count("e|", "e}"), "Count of recursive expansion failed.");
+    CHECK_EQ(5, server.validate_count("b|", "b}"));
+    CHECK_EQ(4, server.validate_count("b|00002|", "b|00002}"));
+    CHECK_EQ(2, server.validate_count("b|00002|0000000002", "b|00002|0000000015"), "Wrong subrange count.");
+    CHECK_EQ(4, server.validate_count("c|", "c}"));
+    CHECK_EQ(0, server.validate_count("j|", "j}"));
 }
 
 void recursive() {
-    std::cerr << "RECURSIVE" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -153,7 +145,6 @@ void recursive() {
 }
 
 void annotation() {
-    std::cerr << "ANNOTATION" << std::endl;
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -259,7 +250,7 @@ void srs() {
     srs.push_back(r1);
     srs.push_back(r2);
 
-    mandatory_assert(srs.total_size() == 3);
+    CHECK_EQ(3, srs.total_size());
 }
 
 void test_join1() {
@@ -284,22 +275,18 @@ void test_join1() {
 
 } // namespace
 
-namespace {
-typedef void (*test_func)();
-std::vector<std::pair<String, test_func> > tests_;
-}
-
-void unit_tests() {
+void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
-    ADD_TEST(pq::simple);
-    ADD_TEST(pq::recursive);
-    ADD_TEST(pq::count);
-    ADD_TEST(pq::annotation);
-    ADD_TEST(pq::srs);
-    ADD_TEST(pq::test_join1);
-    for (auto& t : tests_) {
-        std::cerr << "Testing " << t.first << std::endl;
-        t.second();
-    }
+    ADD_TEST(simple);
+    ADD_TEST(recursive);
+    ADD_TEST(count);
+    ADD_TEST(annotation);
+    ADD_TEST(srs);
+    ADD_TEST(test_join1);
+    for (auto& t : tests_)
+        if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
+            std::cerr << "Testing " << t.first << std::endl;
+            t.second();
+        }
     std::cerr << "PASS" << std::endl;
 }
