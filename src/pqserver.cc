@@ -8,6 +8,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include "time.hh"
+#include "check.hh"
 
 namespace pq {
 
@@ -572,6 +573,28 @@ void srs() {
     mandatory_assert(srs.total_size() == 3);
 }
 
+void test_join1() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("c|<a_id:5>|<b_id:5>|<index:5> "
+                               "a|<a_id>|<b_id> "
+                               "b|<index>|<b_id>"));
+
+    j1.ref();
+    server.add_join("c|", "c}", &j1);
+
+    String begin("c|00000|");
+    String end("c|10000}");
+    server.insert("a|00000|B0000", "a: index-only", true);
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("b|I0000|B0000", "b: real value", true);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    std::cerr << "join1 passed" << std::endl;
+}
+
 void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
                   uint32_t u, uint32_t p, Str value) {
     char buf[128];
@@ -698,6 +721,7 @@ int main(int argc, char** argv) {
         count();
         annotation();
         srs();
+        test_join1();
     } else if (mode == mode_listen) {
         extern void server_loop(int port, pq::Server& server);
         server_loop(listen_port, server);
