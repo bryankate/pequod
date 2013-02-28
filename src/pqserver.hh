@@ -152,6 +152,7 @@ class Server {
     inline const_iterator end() const;
     inline const_iterator find(Str str) const;
     inline const_iterator lower_bound(Str str) const;
+    inline size_t count(Str first, Str last) const;
 
     void insert(const String& key, const String& value, bool notify);
     void erase(const String& key, bool notify);
@@ -164,7 +165,7 @@ class Server {
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
-    inline size_t count(Str first, Str last);
+    inline size_t validate_count(Str first, Str last);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -331,9 +332,13 @@ inline void Server::validate(Str first, Str last) {
     srs.validate();
 }
 
-inline size_t Server::count(Str first, Str last) {
-    validate(first, last);
+inline size_t Server::count(Str first, Str last) const {
     return std::distance(lower_bound(first), lower_bound(last));
+}
+
+inline size_t Server::validate_count(Str first, Str last) {
+    validate(first, last);
+    return count(first, last);
 }
 
 } // namespace

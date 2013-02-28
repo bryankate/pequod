@@ -377,7 +377,7 @@ void count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    std::cerr << std::endl << "e| count: " << server.count("e|", "e}") << std::endl << std::endl;
+    std::cerr << std::endl << "e| count: " << server.validate_count("e|", "e}") << std::endl << std::endl;
 
     std::cerr << "After recursive count:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -385,10 +385,10 @@ void count() {
     server.print(std::cerr);
     std::cerr << std::endl;
 
-    std::cerr << "b| count: " << server.count("b|", "b}") << std::endl;
-    std::cerr << "b|00002 count: " << server.count("b|00002|", "b|00002}") << std::endl;
-    std::cerr << "b|00002 subcount: " << server.count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
-    std::cerr << "c| count: " << server.count("c|", "c}") << std::endl << std::endl;
+    std::cerr << "b| count: " << server.validate_count("b|", "b}") << std::endl;
+    std::cerr << "b|00002 count: " << server.validate_count("b|00002|", "b|00002}") << std::endl;
+    std::cerr << "b|00002 subcount: " << server.validate_count("b|00002|0000000002", "b|00002|0000000015") << std::endl;
+    std::cerr << "c| count: " << server.validate_count("c|", "c}") << std::endl << std::endl;
 }
 
 void recursive() {
