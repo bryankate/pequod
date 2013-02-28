@@ -32,13 +32,13 @@ ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join)
 
 void ServerRange::add_sink(const Match& m) {
     assert(join_ && type_ == copy);
-    resultkeys_.push_back(String::make_uninitialized((*join_)[0].key_length()));
-    (*join_)[0].expand(resultkeys_.back().mutable_udata(), m);
+    resultkeys_.push_back(String::make_uninitialized(join_->sink().key_length()));
+    join_->sink().expand(resultkeys_.back().mutable_udata(), m);
 }
 
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (type_ == copy && join_->back().match(d->key())) {
+    if (type_ == copy && join_->back_source().match(d->key())) {
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0)
@@ -52,9 +52,9 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 void ServerRange::validate(Str first, Str last, Server& server) {
     if (type_ == joinsink) {
         Match mf, ml;
-        (*join_)[0].match(first, mf);
-        (*join_)[0].match(last, ml);
-        validate(mf, ml, 1, server);
+        join_->sink().match(first, mf);
+        join_->sink().match(last, ml);
+        validate(mf, ml, 0, server);
 
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
@@ -63,15 +63,15 @@ void ServerRange::validate(Str first, Str last, Server& server) {
 
 void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     uint8_t kf[128], kl[128];
-    int kflen = (*join_)[joinpos].expand_first(kf, mf);
-    int kllen = (*join_)[joinpos].expand_last(kl, ml);
+    int kflen = join_->source(joinpos).expand_first(kf, mf);
+    int kllen = join_->source(joinpos).expand_last(kl, ml);
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
     // XXX PERFORMANCE this is not always necessary
     server.validate(Str(kf, kflen), Str(kl, kllen));
 
-    if (join_->maintained() && joinpos + 1 == join_->size())
+    if (join_->maintained() && joinpos + 1 == join_->nsource())
         server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
 
     auto it = server.lower_bound(Str(kf, kflen));
@@ -82,19 +82,19 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
 
     for (; it != ilast; ++it) {
-	if (it->key().length() != (*join_)[joinpos].key_length())
+	if (it->key().length() != join_->source(joinpos).key_length())
             continue;
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
-        if ((*join_)[joinpos].match(it->key(), mk)) {
-            if (joinpos + 1 == join_->size()) {
-                kflen = (*join_)[0].expand_first(kf, mk);
+        if (join_->source(joinpos).match(it->key(), mk)) {
+            if (joinpos + 1 == join_->nsource()) {
+                kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
                 server.insert(Str(kf, kflen), it->value_, join_->recursive());
             } else {
-                (*join_)[joinpos].match(it->key(), mf);
-                (*join_)[joinpos].match(it->key(), ml);
+                join_->source(joinpos).match(it->key(), mf);
+                join_->source(joinpos).match(it->key(), ml);
                 validate(mf, ml, joinpos + 1, server);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
@@ -226,10 +226,11 @@ void Server::add_join(Str first, Str last, Join* join) {
     std::vector<ServerRange*> ranges;
     ranges.push_back(ServerRange::make(first, last,
 				       ServerRange::joinsink, join));
-    for (int i = 1; i != join->size(); ++i)
-	ranges.push_back(ServerRange::make((*join)[i].expand_first(Match()),
-					   (*join)[i].expand_last(Match()),
-					   ServerRange::joinsource, join));
+    for (int i = 0; i != join->nsource(); ++i)
+	ranges.push_back(ServerRange::make
+                         (join->source(i).expand_first(Match()),
+                          join->source(i).expand_last(Match()),
+                          ServerRange::joinsource, join));
     for (auto r : ranges)
 	join_ranges_.insert(r);
 
@@ -238,7 +239,7 @@ void Server::add_join(Str first, Str last, Join* join) {
 	 it != join_ranges_.end(); ++it)
 	if (it->type() == ServerRange::joinsource)
 	    join->set_recursive();
-    for (int i = 1; i != join->size(); ++i)
+    for (int i = 1; i != (int) ranges.size(); ++i)
 	for (auto it = join_ranges_.begin_overlaps(ranges[i]->interval());
 	     it != join_ranges_.end(); ++it)
 	    if (it->type() == ServerRange::joinsink)

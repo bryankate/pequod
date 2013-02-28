@@ -84,9 +84,10 @@ class Join {
     inline void ref();
     inline void deref();
 
-    inline int size() const;
-    inline const Pattern& operator[](int i) const;
-    inline const Pattern& back() const;
+    inline int nsource() const;
+    inline const Pattern& sink() const;
+    inline const Pattern& source(int i) const;
+    inline const Pattern& back_source() const;
     inline void expand(uint8_t* out, Str str) const;
 
     inline bool recursive() const;
@@ -275,8 +276,8 @@ inline void Join::deref() {
 	delete this;
 }
 
-inline int Join::size() const {
-    return npat_;
+inline int Join::nsource() const {
+    return npat_ - 1;
 }
 
 inline bool Join::recursive() const {
@@ -308,17 +309,21 @@ inline void Join::set_staleness(double s) {
     maintained_ = false;
 }
 
-inline const Pattern& Join::operator[](int i) const {
-    return pat_[i];
+inline const Pattern& Join::sink() const {
+    return pat_[0];
 }
 
-inline const Pattern& Join::back() const {
+inline const Pattern& Join::source(int i) const {
+    return pat_[i + 1];
+}
+
+inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
 }
 
 inline void Join::expand(uint8_t* s, Str str) const {
-    const Pattern& last = back();
-    const Pattern& first = pat_[0];
+    const Pattern& last = back_source();
+    const Pattern& first = sink();
     for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
 	if (*p >= 128 && first.has_slot(*p - 128))
 	    memcpy(s + first.slotpos_[*p - 128],
