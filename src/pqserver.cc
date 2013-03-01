@@ -225,7 +225,7 @@ Table::Table(Str name)
 
 const Table Table::empty_table{Str()};
 
-void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
+void Table::add_copy(Str first, Str last, Join* join, const Match& m) {
     for (auto it = source_ranges_.begin_contains(make_interval(first, last));
 	 it != source_ranges_.end(); ++it)
 	if (it->type() == ServerRange::copy && it->join() == join) {
@@ -237,6 +237,12 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
     ServerRange* r = ServerRange::make(first, last, ServerRange::copy, join);
     r->add_sink(m);
     source_ranges_.insert(r);
+}
+
+void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
+    Str t = table_name(first, last);
+    assert(t);
+    make_table(t).add_copy(first, last, join, m);
 }
 
 void Server::add_join(Str first, Str last, Join* join) {
@@ -278,7 +284,7 @@ void Server::insert(JoinValue &jv, bool notify) {
     Str tname = table_name(jv.key());
     if (!tname)
         return;
-    Table& t = add_table(tname);
+    Table& t = make_table(tname);
 
     store_type::insert_commit_data cd;
     auto p = t.store_.insert_check(jv.key(), DatumCompare(), cd);
@@ -292,8 +298,8 @@ void Server::insert(JoinValue &jv, bool notify) {
     }
 
     if (notify)
-	for (auto it = source_ranges_.begin_contains(Str(jv.key()));
-	     it != source_ranges_.end(); ++it)
+	for (auto it = t.source_ranges_.begin_contains(Str(jv.key()));
+	     it != t.source_ranges_.end(); ++it)
 	    if (it->type() == ServerRange::copy)
 		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
@@ -309,8 +315,8 @@ void Server::erase(const String& key, bool notify) {
 	tit->store_.erase(it);
 
 	if (notify)
-	    for (auto it = source_ranges_.begin_contains(Str(key));
-		 it != source_ranges_.end(); ++it)
+	    for (auto it = tit->source_ranges_.begin_contains(Str(key));
+		 it != tit->source_ranges_.end(); ++it)
 		if (it->type() == ServerRange::copy)
 		    it->notify(d, ServerRange::notify_erase, *this);
 
@@ -319,16 +325,20 @@ void Server::erase(const String& key, bool notify) {
 }
 
 Json Server::stats() const {
-    size_t store_size = 0;
-    for (auto& t : tables_)
+    size_t store_size = 0, source_ranges_size = 0;
+    for (auto& t : tables_) {
         store_size += t.store_.size();
+        source_ranges_size += t.source_ranges_.size();
+    }
     return Json().set("store_size", store_size)
-	.set("source_ranges_size", source_ranges_.size())
+	.set("source_ranges_size", source_ranges_size)
 	.set("sink_ranges_size", sink_ranges_.size());
 }
 
 void Server::print(std::ostream& stream) {
-    stream << "sources:" << std::endl << source_ranges_;
+    stream << "sources:" << std::endl;
+    for (auto& t : tables_by_name_)
+        stream << t.source_ranges_;
     stream << "sinks:" << std::endl << sink_ranges_;
     stream << "joins:" << std::endl << join_ranges_;
 }

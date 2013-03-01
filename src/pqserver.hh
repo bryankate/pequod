@@ -254,8 +254,11 @@ class Table : public pequod_set_base_hook {
     inline const_iterator begin() const;
     inline const_iterator end() const;
 
+    void add_copy(Str first, Str last, Join* join, const Match& m);
+
   private:
     store_type store_;
+    interval_tree<ServerRange> source_ranges_;
     int namelen_;
     char name_[32];
   public:
@@ -278,14 +281,16 @@ class Server {
     inline store_type::const_iterator lower_bound(Str str) const;
     inline size_t count(Str first, Str last) const;
 
-    Table& add_table(Str name);
+    Table& make_table(Str name);
 
     void insert(const String& key, const String& value, bool notify);
     void insert(JoinValue &jv, bool notify);
     void erase(const String& key, bool notify);
 
+#if 0
     template <typename I>
     void replace_range(Str first, Str last, I first_value, I last_value);
+#endif
 
     void add_copy(Str first, Str last, Join* j, const Match& m);
     void add_join(Str first, Str last, Join* j);
@@ -300,8 +305,6 @@ class Server {
   private:
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
-    //store_type store_;
-    interval_tree<ServerRange> source_ranges_;
     interval_tree<ServerRange> sink_ranges_;
     interval_tree<ServerRange> join_ranges_;
     friend class const_iterator;
@@ -347,7 +350,7 @@ inline Table::const_iterator Table::end() const {
     return store_.end();
 }
 
-inline Table& Server::add_table(Str name) {
+inline Table& Server::make_table(Str name) {
     bool inserted;
     auto it = tables_.find_insert(name, inserted);
     if (inserted)
