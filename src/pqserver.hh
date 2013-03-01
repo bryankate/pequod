@@ -101,7 +101,7 @@ struct JoinValue {
             mandatory_assert(0, "bad JoinValueType");
         }
     }
-    bool update(const Str &key, const String &v, bool key_safe, bool value_safe) {
+    void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
         case jvt_copy_last:
             update_string_value(v, value_safe);
@@ -127,7 +127,6 @@ struct JoinValue {
             update_key(key, key_safe);
             has_value_ = true;
         }
-        return true;
     }
     bool has_value() const {
         return has_value_;
