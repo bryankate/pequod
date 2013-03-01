@@ -256,6 +256,10 @@ class Table : public pequod_set_base_hook {
 
     void add_copy(Str first, Str last, Join* join, const Match& m);
 
+    void insert(const String& key, const String& value, Server& server);
+    template <typename F>
+    void modify(const String& key, F& func, Server& server);
+
   private:
     store_type store_;
     interval_tree<ServerRange> source_ranges_;
@@ -263,6 +267,9 @@ class Table : public pequod_set_base_hook {
     char name_[32];
   public:
     pequod_set_member_hook member_hook_;
+  private:
+    inline void notify_insert(Datum* d, ServerRange::notify_type notifier,
+                              Server& server);
 
     friend class Server;
 };
@@ -283,7 +290,9 @@ class Server {
 
     Table& make_table(Str name);
 
-    void insert(const String& key, const String& value);
+    inline void insert(const String& key, const String& value);
+    template <typename F>
+    inline void modify(const String& key, F& func);
     void insert(JoinValue &jv);
     void erase(const String& key);
 
@@ -422,6 +431,39 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 
 inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
+}
+
+inline void Table::notify_insert(Datum* d, ServerRange::notify_type notifier,
+                                 Server& server) {
+    for (auto it = source_ranges_.begin_contains(Str(d->key()));
+         it != source_ranges_.end(); ++it)
+        if (it->type() == ServerRange::copy)
+            it->notify(d, notifier, server);
+}
+
+template <typename F>
+void Table::modify(const String& key, F& func, Server& server) {
+    store_type::insert_commit_data cd;
+    auto p = store_.insert_check(key, DatumCompare(), cd);
+    Datum* d;
+    if (p.second) {
+        d = new Datum(key, String());
+        store_.insert_commit(*d, cd);
+    } else
+        d = p.first.operator->();
+    func(d, p.second, server);
+    notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
+}
+
+inline void Server::insert(const String& key, const String& value) {
+    if (Str tname = table_name(key))
+        make_table(tname).insert(key, value, *this);
+}
+
+template <typename F>
+inline void Server::modify(const String& key, F& func) {
+    if (Str tname = table_name(key))
+        make_table(tname).modify(key, func, *this);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {
