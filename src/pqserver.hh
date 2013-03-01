@@ -162,7 +162,7 @@ struct JoinValue {
     };
     JoinValueType jvt_;
     bool has_value_;
-    uint64_t int_value_;
+    int64_t int_value_;
     safe_string key_;
     safe_string string_value_;
 };
