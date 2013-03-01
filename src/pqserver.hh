@@ -283,9 +283,9 @@ class Server {
 
     Table& make_table(Str name);
 
-    void insert(const String& key, const String& value, bool notify);
-    void insert(JoinValue &jv, bool notify);
-    void erase(const String& key, bool notify);
+    void insert(const String& key, const String& value);
+    void insert(JoinValue &jv);
+    void erase(const String& key);
 
 #if 0
     template <typename I>

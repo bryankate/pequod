@@ -48,9 +48,9 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 	    if (notifier >= 0) {
                 jv.reset();
                 jv.update(s, d->value_, true, true);
-                server.insert(jv, join_->recursive());
+                server.insert(jv);
             } else
-		server.erase(s, join_->recursive());
+		server.erase(s);
 	}
     }
 }
@@ -63,7 +63,7 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         JoinValue jv(join_->jvt());
         validate(mf, ml, 0, server, jv);
         if (jv.has_value())
-            server.insert(jv, join_->recursive());
+            server.insert(jv);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
@@ -100,7 +100,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
                 if (jv.copy_last())
-                    server.insert(Str(kf, kflen), it->value_, join_->recursive());
+                    server.insert(Str(kf, kflen), it->value_);
                 else
                     jv.update(Str(kf, kflen), it->value_, false, true);
             } else {
@@ -274,13 +274,13 @@ void Server::add_join(Str first, Str last, Join* join) {
 					  join));
 }
 
-void Server::insert(const String& key, const String& value, bool notify) {
+void Server::insert(const String& key, const String& value) {
     JoinValue jv(jvt_copy_last);
     jv.update(key, value, true, true);
-    insert(jv, notify);
+    insert(jv);
 }
 
-void Server::insert(JoinValue &jv, bool notify) {
+void Server::insert(JoinValue &jv) {
     Str tname = table_name(jv.key());
     if (!tname)
         return;
@@ -297,14 +297,13 @@ void Server::insert(JoinValue &jv, bool notify) {
         jv.apply_to(d->value_);
     }
 
-    if (notify)
-	for (auto it = t.source_ranges_.begin_contains(Str(jv.key()));
-	     it != t.source_ranges_.end(); ++it)
-	    if (it->type() == ServerRange::copy)
-		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
+    for (auto it = t.source_ranges_.begin_contains(Str(jv.key()));
+         it != t.source_ranges_.end(); ++it)
+        if (it->type() == ServerRange::copy)
+            it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
 
-void Server::erase(const String& key, bool notify) {
+void Server::erase(const String& key) {
     auto tit = tables_.find(table_name(Str(key)));
     if (!tit)
         return;
@@ -314,11 +313,10 @@ void Server::erase(const String& key, bool notify) {
 	Datum* d = it.operator->();
 	tit->store_.erase(it);
 
-	if (notify)
-	    for (auto it = tit->source_ranges_.begin_contains(Str(key));
-		 it != tit->source_ranges_.end(); ++it)
-		if (it->type() == ServerRange::copy)
-		    it->notify(d, ServerRange::notify_erase, *this);
+        for (auto it = tit->source_ranges_.begin_contains(Str(key));
+             it != tit->source_ranges_.end(); ++it)
+            if (it->type() == ServerRange::copy)
+                it->notify(d, ServerRange::notify_erase, *this);
 
 	delete d;
     }
@@ -349,12 +347,12 @@ void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
                   uint32_t u, uint32_t p, Str value) {
     char buf[128];
     sprintf(buf, "l|%06d|%06d", u, p);
-    server.insert(Str(buf, 15), value, true);
+    server.insert(Str(buf, 15), value);
     if (fp.push())
           std::cerr << "NOT IMPLEMENTED" << std::endl;
 //        for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
 //            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-//            server.insert(Str(buf, 24), value, false);
+//            server.insert(Str(buf, 24), value);
 //        }
 }
 
@@ -366,7 +364,7 @@ void facebook_populate(pq::Server& server, pq::FacebookPopulator& fp) {
     fp.generate_friends(gen);
     fp.nusers();
     for (auto& x : fp.get_base_data()) {
-        server.insert(x.first, Str("1", 1), true);
+        server.insert(x.first, Str("1", 1));
     }
     fp.report_counts(std::cout);
 
