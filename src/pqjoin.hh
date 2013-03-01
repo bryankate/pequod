@@ -93,8 +93,6 @@ class Join {
     inline const Pattern& back_source() const;
     inline void expand(uint8_t* out, Str str) const;
 
-    inline bool recursive() const;
-    inline void set_recursive();
     inline bool maintained() const;
     inline void set_maintained(bool m);
     inline double staleness() const;
@@ -110,7 +108,6 @@ class Join {
   private:
     enum { pcap = 5 };
     int npat_;
-    bool recursive_;    // if another join uses the output of this join as input
     bool maintained_;   // if the output is kept up to date with changes to the input
     double staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
@@ -269,7 +266,7 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), recursive_(false), maintained_(true),
+    : npat_(0), maintained_(true),
       staleness_(0), refcount_(0), jvt_(jvt_copy_last) {
 }
 
@@ -284,14 +281,6 @@ inline void Join::deref() {
 
 inline int Join::nsource() const {
     return npat_ - 1;
-}
-
-inline bool Join::recursive() const {
-    return recursive_;
-}
-
-inline void Join::set_recursive() {
-    recursive_ = true;
 }
 
 inline bool Join::maintained() const {

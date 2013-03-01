@@ -253,27 +253,13 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
 void Server::add_join(Str first, Str last, Join* join) {
     // track full ranges used for join and copy
     // XXX could do a more precise job if that was ever warranted
-    std::vector<ServerRange*> ranges;
-    ranges.push_back(ServerRange::make(first, last,
-				       ServerRange::joinsink, join));
+    join_ranges_.insert(ServerRange::make(first, last,
+                                          ServerRange::joinsink, join));
     for (int i = 0; i != join->nsource(); ++i)
-	ranges.push_back(ServerRange::make
-                         (join->source(i).expand_first(Match()),
-                          join->source(i).expand_last(Match()),
-                          ServerRange::joinsource, join));
-    for (auto r : ranges)
-	join_ranges_.insert(r);
-
-    // check for recursion
-    for (auto it = join_ranges_.begin_overlaps(ranges[0]->interval());
-	 it != join_ranges_.end(); ++it)
-	if (it->type() == ServerRange::joinsource)
-	    join->set_recursive();
-    for (int i = 1; i != (int) ranges.size(); ++i)
-	for (auto it = join_ranges_.begin_overlaps(ranges[i]->interval());
-	     it != join_ranges_.end(); ++it)
-	    if (it->type() == ServerRange::joinsink)
-		it->join()->set_recursive();
+	join_ranges_.insert(ServerRange::make
+                            (join->source(i).expand_first(Match()),
+                             join->source(i).expand_last(Match()),
+                             ServerRange::joinsource, join));
 
     sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
 					  join));
