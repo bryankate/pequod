@@ -63,6 +63,9 @@ struct Str : public String_base<Str> {
     int length() const {
 	return len;
     }
+    char* mutable_data() {
+        return const_cast<char*>(s);
+    }
 
     Str substring(const char *first, const char *last) const {
 	if (first <= last && first >= s && last <= s + len)
