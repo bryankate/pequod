@@ -45,13 +45,14 @@ void HackernewsRunner::populate() {
         // are articles, not comments?
         const uint32_t nvote = rng(10);
         for (uint32_t j = 0; j < nvote; ++j) {
-            nv++;
-            hp_.vote(aid); // karma
             const uint32_t voter = rng(hp_.nusers());
-            sprintf(buf, "v|%05d%05d|%05d|%05d", author, aid, 0, voter);
-            server_.insert(Str(buf, 24), Str("1", 1));
-            if (hp_.log()) {
-                printf("vote %.24s\n", buf);
+            if (hp_.vote(aid, voter)) {
+                nv++;
+                sprintf(buf, "v|%05d%05d|%05d|%05d", author, aid, 0, voter);
+                server_.insert(Str(buf, 24), Str("1", 1));
+                if (hp_.log()) {
+                    printf("vote %.24s\n", buf);
+                }
             }
         }
     }
