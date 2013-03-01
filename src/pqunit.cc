@@ -306,6 +306,36 @@ void test_count() {
     CHECK_EQ("1", k1->value_);
 }
 
+// One Server::validate produces multiple grouped keys
+void test_count_validate1() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0");
+    server.insert("a|00000|00001", "article 1");
+    server.insert("a|00001|00002", "article 2");
+    server.insert("v|00000|00000", "vote 0");
+    server.insert("v|00001|00000", "vote 0");
+    server.insert("v|00002|00000", "vote 0");
+
+    server.validate(begin, end);
+    CHECK_EQ(size_t(2), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("2", k0->value_);
+    auto k1 = server.find("k|00001");
+    CHECK_EQ("1", k1->value_);
+}
+
 void test_min() {
     pq::Server server;
     pq::Join j1;
@@ -389,6 +419,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(srs);
     ADD_TEST(test_join1);
     ADD_TEST(test_count);
+    ADD_TEST(test_count_validate1);
     ADD_TEST(test_min);
     ADD_TEST(test_max);
     for (auto& t : tests_)
