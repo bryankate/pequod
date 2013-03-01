@@ -202,13 +202,12 @@ class ServerRange {
     range_type type_;
     Join* join_;
     uint64_t expires_at_;
-    mutable JoinValue jv_;
     mutable local_vector<String, 4> resultkeys_;
     char keys_[0];
 
     inline ServerRange(Str first, Str last, range_type type, Join* join);
     ~ServerRange() = default;
-    void validate(Match& mf, Match& ml, int joinpos, Server& server);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv);
 };
 
 class ServerRangeSet {

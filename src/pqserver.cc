@@ -19,7 +19,7 @@ namespace pq {
 inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
     : ibegin_len_(first.length()), iend_len_(last.length()),
       subtree_iend_(keys_ + ibegin_len_, iend_len_),
-      type_(type), join_(join), expires_at_(0), jv_(join->jvt()) {
+      type_(type), join_(join), expires_at_(0) {
 
     memcpy(keys_, first.data(), first.length());
     memcpy(keys_ + ibegin_len_, last.data(), last.length());
@@ -42,12 +42,13 @@ void ServerRange::add_sink(const Match& m) {
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (type_ == copy && join_->back_source().match(d->key())) {
+        JoinValue jv(join_->jvt());
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0) {
-                jv_.reset();
-                jv_.update(s, d->value_, true, true);
-                server.insert(jv_, join_->recursive());
+                jv.reset();
+                jv.update(s, d->value_, true, true);
+                server.insert(jv, join_->recursive());
             } else
 		server.erase(s, join_->recursive());
 	}
@@ -59,16 +60,16 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        jv_.reset();
-        validate(mf, ml, 0, server);
-        if (jv_.has_value())
-            server.insert(jv_, join_->recursive());
+        JoinValue jv(join_->jvt());
+        validate(mf, ml, 0, server, jv);
+        if (jv.has_value())
+            server.insert(jv, join_->recursive());
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv) {
     uint8_t kf[128], kl[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -98,14 +99,14 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
                 kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
-                if (jv_.copy_last())
+                if (jv.copy_last())
                     server.insert(Str(kf, kflen), it->value_, join_->recursive());
                 else
-                    jv_.update(Str(kf, kflen), it->value_, false, true);
+                    jv.update(Str(kf, kflen), it->value_, false, true);
             } else {
                 join_->source(joinpos).match(it->key(), mf);
                 join_->source(joinpos).match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server);
+                validate(mf, ml, joinpos + 1, server, jv);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
             }
