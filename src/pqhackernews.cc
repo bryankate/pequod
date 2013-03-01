@@ -81,13 +81,13 @@ void HackernewsRunner::run() {
     const uint32_t nusers = hp_.nusers();
 
     char buf1[128], buf2[128];
-    sprintf(buf1, "k|%05d|", 0);
-    sprintf(buf2, "k|%05d}", 99999);
-    server_.validate(Str(buf1, 8), Str(buf2, 8));
+    sprintf(buf1, "k|");
+    sprintf(buf2, "k}");
+    server_.validate(Str(buf1, 2), Str(buf2, 2));
 
     std::cout << ": scan [" << buf1 << "," << buf2 << ")\n";
-    auto bit = server_.lower_bound(Str(buf1, 8)),
-        eit = server_.lower_bound(Str(buf2, 8));
+    auto bit = server_.lower_bound(Str(buf1, 2)),
+        eit = server_.lower_bound(Str(buf2, 2));
     for (; bit != eit; ++bit)
         std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
 
