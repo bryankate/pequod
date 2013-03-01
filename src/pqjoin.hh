@@ -77,6 +77,9 @@ class Pattern {
     friend class Join;
 };
 
+// every type >=jvt_min_last is aggregation.
+enum JoinValueType { jvt_copy_last = 0, jvt_min_last, jvt_max_last, jvt_count_match };
+
 class Join {
   public:
     inline Join();
@@ -96,6 +99,8 @@ class Join {
     inline void set_maintained(bool m);
     inline double staleness() const;
     inline void set_staleness(double s);
+    inline void set_jvt(JoinValueType jvt);
+    inline JoinValueType jvt() const;
 
     bool assign_parse(Str str);
 
@@ -111,6 +116,7 @@ class Join {
                         // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
     int refcount_;
+    JoinValueType jvt_;
 };
 
 
@@ -264,7 +270,7 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 
 inline Join::Join()
     : npat_(0), recursive_(false), maintained_(true),
-      staleness_(0), refcount_(0) {
+      staleness_(0), refcount_(0), jvt_(jvt_copy_last) {
 }
 
 inline void Join::ref() {
@@ -300,6 +306,14 @@ inline void Join::set_maintained(bool m) {
 
 inline double Join::staleness() const {
     return staleness_;
+}
+
+inline void Join::set_jvt(JoinValueType _jvt) {
+    jvt_ = _jvt;
+}
+
+inline JoinValueType Join::jvt() const {
+    return jvt_;
 }
 
 inline void Join::set_staleness(double s) {

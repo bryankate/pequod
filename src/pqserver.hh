@@ -8,6 +8,7 @@
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqbase.hh"
+#include "pqjoin.hh"
 class Json;
 
 namespace pq {
@@ -67,6 +68,104 @@ struct DatumDispose {
     }
 };
 
+struct JoinValue {
+    JoinValue(JoinValueType jvt) : jvt_(jvt), has_value_(false) {
+    }
+    void reset() {
+        has_value_ = false;
+    }
+    bool copy_last() const {
+        return jvt_ == jvt_copy_last;
+    }
+    void operator()(Datum* d, bool insert, Server&) {
+        if (insert) {
+            d->value_ = value();
+            return;
+        }
+        switch (jvt_) {
+        case jvt_copy_last:
+            d->value_ = string_value_;
+            break;
+        case jvt_min_last:
+            if (d->value_ > string_value_)
+                d->value_ = string_value_;
+            break;
+        case jvt_max_last:
+            if (d->value_ < string_value_)
+                d->value_ = string_value_;
+            break;
+        case jvt_count_match:
+            d->value_ = String(int_value_ + atoi(d->value_.c_str()));
+            break;
+        default:
+            mandatory_assert(0, "bad JoinValueType");
+        }
+    }
+    bool update(const Str &key, const String &v, bool key_safe, bool value_safe) {
+        switch (jvt_) {
+        case jvt_copy_last:
+            update_string_value(v, value_safe);
+            break;
+        case jvt_min_last:
+            if (unlikely(!has_value_) || v < string_value_)
+                update_string_value(v, value_safe);
+            break;
+        case jvt_max_last:
+            if (unlikely(!has_value_) || v > string_value_)
+                update_string_value(v, value_safe);
+            break;
+        case jvt_count_match:
+            if (unlikely(!has_value_))
+                int_value_ = 1;
+            else
+                ++int_value_;
+            break;
+        default:
+            mandatory_assert(0, "bad JoinValueType");
+        }
+        if (unlikely(!has_value_)) {
+            update_key(key, key_safe);
+            has_value_ = true;
+        }
+        return true;
+    }
+    bool has_value() const {
+        return has_value_;
+    }
+    const Str &key() const {
+        return key_;
+    }
+    const Str &value() {
+        if (jvt_ == jvt_count_match)
+            update_string_value(String(int_value_), false);
+        return string_value_;
+    }
+  private:
+    void update_key(const Str &key, bool safe) {
+        if (safe)
+            key_.assign(key);
+        else {
+            key_buffer_ = key;
+            key_.assign(key_buffer_);
+        }
+    }
+    void update_string_value(const String &v, bool safe) {
+        if (safe)
+            string_value_.assign(v);
+        else {
+            value_buffer_ = v;
+            string_value_.assign(value_buffer_);
+        }
+    }
+    JoinValueType jvt_;
+    bool has_value_;
+    uint64_t int_value_;
+    Str key_;
+    String key_buffer_;
+    Str string_value_;
+    String value_buffer_;
+};
+
 typedef bi::set<Datum> ServerStore;
 
 class ServerRange {
@@ -112,7 +211,7 @@ class ServerRange {
 
     inline ServerRange(Str first, Str last, range_type type, Join* join);
     ~ServerRange() = default;
-    void validate(Match& mf, Match& ml, int joinpos, Server& server);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv);
 };
 
 class ServerRangeSet {
@@ -159,12 +258,22 @@ class Table : public pequod_set_base_hook {
     inline const_iterator begin() const;
     inline const_iterator end() const;
 
+    void add_copy(Str first, Str last, Join* join, const Match& m);
+
+    void insert(const String& key, const String& value, Server& server);
+    template <typename F>
+    void modify(const String& key, F& func, Server& server);
+
   private:
     store_type store_;
+    interval_tree<ServerRange> source_ranges_;
     int namelen_;
     char name_[32];
   public:
     pequod_set_member_hook member_hook_;
+  private:
+    inline void notify_insert(Datum* d, ServerRange::notify_type notifier,
+                              Server& server);
 
     friend class Server;
 };
@@ -183,13 +292,17 @@ class Server {
     inline store_type::const_iterator lower_bound(Str str) const;
     inline size_t count(Str first, Str last) const;
 
-    Table& add_table(Str name);
+    Table& make_table(Str name);
 
-    void insert(const String& key, const String& value, bool notify);
-    void erase(const String& key, bool notify);
+    inline void insert(const String& key, const String& value);
+    template <typename F>
+    inline void modify(const String& key, F& func);
+    void erase(const String& key);
 
+#if 0
     template <typename I>
     void replace_range(Str first, Str last, I first_value, I last_value);
+#endif
 
     void add_copy(Str first, Str last, Join* j, const Match& m);
     void add_join(Str first, Str last, Join* j);
@@ -204,8 +317,6 @@ class Server {
   private:
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
-    //store_type store_;
-    interval_tree<ServerRange> source_ranges_;
     interval_tree<ServerRange> sink_ranges_;
     interval_tree<ServerRange> join_ranges_;
     friend class const_iterator;
@@ -251,7 +362,7 @@ inline Table::const_iterator Table::end() const {
     return store_.end();
 }
 
-inline Table& Server::add_table(Str name) {
+inline Table& Server::make_table(Str name) {
     bool inserted;
     auto it = tables_.find_insert(name, inserted);
     if (inserted)
@@ -323,6 +434,39 @@ inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
 
 inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
+}
+
+inline void Table::notify_insert(Datum* d, ServerRange::notify_type notifier,
+                                 Server& server) {
+    for (auto it = source_ranges_.begin_contains(Str(d->key()));
+         it != source_ranges_.end(); ++it)
+        if (it->type() == ServerRange::copy)
+            it->notify(d, notifier, server);
+}
+
+template <typename F>
+void Table::modify(const String& key, F& func, Server& server) {
+    store_type::insert_commit_data cd;
+    auto p = store_.insert_check(key, DatumCompare(), cd);
+    Datum* d;
+    if (p.second) {
+        d = new Datum(key, String());
+        store_.insert_commit(*d, cd);
+    } else
+        d = p.first.operator->();
+    func(d, p.second, server);
+    notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
+}
+
+inline void Server::insert(const String& key, const String& value) {
+    if (Str tname = table_name(key))
+        make_table(tname).insert(key, value, *this);
+}
+
+template <typename F>
+inline void Server::modify(const String& key, F& func) {
+    if (Str tname = table_name(key))
+        make_table(tname).modify(key, func, *this);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {

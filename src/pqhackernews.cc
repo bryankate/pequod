@@ -33,7 +33,7 @@ void HackernewsRunner::populate() {
     for (uint32_t aid = 0; aid < hp_.narticles(); aid++) {
         auto &art = hp_.articles()[aid];
         sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, art.first, 0);
-        server_.insert(Str(buf, 24), Str("lalalalala", 10), true);
+        server_.insert(Str(buf, 24), Str("lalalalala", 10));
         if (hp_.log()) {
             printf("article %.24s\n", buf);
         }
@@ -43,7 +43,7 @@ void HackernewsRunner::populate() {
         for (uint32_t j = 1; j <= ncomment; ++j) {
             const uint32_t commentor = rng(hp_.nusers());
             sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, commentor, j);
-            server_.insert(Str(buf, 25), Str("lalalalala", 10), true);
+            server_.insert(Str(buf, 25), Str("lalalalala", 10));
             if (hp_.log()) {
                 printf("  %.24s\n", buf);
             }
@@ -57,7 +57,7 @@ void HackernewsRunner::populate() {
             hp_.vote(aid); // karma
             const uint32_t voter = rng(hp_.nusers());
             sprintf(buf, "v|%05d%05d|%05d", art.first, aid, voter);
-            server_.insert(Str(buf, 13), Str("1", 1), true);
+            server_.insert(Str(buf, 13), Str("1", 1));
             if (hp_.log()) {
                 printf("vote %.24s\n", buf);
             }

@@ -26,7 +26,7 @@ void simple() {
 	{"p|10000|0000000018", "Jennifer Jones"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
-        server.insert(it->first, it->second, true);
+        server.insert(it->first, it->second);
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -47,8 +47,8 @@ void simple() {
 	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
     std::cerr << std::endl;
 
-    server.insert("p|10000|0000000022", "This should appear in t|00001", true);
-    server.insert("p|00002|0000000023", "As should this", true);
+    server.insert("p|10000|0000000022", "This should appear in t|00001");
+    server.insert("p|00002|0000000023", "As should this");
 
     std::cerr << "After processing add_copy:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -72,7 +72,7 @@ void count() {
         {"d|00003|00001", "1"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
-        server.insert(it->first, it->second, true);
+        server.insert(it->first, it->second);
     std::cerr << std::endl;
 
     pq::Join j1;
@@ -107,7 +107,7 @@ void recursive() {
         {"d|00003|00001", "1"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
-        server.insert(it->first, it->second, true);
+        server.insert(it->first, it->second);
 
     std::cerr << "Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -135,8 +135,8 @@ void recursive() {
         std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
     std::cerr << std::endl;
 
-    server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003", true);
-    server.insert("b|00002|0000002000", "As should this", true);
+    server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003");
+    server.insert("b|00002|0000002000", "As should this");
 
     std::cerr << "After processing inserts:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -157,7 +157,7 @@ void annotation() {
         {"e|00004|0000000010", "e3"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
-        server.insert(it->first, it->second, true);
+        server.insert(it->first, it->second);
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -188,7 +188,7 @@ void annotation() {
     std::cerr << std::endl;
 
     // should NOT trigger the insertion of a new c|00001 key
-    server.insert("b|00002|0000000005", "b3", true);
+    server.insert("b|00002|0000000005", "b3");
 
     std::cerr << "After inserting new b|00002 key" << std::endl;
     for (auto it = server.begin(); it != server.end(); ++it)
@@ -204,7 +204,7 @@ void annotation() {
     server.print(std::cerr);
     std::cerr << std::endl;
 
-    server.insert("e|00004|0000000003", "e4", true);
+    server.insert("e|00004|0000000003", "e4");
 
     // should NOT trigger the insertion of a new f|00003 key
     std::cerr << "After inserting new e|00004 key" << std::endl;
@@ -265,11 +265,112 @@ void test_join1() {
 
     String begin("c|00000|");
     String end("c|10000}");
-    server.insert("a|00000|B0000", "a: index-only", true);
+    server.insert("a|00000|B0000", "a: index-only");
     server.validate(begin, end);
     CHECK_EQ(size_t(0), server.count(begin, end));
 
-    server.insert("b|I0000|B0000", "b: real value", true);
+    server.insert("b|I0000|B0000", "b: real value");
+    CHECK_EQ(size_t(1), server.count(begin, end));
+}
+
+void test_count() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0");
+    server.insert("a|00000|00001", "article 1");
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00000", "vote 0");
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("1", k0->value_);
+
+    server.insert("v|00001|00000", "vote 0");
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ("2", k0->value_);
+}
+
+void test_min() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_min_last);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0");
+    server.insert("a|00000|00001", "article 1");
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00009", "v9");
+    server.insert("v|00000|00008", "v8");
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("v8", k0->value_);
+
+    server.insert("v|00000|00005", "v5");
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00000|00006", "v6");
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+}
+
+void test_max() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_max_last);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0");
+    server.insert("a|00000|00001", "article 1");
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00001", "v1");
+    server.insert("v|00000|00002", "v2");
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("v2", k0->value_);
+
+    server.insert("v|00000|00003", "v5");
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00000|00004", "v4");
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00001|00005", "v6");
+    CHECK_EQ("v6", k0->value_);
     CHECK_EQ(size_t(1), server.count(begin, end));
 }
 
@@ -283,6 +384,9 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(annotation);
     ADD_TEST(srs);
     ADD_TEST(test_join1);
+    ADD_TEST(test_count);
+    ADD_TEST(test_min);
+    ADD_TEST(test_max);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;

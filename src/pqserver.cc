@@ -42,12 +42,15 @@ void ServerRange::add_sink(const Match& m) {
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (type_ == copy && join_->back_source().match(d->key())) {
+        JoinValue jv(join_->jvt());
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
-	    if (notifier >= 0)
-		server.insert(s, d->value_, join_->recursive());
-	    else
-		server.erase(s, join_->recursive());
+	    if (notifier >= 0) {
+                jv.reset();
+                jv.update(s, d->value_, true, true);
+                server.modify(jv.key(), jv);
+            } else
+		server.erase(s);
 	}
     }
 }
@@ -57,14 +60,16 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        validate(mf, ml, 0, server);
-
+        JoinValue jv(join_->jvt());
+        validate(mf, ml, 0, server, jv);
+        if (jv.has_value())
+            server.modify(jv.key(), jv);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv) {
     uint8_t kf[128], kl[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -94,11 +99,14 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
                 kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
-                server.insert(Str(kf, kflen), it->value_, join_->recursive());
+                if (jv.copy_last())
+                    server.insert(Str(kf, kflen), it->value_);
+                else
+                    jv.update(Str(kf, kflen), it->value_, false, true);
             } else {
                 join_->source(joinpos).match(it->key(), mf);
                 join_->source(joinpos).match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server);
+                validate(mf, ml, joinpos + 1, server, jv);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
             }
@@ -217,7 +225,7 @@ Table::Table(Str name)
 
 const Table Table::empty_table{Str()};
 
-void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
+void Table::add_copy(Str first, Str last, Join* join, const Match& m) {
     for (auto it = source_ranges_.begin_contains(make_interval(first, last));
 	 it != source_ranges_.end(); ++it)
 	if (it->type() == ServerRange::copy && it->join() == join) {
@@ -229,6 +237,12 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
     ServerRange* r = ServerRange::make(first, last, ServerRange::copy, join);
     r->add_sink(m);
     source_ranges_.insert(r);
+}
+
+void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
+    Str t = table_name(first, last);
+    assert(t);
+    make_table(t).add_copy(first, last, join, m);
 }
 
 void Server::add_join(Str first, Str last, Join* join) {
@@ -260,31 +274,21 @@ void Server::add_join(Str first, Str last, Join* join) {
 					  join));
 }
 
-void Server::insert(const String& key, const String& value, bool notify) {
-    Str tname = table_name(key);
-    if (!tname)
-        return;
-    Table& t = add_table(tname);
-
+void Table::insert(const String& key, const String& value, Server& server) {
     store_type::insert_commit_data cd;
-    auto p = t.store_.insert_check(key, DatumCompare(), cd);
+    auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
-	t.store_.insert_commit(*d, cd);
+	store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
-	d->value_ = value;
+        d->value_ = value;
     }
-
-    if (notify)
-	for (auto it = source_ranges_.begin_contains(Str(key));
-	     it != source_ranges_.end(); ++it)
-	    if (it->type() == ServerRange::copy)
-		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
+    notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
 }
 
-void Server::erase(const String& key, bool notify) {
+void Server::erase(const String& key) {
     auto tit = tables_.find(table_name(Str(key)));
     if (!tit)
         return;
@@ -294,27 +298,30 @@ void Server::erase(const String& key, bool notify) {
 	Datum* d = it.operator->();
 	tit->store_.erase(it);
 
-	if (notify)
-	    for (auto it = source_ranges_.begin_contains(Str(key));
-		 it != source_ranges_.end(); ++it)
-		if (it->type() == ServerRange::copy)
-		    it->notify(d, ServerRange::notify_erase, *this);
+        for (auto it = tit->source_ranges_.begin_contains(Str(key));
+             it != tit->source_ranges_.end(); ++it)
+            if (it->type() == ServerRange::copy)
+                it->notify(d, ServerRange::notify_erase, *this);
 
 	delete d;
     }
 }
 
 Json Server::stats() const {
-    size_t store_size = 0;
-    for (auto& t : tables_)
+    size_t store_size = 0, source_ranges_size = 0;
+    for (auto& t : tables_) {
         store_size += t.store_.size();
+        source_ranges_size += t.source_ranges_.size();
+    }
     return Json().set("store_size", store_size)
-	.set("source_ranges_size", source_ranges_.size())
+	.set("source_ranges_size", source_ranges_size)
 	.set("sink_ranges_size", sink_ranges_.size());
 }
 
 void Server::print(std::ostream& stream) {
-    stream << "sources:" << std::endl << source_ranges_;
+    stream << "sources:" << std::endl;
+    for (auto& t : tables_by_name_)
+        stream << t.source_ranges_;
     stream << "sinks:" << std::endl << sink_ranges_;
     stream << "joins:" << std::endl << join_ranges_;
 }
@@ -325,12 +332,12 @@ void facebook_like(pq::Server& server, pq::FacebookPopulator& fp,
                   uint32_t u, uint32_t p, Str value) {
     char buf[128];
     sprintf(buf, "l|%06d|%06d", u, p);
-    server.insert(Str(buf, 15), value, true);
+    server.insert(Str(buf, 15), value);
     if (fp.push())
           std::cerr << "NOT IMPLEMENTED" << std::endl;
 //        for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
 //            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-//            server.insert(Str(buf, 24), value, false);
+//            server.insert(Str(buf, 24), value);
 //        }
 }
 
@@ -342,7 +349,7 @@ void facebook_populate(pq::Server& server, pq::FacebookPopulator& fp) {
     fp.generate_friends(gen);
     fp.nusers();
     for (auto& x : fp.get_base_data()) {
-        server.insert(x.first, Str("1", 1), true);
+        server.insert(x.first, Str("1", 1));
     }
     fp.report_counts(std::cout);
 

@@ -131,12 +131,12 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
 void TwitterRunner::post(uint32_t u, uint32_t time, Str value) {
     char buf[128];
     sprintf(buf, "p|%05d|%010u", u, time);
-    server_.insert(Str(buf, 18), value, true);
+    server_.insert(Str(buf, 18), value);
     if (tp_.push())
         for (auto it = tp_.begin_followers(u);
              it != tp_.end_followers(u); ++it) {
             sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-            server_.insert(Str(buf, 24), value, false);
+            server_.insert(Str(buf, 24), value);
         }
 }
 
@@ -148,7 +148,7 @@ void TwitterRunner::populate() {
     char buf[128];
     for (auto& x : tp_.subscriptions()) {
         sprintf(buf, "s|%05d|%05d", x.first, x.second);
-        server_.insert(Str(buf, 13), Str("1", 1), true);
+        server_.insert(Str(buf, 13), Str("1", 1));
         if (tp_.log())
             printf("subscribe %.13s\n", buf);
     }
