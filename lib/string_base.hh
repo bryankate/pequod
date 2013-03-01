@@ -35,9 +35,10 @@ class String_generic {
     template <typename T> static inline typename T::substring_type rtrim(const T &str);
     template <typename T> static inline typename T::substring_type trim(const T &str);
     static hashcode_t hashcode(const char *s, int len);
-    static hashcode_t hashcode(const char *begin, const char *end) {
-	return hashcode(begin, end - begin);
+    static hashcode_t hashcode(const char *first, const char *last) {
+	return hashcode(first, last - first);
     }
+    static long to_i(const char* first, const char* last);
 };
 
 template <typename T>
@@ -233,21 +234,26 @@ class String_base {
     int find_right(const String_base<TT> &x, int start = INT_MAX) const {
 	return String_generic::find_right(data(), length(), start, x.data(), x.length());
     }
-    /** @brief Return a 32-bit hash function of the characters in [@a begin, @a end).
+    /** @brief Return a 32-bit hash function of the characters in [@a first, @a last).
 
 	Uses Paul Hsieh's "SuperFastHash" algorithm, described at
 	http://www.azillionmonkeys.com/qed/hash.html
 	This hash function uses all characters in the string.
 
-	@invariant If end1 - begin1 == end2 - begin2 and memcmp(begin1,
-	begin2, end1 - begin1) == 0, then hashcode(begin1, end1) ==
-	hashcode(begin2, end2). */
-    static hashcode_t hashcode(const char *begin, const char *end) {
-	return String_generic::hashcode(begin, end);
+	@invariant If last1 - first1 == last2 - first2 and memcmp(first1,
+	first2, last1 - first1) == 0, then hashcode(first1, last1) ==
+	hashcode(first2, last2). */
+    static hashcode_t hashcode(const char *first, const char *last) {
+	return String_generic::hashcode(first, last);
     }
     /** @brief Return a 32-bit hash function of the characters in this string. */
     hashcode_t hashcode() const {
 	return String_generic::hashcode(data(), length());
+    }
+
+    /** @brief Return the integer value of this string. */
+    long to_i() const {
+        return String_generic::to_i(begin(), end());
     }
   protected:
     String_base() = default;

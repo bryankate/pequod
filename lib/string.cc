@@ -242,6 +242,21 @@ String_generic::find_right(const char *s, int len, int start,
     return -1;
 }
 
+long String_generic::to_i(const char* s, const char* ends) {
+    bool neg;
+    if (s != ends && (s[0] == '-' || s[0] == '+')) {
+        neg = s[0] == '-';
+        ++s;
+    } else
+        neg = false;
+    if (s == ends || !isdigit((unsigned char) *s))
+        return 0;
+    unsigned long x = (unsigned char) *s - '0', y;
+    for (++s; s != ends && isdigit((unsigned char) *s); ++s)
+        x = x * 10 + *s - '0';  // XXX overflow
+    return neg ? -x : x;
+}
+
 
 /** @cond never */
 String::memo_t *
