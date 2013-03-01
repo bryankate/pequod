@@ -8,6 +8,7 @@
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqbase.hh"
+#include "pqjoin.hh"
 class Json;
 
 namespace pq {
@@ -67,6 +68,100 @@ struct DatumDispose {
     }
 };
 
+struct JoinValue {
+    JoinValue(JoinValueType jvt) : jvt_(jvt), has_value_(false) {
+    }
+    void reset() {
+        has_value_ = false;
+    }
+    bool copy_last() const {
+        return jvt_ == jvt_copy_last;
+    }
+    void apply_to(String &v) const {
+        switch (jvt_) {
+        case jvt_copy_last:
+            v = string_value_;
+            break;
+        case jvt_min_last:
+            if (v > string_value_)
+                v = string_value_;
+            break;
+        case jvt_max_last:
+            if (v < string_value_)
+                v = string_value_;
+            break;
+        case jvt_count_match:
+            v = String(int_value_ + atoi(v.c_str()));
+            break;
+        default:
+            mandatory_assert(0, "bad JoinValueType");
+        }
+    }
+    bool update(const Str &key, const String &v, bool key_safe, bool value_safe) {
+        switch (jvt_) {
+        case jvt_copy_last:
+            update_string_value(v, value_safe);
+            break;
+        case jvt_min_last:
+            if (unlikely(!has_value_) || v < string_value_)
+                update_string_value(v, value_safe);
+            break;
+        case jvt_max_last:
+            if (unlikely(!has_value_) || v > string_value_)
+                update_string_value(v, value_safe);
+            break;
+        case jvt_count_match:
+            if (unlikely(!has_value_))
+                int_value_ = 1;
+            else
+                ++int_value_;
+            break;
+        default:
+            mandatory_assert(0, "bad JoinValueType");
+        }
+        if (unlikely(!has_value_)) {
+            update_key(key, key_safe);
+            has_value_ = true;
+        }
+        return true;
+    }
+    bool has_value() const {
+        return has_value_;
+    }
+    const Str &key() const {
+        return key_;
+    }
+    const Str &value() {
+        if (jvt_ == jvt_count_match)
+            update_string_value(String(int_value_), false);
+        return string_value_;
+    }
+  private:
+    void update_key(const Str &key, bool safe) {
+        if (safe)
+            key_.assign(key);
+        else {
+            key_buffer_ = key;
+            key_.assign(key_buffer_);
+        }
+    }
+    void update_string_value(const String &v, bool safe) {
+        if (safe)
+            string_value_.assign(v);
+        else {
+            value_buffer_ = v;
+            string_value_.assign(value_buffer_);
+        }
+    }
+    JoinValueType jvt_;
+    bool has_value_;
+    uint64_t int_value_;
+    Str key_;
+    String key_buffer_;
+    Str string_value_;
+    String value_buffer_;
+};
+
 typedef bi::set<Datum> ServerStore;
 
 class ServerRange {
@@ -112,7 +207,7 @@ class ServerRange {
 
     inline ServerRange(Str first, Str last, range_type type, Join* join);
     ~ServerRange() = default;
-    void validate(Match& mf, Match& ml, int joinpos, Server& server);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv);
 };
 
 class ServerRangeSet {
@@ -186,6 +281,7 @@ class Server {
     Table& add_table(Str name);
 
     void insert(const String& key, const String& value, bool notify);
+    void insert(JoinValue &jv, bool notify);
     void erase(const String& key, bool notify);
 
     template <typename I>

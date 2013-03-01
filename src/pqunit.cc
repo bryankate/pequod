@@ -273,6 +273,107 @@ void test_join1() {
     CHECK_EQ(size_t(1), server.count(begin, end));
 }
 
+void test_count() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0", true);
+    server.insert("a|00000|00001", "article 1", true);
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00000", "vote 0", true);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("1", k0->value_);
+
+    server.insert("v|00001|00000", "vote 0", true);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ("2", k0->value_);
+}
+
+void test_min() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_min_last);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0", true);
+    server.insert("a|00000|00001", "article 1", true);
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00009", "v9", true);
+    server.insert("v|00000|00008", "v8", true);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("v8", k0->value_);
+
+    server.insert("v|00000|00005", "v5", true);
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00000|00006", "v6", true);
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+}
+
+void test_max() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_max_last);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    server.insert("a|00000|00000", "article 0", true);
+    server.insert("a|00000|00001", "article 1", true);
+    server.validate(begin, end);
+    CHECK_EQ(size_t(0), server.count(begin, end));
+
+    server.insert("v|00000|00001", "v1", true);
+    server.insert("v|00000|00002", "v2", true);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+    auto k0 = server.find("k|00000");
+    CHECK_EQ("v2", k0->value_);
+
+    server.insert("v|00000|00003", "v5", true);
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00000|00004", "v4", true);
+    CHECK_EQ("v5", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+
+    server.insert("v|00001|00005", "v6", true);
+    CHECK_EQ("v6", k0->value_);
+    CHECK_EQ(size_t(1), server.count(begin, end));
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -283,6 +384,9 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(annotation);
     ADD_TEST(srs);
     ADD_TEST(test_join1);
+    ADD_TEST(test_count);
+    ADD_TEST(test_min);
+    ADD_TEST(test_max);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;

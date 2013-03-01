@@ -42,11 +42,14 @@ void ServerRange::add_sink(const Match& m) {
 void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (type_ == copy && join_->back_source().match(d->key())) {
+        JoinValue jv(join_->jvt());
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
-	    if (notifier >= 0)
-		server.insert(s, d->value_, join_->recursive());
-	    else
+	    if (notifier >= 0) {
+                jv.reset();
+                jv.update(s, d->value_, true, true);
+                server.insert(jv, join_->recursive());
+            } else
 		server.erase(s, join_->recursive());
 	}
     }
@@ -57,14 +60,16 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        validate(mf, ml, 0, server);
-
+        JoinValue jv(join_->jvt());
+        validate(mf, ml, 0, server, jv);
+        if (jv.has_value())
+            server.insert(jv, join_->recursive());
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv) {
     uint8_t kf[128], kl[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -94,11 +99,14 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
                 kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
-                server.insert(Str(kf, kflen), it->value_, join_->recursive());
+                if (jv.copy_last())
+                    server.insert(Str(kf, kflen), it->value_, join_->recursive());
+                else
+                    jv.update(Str(kf, kflen), it->value_, false, true);
             } else {
                 join_->source(joinpos).match(it->key(), mf);
                 join_->source(joinpos).match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server);
+                validate(mf, ml, joinpos + 1, server, jv);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
             }
@@ -261,24 +269,30 @@ void Server::add_join(Str first, Str last, Join* join) {
 }
 
 void Server::insert(const String& key, const String& value, bool notify) {
-    Str tname = table_name(key);
+    JoinValue jv(jvt_copy_last);
+    jv.update(key, value, true, true);
+    insert(jv, notify);
+}
+
+void Server::insert(JoinValue &jv, bool notify) {
+    Str tname = table_name(jv.key());
     if (!tname)
         return;
     Table& t = add_table(tname);
 
     store_type::insert_commit_data cd;
-    auto p = t.store_.insert_check(key, DatumCompare(), cd);
+    auto p = t.store_.insert_check(jv.key(), DatumCompare(), cd);
     Datum* d;
     if (p.second) {
-	d = new Datum(key, value);
+	d = new Datum(jv.key(), jv.value());
 	t.store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
-	d->value_ = value;
+        jv.apply_to(d->value_);
     }
 
     if (notify)
-	for (auto it = source_ranges_.begin_contains(Str(key));
+	for (auto it = source_ranges_.begin_contains(Str(jv.key()));
 	     it != source_ranges_.end(); ++it)
 	    if (it->type() == ServerRange::copy)
 		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
