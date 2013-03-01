@@ -129,8 +129,6 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     }
     else if (r.type_ == ServerRange::joinsink)
         stream << ": joinsink @" << (void*) r.join_;
-    else if (r.type_ == ServerRange::joinsource)
-            stream << ": joinsource @" << (void*) r.join_;
     else if (r.type_ == ServerRange::validjoin) {
         stream << ": validjoin @" << (void*) r.join_ << ", expires: ";
         if (r.expires_at_) {
@@ -252,15 +250,6 @@ void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
 
 void Server::add_join(Str first, Str last, Join* join) {
     // track full ranges used for join and copy
-    // XXX could do a more precise job if that was ever warranted
-    join_ranges_.insert(ServerRange::make(first, last,
-                                          ServerRange::joinsink, join));
-    for (int i = 0; i != join->nsource(); ++i)
-	join_ranges_.insert(ServerRange::make
-                            (join->source(i).expand_first(Match()),
-                             join->source(i).expand_last(Match()),
-                             ServerRange::joinsource, join));
-
     sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
 					  join));
 }
@@ -314,7 +303,6 @@ void Server::print(std::ostream& stream) {
     for (auto& t : tables_by_name_)
         stream << t.source_ranges_;
     stream << "sinks:" << std::endl << sink_ranges_;
-    stream << "joins:" << std::endl << join_ranges_;
 }
 
 } // namespace
