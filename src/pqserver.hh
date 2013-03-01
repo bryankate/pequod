@@ -69,30 +69,31 @@ struct DatumDispose {
 };
 
 struct JoinValue {
-    JoinValue(JoinValueType jvt) : jvt_(jvt), has_value_(false) {
+    inline JoinValue(JoinValueType jvt) : jvt_(jvt) {
     }
-    void reset() {
-        has_value_ = false;
+    inline void reset() {
+        string_value_.reset();
+        key_.reset();
     }
-    bool copy_last() const {
+    inline bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    void operator()(Datum* d, bool insert, Server&) {
+    inline void operator()(Datum* d, bool insert, Server&) {
         if (insert) {
             d->value_ = value();
             return;
         }
         switch (jvt_) {
         case jvt_copy_last:
-            d->value_ = string_value_;
+            d->value_ = string_value_.ref_;
             break;
         case jvt_min_last:
-            if (d->value_ > string_value_)
-                d->value_ = string_value_;
+            if (d->value_ > string_value_.ref_)
+                d->value_ = string_value_.ref_;
             break;
         case jvt_max_last:
-            if (d->value_ < string_value_)
-                d->value_ = string_value_;
+            if (d->value_ < string_value_.ref_)
+                d->value_ = string_value_.ref_;
             break;
         case jvt_count_match:
             d->value_ = String(int_value_ + atoi(d->value_.c_str()));
@@ -101,21 +102,21 @@ struct JoinValue {
             mandatory_assert(0, "bad JoinValueType");
         }
     }
-    void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
+    inline void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
         case jvt_copy_last:
-            update_string_value(v, value_safe);
+            string_value_.update(v, value_safe);
             break;
         case jvt_min_last:
-            if (unlikely(!has_value_) || v < string_value_)
-                update_string_value(v, value_safe);
+            if (unlikely(!has_value()) || v < string_value_.ref_)
+                string_value_.update(v, value_safe);
             break;
         case jvt_max_last:
-            if (unlikely(!has_value_) || v > string_value_)
-                update_string_value(v, value_safe);
+            if (unlikely(!has_value()) || v > string_value_.ref_)
+                string_value_.update(v, value_safe);
             break;
         case jvt_count_match:
-            if (unlikely(!has_value_))
+            if (unlikely(!has_value()))
                 int_value_ = 1;
             else
                 ++int_value_;
@@ -123,46 +124,43 @@ struct JoinValue {
         default:
             mandatory_assert(0, "bad JoinValueType");
         }
-        if (unlikely(!has_value_)) {
-            update_key(key, key_safe);
-            has_value_ = true;
-        }
+        if (unlikely(!has_value()))
+            key_.update(key, key_safe);
     }
-    bool has_value() const {
-        return has_value_;
+    inline bool has_value() const {
+        return !!key_;
     }
-    const Str &key() const {
-        return key_;
+    inline const Str &key() const {
+        return key_.ref_;
     }
-    const Str &value() {
-        if (jvt_ == jvt_count_match)
-            update_string_value(String(int_value_), false);
-        return string_value_;
+    inline const Str &value() {
+        if (jvt_ == jvt_count_match && !string_value_)
+            string_value_.update(String(int_value_), false);
+        return string_value_.ref_;
     }
   private:
-    void update_key(const Str &key, bool safe) {
-        if (safe)
-            key_.assign(key);
-        else {
-            key_buffer_ = key;
-            key_.assign(key_buffer_);
+    struct safe_string {
+        Str ref_;
+        String buffer_;
+        inline void update(const Str v, bool safe) {
+            if (safe)
+                ref_ = v;
+            else {
+                buffer_ = v;
+                ref_.assign(buffer_);
+            }
         }
-    }
-    void update_string_value(const String &v, bool safe) {
-        if (safe)
-            string_value_.assign(v);
-        else {
-            value_buffer_ = v;
-            string_value_.assign(value_buffer_);
+        inline void reset() {
+            ref_.assign(NULL, 0);
         }
-    }
+        inline bool operator!() const {
+            return ref_.s == NULL;
+        }
+    };
     JoinValueType jvt_;
-    bool has_value_;
-    uint64_t int_value_;
-    Str key_;
-    String key_buffer_;
-    Str string_value_;
-    String value_buffer_;
+    int64_t int_value_;
+    safe_string key_;
+    safe_string string_value_;
 };
 
 typedef bi::set<Datum> ServerStore;
