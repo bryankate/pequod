@@ -249,6 +249,8 @@ class String_base {
     hashcode_t hashcode() const {
 	return String_generic::hashcode(data(), length());
     }
+  protected:
+    String_base() = default;
 };
 
 template <typename T, typename U>

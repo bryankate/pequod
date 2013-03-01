@@ -18,7 +18,7 @@ inline T table_name(const String_base<T>& key) {
 
 template <typename T>
 inline T table_name(const String_base<T>& key, const String_base<T>& key2) {
-    String_base<T> t = table_name(key);
+    T t = table_name(key);
     if (t.length() && key2.length() > t.length()
         && memcmp(key2.data(), t.data(), t.length()) == 0
         && (key2[t.length()] | 1) == '}' /* matches | or } */)
