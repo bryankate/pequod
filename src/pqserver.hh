@@ -165,10 +165,45 @@ struct JoinValue {
 
 typedef bi::set<Datum> ServerStore;
 
+class SourceRange {
+  public:
+    SourceRange(Str ibegin, Str iend, Join* join);
+    virtual ~SourceRange();
+
+    typedef Str endpoint_type;
+    inline Str ibegin() const;
+    inline Str iend() const;
+    inline ::interval<Str> interval() const;
+    inline Str subtree_iend() const;
+    inline void set_subtree_iend(Str subtree_iend);
+
+    inline Join* join() const;
+    void add_sink(const Match& m);
+
+    enum notify_type {
+	notify_erase = -1, notify_update = 0, notify_insert = 1
+    };
+    void notify(const Datum* d, int notifier, Server& server) const;
+
+    friend std::ostream& operator<<(std::ostream&, const SourceRange&);
+
+  private:
+    Str ibegin_;
+    Str iend_;
+    Str subtree_iend_;
+  public:
+    rblinks<SourceRange> rblinks_;
+  private:
+    Join* join_;
+    // XXX?????    uint64_t expires_at_;
+    mutable local_vector<String, 4> resultkeys_;
+    char buf_[32];
+};
+
 class ServerRange {
   public:
     enum range_type {
-        copy = 1, joinsink = 2, validjoin = 4
+        joinsink = 2, validjoin = 4
     };
     static ServerRange* make(Str first, Str last, range_type type, Join *join = 0);
 
@@ -183,12 +218,6 @@ class ServerRange {
     inline Join* join() const;
     inline bool expired_at(uint64_t t) const;
 
-    void add_sink(const Match& m);
-
-    enum notify_type {
-	notify_erase = -1, notify_update = 0, notify_insert = 1
-    };
-    void notify(const Datum* d, int notifier, Server& server) const;
     void validate(Str first, Str last, Server& server);
 
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
@@ -218,7 +247,6 @@ class ServerRangeSet {
 
     void push_back(ServerRange* r);
 
-    inline void notify(const Datum* d, int notifier);
     void validate();
 
     friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
@@ -263,13 +291,13 @@ class Table : public pequod_set_base_hook {
 
   private:
     store_type store_;
-    interval_tree<ServerRange> source_ranges_;
+    interval_tree<SourceRange> source_ranges_;
     int namelen_;
     char name_[32];
   public:
     pequod_set_member_hook member_hook_;
   private:
-    inline void notify_insert(Datum* d, ServerRange::notify_type notifier,
+    inline void notify_insert(Datum* d, SourceRange::notify_type notifier,
                               Server& server);
 
     friend class Server;
@@ -380,6 +408,30 @@ inline size_t Server::count(Str first, Str last) const {
     return std::distance(lower_bound(first), lower_bound(last));
 }
 
+inline Str SourceRange::ibegin() const {
+    return ibegin_;
+}
+
+inline Str SourceRange::iend() const {
+    return iend_;
+}
+
+inline Join* SourceRange::join() const {
+    return join_;
+}
+
+inline interval<Str> SourceRange::interval() const {
+    return make_interval(ibegin(), iend());
+}
+
+inline Str SourceRange::subtree_iend() const {
+    return subtree_iend_;
+}
+
+inline void SourceRange::set_subtree_iend(Str subtree_iend) {
+    subtree_iend_ = subtree_iend;
+}
+
 inline Str ServerRange::ibegin() const {
     return Str(keys_, ibegin_len_);
 }
@@ -422,24 +474,15 @@ inline ServerRangeSet::ServerRangeSet(Server* server, int types)
     : nr_(0), sw_(0), server_(server), types_(types) {
 }
 
-inline void ServerRangeSet::notify(const Datum* datum, int notifier) {
-    if (sw_ != 0)
-	hard_visit(datum);
-    for (int i = 0; i != nr_; ++i)
-	if (r_[i])
-	    r_[i]->notify(datum, notifier, *server_);
-}
-
 inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
 }
 
-inline void Table::notify_insert(Datum* d, ServerRange::notify_type notifier,
+inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier,
                                  Server& server) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        if (it->type() == ServerRange::copy)
-            it->notify(d, notifier, server);
+        it->notify(d, notifier, server);
 }
 
 template <typename F>
@@ -453,7 +496,7 @@ void Table::modify(const String& key, F& func, Server& server) {
     } else
         d = p.first.operator->();
     func(d, p.second, server);
-    notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
+    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
 }
 
 inline void Server::insert(const String& key, const String& value) {

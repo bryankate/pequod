@@ -16,6 +16,63 @@ namespace pq {
 
 // XXX check circular expansion
 
+SourceRange::SourceRange(Str ibegin, Str iend, Join* join)
+    : join_(join) {
+    char* s = buf_;
+    char* ends = buf_ + sizeof(buf_);
+
+    if (ends - s >= ibegin.length()) {
+        ibegin_.assign(s, ibegin.length());
+        s += ibegin.length();
+    } else
+        ibegin_.assign(new char[ibegin.length()], ibegin.length());
+    memcpy(ibegin_.mutable_data(), ibegin.data(), ibegin.length());
+
+    if (ends - s >= iend.length())
+        iend_.assign(s, iend.length());
+    else
+        iend_.assign(new char[iend.length()], iend.length());
+    memcpy(iend_.mutable_data(), iend.data(), iend.length());
+
+    subtree_iend_ = iend_;
+}
+
+SourceRange::~SourceRange() {
+    if (ibegin_.data() >= buf_ && ibegin_.data() < buf_ + sizeof(buf_))
+        delete[] ibegin_.mutable_data();
+    if (iend_.data() >= buf_ && iend_.data() < buf_ + sizeof(buf_))
+        delete[] iend_.mutable_data();
+}
+
+void SourceRange::add_sink(const Match& m) {
+    resultkeys_.push_back(String::make_uninitialized(join_->sink().key_length()));
+    join_->sink().expand(resultkeys_.back().mutable_udata(), m);
+}
+
+void SourceRange::notify(const Datum* d, int notifier, Server& server) const {
+    // XXX PERFORMANCE the match() is often not necessary
+    if (join_->back_source().match(d->key())) {
+        JoinValue jv(join_->jvt());
+	for (auto& s : resultkeys_) {
+	    join_->expand(s.mutable_udata(), d->key());
+	    if (notifier >= 0) {
+                jv.reset();
+                jv.accum(s, d->value_, true, true);
+                server.modify(jv.key(), jv);
+            } else
+		server.erase(s);
+	}
+    }
+}
+
+std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
+    stream << "{" << "[" << r.ibegin() << ", " << r.iend() << "): copy ->";
+    for (auto s : r.resultkeys_)
+        stream << " " << s;
+    return stream << "}";
+}
+
+
 inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
     : ibegin_len_(first.length()), iend_len_(last.length()),
       subtree_iend_(keys_ + ibegin_len_, iend_len_),
@@ -31,28 +88,6 @@ inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join
 ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join) {
     char* buf = new char[sizeof(ServerRange) + first.length() + last.length()];
     return new(buf) ServerRange(first, last, type, join);
-}
-
-void ServerRange::add_sink(const Match& m) {
-    assert(join_ && type_ == copy);
-    resultkeys_.push_back(String::make_uninitialized(join_->sink().key_length()));
-    join_->sink().expand(resultkeys_.back().mutable_udata(), m);
-}
-
-void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (type_ == copy && join_->back_source().match(d->key())) {
-        JoinValue jv(join_->jvt());
-	for (auto& s : resultkeys_) {
-	    join_->expand(s.mutable_udata(), d->key());
-	    if (notifier >= 0) {
-                jv.reset();
-                jv.accum(s, d->value_, true, true);
-                server.modify(jv.key(), jv);
-            } else
-		server.erase(s);
-	}
-    }
 }
 
 void ServerRange::validate(Str first, Str last, Server& server) {
@@ -122,12 +157,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
 
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     stream << "{" << "[" << r.ibegin() << ", " << r.iend() << ")";
-    if (r.type_ == ServerRange::copy) {
-	stream << ": copy ->";
-	for (auto s : r.resultkeys_)
-	    stream << " " << s;
-    }
-    else if (r.type_ == ServerRange::joinsink)
+    if (r.type_ == ServerRange::joinsink)
         stream << ": joinsink @" << (void*) r.join_;
     else if (r.type_ == ServerRange::validjoin) {
         stream << ": validjoin @" << (void*) r.join_ << ", expires: ";
@@ -231,13 +261,13 @@ const Table Table::empty_table{Str()};
 void Table::add_copy(Str first, Str last, Join* join, const Match& m) {
     for (auto it = source_ranges_.begin_contains(make_interval(first, last));
 	 it != source_ranges_.end(); ++it)
-	if (it->type() == ServerRange::copy && it->join() == join) {
+	if (it->join() == join) {
 	    // XXX may copy too much. This will not actually cause visible
 	    // bugs I think?, but will grow the store
 	    it->add_sink(m);
 	    return;
 	}
-    ServerRange* r = ServerRange::make(first, last, ServerRange::copy, join);
+    SourceRange* r = new SourceRange(first, last, join);
     r->add_sink(m);
     source_ranges_.insert(r);
 }
@@ -265,7 +295,7 @@ void Table::insert(const String& key, const String& value, Server& server) {
 	d = p.first.operator->();
         d->value_ = value;
     }
-    notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
+    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
 }
 
 void Server::erase(const String& key) {
@@ -280,8 +310,7 @@ void Server::erase(const String& key) {
 
         for (auto it = tit->source_ranges_.begin_contains(Str(key));
              it != tit->source_ranges_.end(); ++it)
-            if (it->type() == ServerRange::copy)
-                it->notify(d, ServerRange::notify_erase, *this);
+            it->notify(d, SourceRange::notify_erase, *this);
 
 	delete d;
     }
