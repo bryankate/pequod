@@ -296,12 +296,14 @@ void test_count() {
     server.insert("v|00000|00000", "vote 0");
     CHECK_EQ(size_t(1), server.count(begin, end));
     auto k0 = server.find("k|00000");
+    mandatory_assert(k0);
     CHECK_EQ("1", k0->value_);
 
     server.insert("v|00001|00000", "vote 0");
     server.insert("v|00003|00000", "vote 0");
     CHECK_EQ(size_t(2), server.count(begin, end));
     auto k1 = server.find("k|00001");
+    mandatory_assert(k1);
     CHECK_EQ("2", k0->value_);
     CHECK_EQ("1", k1->value_);
 }
@@ -331,8 +333,10 @@ void test_count_validate1() {
     server.validate(begin, end);
     CHECK_EQ(size_t(2), server.count(begin, end));
     auto k0 = server.find("k|00000");
+    mandatory_assert(k0);
     CHECK_EQ("2", k0->value_);
     auto k1 = server.find("k|00001");
+    mandatory_assert(k1);
     CHECK_EQ("1", k1->value_);
 }
 
@@ -359,6 +363,7 @@ void test_min() {
     server.insert("v|00000|00008", "v8");
     CHECK_EQ(size_t(1), server.count(begin, end));
     auto k0 = server.find("k|00000");
+    mandatory_assert(k0);
     CHECK_EQ("v8", k0->value_);
 
     server.insert("v|00000|00005", "v5");
@@ -393,6 +398,7 @@ void test_max() {
     server.insert("v|00000|00002", "v2");
     CHECK_EQ(size_t(1), server.count(begin, end));
     auto k0 = server.find("k|00000");
+    mandatory_assert(k0);
     CHECK_EQ("v2", k0->value_);
 
     server.insert("v|00000|00003", "v5");
