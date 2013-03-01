@@ -268,27 +268,9 @@ void Server::add_join(Str first, Str last, Join* join) {
 }
 
 void Server::insert(const String& key, const String& value, bool notify) {
-    Str tname = table_name(key);
-    if (!tname)
-        return;
-    Table& t = add_table(tname);
-
-    store_type::insert_commit_data cd;
-    auto p = t.store_.insert_check(key, DatumCompare(), cd);
-    Datum* d;
-    if (p.second) {
-       d = new Datum(key, value);
-       t.store_.insert_commit(*d, cd);
-    } else {
-       d = p.first.operator->();
-       d->value_ = value;
-    }
-
-    if (notify)
-       for (auto it = source_ranges_.begin_contains(Str(key));
-            it != source_ranges_.end(); ++it)
-           if (it->type() == ServerRange::copy)
-               it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
+    JoinValue jv(jvt_copy_last);
+    jv.update(key, value, true, true);
+    insert(jv, notify);
 }
 
 void Server::insert(JoinValue &jv, bool notify) {
