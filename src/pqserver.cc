@@ -101,8 +101,13 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
                 // this insert is simple (no notifies)
                 if (jv.copy_last())
                     server.insert(Str(kf, kflen), it->value_);
-                else
+                else {
+                    if (jv.has_value() && jv.key() != Str(kf, kflen)) {
+                        server.modify(jv.key(), jv);
+                        jv.reset();
+                    }
                     jv.update(Str(kf, kflen), it->value_, false, true);
+                }
             } else {
                 join_->source(joinpos).match(it->key(), mf);
                 join_->source(joinpos).match(it->key(), ml);
