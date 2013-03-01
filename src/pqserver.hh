@@ -69,10 +69,9 @@ struct DatumDispose {
 };
 
 struct JoinValue {
-    JoinValue(JoinValueType jvt) : jvt_(jvt), has_value_(false) {
+    JoinValue(JoinValueType jvt) : jvt_(jvt) {
     }
     void reset() {
-        has_value_ = false;
         string_value_.reset();
         key_.reset();
     }
@@ -109,15 +108,15 @@ struct JoinValue {
             string_value_.update(v, value_safe);
             break;
         case jvt_min_last:
-            if (unlikely(!has_value_) || v < string_value_.ref_)
+            if (unlikely(!has_value()) || v < string_value_.ref_)
                 string_value_.update(v, value_safe);
             break;
         case jvt_max_last:
-            if (unlikely(!has_value_) || v > string_value_.ref_)
+            if (unlikely(!has_value()) || v > string_value_.ref_)
                 string_value_.update(v, value_safe);
             break;
         case jvt_count_match:
-            if (unlikely(!has_value_))
+            if (unlikely(!has_value()))
                 int_value_ = 1;
             else
                 ++int_value_;
@@ -125,13 +124,11 @@ struct JoinValue {
         default:
             mandatory_assert(0, "bad JoinValueType");
         }
-        if (unlikely(!has_value_)) {
+        if (unlikely(!has_value()))
             key_.update(key, key_safe);
-            has_value_ = true;
-        }
     }
     bool has_value() const {
-        return has_value_;
+        return !!key_;
     }
     const Str &key() const {
         return key_.ref_;
@@ -161,7 +158,6 @@ struct JoinValue {
         }
     };
     JoinValueType jvt_;
-    bool has_value_;
     int64_t int_value_;
     safe_string key_;
     safe_string string_value_;
