@@ -74,13 +74,13 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
             }
 	    Str name(name0, s);
             if (*s != ':' && slotmap.get(name) == -1) {
-                printf("assign_parse(): No length description for %s\n", name);
+                std::cout << "assign_parse(): No length description for " << name << std::endl;
 		return false;
             }
 	    // parse name description
 	    int len = 0;
 	    if (*s == ':' && (s + 1 == str.uend() || !isdigit(s[1]))) {
-                printf("assign_parse(): Malformed length description\n");
+                std::cout << "assign_parse(): Malformed length description\n";
 		return false;
             }
 	    else if (*s == ':') {
@@ -89,7 +89,7 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 		    len = 10 * len + *s - '0';
 	    }
 	    if (s == str.uend() || *s != '>') {
-                printf("assign_parse(): Bad end\n");
+                std::cout << "assign_parse(): Bad end\n";
 		return false;
             }
 	    ++s;
@@ -97,7 +97,7 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 	    int slot = slotmap.get(name);
 	    if (slot == -1) {
 		if (len == 0 || slotmap.size() == slot_capacity) {
-                    printf("assign_parse(): Reached capacity %d\n", slot_capacity);
+                    std::cout << "assign_parse(): Reached capacity " << slot_capacity << std::endl;
 		    return false;
                 }
 		slot = len + 256 * slotmap.size();
