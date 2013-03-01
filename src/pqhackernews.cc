@@ -10,39 +10,31 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       narticles_(0) {
 }
 
-void HackernewsPopulator::create_data() {
-    boost::mt19937 gen;
-    gen.seed(13918);
-    boost::random_number_generator<boost::mt19937> rng(gen);
-    for (uint32_t i = 0; i < articles_.size(); ++i) {
-        const uint32_t u = rng(nusers_);
-        const uint32_t aid = next_aid();
-        post_article(u, aid);
-    }
-}
-
 void HackernewsRunner::populate() {
     boost::mt19937 gen;
     gen.seed(13918);
     boost::random_number_generator<boost::mt19937> rng(gen);
-    hp_.create_data();
     char buf[128];
     uint32_t nv = 0;
-
+    uint32_t nc = 0;
+    
     // author:aid, 0, author
-    for (uint32_t aid = 0; aid < hp_.narticles(); aid++) {
-        auto &art = hp_.articles()[aid];
-        sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, art.first, 0);
+    for (uint32_t aid = 0; aid < hp_.articles().size(); aid++) {
+        const uint32_t author = rng(hp_.nusers());
+        hp_.post_article(author, aid);
+
+        sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, 0, author);
         server_.insert(Str(buf, 24), Str("lalalalala", 10));
         if (hp_.log()) {
             printf("article %.24s\n", buf);
         }
 
         // author:aid, j, commenter
-        const uint32_t ncomment = rng(50);
+        const uint32_t ncomment = rng(10);
         for (uint32_t j = 1; j <= ncomment; ++j) {
+            nc++;
             const uint32_t commentor = rng(hp_.nusers());
-            sprintf(buf, "a|%05d%05d|%05d|%05d", art.first, aid, commentor, j);
+            sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, j, commentor);
             server_.insert(Str(buf, 25), Str("lalalalala", 10));
             if (hp_.log()) {
                 printf("  %.24s\n", buf);
@@ -51,26 +43,32 @@ void HackernewsRunner::populate() {
 
         // author:aid, voter.  Need 0 to only join on a| keys which
         // are articles, not comments?
-        const uint32_t nvote = rng(50);
+        const uint32_t nvote = rng(10);
         for (uint32_t j = 0; j < nvote; ++j) {
-            nv++;
-            hp_.vote(aid); // karma
             const uint32_t voter = rng(hp_.nusers());
-            sprintf(buf, "v|%05d%05d|%05d", art.first, aid, voter);
-            server_.insert(Str(buf, 13), Str("1", 1));
-            if (hp_.log()) {
-                printf("vote %.24s\n", buf);
+            if (hp_.vote(aid, voter)) {
+                nv++;
+                sprintf(buf, "v|%05d%05d|%05d|%05d", author, aid, 0, voter);
+                server_.insert(Str(buf, 24), Str("1", 1));
+                if (hp_.log()) {
+                    printf("vote %.24s\n", buf);
+                }
             }
         }
     }
+    hp_.set_narticles(hp_.articles().size());
     pq::Join* j = new pq::Join;
-    bool valid = j->assign_parse("k|<author:5>|<aid:10>|<voter:5> "
-                                 "a|<aid>|<author>|<idx:5> "
-                                 "v|<aid>|<voter>");
+    //    bool valid = j->assign_parse("k|<author:5>|<aid:10>|<voter:5> "
+    //                                 "a|<aid>|<idx:5>|<author:5> "
+    //                                 "v|<aid>|<voter>");
+    bool valid = j->assign_parse("k|<author:5> "
+                                 "a|<aid:10>|00000|<author> "
+                                 "v|<aid>|00000|<voter:5>");
     mandatory_assert(valid && "Invalid join");
+    j->set_jvt(jvt_count_match);
     server_.add_join("k|", "k}", j);
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
-              << " articles, " << nv << " votes."<< std::endl;
+              << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
 }
 
 void HackernewsRunner::run() {
@@ -81,13 +79,13 @@ void HackernewsRunner::run() {
     const uint32_t nusers = hp_.nusers();
 
     char buf1[128], buf2[128];
-    sprintf(buf1, "k|%05d|", 0);
-    sprintf(buf2, "k|%05d}", 99999);
-    server_.validate(Str(buf1, 8), Str(buf2, 8));
+    sprintf(buf1, "k|");
+    sprintf(buf2, "k}");
+    server_.validate(Str(buf1, 2), Str(buf2, 2));
 
     std::cout << ": scan [" << buf1 << "," << buf2 << ")\n";
-    auto bit = server_.lower_bound(Str(buf1, 8)),
-        eit = server_.lower_bound(Str(buf2, 8));
+    auto bit = server_.lower_bound(Str(buf1, 2)),
+        eit = server_.lower_bound(Str(buf2, 2));
     for (; bit != eit; ++bit)
         std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
 

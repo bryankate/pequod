@@ -289,6 +289,7 @@ void test_count() {
     String end("k}");
     server.insert("a|00000|00000", "article 0");
     server.insert("a|00000|00001", "article 1");
+    server.insert("a|00001|00003", "article 2");
     server.validate(begin, end);
     CHECK_EQ(size_t(0), server.count(begin, end));
 
@@ -298,8 +299,11 @@ void test_count() {
     CHECK_EQ("1", k0->value_);
 
     server.insert("v|00001|00000", "vote 0");
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    server.insert("v|00003|00000", "vote 0");
+    CHECK_EQ(size_t(2), server.count(begin, end));
+    auto k1 = server.find("k|00001");
     CHECK_EQ("2", k0->value_);
+    CHECK_EQ("1", k1->value_);
 }
 
 // One Server::validate produces multiple grouped keys
