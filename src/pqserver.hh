@@ -77,21 +77,25 @@ struct JoinValue {
     bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    void apply_to(String &v) const {
+    void operator()(Datum* d, bool insert, Server&) {
+        if (insert) {
+            d->value_ = value();
+            return;
+        }
         switch (jvt_) {
         case jvt_copy_last:
-            v = string_value_;
+            d->value_ = string_value_;
             break;
         case jvt_min_last:
-            if (v > string_value_)
-                v = string_value_;
+            if (d->value_ > string_value_)
+                d->value_ = string_value_;
             break;
         case jvt_max_last:
-            if (v < string_value_)
-                v = string_value_;
+            if (d->value_ < string_value_)
+                d->value_ = string_value_;
             break;
         case jvt_count_match:
-            v = String(int_value_ + atoi(v.c_str()));
+            d->value_ = String(int_value_ + atoi(d->value_.c_str()));
             break;
         default:
             mandatory_assert(0, "bad JoinValueType");
@@ -293,7 +297,6 @@ class Server {
     inline void insert(const String& key, const String& value);
     template <typename F>
     inline void modify(const String& key, F& func);
-    void insert(JoinValue &jv);
     void erase(const String& key);
 
 #if 0

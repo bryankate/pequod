@@ -48,7 +48,7 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 	    if (notifier >= 0) {
                 jv.reset();
                 jv.update(s, d->value_, true, true);
-                server.insert(jv);
+                server.modify(jv.key(), jv);
             } else
 		server.erase(s);
 	}
@@ -63,7 +63,7 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         JoinValue jv(join_->jvt());
         validate(mf, ml, 0, server, jv);
         if (jv.has_value())
-            server.insert(jv);
+            server.modify(jv.key(), jv);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
@@ -286,29 +286,6 @@ void Table::insert(const String& key, const String& value, Server& server) {
         d->value_ = value;
     }
     notify_insert(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, server);
-}
-
-void Server::insert(JoinValue &jv) {
-    Str tname = table_name(jv.key());
-    if (!tname)
-        return;
-    Table& t = make_table(tname);
-
-    store_type::insert_commit_data cd;
-    auto p = t.store_.insert_check(jv.key(), DatumCompare(), cd);
-    Datum* d;
-    if (p.second) {
-	d = new Datum(jv.key(), jv.value());
-	t.store_.insert_commit(*d, cd);
-    } else {
-	d = p.first.operator->();
-        jv.apply_to(d->value_);
-    }
-
-    for (auto it = t.source_ranges_.begin_contains(Str(jv.key()));
-         it != t.source_ranges_.end(); ++it)
-        if (it->type() == ServerRange::copy)
-            it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
 
 void Server::erase(const String& key) {
