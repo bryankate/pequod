@@ -41,17 +41,16 @@ void HackernewsRunner::populate() {
             }
         }
 
-        // author:aid, voter.  Need 0 to only join on a| keys which
-        // are articles, not comments?
+        // author:aid, voter.
         const uint32_t nvote = rng(10);
         for (uint32_t j = 0; j < nvote; ++j) {
             const uint32_t voter = rng(hp_.nusers());
             if (hp_.vote(aid, voter)) {
                 nv++;
-                sprintf(buf, "v|%05d%05d|%05d|%05d", author, aid, 0, voter);
-                server_.insert(Str(buf, 24), Str("1", 1));
+                sprintf(buf, "v|%05d%05d|%05d", author, aid, voter);
+                server_.insert(Str(buf, 18), Str("1", 1));
                 if (hp_.log()) {
-                    printf("vote %.24s\n", buf);
+                    printf("vote %.18s\n", buf);
                 }
             }
         }
@@ -63,7 +62,7 @@ void HackernewsRunner::populate() {
     //                                 "v|<aid>|<voter>");
     bool valid = j->assign_parse("k|<author:5> "
                                  "a|<aid:10>|00000|<author> "
-                                 "v|<aid>|00000|<voter:5>");
+                                 "v|<aid>|<voter:5>");
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
     server_.add_join("k|", "k}", j);
