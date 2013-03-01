@@ -98,8 +98,10 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
                 kflen = join_->sink().expand_first(kf, mk);
                 // XXX PERFORMANCE can prob figure out ahead of time whether
                 // this insert is simple (no notifies)
-                if (!jv_.update(Str(kf, kflen), it->value_, false, true))
+                if (jv_.copy_last())
                     server.insert(Str(kf, kflen), it->value_, join_->recursive());
+                else
+                    jv_.update(Str(kf, kflen), it->value_, false, true);
             } else {
                 join_->source(joinpos).match(it->key(), mf);
                 join_->source(joinpos).match(it->key(), ml);
@@ -275,18 +277,18 @@ void Server::insert(const String& key, const String& value, bool notify) {
     auto p = t.store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
-	d = new Datum(key, value);
-	t.store_.insert_commit(*d, cd);
+       d = new Datum(key, value);
+       t.store_.insert_commit(*d, cd);
     } else {
-	d = p.first.operator->();
-	d->value_ = value;
+       d = p.first.operator->();
+       d->value_ = value;
     }
 
     if (notify)
-	for (auto it = source_ranges_.begin_contains(Str(key));
-	     it != source_ranges_.end(); ++it)
-	    if (it->type() == ServerRange::copy)
-		it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
+       for (auto it = source_ranges_.begin_contains(Str(key));
+            it != source_ranges_.end(); ++it)
+           if (it->type() == ServerRange::copy)
+               it->notify(d, p.second ? ServerRange::notify_insert : ServerRange::notify_update, *this);
 }
 
 void Server::insert(JoinValue &jv, bool notify) {

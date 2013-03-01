@@ -74,8 +74,14 @@ struct JoinValue {
     void reset() {
         has_value_ = false;
     }
+    bool copy_last() const {
+        return jvt_ == jvt_copy_last;
+    }
     void apply_to(String &v) const {
         switch (jvt_) {
+        case jvt_copy_last:
+            v = string_value_;
+            break;
         case jvt_min_last:
             if (v > string_value_)
                 v = string_value_;
@@ -94,7 +100,8 @@ struct JoinValue {
     bool update(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
         case jvt_copy_last:
-            return false;
+            update_string_value(v, value_safe);
+            break;
         case jvt_min_last:
             if (unlikely(!has_value_) || v < string_value_)
                 update_string_value(v, value_safe);
