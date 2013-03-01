@@ -183,7 +183,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    void notify(const Datum* d, int notifier, Server& server) const;
+    virtual void notify(const Datum* d, int notifier, Server& server) const = 0;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -193,11 +193,30 @@ class SourceRange {
     Str subtree_iend_;
   public:
     rblinks<SourceRange> rblinks_;
-  private:
+  protected:
     Join* join_;
     // XXX?????    uint64_t expires_at_;
     mutable local_vector<String, 4> resultkeys_;
+  private:
     char buf_[32];
+};
+
+class CopySourceRange : public SourceRange {
+  public:
+    CopySourceRange(Str ibegin, Str iend, Join* join);
+    virtual void notify(const Datum* d, int notifier, Server& server) const;
+};
+
+class CountSourceRange : public SourceRange {
+  public:
+    CountSourceRange(Str ibegin, Str iend, Join* join);
+    virtual void notify(const Datum* d, int notifier, Server& server) const;
+};
+
+class JVSourceRange : public SourceRange {
+  public:
+    JVSourceRange(Str ibegin, Str iend, Join* join);
+    virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
 class ServerRange {
@@ -322,6 +341,8 @@ class Server {
     inline void insert(const String& key, const String& value);
     template <typename F>
     inline void modify(const String& key, F& func);
+    template <typename F>
+    inline void modify(const String& key, const F& func);
     void erase(const String& key);
 
 #if 0
@@ -508,6 +529,12 @@ template <typename F>
 inline void Server::modify(const String& key, F& func) {
     if (Str tname = table_name(key))
         make_table(tname).modify(key, func, *this);
+}
+
+template <typename F>
+inline void Server::modify(const String& key, const F& func) {
+    F func_copy(func);
+    modify(key, func_copy);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {

@@ -49,7 +49,44 @@ void SourceRange::add_sink(const Match& m) {
     join_->sink().expand(resultkeys_.back().mutable_udata(), m);
 }
 
-void SourceRange::notify(const Datum* d, int notifier, Server& server) const {
+
+CopySourceRange::CopySourceRange(Str ibegin, Str iend, Join* join)
+    : SourceRange(ibegin, iend, join) {
+}
+
+void CopySourceRange::notify(const Datum* d, int notifier, Server& server) const {
+    // XXX PERFORMANCE the match() is often not necessary
+    if (join_->back_source().match(d->key()))
+	for (auto& s : resultkeys_) {
+	    join_->expand(s.mutable_udata(), d->key());
+	    if (notifier >= 0)
+                server.insert(s, d->value());
+            else
+		server.erase(s);
+	}
+}
+
+CountSourceRange::CountSourceRange(Str ibegin, Str iend, Join* join)
+    : SourceRange(ibegin, iend, join) {
+}
+
+void CountSourceRange::notify(const Datum* d, int notifier, Server& server) const {
+    assert(notifier >= -1 && notifier <= 1);
+    // XXX PERFORMANCE the match() is often not necessary
+    if (notifier && join_->back_source().match(d->key())) {
+        for (auto& s : resultkeys_)
+            server.modify(s, [=](Datum* d, bool insert, Server&) {
+                    d->value_ = String(notifier
+                                       + (insert ? 0 : d->value_.to_i()));
+                });
+    }
+}
+
+JVSourceRange::JVSourceRange(Str ibegin, Str iend, Join* join)
+    : SourceRange(ibegin, iend, join) {
+}
+
+void JVSourceRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(d->key())) {
         JoinValue jv(join_->jvt());
@@ -267,7 +304,13 @@ void Table::add_copy(Str first, Str last, Join* join, const Match& m) {
 	    it->add_sink(m);
 	    return;
 	}
-    SourceRange* r = new SourceRange(first, last, join);
+    SourceRange* r;
+    if (join->jvt() == jvt_copy_last)
+        r = new CopySourceRange(first, last, join);
+    else if (join->jvt() == jvt_count_match)
+        r = new CountSourceRange(first, last, join);
+    else
+        r = new JVSourceRange(first, last, join);
     r->add_sink(m);
     source_ranges_.insert(r);
 }
