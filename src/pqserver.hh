@@ -168,7 +168,7 @@ typedef bi::set<Datum> ServerStore;
 class ServerRange {
   public:
     enum range_type {
-        copy = 1, joinsink = 2, validjoin = 4, joinsource = 8
+        copy = 1, joinsink = 2, validjoin = 4
     };
     static ServerRange* make(Str first, Str last, range_type type, Join *join = 0);
 
@@ -315,7 +315,6 @@ class Server {
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
     interval_tree<ServerRange> sink_ranges_;
-    interval_tree<ServerRange> join_ranges_;
     friend class const_iterator;
 };
 
