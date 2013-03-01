@@ -47,7 +47,7 @@ void ServerRange::notify(const Datum* d, int notifier, Server& server) const {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0) {
                 jv.reset();
-                jv.update(s, d->value_, true, true);
+                jv.accum(s, d->value_, true, true);
                 server.modify(jv.key(), jv);
             } else
 		server.erase(s);
@@ -106,7 +106,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
                         server.modify(jv.key(), jv);
                         jv.reset();
                     }
-                    jv.update(Str(kf, kflen), it->value_, false, true);
+                    jv.accum(Str(kf, kflen), it->value_, false, true);
                 }
             } else {
                 join_->source(joinpos).match(it->key(), mf);
