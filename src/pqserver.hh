@@ -69,16 +69,16 @@ struct DatumDispose {
 };
 
 struct JoinValue {
-    JoinValue(JoinValueType jvt) : jvt_(jvt) {
+    inline JoinValue(JoinValueType jvt) : jvt_(jvt) {
     }
-    void reset() {
+    inline void reset() {
         string_value_.reset();
         key_.reset();
     }
-    bool copy_last() const {
+    inline bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    void operator()(Datum* d, bool insert, Server&) {
+    inline void operator()(Datum* d, bool insert, Server&) {
         if (insert) {
             d->value_ = value();
             return;
@@ -102,7 +102,7 @@ struct JoinValue {
             mandatory_assert(0, "bad JoinValueType");
         }
     }
-    void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
+    inline void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
         case jvt_copy_last:
             string_value_.update(v, value_safe);
@@ -127,13 +127,13 @@ struct JoinValue {
         if (unlikely(!has_value()))
             key_.update(key, key_safe);
     }
-    bool has_value() const {
+    inline bool has_value() const {
         return !!key_;
     }
-    const Str &key() const {
+    inline const Str &key() const {
         return key_.ref_;
     }
-    const Str &value() {
+    inline const Str &value() {
         if (jvt_ == jvt_count_match && !string_value_)
             string_value_.update(String(int_value_), false);
         return string_value_.ref_;
@@ -142,7 +142,7 @@ struct JoinValue {
     struct safe_string {
         Str ref_;
         String buffer_;
-        void update(const Str v, bool safe) {
+        inline void update(const Str v, bool safe) {
             if (safe)
                 ref_ = v;
             else {
@@ -150,10 +150,10 @@ struct JoinValue {
                 ref_.assign(buffer_);
             }
         }
-        void reset() {
+        inline void reset() {
             ref_.assign(NULL, 0);
         }
-        bool operator!() const {
+        inline bool operator!() const {
             return ref_.s == NULL;
         }
     };
