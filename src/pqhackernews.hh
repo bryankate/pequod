@@ -22,10 +22,10 @@ class HackernewsPopulator {
     inline void set_nusers(uint32_t);
     inline uint32_t nusers() const;
     inline uint32_t narticles() const;
+    inline void set_narticles(uint32_t n);
     inline uint32_t karma(uint32_t author) const;
     inline bool log() const;
 
-    void create_data();
     inline const std::vector<std::pair<uint32_t, uint32_t> >& articles() const;
 
   private:
@@ -33,7 +33,6 @@ class HackernewsPopulator {
     // article -> <author, ncomment>
     std::vector<std::pair<uint32_t, uint32_t> > articles_;
     // author -> karma
-    size_t next_aid_;
     uint32_t nusers_;
     std::vector<uint32_t> karma_;
     uint32_t narticles_;
@@ -56,10 +55,6 @@ class HackernewsRunner {
 inline uint32_t HackernewsPopulator::nusers() const {
     return nusers_;
 }
-
-inline void HackernewsPopulator::set_nusers(uint32_t n) {
-    nusers_ = n;
-}
     
 inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article) {
     articles_[article].first = author;
@@ -77,6 +72,10 @@ inline uint32_t HackernewsPopulator::next_aid() {
 
 inline uint32_t HackernewsPopulator::narticles() const {
     return narticles_;
+}
+
+inline void HackernewsPopulator::set_narticles(uint32_t n) {
+    narticles_ = n;
 }
 
 inline const std::vector<std::pair<uint32_t, uint32_t> >& HackernewsPopulator::articles() const {
