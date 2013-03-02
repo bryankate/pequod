@@ -16,8 +16,9 @@ namespace pq {
 
 // XXX check circular expansion
 
-SourceRange::SourceRange(Str ibegin, Str iend, Join* join)
+SourceRange::SourceRange(Str ibegin, Str iend, Join* join, const Match& m)
     : join_(join) {
+    assert(table_name(ibegin, iend));
     char* s = buf_;
     char* ends = buf_ + sizeof(buf_);
 
@@ -35,6 +36,10 @@ SourceRange::SourceRange(Str ibegin, Str iend, Join* join)
     memcpy(iend_.mutable_data(), iend.data(), iend.length());
 
     subtree_iend_ = iend_;
+
+    String str = String::make_uninitialized(join_->sink().key_length());
+    join_->sink().expand(str.mutable_udata(), m);
+    resultkeys_.push_back(std::move(str));
 }
 
 SourceRange::~SourceRange() {
@@ -44,15 +49,21 @@ SourceRange::~SourceRange() {
         delete[] iend_.mutable_data();
 }
 
-void SourceRange::add_sink(const Match& m) {
-    resultkeys_.push_back(String::make_uninitialized(join_->sink().key_length()));
-    join_->sink().expand(resultkeys_.back().mutable_udata(), m);
+void SourceRange::add_sinks(const SourceRange& r) {
+    assert(join() == r.join());
+    for (auto rk : r.resultkeys_)
+        resultkeys_.push_back(rk);
 }
 
-
-CopySourceRange::CopySourceRange(Str ibegin, Str iend, Join* join)
-    : SourceRange(ibegin, iend, join) {
+SourceRange* SourceRange::make(Str ibegin, Str iend, Join* join, const Match& m) {
+    if (join->jvt() == jvt_copy_last)
+        return new CopySourceRange(ibegin, iend, join, m);
+    else if (join->jvt() == jvt_count_match)
+        return new CountSourceRange(ibegin, iend, join, m);
+    else
+        return new JVSourceRange(ibegin, iend, join, m);
 }
+
 
 void CopySourceRange::notify(const Datum* d, int notifier, Server& server) const {
     // XXX PERFORMANCE the match() is often not necessary
@@ -66,10 +77,6 @@ void CopySourceRange::notify(const Datum* d, int notifier, Server& server) const
 	}
 }
 
-CountSourceRange::CountSourceRange(Str ibegin, Str iend, Join* join)
-    : SourceRange(ibegin, iend, join) {
-}
-
 void CountSourceRange::notify(const Datum* d, int notifier, Server& server) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
@@ -80,10 +87,6 @@ void CountSourceRange::notify(const Datum* d, int notifier, Server& server) cons
                                        + (insert ? 0 : d->value_.to_i()));
                 });
     }
-}
-
-JVSourceRange::JVSourceRange(Str ibegin, Str iend, Join* join)
-    : SourceRange(ibegin, iend, join) {
 }
 
 void JVSourceRange::notify(const Datum* d, int notifier, Server& server) const {
@@ -132,16 +135,13 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        JoinValue jv(join_->jvt());
-        validate(mf, ml, 0, server, jv);
-        if (jv.has_value())
-            server.modify(jv.key(), jv);
+        validate(mf, ml, 0, server);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv) {
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     uint8_t kf[128], kl[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -151,8 +151,9 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
     // XXX PERFORMANCE this is not always necessary
     server.validate(Str(kf, kflen), Str(kl, kllen));
 
-    if (join_->maintained() && joinpos + 1 == join_->nsource())
-        server.add_copy(Str(kf, kflen), Str(kl, kllen), join_, mf);
+    SourceRange* r = 0;
+    if (joinpos + 1 == join_->nsource())
+        r = SourceRange::make(Str(kf, kflen), Str(kl, kllen), join_, mf);
 
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
@@ -166,29 +167,23 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Jo
             continue;
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
-        if (join_->source(joinpos).match(it->key(), mk)) {
-            if (joinpos + 1 == join_->nsource()) {
-                kflen = join_->sink().expand_first(kf, mk);
-                // XXX PERFORMANCE can prob figure out ahead of time whether
-                // this insert is simple (no notifies)
-                if (jv.copy_last())
-                    server.insert(Str(kf, kflen), it->value_);
-                else {
-                    if (jv.has_value() && jv.key() != Str(kf, kflen)) {
-                        server.modify(jv.key(), jv);
-                        jv.reset();
-                    }
-                    jv.accum(Str(kf, kflen), it->value_, false, true);
-                }
-            } else {
-                join_->source(joinpos).match(it->key(), mf);
-                join_->source(joinpos).match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server, jv);
-                mf.restore(mfstate);
-                ml.restore(mlstate);
-            }
+        if (r)
+            r->notify(it.operator->(), SourceRange::notify_insert, server);
+        else if (join_->source(joinpos).match(it->key(), mk)) {
+            join_->source(joinpos).match(it->key(), mf);
+            join_->source(joinpos).match(it->key(), ml);
+            validate(mf, ml, joinpos + 1, server);
+            mf.restore(mfstate);
+            ml.restore(mlstate);
         }
         mk.restore(mkstate);
+    }
+
+    if (r) {
+        if (join_->maintained())
+            server.add_copy(r);
+        else
+            delete r;
     }
 }
 
@@ -295,30 +290,23 @@ Table::Table(Str name)
 
 const Table Table::empty_table{Str()};
 
-void Table::add_copy(Str first, Str last, Join* join, const Match& m) {
-    for (auto it = source_ranges_.begin_contains(make_interval(first, last));
+void Table::add_copy(SourceRange* r) {
+    for (auto it = source_ranges_.begin_contains(r->interval());
 	 it != source_ranges_.end(); ++it)
-	if (it->join() == join) {
+	if (it->join() == r->join()) {
 	    // XXX may copy too much. This will not actually cause visible
 	    // bugs I think?, but will grow the store
-	    it->add_sink(m);
+	    it->add_sinks(*r);
+            delete r;
 	    return;
 	}
-    SourceRange* r;
-    if (join->jvt() == jvt_copy_last)
-        r = new CopySourceRange(first, last, join);
-    else if (join->jvt() == jvt_count_match)
-        r = new CountSourceRange(first, last, join);
-    else
-        r = new JVSourceRange(first, last, join);
-    r->add_sink(m);
     source_ranges_.insert(r);
 }
 
-void Server::add_copy(Str first, Str last, Join* join, const Match& m) {
-    Str t = table_name(first, last);
+void Server::add_copy(SourceRange* r) {
+    Str t = table_name(r->ibegin());
     assert(t);
-    make_table(t).add_copy(first, last, join, m);
+    make_table(t).add_copy(r);
 }
 
 void Server::add_join(Str first, Str last, Join* join) {

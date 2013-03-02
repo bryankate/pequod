@@ -167,8 +167,10 @@ typedef bi::set<Datum> ServerStore;
 
 class SourceRange {
   public:
-    SourceRange(Str ibegin, Str iend, Join* join);
+    SourceRange(Str ibegin, Str iend, Join* join, const Match& m);
     virtual ~SourceRange();
+
+    static SourceRange* make(Str ibegin, Str iend, Join* join, const Match& m);
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
@@ -178,7 +180,7 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline Join* join() const;
-    void add_sink(const Match& m);
+    void add_sinks(const SourceRange& r);
 
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
@@ -203,19 +205,19 @@ class SourceRange {
 
 class CopySourceRange : public SourceRange {
   public:
-    CopySourceRange(Str ibegin, Str iend, Join* join);
+    inline CopySourceRange(Str ibegin, Str iend, Join* join, const Match& m);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
 class CountSourceRange : public SourceRange {
   public:
-    CountSourceRange(Str ibegin, Str iend, Join* join);
+    inline CountSourceRange(Str ibegin, Str iend, Join* join, const Match& m);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
 class JVSourceRange : public SourceRange {
   public:
-    JVSourceRange(Str ibegin, Str iend, Join* join);
+    inline JVSourceRange(Str ibegin, Str iend, Join* join, const Match& m);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
@@ -256,7 +258,7 @@ class ServerRange {
 
     inline ServerRange(Str first, Str last, range_type type, Join* join);
     ~ServerRange() = default;
-    void validate(Match& mf, Match& ml, int joinpos, Server& server, JoinValue &jv);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server);
 };
 
 class ServerRangeSet {
@@ -302,7 +304,7 @@ class Table : public pequod_set_base_hook {
     inline const_iterator begin() const;
     inline const_iterator end() const;
 
-    void add_copy(Str first, Str last, Join* join, const Match& m);
+    void add_copy(SourceRange* r);
 
     void insert(const String& key, const String& value, Server& server);
     template <typename F>
@@ -350,7 +352,7 @@ class Server {
     void replace_range(Str first, Str last, I first_value, I last_value);
 #endif
 
-    void add_copy(Str first, Str last, Join* j, const Match& m);
+    void add_copy(SourceRange* r);
     void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
@@ -451,6 +453,21 @@ inline Str SourceRange::subtree_iend() const {
 
 inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
+}
+
+inline CopySourceRange::CopySourceRange(Str ibegin, Str iend, Join* join,
+                                        const Match& m)
+    : SourceRange(ibegin, iend, join, m) {
+}
+
+inline CountSourceRange::CountSourceRange(Str ibegin, Str iend, Join* join,
+                                          const Match& m)
+    : SourceRange(ibegin, iend, join, m) {
+}
+
+inline JVSourceRange::JVSourceRange(Str ibegin, Str iend, Join* join,
+                                    const Match& m)
+    : SourceRange(ibegin, iend, join, m) {
 }
 
 inline Str ServerRange::ibegin() const {
