@@ -142,6 +142,7 @@ class rbtree {
 
     inline node_type *root();
 
+    inline bool empty() const;
     inline size_t size() const;
 
     typedef rbiterator<T> iterator;
@@ -560,6 +561,11 @@ template <typename T>
 size_t rbnodeptr<T>::size() const {
     return 1 + (child(false) ? child(false).size() : 0)
 	+ (child(true) ? child(true).size() : 0);
+}
+
+template <typename T, typename C, typename R>
+inline bool rbtree<T, C, R>::empty() const {
+    return !r_.root_;
 }
 
 template <typename T, typename C, typename R>
