@@ -372,8 +372,14 @@ Json Server::stats() const {
 
 void Server::print(std::ostream& stream) {
     stream << "sources:" << std::endl;
+    bool any = false;
     for (auto& t : tables_by_name_)
-        stream << t.source_ranges_;
+        if (!t.source_ranges_.empty()) {
+            stream << t.source_ranges_;
+            any = true;
+        }
+    if (!any)
+        stream << "<empty>\n";
     stream << "sinks:" << std::endl << sink_ranges_;
 }
 
