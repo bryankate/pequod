@@ -38,9 +38,9 @@ SourceRange::SourceRange(Str ibegin, Str iend, Join* join)
 }
 
 SourceRange::~SourceRange() {
-    if (ibegin_.data() >= buf_ && ibegin_.data() < buf_ + sizeof(buf_))
+    if (ibegin_.data() < buf_ || ibegin_.data() >= buf_ + sizeof(buf_))
         delete[] ibegin_.mutable_data();
-    if (iend_.data() >= buf_ && iend_.data() < buf_ + sizeof(buf_))
+    if (iend_.data() < buf_ || iend_.data() >= buf_ + sizeof(buf_))
         delete[] iend_.mutable_data();
 }
 
