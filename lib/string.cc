@@ -251,7 +251,7 @@ long String_generic::to_i(const char* s, const char* ends) {
         neg = false;
     if (s == ends || !isdigit((unsigned char) *s))
         return 0;
-    unsigned long x = (unsigned char) *s - '0', y;
+    unsigned long x = (unsigned char) *s - '0';
     for (++s; s != ends && isdigit((unsigned char) *s); ++s)
         x = x * 10 + *s - '0';  // XXX overflow
     return neg ? -x : x;
