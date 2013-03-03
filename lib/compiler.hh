@@ -921,6 +921,12 @@ template <> struct make_signed<unsigned long long> : public type_synonym<long lo
 
 
 template <typename T>
+typename mass::make_unsigned<T>::type to_unsigned(T x) {
+    return static_cast<typename mass::make_unsigned<T>::type>(x);
+}
+
+
+template <typename T>
 struct has_fast_int_multiply : public mass::false_type {
     // enum { check_t_integral = mass::integer_traits<T>::is_signed };
 };
