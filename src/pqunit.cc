@@ -340,6 +340,48 @@ void test_count_validate1() {
     CHECK_EQ("1", k1->value_);
 }
 
+void test_karma() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(2, j1.nsource());
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    int nuser = 10000;
+    int nvotes_per_aid = 1000;
+    String aid;
+    char buf[20];
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "a|%05d|%05d", i, i);
+        server.insert(String(buf), "article");
+        for (int j = 0; j < nvotes_per_aid; ++j) {
+            sprintf(buf, "v|%05d|%05d", i, j + 1);
+            server.insert(String(buf), "vote");
+        }
+    }
+    struct rusage ru[2];
+    getrusage(RUSAGE_SELF, &ru[0]);
+    server.validate(begin, end);
+    getrusage(RUSAGE_SELF, &ru[1]);
+
+    CHECK_EQ(size_t(nuser), server.count(begin, end));
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "k|%05d", i);
+        auto k0 = server.find(String(buf));
+        mandatory_assert(k0);
+        CHECK_EQ(String(nvotes_per_aid), k0->value_);
+    }
+    Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+}
+
 void test_min() {
     pq::Server server;
     pq::Join j1;
@@ -428,6 +470,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_count_validate1);
     ADD_TEST(test_min);
     ADD_TEST(test_max);
+    ADD_TEST(test_karma);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
