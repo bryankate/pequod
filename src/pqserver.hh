@@ -79,7 +79,7 @@ struct JoinValue {
     inline bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    inline void operator()(Datum* d, bool insert, Server&) {
+    inline void operator()(Datum* d, bool insert) {
         if (insert) {
             d->value_ = value();
             return;
@@ -188,7 +188,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* d, int notifier, Server& server) const = 0;
+    virtual void notify(const Datum* d, int notifier) const = 0;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -211,21 +211,21 @@ class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend);
-    virtual void notify(const Datum* d, int notifier, Server& server) const;
+    virtual void notify(const Datum* d, int notifier) const;
 };
 
 class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend);
-    virtual void notify(const Datum* d, int notifier, Server& server) const;
+    virtual void notify(const Datum* d, int notifier) const;
 };
 
 class JVSourceRange : public SourceRange {
   public:
     inline JVSourceRange(Server& server, Join* join, const Match& m,
                          Str ibegin, Str iend);
-    virtual void notify(const Datum* d, int notifier, Server& server) const;
+    virtual void notify(const Datum* d, int notifier) const;
 };
 
 class ServerRange {
@@ -309,18 +309,18 @@ class Table : public pequod_set_base_hook {
     inline const_iterator begin() const;
     inline const_iterator end() const;
 
-    inline void validate(Str first, Str last, Server& server);
+    inline void validate(Str first, Str last);
 
     void add_copy(SourceRange* r);
     void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
-    void insert(const String& key, const String& value, Server& server);
+    void insert(const String& key, const String& value);
     template <typename F>
-    void modify(const String& key, F& func, Server& server);
+    void modify(const String& key, F& func);
     template <typename F>
-    void modify(const String& key, const F& func, Server& server);
-    void erase(const String& key, Server& server);
+    void modify(const String& key, const F& func);
+    void erase(const String& key);
 
   private:
     store_type store_;
@@ -331,8 +331,8 @@ class Table : public pequod_set_base_hook {
   public:
     pequod_set_member_hook member_hook_;
   private:
-    inline void notify_insert(Datum* d, SourceRange::notify_type notifier,
-                              Server& server);
+    Server* server_;
+    inline void notify_insert(Datum* d, SourceRange::notify_type notifier);
 
     friend class Server;
 };
@@ -424,8 +424,10 @@ inline Table::const_iterator Table::end() const {
 inline Table& Server::make_table(Str name) {
     bool inserted;
     auto it = tables_.find_insert(name, inserted);
-    if (inserted)
+    if (inserted) {
+        it->server_ = this;
         tables_by_name_.insert(*it);
+    }
     return *it;
 }
 
@@ -519,15 +521,14 @@ inline int ServerRangeSet::total_size() const {
     return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
 }
 
-inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier,
-                                 Server& server) {
+inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        it->notify(d, notifier, server);
+        it->notify(d, notifier);
 }
 
 template <typename F>
-void Table::modify(const String& key, F& func, Server& server) {
+void Table::modify(const String& key, F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -536,14 +537,14 @@ void Table::modify(const String& key, F& func, Server& server) {
         store_.insert_commit(*d, cd);
     } else
         d = p.first.operator->();
-    func(d, p.second, server);
-    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
+    func(d, p.second);
+    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }
 
 template <typename F>
-void Table::modify(const String& key, const F& func, Server& server) {
+void Table::modify(const String& key, const F& func) {
     F func_copy(func);
-    modify(key, func_copy, server);
+    modify(key, func_copy);
 }
 
 inline void Table::add_validjoin(Str first, Str last, Join* join) {
@@ -551,24 +552,24 @@ inline void Table::add_validjoin(Str first, Str last, Join* join) {
     sink_ranges_.insert(r);
 }
 
-inline void Table::validate(Str first, Str last, Server& server) {
+inline void Table::validate(Str first, Str last) {
     ServerRangeSet srs(first, last,
                        ServerRange::joinsink | ServerRange::validjoin);
     for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
 	 it != sink_ranges_.end(); ++it)
 	srs.push_back(it.operator->());
-    srs.validate(server);
+    srs.validate(*server_);
 }
 
 inline void Server::insert(const String& key, const String& value) {
     if (Str tname = table_name(key))
-        make_table(tname).insert(key, value, *this);
+        make_table(tname).insert(key, value);
 }
 
 template <typename F>
 inline void Server::modify(const String& key, F& func) {
     if (Str tname = table_name(key))
-        make_table(tname).modify(key, func, *this);
+        make_table(tname).modify(key, func);
 }
 
 template <typename F>
@@ -580,7 +581,7 @@ inline void Server::modify(const String& key, const F& func) {
 inline void Server::erase(const String& key) {
     auto tit = tables_.find(table_name(Str(key)));
     if (tit)
-        tit->erase(key, *this);
+        tit->erase(key);
 }
 
 inline void Server::add_copy(SourceRange* r) {
@@ -653,7 +654,7 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 inline void Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).validate(first, last, *this);
+    make_table(tname).validate(first, last);
 }
 
 inline size_t Server::validate_count(Str first, Str last) {

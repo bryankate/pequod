@@ -67,31 +67,31 @@ SourceRange* SourceRange::make(Server& server, Join* join, const Match& m,
 }
 
 
-void CopySourceRange::notify(const Datum* d, int notifier, Server& server) const {
+void CopySourceRange::notify(const Datum* d, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(d->key()))
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0)
-                dst_table_->insert(s, d->value(), server);
+                dst_table_->insert(s, d->value());
             else
-		dst_table_->erase(s, server);
+		dst_table_->erase(s);
 	}
 }
 
-void CountSourceRange::notify(const Datum* d, int notifier, Server& server) const {
+void CountSourceRange::notify(const Datum* d, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
     if (notifier && join_->back_source().match(d->key())) {
         for (auto& s : resultkeys_)
-            dst_table_->modify(s, [=](Datum* d, bool insert, Server&) {
+            dst_table_->modify(s, [=](Datum* d, bool insert) {
                     d->value_ = String(notifier
                                        + (insert ? 0 : d->value_.to_i()));
-                }, server);
+                });
     }
 }
 
-void JVSourceRange::notify(const Datum* d, int notifier, Server& server) const {
+void JVSourceRange::notify(const Datum* d, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(d->key())) {
         JoinValue jv(join_->jvt());
@@ -100,9 +100,9 @@ void JVSourceRange::notify(const Datum* d, int notifier, Server& server) const {
 	    if (notifier >= 0) {
                 jv.reset();
                 jv.accum(s, d->value_, true, true);
-                dst_table_->modify(jv.key(), jv, server);
+                dst_table_->modify(jv.key(), jv);
             } else
-		dst_table_->erase(s, server);
+		dst_table_->erase(s);
 	}
     }
 }
@@ -170,7 +170,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
         if (r)
-            r->notify(it.operator->(), SourceRange::notify_insert, server);
+            r->notify(it.operator->(), SourceRange::notify_insert);
         else if (join_->source(joinpos).match(it->key(), mk)) {
             join_->source(joinpos).match(it->key(), mf);
             join_->source(joinpos).match(it->key(), ml);
@@ -311,7 +311,7 @@ void Table::add_join(Str first, Str last, Join* join) {
 					  join));
 }
 
-void Table::insert(const String& key, const String& value, Server& server) {
+void Table::insert(const String& key, const String& value) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -322,10 +322,10 @@ void Table::insert(const String& key, const String& value, Server& server) {
 	d = p.first.operator->();
         d->value_ = value;
     }
-    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
+    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }
 
-void Table::erase(const String& key, Server& server) {
+void Table::erase(const String& key) {
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end()) {
 	Datum* d = it.operator->();
@@ -333,7 +333,7 @@ void Table::erase(const String& key, Server& server) {
 
         for (auto it = source_ranges_.begin_contains(Str(key));
              it != source_ranges_.end(); ++it)
-            it->notify(d, SourceRange::notify_erase, server);
+            it->notify(d, SourceRange::notify_erase);
 
 	delete d;
     }
