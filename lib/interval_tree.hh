@@ -4,21 +4,6 @@
 #include "rb.hh"
 #include "interval.hh"
 
-template <typename T>
-struct rbintervalvalue : public T {
-    typedef typename T::endpoint_type endpoint_type;
-    endpoint_type max_child_iend_;
-
-    inline rbintervalvalue(const T &x)
-	: T(x) {
-	max_child_iend_ = this->iend();
-    }
-    inline rbintervalvalue(T &&x) noexcept
-	: T(std::move(x)) {
-	max_child_iend_ = this->iend();
-    }
-};
-
 struct interval_comparator {
     template <typename A, typename B>
     inline int operator()(const A &a, const B &b) const {
