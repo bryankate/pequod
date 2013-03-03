@@ -15,6 +15,7 @@ namespace pq {
 class Join;
 class Match;
 class Server;
+class Table;
 
 namespace bi = boost::intrusive;
 typedef bi::set_base_hook<bi::link_mode<bi::normal_link>,
@@ -167,10 +168,12 @@ typedef bi::set<Datum> ServerStore;
 
 class SourceRange {
   public:
-    SourceRange(Str ibegin, Str iend, Join* join, const Match& m);
+    SourceRange(Server& server, Join* join, const Match& m,
+                Str ibegin, Str iend);
     virtual ~SourceRange();
 
-    static SourceRange* make(Str ibegin, Str iend, Join* join, const Match& m);
+    static SourceRange* make(Server& server, Join* join, const Match& m,
+                             Str ibegin, Str iend);
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
@@ -197,6 +200,7 @@ class SourceRange {
     rblinks<SourceRange> rblinks_;
   protected:
     Join* join_;
+    Table* dst_table_;
     // XXX?????    uint64_t expires_at_;
     mutable local_vector<String, 4> resultkeys_;
   private:
@@ -205,19 +209,22 @@ class SourceRange {
 
 class CopySourceRange : public SourceRange {
   public:
-    inline CopySourceRange(Str ibegin, Str iend, Join* join, const Match& m);
+    inline CopySourceRange(Server& server, Join* join, const Match& m,
+                           Str ibegin, Str iend);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
 class CountSourceRange : public SourceRange {
   public:
-    inline CountSourceRange(Str ibegin, Str iend, Join* join, const Match& m);
+    inline CountSourceRange(Server& server, Join* join, const Match& m,
+                            Str ibegin, Str iend);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
 class JVSourceRange : public SourceRange {
   public:
-    inline JVSourceRange(Str ibegin, Str iend, Join* join, const Match& m);
+    inline JVSourceRange(Server& server, Join* join, const Match& m,
+                         Str ibegin, Str iend);
     virtual void notify(const Datum* d, int notifier, Server& server) const;
 };
 
@@ -311,6 +318,9 @@ class Table : public pequod_set_base_hook {
     void insert(const String& key, const String& value, Server& server);
     template <typename F>
     void modify(const String& key, F& func, Server& server);
+    template <typename F>
+    void modify(const String& key, const F& func, Server& server);
+    void erase(const String& key, Server& server);
 
   private:
     store_type store_;
@@ -348,7 +358,7 @@ class Server {
     inline void modify(const String& key, F& func);
     template <typename F>
     inline void modify(const String& key, const F& func);
-    void erase(const String& key);
+    inline void erase(const String& key);
 
 #if 0
     template <typename I>
@@ -457,19 +467,16 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline CopySourceRange::CopySourceRange(Str ibegin, Str iend, Join* join,
-                                        const Match& m)
-    : SourceRange(ibegin, iend, join, m) {
+inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
 }
 
-inline CountSourceRange::CountSourceRange(Str ibegin, Str iend, Join* join,
-                                          const Match& m)
-    : SourceRange(ibegin, iend, join, m) {
+inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
 }
 
-inline JVSourceRange::JVSourceRange(Str ibegin, Str iend, Join* join,
-                                    const Match& m)
-    : SourceRange(ibegin, iend, join, m) {
+inline JVSourceRange::JVSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
 }
 
 inline Str ServerRange::ibegin() const {
@@ -533,6 +540,12 @@ void Table::modify(const String& key, F& func, Server& server) {
     notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
 }
 
+template <typename F>
+void Table::modify(const String& key, const F& func, Server& server) {
+    F func_copy(func);
+    modify(key, func_copy, server);
+}
+
 inline void Table::add_validjoin(Str first, Str last, Join* join) {
     ServerRange* r = ServerRange::make(first, last, ServerRange::validjoin, join);
     sink_ranges_.insert(r);
@@ -562,6 +575,12 @@ template <typename F>
 inline void Server::modify(const String& key, const F& func) {
     F func_copy(func);
     modify(key, func_copy);
+}
+
+inline void Server::erase(const String& key) {
+    auto tit = tables_.find(table_name(Str(key)));
+    if (tit)
+        tit->erase(key, *this);
 }
 
 inline void Server::add_copy(SourceRange* r) {

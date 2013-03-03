@@ -46,6 +46,7 @@ class Pattern {
     void append_slot(int si, int len);
 
     inline int key_length() const;
+    inline Str table_name() const;
     bool has_slot(int si) const;
 
     inline bool match(Str str) const;
@@ -148,6 +149,13 @@ inline Pattern::Pattern()
 
 inline int Pattern::key_length() const {
     return klen_;
+}
+
+inline Str Pattern::table_name() const {
+    const uint8_t* p = pat_;
+    while (p != pat_ + plen_ && *p < 128 && *p != '|')
+        ++p;
+    return Str(pat_, p);
 }
 
 inline bool Pattern::match(Str str) const {

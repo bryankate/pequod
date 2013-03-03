@@ -16,8 +16,9 @@ namespace pq {
 
 // XXX check circular expansion
 
-SourceRange::SourceRange(Str ibegin, Str iend, Join* join, const Match& m)
-    : join_(join) {
+SourceRange::SourceRange(Server& server, Join* join, const Match& m,
+                         Str ibegin, Str iend)
+    : join_(join), dst_table_(&server.make_table(join->sink().table_name())) {
     assert(table_name(ibegin, iend));
     char* s = buf_;
     char* ends = buf_ + sizeof(buf_);
@@ -55,13 +56,14 @@ void SourceRange::add_sinks(const SourceRange& r) {
         resultkeys_.push_back(rk);
 }
 
-SourceRange* SourceRange::make(Str ibegin, Str iend, Join* join, const Match& m) {
+SourceRange* SourceRange::make(Server& server, Join* join, const Match& m,
+                               Str ibegin, Str iend) {
     if (join->jvt() == jvt_copy_last)
-        return new CopySourceRange(ibegin, iend, join, m);
+        return new CopySourceRange(server, join, m, ibegin, iend);
     else if (join->jvt() == jvt_count_match)
-        return new CountSourceRange(ibegin, iend, join, m);
+        return new CountSourceRange(server, join, m, ibegin, iend);
     else
-        return new JVSourceRange(ibegin, iend, join, m);
+        return new JVSourceRange(server, join, m, ibegin, iend);
 }
 
 
@@ -71,9 +73,9 @@ void CopySourceRange::notify(const Datum* d, int notifier, Server& server) const
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), d->key());
 	    if (notifier >= 0)
-                server.insert(s, d->value());
+                dst_table_->insert(s, d->value(), server);
             else
-		server.erase(s);
+		dst_table_->erase(s, server);
 	}
 }
 
@@ -82,10 +84,10 @@ void CountSourceRange::notify(const Datum* d, int notifier, Server& server) cons
     // XXX PERFORMANCE the match() is often not necessary
     if (notifier && join_->back_source().match(d->key())) {
         for (auto& s : resultkeys_)
-            server.modify(s, [=](Datum* d, bool insert, Server&) {
+            dst_table_->modify(s, [=](Datum* d, bool insert, Server&) {
                     d->value_ = String(notifier
                                        + (insert ? 0 : d->value_.to_i()));
-                });
+                }, server);
     }
 }
 
@@ -98,9 +100,9 @@ void JVSourceRange::notify(const Datum* d, int notifier, Server& server) const {
 	    if (notifier >= 0) {
                 jv.reset();
                 jv.accum(s, d->value_, true, true);
-                server.modify(jv.key(), jv);
+                dst_table_->modify(jv.key(), jv, server);
             } else
-		server.erase(s);
+		dst_table_->erase(s, server);
 	}
     }
 }
@@ -153,7 +155,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
-        r = SourceRange::make(Str(kf, kflen), Str(kl, kllen), join_, mf);
+        r = SourceRange::make(server, join_, mf, Str(kf, kflen), Str(kl, kllen));
 
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
@@ -323,19 +325,15 @@ void Table::insert(const String& key, const String& value, Server& server) {
     notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
 }
 
-void Server::erase(const String& key) {
-    auto tit = tables_.find(table_name(Str(key)));
-    if (!tit)
-        return;
-
-    auto it = tit->store_.find(key, DatumCompare());
-    if (it != tit->store_.end()) {
+void Table::erase(const String& key, Server& server) {
+    auto it = store_.find(key, DatumCompare());
+    if (it != store_.end()) {
 	Datum* d = it.operator->();
-	tit->store_.erase(it);
+	store_.erase(it);
 
-        for (auto it = tit->source_ranges_.begin_contains(Str(key));
-             it != tit->source_ranges_.end(); ++it)
-            it->notify(d, SourceRange::notify_erase, *this);
+        for (auto it = source_ranges_.begin_contains(Str(key));
+             it != source_ranges_.end(); ++it)
+            it->notify(d, SourceRange::notify_erase, server);
 
 	delete d;
     }
