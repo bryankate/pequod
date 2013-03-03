@@ -1,5 +1,5 @@
 #include "pqjoin.hh"
-#include "pqbase.hh"
+#include "pqserver.hh"
 #include "hashtable.hh"
 #include "json.hh"
 namespace pq {
@@ -53,6 +53,16 @@ void Pattern::append_slot(int si, int len) {
     pat_[plen_] = 128 + si;
     ++plen_;
     klen_ += len;
+}
+
+SourceRange* Join::make_source(Server& server, const Match& m,
+                               Str ibegin, Str iend) {
+    if (jvt() == jvt_copy_last)
+        return new CopySourceRange(server, this, m, ibegin, iend);
+    else if (jvt() == jvt_count_match)
+        return new CountSourceRange(server, this, m, ibegin, iend);
+    else
+        return new JVSourceRange(server, this, m, ibegin, iend);
 }
 
 bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {

@@ -10,6 +10,8 @@ class String;
 
 namespace pq {
 class Join;
+class SourceRange;
+class Server;
 
 enum { slot_capacity = 5 };
 
@@ -100,6 +102,9 @@ class Join {
     inline void set_staleness(double s);
     inline void set_jvt(JoinValueType jvt);
     inline JoinValueType jvt() const;
+
+    SourceRange* make_source(Server& server, const Match& m,
+                             Str ibegin, Str iend);
 
     bool assign_parse(Str str);
 

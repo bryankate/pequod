@@ -172,9 +172,6 @@ class SourceRange {
                 Str ibegin, Str iend);
     virtual ~SourceRange();
 
-    static SourceRange* make(Server& server, Join* join, const Match& m,
-                             Str ibegin, Str iend);
-
     typedef Str endpoint_type;
     inline Str ibegin() const;
     inline Str iend() const;

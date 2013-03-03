@@ -54,16 +54,6 @@ void SourceRange::add_sinks(const SourceRange& r) {
         resultkeys_.push_back(rk);
 }
 
-SourceRange* SourceRange::make(Server& server, Join* join, const Match& m,
-                               Str ibegin, Str iend) {
-    if (join->jvt() == jvt_copy_last)
-        return new CopySourceRange(server, join, m, ibegin, iend);
-    else if (join->jvt() == jvt_count_match)
-        return new CountSourceRange(server, join, m, ibegin, iend);
-    else
-        return new JVSourceRange(server, join, m, ibegin, iend);
-}
-
 
 void CopySourceRange::notify(const Datum* d, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
@@ -152,7 +142,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
-        r = SourceRange::make(server, join_, mf, Str(kf, kflen), Str(kl, kllen));
+        r = join_->make_source(server, mf, Str(kf, kflen), Str(kl, kllen));
 
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
