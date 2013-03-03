@@ -1,6 +1,7 @@
 #ifndef PEQUOD_TIME_HH
 #define PEQUOD_TIME_HH
 #include <sys/time.h>
+#include "compiler.hh"
 
 extern uint64_t tstamp_adjustment;
 
