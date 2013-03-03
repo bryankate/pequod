@@ -263,12 +263,11 @@ class ServerRange {
 
 class ServerRangeSet {
   public:
-    inline ServerRangeSet(Server* store, Str first, Str last, int types);
-    inline ServerRangeSet(Server* store, int types);
+    inline ServerRangeSet(Str first, Str last, int types);
 
     void push_back(ServerRange* r);
 
-    void validate();
+    void validate(Server& server);
 
     friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
     inline int total_size() const;
@@ -278,13 +277,12 @@ class ServerRangeSet {
     int nr_;
     int sw_;
     ServerRange* r_[rangecap];
-    Server* server_;
     Str first_;
     Str last_;
     int types_;
 
     void hard_visit(const Datum* datum);
-    void validate_join(ServerRange* jr, int ts);
+    void validate_join(ServerRange* jr, int ts, Server& server);
 };
 
 class Table : public pequod_set_base_hook {
@@ -304,7 +302,11 @@ class Table : public pequod_set_base_hook {
     inline const_iterator begin() const;
     inline const_iterator end() const;
 
+    inline void validate(Str first, Str last, Server& server);
+
     void add_copy(SourceRange* r);
+    void add_join(Str first, Str last, Join* j);
+    inline void add_validjoin(Str first, Str last, Join* j);
 
     void insert(const String& key, const String& value, Server& server);
     template <typename F>
@@ -313,6 +315,7 @@ class Table : public pequod_set_base_hook {
   private:
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
+    interval_tree<ServerRange> sink_ranges_;
     int namelen_;
     char name_[32];
   public:
@@ -352,8 +355,8 @@ class Server {
     void replace_range(Str first, Str last, I first_value, I last_value);
 #endif
 
-    void add_copy(SourceRange* r);
-    void add_join(Str first, Str last, Join* j);
+    inline void add_copy(SourceRange* r);
+    inline void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
@@ -365,7 +368,6 @@ class Server {
   private:
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
-    interval_tree<ServerRange> sink_ranges_;
     friend class const_iterator;
 };
 
@@ -502,14 +504,8 @@ inline bool ServerRange::expired_at(uint64_t t) const {
     return expires_at_ && (expires_at_ < t);
 }
 
-inline ServerRangeSet::ServerRangeSet(Server* server, Str first, Str last,
-				      int types)
-    : nr_(0), sw_(0), server_(server), first_(first), last_(last),
-      types_(types) {
-}
-
-inline ServerRangeSet::ServerRangeSet(Server* server, int types)
-    : nr_(0), sw_(0), server_(server), types_(types) {
+inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
+    : nr_(0), sw_(0), first_(first), last_(last), types_(types) {
 }
 
 inline int ServerRangeSet::total_size() const {
@@ -537,6 +533,20 @@ void Table::modify(const String& key, F& func, Server& server) {
     notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update, server);
 }
 
+inline void Table::add_validjoin(Str first, Str last, Join* join) {
+    ServerRange* r = ServerRange::make(first, last, ServerRange::validjoin, join);
+    sink_ranges_.insert(r);
+}
+
+inline void Table::validate(Str first, Str last, Server& server) {
+    ServerRangeSet srs(first, last,
+                       ServerRange::joinsink | ServerRange::validjoin);
+    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
+	 it != sink_ranges_.end(); ++it)
+	srs.push_back(it.operator->());
+    srs.validate(server);
+}
+
 inline void Server::insert(const String& key, const String& value) {
     if (Str tname = table_name(key))
         make_table(tname).insert(key, value, *this);
@@ -554,9 +564,22 @@ inline void Server::modify(const String& key, const F& func) {
     modify(key, func_copy);
 }
 
+inline void Server::add_copy(SourceRange* r) {
+    Str tname = table_name(r->ibegin());
+    assert(tname);
+    make_table(tname).add_copy(r);
+}
+
+inline void Server::add_join(Str first, Str last, Join* join) {
+    Str tname = table_name(first, last);
+    assert(tname);
+    make_table(tname).add_join(first, last, join);
+}
+
 inline void Server::add_validjoin(Str first, Str last, Join* join) {
-    ServerRange* r = ServerRange::make(first, last, ServerRange::validjoin, join);
-    sink_ranges_.insert(r);
+    Str tname = table_name(first, last);
+    assert(tname);
+    make_table(tname).add_validjoin(first, last, join);
 }
 
 #if 0
@@ -609,12 +632,9 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 #endif
 
 inline void Server::validate(Str first, Str last) {
-    ServerRangeSet srs(this, first, last,
-                       ServerRange::joinsink | ServerRange::validjoin);
-    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
-	 it != sink_ranges_.end(); ++it)
-	srs.push_back(it.operator->());
-    srs.validate();
+    Str tname = table_name(first, last);
+    assert(tname);
+    make_table(tname).validate(first, last, *this);
 }
 
 inline size_t Server::validate_count(Str first, Str last) {

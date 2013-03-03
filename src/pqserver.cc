@@ -242,7 +242,7 @@ void ServerRangeSet::hard_visit(const Datum* datum) {
 	    }
 }
 
-void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
+void ServerRangeSet::validate_join(ServerRange* jr, int ts, Server& server) {
     uint64_t now = tstamp();
     Str last_valid = first_;
     for (int i = 0; i != ts; ++i)
@@ -257,18 +257,18 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts) {
             if (sw_ == 0)
                 return;
             if (last_valid < r_[i]->ibegin())
-                jr->validate(last_valid, r_[i]->ibegin(), *server_);
+                jr->validate(last_valid, r_[i]->ibegin(), server);
             last_valid = r_[i]->iend();
         }
     if (last_valid < last_)
-        jr->validate(last_valid, last_, *server_);
+        jr->validate(last_valid, last_, server);
 }
 
-void ServerRangeSet::validate() {
+void ServerRangeSet::validate(Server& server) {
     int ts = total_size();
     for (int i = 0; i != ts; ++i)
         if (r_[i]->type() == ServerRange::joinsink)
-            validate_join(r_[i], ts);
+            validate_join(r_[i], ts, server);
 }
 
 std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
@@ -303,13 +303,7 @@ void Table::add_copy(SourceRange* r) {
     source_ranges_.insert(r);
 }
 
-void Server::add_copy(SourceRange* r) {
-    Str t = table_name(r->ibegin());
-    assert(t);
-    make_table(t).add_copy(r);
-}
-
-void Server::add_join(Str first, Str last, Join* join) {
+void Table::add_join(Str first, Str last, Join* join) {
     // track full ranges used for join and copy
     sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
 					  join));
@@ -348,14 +342,15 @@ void Server::erase(const String& key) {
 }
 
 Json Server::stats() const {
-    size_t store_size = 0, source_ranges_size = 0;
+    size_t store_size = 0, source_ranges_size = 0, sink_ranges_size = 0;
     for (auto& t : tables_) {
         store_size += t.store_.size();
         source_ranges_size += t.source_ranges_.size();
+        sink_ranges_size += t.sink_ranges_.size();
     }
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
-	.set("sink_ranges_size", sink_ranges_.size());
+	.set("sink_ranges_size", sink_ranges_size);
 }
 
 void Server::print(std::ostream& stream) {
@@ -368,7 +363,16 @@ void Server::print(std::ostream& stream) {
         }
     if (!any)
         stream << "<empty>\n";
-    stream << "sinks:" << std::endl << sink_ranges_;
+
+    stream << "sinks:" << std::endl;
+    any = false;
+    for (auto& t : tables_by_name_)
+        if (!t.sink_ranges_.empty()) {
+            stream << t.sink_ranges_;
+            any = true;
+        }
+    if (!any)
+        stream << "<empty>\n";
 }
 
 } // namespace

@@ -238,7 +238,7 @@ void annotation() {
 
 void srs() {
     pq::Server server;
-    pq::ServerRangeSet srs(&server, "a001", "a}",
+    pq::ServerRangeSet srs("a001", "a}",
                        pq::ServerRange::joinsink | pq::ServerRange::validjoin);
 
     pq::Join j;
