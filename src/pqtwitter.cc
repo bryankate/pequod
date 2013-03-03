@@ -110,7 +110,7 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
     for (uint32_t i = 0; i != nusers_; ++i)
         acc(num_followers[i]);
 
-    stream << "USERS HAVE # SUBSCRIBERS:\n"
+    stream << nusers_ << " USERS HAVE SUBSCRIBERS:\n"
            << "  zero: " << (std::upper_bound(num_followers, num_followers + nusers_, 0) - num_followers)
            << "  mean: " << mean(acc)
            << "  sdev: " << sqrt(variance(acc)) << "\n"
