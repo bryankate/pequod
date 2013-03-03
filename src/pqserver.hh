@@ -518,7 +518,10 @@ inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
 }
 
 inline int ServerRangeSet::total_size() const {
-    return sw_ ? 8 * sizeof(sw_) + 1 - ffs_msb((unsigned) sw_) : nr_;
+    if (sw_ <= nr_ || sw_ < (1 << nr_))
+        return nr_;
+    else
+        return 8 * sizeof(sw_) + 1 - ffs_msb(to_unsigned(sw_));
 }
 
 inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier) {
