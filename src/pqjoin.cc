@@ -1,4 +1,5 @@
 #include "pqjoin.hh"
+#include "pqbase.hh"
 #include "hashtable.hh"
 #include "json.hh"
 namespace pq {
@@ -130,6 +131,9 @@ bool Join::assign_parse(Str str) {
 	    return npat_ > 1;
 	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap))
 	    return false;
+        // Every pattern must involve a known table
+        if (!table_name(pat_[npat_].expand_first(Match())))
+            return false;
 	++npat_;
     }
 }
