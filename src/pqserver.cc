@@ -36,8 +36,6 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
         iend_.assign(new char[iend.length()], iend.length());
     memcpy(iend_.mutable_data(), iend.data(), iend.length());
 
-    subtree_iend_ = iend_;
-
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
     resultkeys_.push_back(std::move(str));
@@ -111,13 +109,12 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     stream << "{" << "[" << r.ibegin() << ", " << r.iend() << "): copy ->";
     for (auto s : r.resultkeys_)
         stream << " " << s;
-    return stream << "}";
+    return stream << " ]" << r.subtree_iend() << "}";
 }
 
 
 inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
     : ibegin_len_(first.length()), iend_len_(last.length()),
-      subtree_iend_(keys_ + ibegin_len_, iend_len_),
       type_(type), join_(join), expires_at_(0) {
 
     memcpy(keys_, first.data(), first.length());
