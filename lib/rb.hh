@@ -363,8 +363,13 @@ void rbrep1<T, C, R>::insert_node(T* x) {
     rbnodeptr<T> z(x, true);
 
     // reshape
-    while (x && this->reshape()(x))
-        x = x->rblinks_.p_;
+    if (this->reshape()(x)) {
+        if (p)
+            p.child(child) = z;
+        do {
+            x = x->rblinks_.p_;
+        } while (x && this->reshape()(x));
+    }
 
     // flip up the tree
     // invariant: z.red()
