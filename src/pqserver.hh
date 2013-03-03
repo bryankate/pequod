@@ -272,7 +272,7 @@ class ServerRangeSet {
   public:
     inline ServerRangeSet(Str first, Str last, int types);
 
-    void push_back(ServerRange* r);
+    inline void push_back(ServerRange* r);
 
     void validate(Server& server);
 
@@ -280,16 +280,12 @@ class ServerRangeSet {
     inline int total_size() const;
 
   private:
-    enum { rangecap = 5 };
-    int nr_;
-    int sw_;
-    ServerRange* r_[rangecap];
+    local_vector<ServerRange*, 5> r_;
     Str first_;
     Str last_;
     int types_;
 
-    void hard_visit(const Datum* datum);
-    void validate_join(ServerRange* jr, int ts, Server& server);
+    void validate_join(ServerRange* jr, Server& server);
 };
 
 class Table : public pequod_set_base_hook {
@@ -514,14 +510,16 @@ inline bool ServerRange::expired_at(uint64_t t) const {
 }
 
 inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
-    : nr_(0), sw_(0), first_(first), last_(last), types_(types) {
+    : first_(first), last_(last), types_(types) {
+}
+
+inline void ServerRangeSet::push_back(ServerRange* r) {
+    if (r->type() & types_)
+        r_.push_back(r);
 }
 
 inline int ServerRangeSet::total_size() const {
-    if (sw_ <= nr_ || sw_ < (1 << nr_))
-        return nr_;
-    else
-        return 8 * sizeof(sw_) + 1 - ffs_msb(to_unsigned(sw_));
+    return r_.size();
 }
 
 inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier) {

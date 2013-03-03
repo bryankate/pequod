@@ -210,44 +210,10 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     return stream << "}";
 }
 
-void ServerRangeSet::push_back(ServerRange* r) {
-    if (!(r->type() & types_))
-	return;
-
-    int i = nr_;
-    while (sw_ >= (1 << i))
-	++i;
-    assert(i == 0 || !(r->ibegin() < r_[i - 1]->ibegin()));
-    assert(i < rangecap);
-
-    r_[i] = r;
-    if (last_ && first_ < r_[i]->ibegin())
-	sw_ |= 1 << i;
-    else if (last_ && r_[i]->iend() < last_) {
-	++nr_;
-	sw_ |= 1 << i;
-    } else
-	++nr_;
-}
-
-void ServerRangeSet::hard_visit(const Datum* datum) {
-    while (sw_ >= (1 << nr_) && !(datum->key() < r_[nr_]->ibegin())) {
-	if (!(r_[nr_]->iend() < last_))
-	    sw_ &= ~(1 << nr_);
-	++nr_;
-    }
-    if (sw_ & ((1 << nr_) - 1))
-	for (int i = 0; i != nr_; ++i)
-	    if ((sw_ & (1 << i)) && !(datum->key() < r_[nr_]->iend())) {
-		r_[i] = 0;
-		sw_ &= ~(1 << i);
-	    }
-}
-
-void ServerRangeSet::validate_join(ServerRange* jr, int ts, Server& server) {
+void ServerRangeSet::validate_join(ServerRange* jr, Server& server) {
     uint64_t now = tstamp();
     Str last_valid = first_;
-    for (int i = 0; i != ts; ++i)
+    for (int i = 0; i != r_.size(); ++i)
         if (r_[i]
             && r_[i]->type() == ServerRange::validjoin
             && r_[i]->join() == jr->join()) {
@@ -256,8 +222,7 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts, Server& server) {
                 // (and possibly this set if it will be used after this validation)
                 continue;
             }
-            if (sw_ == 0)
-                return;
+            // XXX PERFORMANCE can often avoid this check
             if (last_valid < r_[i]->ibegin())
                 jr->validate(last_valid, r_[i]->ibegin(), server);
             last_valid = r_[i]->iend();
@@ -267,16 +232,15 @@ void ServerRangeSet::validate_join(ServerRange* jr, int ts, Server& server) {
 }
 
 void ServerRangeSet::validate(Server& server) {
-    int ts = total_size();
-    for (int i = 0; i != ts; ++i)
+    for (int i = 0; i != r_.size(); ++i)
         if (r_[i]->type() == ServerRange::joinsink)
-            validate_join(r_[i], ts, server);
+            validate_join(r_[i], server);
 }
 
 std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
     stream << "[";
     const char* sep = "";
-    for (int i = 0; i != srs.nr_; ++i)
+    for (int i = 0; i != srs.r_.size(); ++i)
 	if (srs.r_[i]) {
 	    stream << sep << *srs.r_[i];
 	    sep = ", ";
