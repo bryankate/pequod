@@ -2,6 +2,7 @@
 #define LCDF_STRING_HH 1
 #include "string_base.hh"
 #include <string>
+#include <utility>
 #if HAVE_CXX_CONSTEXPR
 # define STRING_CONSTEXPR constexpr
 #else
@@ -731,5 +732,12 @@ inline String operator"" _S(const char *s, size_t len) {
     return String::make_stable(s, s + len);
 }
 #endif
+
+namespace std {
+inline void swap(::String& a, ::String& b) {
+    a.swap(b);
+}
+}
+
 #undef STRING_CONSTEXPR
 #endif
