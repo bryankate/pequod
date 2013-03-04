@@ -89,12 +89,12 @@ void count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    CHECK_EQ(size_t(4), server.validate_count("e|", "e}"), "Count of recursive expansion failed.");
-    CHECK_EQ(size_t(5), server.validate_count("b|", "b}"));
-    CHECK_EQ(size_t(4), server.validate_count("b|00002|", "b|00002}"));
-    CHECK_EQ(size_t(2), server.validate_count("b|00002|0000000002", "b|00002|0000000015"), "Wrong subrange count.");
-    CHECK_EQ(size_t(4), server.validate_count("c|", "c}"));
-    CHECK_EQ(size_t(0), server.validate_count("j|", "j}"));
+    CHECK_EQ(server.validate_count("e|", "e}"), size_t(4), "Count of recursive expansion failed.");
+    CHECK_EQ(server.validate_count("b|", "b}"), size_t(5));
+    CHECK_EQ(server.validate_count("b|00002|", "b|00002}"), size_t(4));
+    CHECK_EQ(server.validate_count("b|00002|0000000002", "b|00002|0000000015"), size_t(2), "\nWrong subrange count.");
+    CHECK_EQ(server.validate_count("c|", "c}"), size_t(4));
+    CHECK_EQ(server.validate_count("j|", "j}"), size_t(0));
 }
 
 void recursive() {
@@ -250,7 +250,7 @@ void srs() {
     srs.push_back(r1);
     srs.push_back(r2);
 
-    CHECK_EQ(3, srs.total_size());
+    CHECK_EQ(srs.total_size(), 3);
 }
 
 void test_join1() {
@@ -259,8 +259,8 @@ void test_join1() {
     CHECK_TRUE(j1.assign_parse("c|<a_id:5>|<b_id:5>|<index:5> "
                                "a|<a_id>|<b_id> "
                                "b|<index>|<b_id>"));
-    CHECK_EQ(2, j1.nsource());
-    CHECK_EQ(1, j1.completion_source());
+    CHECK_EQ(j1.nsource(), 2);
+    CHECK_EQ(j1.completion_source(), 1);
 
     j1.ref();
     server.add_join("c|", "c}", &j1);
@@ -269,10 +269,10 @@ void test_join1() {
     String end("c|10000}");
     server.insert("a|00000|B0000", "a: index-only");
     server.validate(begin, end);
-    CHECK_EQ(size_t(0), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(0));
 
     server.insert("b|I0000|B0000", "b: real value");
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
 void test_count() {
@@ -281,7 +281,7 @@ void test_count() {
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
                                "a|<uid>|<aid:5> "
                                "v|<aid>|<voter:5>"));
-    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_count_match);
     j1.ref();
@@ -293,21 +293,21 @@ void test_count() {
     server.insert("a|00000|00001", "article 1");
     server.insert("a|00001|00003", "article 2");
     server.validate(begin, end);
-    CHECK_EQ(size_t(0), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(0));
 
     server.insert("v|00000|00000", "vote 0");
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ("1", k0->value_);
+    CHECK_EQ(k0->value_, "1");
 
     server.insert("v|00001|00000", "vote 0");
     server.insert("v|00003|00000", "vote 0");
-    CHECK_EQ(size_t(2), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(2));
     auto k1 = server.find("k|00001");
     mandatory_assert(k1);
-    CHECK_EQ("2", k0->value_);
-    CHECK_EQ("1", k1->value_);
+    CHECK_EQ(k0->value_, "2");
+    CHECK_EQ(k1->value_, "1");
 }
 
 // One Server::validate produces multiple grouped keys
@@ -317,7 +317,7 @@ void test_count_validate1() {
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
                                "a|<uid>|<aid:5> "
                                "v|<aid>|<voter:5>"));
-    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_count_match);
     j1.ref();
@@ -333,13 +333,13 @@ void test_count_validate1() {
     server.insert("v|00002|00000", "vote 0");
 
     server.validate(begin, end);
-    CHECK_EQ(size_t(2), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(2));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ("2", k0->value_);
+    CHECK_EQ(k0->value_, "2");
     auto k1 = server.find("k|00001");
     mandatory_assert(k1);
-    CHECK_EQ("1", k1->value_);
+    CHECK_EQ(k1->value_, "1");
 }
 
 void test_karma() {
@@ -348,7 +348,7 @@ void test_karma() {
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
                                "a|<uid>|<aid:5> "
                                "v|<aid>|<voter:5>"));
-    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_count_match);
     j1.ref();
@@ -373,12 +373,12 @@ void test_karma() {
     server.validate(begin, end);
     getrusage(RUSAGE_SELF, &ru[1]);
 
-    CHECK_EQ(size_t(nuser), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(nuser));
     for (int i = 0; i < nuser; ++i) {
         sprintf(buf, "k|%05d", i);
         auto k0 = server.find(String(buf));
         mandatory_assert(k0);
-        CHECK_EQ(String(nvotes_per_aid), k0->value_);
+        CHECK_EQ(k0->value_, String(nvotes_per_aid));
     }
     Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
@@ -390,7 +390,7 @@ void test_min() {
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
                                "a|<uid>|<aid:5> "
                                "v|<aid>|<voter:5>"));
-    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_min_last);
     j1.ref();
@@ -401,22 +401,22 @@ void test_min() {
     server.insert("a|00000|00000", "article 0");
     server.insert("a|00000|00001", "article 1");
     server.validate(begin, end);
-    CHECK_EQ(size_t(0), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(0));
 
     server.insert("v|00000|00009", "v9");
     server.insert("v|00000|00008", "v8");
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ("v8", k0->value_);
+    CHECK_EQ(k0->value_, "v8");
 
     server.insert("v|00000|00005", "v5");
-    CHECK_EQ("v5", k0->value_);
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00000|00006", "v6");
-    CHECK_EQ("v5", k0->value_);
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
 void test_max() {
@@ -425,7 +425,7 @@ void test_max() {
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
                                "a|<uid>|<aid:5> "
                                "v|<aid>|<voter:5>"));
-    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_max_last);
     j1.ref();
@@ -436,26 +436,26 @@ void test_max() {
     server.insert("a|00000|00000", "article 0");
     server.insert("a|00000|00001", "article 1");
     server.validate(begin, end);
-    CHECK_EQ(size_t(0), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(0));
 
     server.insert("v|00000|00001", "v1");
     server.insert("v|00000|00002", "v2");
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ("v2", k0->value_);
+    CHECK_EQ(k0->value_, "v2");
 
     server.insert("v|00000|00003", "v5");
-    CHECK_EQ("v5", k0->value_);
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00000|00004", "v4");
-    CHECK_EQ("v5", k0->value_);
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00001|00005", "v6");
-    CHECK_EQ("v6", k0->value_);
-    CHECK_EQ(size_t(1), server.count(begin, end));
+    CHECK_EQ(k0->value_, "v6");
+    CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
 } // namespace

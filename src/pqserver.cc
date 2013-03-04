@@ -10,7 +10,6 @@
 #include "pqhackernews.hh"
 #include "clp.h"
 #include "time.hh"
-#include "check.hh"
 
 namespace pq {
 

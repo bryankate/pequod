@@ -7,41 +7,31 @@
 #include "compiler.hh"
 
 template <typename T>
-inline void CHECK_TRUE(const T yes, const std::string &msg = "") {
-    if (!yes) {
-        std::cerr <<   "Assertion failed" << std::endl;
-        std::cerr << "Message:\n" << msg << std::endl;
-        mandatory_assert(0);
-    }
-}
-
-template <typename T>
-inline void CHECK_FALSE(const T yes, const std::string &msg = "") {
-    if (yes) {
-        std::cerr <<   "Assertion failed" << std::endl;
-        std::cerr << "Message:\n" << msg << std::endl;
+inline void check_true(const char* file, int line,
+                       T test, const std::string& msg = "") {
+    if (!test) {
+        std::cerr << file << ":" << line << ": Check failed\n";
+        if (!msg.empty())
+            std::cerr << "\t" << msg << std::endl;
         mandatory_assert(0);
     }
 }
 
 template <typename T1, typename T2>
-inline void CHECK_EQ(const T1 &expected, const T2 &actual, const std::string &msg = "") {
-    if (expected != actual) {
+inline void check_eq(const char* file, int line,
+                     const T1& actual, const T2& expected,
+                     const std::string& msg = "") {
+    if (!(expected == actual)) {
+        std::cerr << file << ":" << line << ": Check failed\n";
+        if (!msg.empty())
+            std::cerr << "\t" << msg << std::endl;
         std::cerr <<   "\tActual:   " << actual
                   << "\n\tExpected: " << expected << std::endl;
-        std::cerr << "Message: " << msg << std::endl;
         mandatory_assert(0);
     }
 }
 
-template <typename T1, typename T2>
-inline void CHECK_GT(const T1 &actual, const T2 &comp) {
-    if (actual <= comp) {
-        std::cerr <<   "\tActual:     " << actual
-                  << "\n\tExpected: > " << comp << std::endl;
-        mandatory_assert(0);
-    }
-}
+#define CHECK_TRUE(test) check_true(__FILE__, __LINE__, (test), #test)
+#define CHECK_EQ(actual, expected, ...) check_eq(__FILE__, __LINE__, (actual), (expected), #actual " == " #expected __VA_ARGS__)
 
 #endif
-
