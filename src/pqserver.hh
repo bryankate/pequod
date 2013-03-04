@@ -151,8 +151,6 @@ class Table : public pequod_set_base_hook {
 
     void insert(const String& key, String value);
     template <typename F>
-    void modify(const String& key, F& func);
-    template <typename F>
     void modify(const String& key, const F& func);
     void erase(const String& key);
 
@@ -188,8 +186,6 @@ class Server {
     Table& make_table(Str name);
 
     inline void insert(const String& key, const String& value);
-    template <typename F>
-    inline void modify(const String& key, F& func);
     template <typename F>
     inline void modify(const String& key, const F& func);
     inline void erase(const String& key);
@@ -331,7 +327,7 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(const String& key, F& func) {
+void Table::modify(const String& key, const F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
@@ -343,12 +339,6 @@ void Table::modify(const String& key, F& func) {
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     } else if (p.second)
         delete d;
-}
-
-template <typename F>
-void Table::modify(const String& key, const F& func) {
-    F func_copy(func);
-    modify(key, func_copy);
 }
 
 inline void Table::add_validjoin(Str first, Str last, Join* join) {
@@ -371,15 +361,9 @@ inline void Server::insert(const String& key, const String& value) {
 }
 
 template <typename F>
-inline void Server::modify(const String& key, F& func) {
+inline void Server::modify(const String& key, const F& func) {
     if (Str tname = table_name(key))
         make_table(tname).modify(key, func);
-}
-
-template <typename F>
-inline void Server::modify(const String& key, const F& func) {
-    F func_copy(func);
-    modify(key, func_copy);
 }
 
 inline void Server::erase(const String& key) {
