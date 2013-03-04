@@ -73,6 +73,7 @@ void CountSourceRange::notify(const Datum* d, int notifier) const {
             dst_table_->modify(s, [=](Datum* d, bool insert) {
                     d->value_ = String(notifier
                                        + (insert ? 0 : d->value_.to_i()));
+                    return true;
                 });
         }
     }

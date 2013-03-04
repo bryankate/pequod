@@ -73,29 +73,34 @@ struct JoinValue {
     inline bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    inline void operator()(Datum* d, bool insert) {
+    inline bool operator()(Datum* d, bool insert) {
         if (insert) {
             d->value_ = value();
-            return;
+            return true;
         }
         switch (jvt_) {
         case jvt_copy_last:
             d->value_ = string_value_.ref_;
             break;
         case jvt_min_last:
-            if (d->value_ > string_value_.ref_)
+            if (d->value_ > string_value_.ref_) {
                 d->value_ = string_value_.ref_;
-            break;
+                return true;
+            } else
+                return false;
         case jvt_max_last:
-            if (d->value_ < string_value_.ref_)
+            if (d->value_ < string_value_.ref_) {
                 d->value_ = string_value_.ref_;
-            break;
+                return true;
+            } else
+                return false;
         case jvt_count_match:
             d->value_ = String(int_value_ + atoi(d->value_.c_str()));
             break;
         default:
             mandatory_assert(0, "bad JoinValueType");
         }
+        return true;
     }
     inline void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
@@ -429,14 +434,14 @@ template <typename F>
 void Table::modify(const String& key, F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
-    Datum* d;
-    if (p.second) {
-        d = new Datum(key, String());
+    Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
+    bool change = func(d, p.second);
+    if (change && p.second)
         store_.insert_commit(*d, cd);
-    } else
-        d = p.first.operator->();
-    func(d, p.second);
-    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
+    if (change)
+        notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
+    else if (p.second)
+        delete d;
 }
 
 template <typename F>
