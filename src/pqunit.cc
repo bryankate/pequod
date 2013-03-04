@@ -458,6 +458,26 @@ void test_max() {
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
+void test_swap() {
+    String s1("abcde");
+    String s2("ghijk");
+    const int64_t n = 80000000;
+    struct rusage ru[2];
+    getrusage(RUSAGE_SELF, &ru[0]);
+    for (int64_t i = 0; i < n; ++i)
+        s1.swap(s2);
+    getrusage(RUSAGE_SELF, &ru[1]);
+    Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+
+    getrusage(RUSAGE_SELF, &ru[0]);
+    for (int64_t i = 0; i < n; ++i)
+        std::swap(s1, s2);
+    getrusage(RUSAGE_SELF, &ru[1]);
+    stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -473,8 +493,9 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_min);
     ADD_TEST(test_max);
     ADD_TEST(test_karma);
+    ADD_TEST(test_swap);
     for (auto& t : tests_)
-        if ((testcases.empty() && t.first != "test_karma")
+        if ((testcases.empty() && t.first != "test_karma" && t.first != "test_swap")
             || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
             t.second();

@@ -220,7 +220,7 @@ void Table::insert(const String& key, String value) {
 	store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
-        std::swap(d->value_, value);
+        d->value_.swap(value);
     }
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }
