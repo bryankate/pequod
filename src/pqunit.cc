@@ -259,6 +259,8 @@ void test_join1() {
     CHECK_TRUE(j1.assign_parse("c|<a_id:5>|<b_id:5>|<index:5> "
                                "a|<a_id>|<b_id> "
                                "b|<index>|<b_id>"));
+    CHECK_EQ(2, j1.nsource());
+    CHECK_EQ(1, j1.completion_source());
 
     j1.ref();
     server.add_join("c|", "c}", &j1);

@@ -49,7 +49,8 @@ class Pattern {
 
     inline int key_length() const;
     inline Str table_name() const;
-    bool has_slot(int si) const;
+    inline bool has_slot(int si) const;
+    inline int slot_length(int si) const;
 
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
@@ -91,6 +92,7 @@ class Join {
     inline void deref();
 
     inline int nsource() const;
+    inline int completion_source() const;
     inline const Pattern& sink() const;
     inline const Pattern& source(int i) const;
     inline const Pattern& back_source() const;
@@ -114,12 +116,15 @@ class Join {
   private:
     enum { pcap = 5 };
     int npat_;
+    int completion_source_;
     bool maintained_;   // if the output is kept up to date with changes to the input
     double staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
     int refcount_;
     JoinValueType jvt_;
+
+    bool analyze();
 };
 
 
@@ -150,6 +155,8 @@ inline void Match::restore(const state& state) {
 
 inline Pattern::Pattern()
     : plen_(0), klen_(0) {
+    for (int i = 0; i < slot_capacity; ++i)
+        slotlen_[i] = slotpos_[i] = 0;
 }
 
 inline int Pattern::key_length() const {
@@ -161,6 +168,14 @@ inline Str Pattern::table_name() const {
     while (p != pat_ + plen_ && *p < 128 && *p != '|')
         ++p;
     return Str(pat_, p);
+}
+
+inline bool Pattern::has_slot(int si) const {
+    return slotlen_[si] != 0;
+}
+
+inline int Pattern::slot_length(int si) const {
+    return slotlen_[si];
 }
 
 inline bool Pattern::match(Str str) const {
@@ -294,6 +309,10 @@ inline void Join::deref() {
 
 inline int Join::nsource() const {
     return npat_ - 1;
+}
+
+inline int Join::completion_source() const {
+    return completion_source_;
 }
 
 inline bool Join::maintained() const {

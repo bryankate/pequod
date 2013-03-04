@@ -28,13 +28,6 @@ std::ostream& operator<<(std::ostream& stream, const Match& m) {
     return stream << "}";
 }
 
-bool Pattern::has_slot(int si) const {
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p == 128 + si)
-	    return true;
-    return false;
-}
-
 void Pattern::append_literal(uint8_t ch) {
     assert(ch < 128);
     assert(plen_ < pcap);
@@ -138,7 +131,7 @@ bool Join::assign_parse(Str str) {
 	while (s != str.uend() && !isspace(*s))
 	    ++s;
 	if (pbegin == s)
-	    return npat_ > 1;
+            return analyze();
 	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap))
 	    return false;
         // Every pattern must involve a known table
@@ -146,6 +139,36 @@ bool Join::assign_parse(Str str) {
             return false;
 	++npat_;
     }
+}
+
+bool Join::analyze() {
+    // fail if too few patterns
+    if (npat_ <= 1)
+        return false;
+
+    // account for slots across all patterns
+    // completion_source_ is the source number after which sink() is complete
+    int need_slots = 0;
+    for (int s = 0; s < slot_capacity; ++s)
+        if (sink().has_slot(s))
+            need_slots |= 1 << s;
+
+    completion_source_ = -1;
+    while (need_slots) {
+        ++completion_source_;
+        if (completion_source_ >= nsource())
+            return false;
+        for (int s = 0; s < slot_capacity; ++s)
+            if (source(completion_source_).has_slot(s)
+                && source(completion_source_).slot_length(s) == sink().slot_length(s))
+                need_slots &= ~(1 << s);
+    }
+
+    if (need_slots)
+        return false;
+
+    // success
+    return true;
 }
 
 Json Pattern::unparse_json() const {
