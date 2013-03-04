@@ -123,14 +123,6 @@ class MaxSourceAccumulator : public SourceAccumulator {
 };
 
 
-class JVSourceRange : public SourceRange {
-  public:
-    inline JVSourceRange(Server& server, Join* join, const Match& m,
-                         Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
-};
-
-
 inline Str SourceRange::ibegin() const {
     return ibegin_;
 }
@@ -189,11 +181,6 @@ inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m
 
 inline MaxSourceAccumulator::MaxSourceAccumulator(Table* dst_table)
     : SourceAccumulator(dst_table), any_(false) {
-}
-
-
-inline JVSourceRange::JVSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
-    : SourceRange(server, join, m, ibegin, iend) {
 }
 
 }

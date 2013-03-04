@@ -59,7 +59,7 @@ SourceRange* Join::make_source(Server& server, const Match& m,
     else if (jvt() == jvt_max_last)
         return new MaxSourceRange(server, this, m, ibegin, iend);
     else
-        return new JVSourceRange(server, this, m, ibegin, iend);
+        assert(0);
 }
 
 SourceAccumulator* Join::make_accumulator(Server& server) {

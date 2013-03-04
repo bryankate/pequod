@@ -152,21 +152,4 @@ void MaxSourceAccumulator::commit(Str dst_key) {
     val_ = String();
 }
 
-
-void JVSourceRange::notify(const Datum* src, const String&, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        JoinValue jv(join_->jvt());
-	for (auto& s : resultkeys_) {
-	    join_->expand(s.mutable_udata(), src->key());
-	    if (notifier >= 0) {
-                jv.reset();
-                jv.accum(s, src->value_, true, true);
-                dst_table_->modify(jv.key(), jv);
-            } else
-		dst_table_->erase(s);
-	}
-    }
-}
-
 } // namespace pq
