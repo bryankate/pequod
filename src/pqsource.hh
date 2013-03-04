@@ -87,6 +87,42 @@ class CountSourceAccumulator : public SourceAccumulator {
 };
 
 
+class MinSourceRange : public SourceRange {
+  public:
+    inline MinSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class MinSourceAccumulator : public SourceAccumulator {
+  public:
+    inline MinSourceAccumulator(Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    String val_;
+    bool any_;
+};
+
+
+class MaxSourceRange : public SourceRange {
+  public:
+    inline MaxSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class MaxSourceAccumulator : public SourceAccumulator {
+  public:
+    inline MaxSourceAccumulator(Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    String val_;
+    bool any_;
+};
+
+
 class JVSourceRange : public SourceRange {
   public:
     inline JVSourceRange(Server& server, Join* join, const Match& m,
@@ -135,6 +171,24 @@ inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Matc
 
 inline CountSourceAccumulator::CountSourceAccumulator(Table* dst_table)
     : SourceAccumulator(dst_table), n_(0) {
+}
+
+
+inline MinSourceRange::MinSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline MinSourceAccumulator::MinSourceAccumulator(Table* dst_table)
+    : SourceAccumulator(dst_table), any_(false) {
+}
+
+
+inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline MaxSourceAccumulator::MaxSourceAccumulator(Table* dst_table)
+    : SourceAccumulator(dst_table), any_(false) {
 }
 
 

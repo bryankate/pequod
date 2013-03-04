@@ -89,6 +89,70 @@ void CountSourceAccumulator::commit(Str dst_key) {
 }
 
 
+void MinSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+    // XXX PERFORMANCE the match() is often not necessary
+    if (join_->back_source().match(src->key())) {
+        for (auto& s : resultkeys_) {
+            join_->expand(s.mutable_udata(), src->key());
+            dst_table_->modify(s, [=](Datum* dst, bool insert) -> String {
+                    if (insert || src->value_ < dst->value_)
+                        return src->value_;
+                    else if (old_value == dst->value_
+                             && (notifier < 0 || src->value_ != old_value))
+                        assert(0 && "removing old min");
+                    else
+                        return unchanged_marker();
+                });
+        }
+    }
+}
+
+void MinSourceAccumulator::notify(const Datum* src) {
+    if (!any_ || src->value_ < val_)
+        val_ = src->value_;
+    any_ = true;
+}
+
+void MinSourceAccumulator::commit(Str dst_key) {
+    if (any_)
+        dst_table_->insert(dst_key, std::move(val_));
+    any_ = false;
+    val_ = String();
+}
+
+
+void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+    // XXX PERFORMANCE the match() is often not necessary
+    if (join_->back_source().match(src->key())) {
+        for (auto& s : resultkeys_) {
+            join_->expand(s.mutable_udata(), src->key());
+            dst_table_->modify(s, [=](Datum* dst, bool insert) -> String {
+                    if (insert || dst->value_ < src->value_)
+                        return src->value_;
+                    else if (old_value == dst->value_
+                             && (notifier < 0 || src->value_ != old_value))
+                        assert(0 && "removing old max");
+                    else
+                        return unchanged_marker();
+                });
+        }
+    }
+}
+
+void MaxSourceAccumulator::notify(const Datum* src) {
+    if (val_ < src->value_)
+        val_ = src->value_;
+    any_ = true;
+}
+
+void MaxSourceAccumulator::commit(Str dst_key) {
+    if (any_)
+        dst_table_->insert(dst_key, std::move(val_));
+    any_ = false;
+    val_ = String();
+}
+
+
 void JVSourceRange::notify(const Datum* src, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {

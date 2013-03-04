@@ -54,6 +54,10 @@ SourceRange* Join::make_source(Server& server, const Match& m,
         return new CopySourceRange(server, this, m, ibegin, iend);
     else if (jvt() == jvt_count_match)
         return new CountSourceRange(server, this, m, ibegin, iend);
+    else if (jvt() == jvt_min_last)
+        return new MinSourceRange(server, this, m, ibegin, iend);
+    else if (jvt() == jvt_max_last)
+        return new MaxSourceRange(server, this, m, ibegin, iend);
     else
         return new JVSourceRange(server, this, m, ibegin, iend);
 }
@@ -61,6 +65,10 @@ SourceRange* Join::make_source(Server& server, const Match& m,
 SourceAccumulator* Join::make_accumulator(Server& server) {
     if (jvt() == jvt_count_match)
         return new CountSourceAccumulator(&server.make_table(sink().table_name()));
+    else if (jvt() == jvt_min_last)
+        return new MinSourceAccumulator(&server.make_table(sink().table_name()));
+    else if (jvt() == jvt_max_last)
+        return new MaxSourceAccumulator(&server.make_table(sink().table_name()));
     else
         return 0;
 }
