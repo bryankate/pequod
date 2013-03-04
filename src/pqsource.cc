@@ -51,28 +51,28 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void CopySourceRange::notify(const Datum* d, int notifier) const {
+void CopySourceRange::notify(const Datum* src, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(d->key()))
+    if (join_->back_source().match(src->key()))
 	for (auto& s : resultkeys_) {
-	    join_->expand(s.mutable_udata(), d->key());
+	    join_->expand(s.mutable_udata(), src->key());
 	    if (notifier >= 0)
-                dst_table_->insert(s, d->value());
+                dst_table_->insert(s, src->value());
             else
 		dst_table_->erase(s);
 	}
 }
 
 
-void CountSourceRange::notify(const Datum* d, int notifier) const {
+void CountSourceRange::notify(const Datum* src, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
-    if (notifier && join_->back_source().match(d->key())) {
+    if (notifier && join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
-            join_->expand(s.mutable_udata(), d->key());
-            dst_table_->modify(s, [=](Datum* d, bool insert) {
-                    d->value_ = String(notifier
-                                       + (insert ? 0 : d->value_.to_i()));
+            join_->expand(s.mutable_udata(), src->key());
+            dst_table_->modify(s, [=](Datum* dst, bool insert) {
+                    dst->value_ = String(notifier
+                                         + (insert ? 0 : dst->value_.to_i()));
                     return true;
                 });
         }
@@ -90,15 +90,15 @@ void CountSourceAccumulator::save_reset(Str dst_key) {
 }
 
 
-void JVSourceRange::notify(const Datum* d, int notifier) const {
+void JVSourceRange::notify(const Datum* src, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(d->key())) {
+    if (join_->back_source().match(src->key())) {
         JoinValue jv(join_->jvt());
 	for (auto& s : resultkeys_) {
-	    join_->expand(s.mutable_udata(), d->key());
+	    join_->expand(s.mutable_udata(), src->key());
 	    if (notifier >= 0) {
                 jv.reset();
-                jv.accum(s, d->value_, true, true);
+                jv.accum(s, src->value_, true, true);
                 dst_table_->modify(jv.key(), jv);
             } else
 		dst_table_->erase(s);
