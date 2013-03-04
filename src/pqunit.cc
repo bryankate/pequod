@@ -385,6 +385,61 @@ void test_karma() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
+void test_karma_online() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
+                               "a|<uid>|<aid:5> "
+                               "v|<aid>|<voter:5>"));
+    CHECK_EQ(j1.nsource(), 2);
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    int nuser = 10000;
+    int nvotes_per_aid = 200;
+    String aid;
+    char buf[20];
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "a|%05d|%05d", i, i);
+        server.insert(String(buf), "article");
+        for (int j = 0; j < 1; ++j) {
+            sprintf(buf, "v|%05d|%05d", i, j + 1);
+            server.insert(String(buf), "vote");
+        }
+    }
+    server.validate(begin, end);
+    CHECK_EQ(server.count(begin, end), size_t(nuser));
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "k|%05d", i);
+        auto k0 = server.find(String(buf));
+        mandatory_assert(k0);
+        CHECK_EQ(k0->value_, String(1));
+    }
+    // online votes
+    struct rusage ru[2];
+    getrusage(RUSAGE_SELF, &ru[0]);
+    for (int i = 0; i < nuser; ++i) {
+        for (int j = 1; j < nvotes_per_aid; ++j) {
+            sprintf(buf, "v|%05d|%05d", i, j + 1);
+            server.insert(String(buf), "vote");
+        }
+    }
+    getrusage(RUSAGE_SELF, &ru[1]);
+    CHECK_EQ(server.count(begin, end), size_t(nuser));
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "k|%05d", i);
+        auto k0 = server.find(String(buf));
+        mandatory_assert(k0);
+        CHECK_EQ(k0->value_, String(nvotes_per_aid));
+    }
+    Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+}
+
 void test_min() {
     pq::Server server;
     pq::Join j1;
@@ -496,6 +551,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_max);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_swap);
+    ADD_EXP_TEST(test_karma_online);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
