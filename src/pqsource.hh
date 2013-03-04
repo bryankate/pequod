@@ -56,7 +56,7 @@ class SourceAccumulator {
     inline SourceAccumulator(Table* dst_table);
     virtual ~SourceAccumulator() {}
     virtual void notify(const Datum* src) = 0;
-    virtual void save_reset(Str dst_key) = 0;
+    virtual void commit(Str dst_key) = 0;
   protected:
     Table* dst_table_;
 };
@@ -81,7 +81,7 @@ class CountSourceAccumulator : public SourceAccumulator {
   public:
     inline CountSourceAccumulator(Table* dst_table);
     virtual void notify(const Datum* src);
-    virtual void save_reset(Str dst_key);
+    virtual void commit(Str dst_key);
   private:
     long n_;
 };

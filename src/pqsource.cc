@@ -82,7 +82,7 @@ void CountSourceAccumulator::notify(const Datum*) {
     ++n_;
 }
 
-void CountSourceAccumulator::save_reset(Str dst_key) {
+void CountSourceAccumulator::commit(Str dst_key) {
     if (n_)
         dst_table_->insert(dst_key, String(n_));
     n_ = 0;

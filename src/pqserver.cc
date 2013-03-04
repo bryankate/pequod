@@ -92,7 +92,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
             if (check_accum
                 && !join_->sink().match_same(Str(kaccum, kaccumlen), mk)) {
                 if (kaccumlen)
-                    accum->save_reset(Str(kaccum, kaccumlen));
+                    accum->commit(Str(kaccum, kaccumlen));
                 kaccumlen = join_->sink().expand_first(kaccum, mk);
             }
 
@@ -112,7 +112,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
 
     if (accum && joinpos == join_->completion_source()) {
         if (kaccumlen)
-            accum->save_reset(Str(kaccum, kaccumlen));
+            accum->commit(Str(kaccum, kaccumlen));
         delete accum;
     }
 
