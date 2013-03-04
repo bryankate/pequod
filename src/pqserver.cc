@@ -8,6 +8,7 @@
 #include "pqtwitter.hh"
 #include "pqfacebook.hh"
 #include "pqhackernews.hh"
+#include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
 
@@ -408,7 +409,8 @@ int main(int argc, char** argv) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
-        pq::TwitterRunner<pq::Server> tr(server, tp);
+        pq::DirectClient dc(server);
+        pq::TwitterRunner<pq::DirectClient> tr(dc, tp);
         tr.populate();
         tr.run();
     } else if (mode == mode_hn) {
