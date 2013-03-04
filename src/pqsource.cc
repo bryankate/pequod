@@ -94,7 +94,7 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [=](Datum* dst, bool insert) -> String {
+            dst_table_->modify(s, [&](Datum* dst, bool insert) -> String {
                     if (insert || src->value_ < dst->value_)
                         return src->value_;
                     else if (old_value == dst->value_
@@ -126,7 +126,7 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [=](Datum* dst, bool insert) -> String {
+            dst_table_->modify(s, [&](Datum* dst, bool insert) -> String {
                     if (insert || dst->value_ < src->value_)
                         return src->value_;
                     else if (old_value == dst->value_
