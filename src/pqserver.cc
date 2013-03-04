@@ -83,7 +83,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
             continue;
 
         if (r && !accum) {
-            r->notify(it.operator->(), SourceRange::notify_insert);
+            r->notify(it.operator->(), String(), SourceRange::notify_insert);
             continue;
         }
 
@@ -211,18 +211,19 @@ void Table::add_join(Str first, Str last, Join* join) {
 					  join));
 }
 
-void Table::insert(const String& key, const String& value) {
+void Table::insert(const String& key, String value) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
+        value = String();
 	store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
-        d->value_ = value;
+        std::swap(d->value_, value);
     }
-    notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
+    notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }
 
 void Table::erase(const String& key) {
@@ -230,11 +231,7 @@ void Table::erase(const String& key) {
     if (it != store_.end()) {
 	Datum* d = it.operator->();
 	store_.erase(it);
-
-        for (auto it = source_ranges_.begin_contains(Str(key));
-             it != source_ranges_.end(); ++it)
-            it->notify(d, SourceRange::notify_erase);
-
+        notify(d, String(), SourceRange::notify_erase);
 	delete d;
     }
 }

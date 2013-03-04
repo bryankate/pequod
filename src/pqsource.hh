@@ -32,7 +32,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, int notifier) const = 0;
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const = 0;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -66,7 +66,7 @@ class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend);
-    virtual void notify(const Datum* src, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
 
@@ -74,7 +74,7 @@ class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend);
-    virtual void notify(const Datum* src, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
 class CountSourceAccumulator : public SourceAccumulator {
@@ -91,7 +91,7 @@ class JVSourceRange : public SourceRange {
   public:
     inline JVSourceRange(Server& server, Join* join, const Match& m,
                          Str ibegin, Str iend);
-    virtual void notify(const Datum* src, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
 

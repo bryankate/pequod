@@ -243,7 +243,7 @@ class Table : public pequod_set_base_hook {
     void add_join(Str first, Str last, Join* j);
     inline void add_validjoin(Str first, Str last, Join* j);
 
-    void insert(const String& key, const String& value);
+    void insert(const String& key, String value);
     template <typename F>
     void modify(const String& key, F& func);
     template <typename F>
@@ -260,7 +260,7 @@ class Table : public pequod_set_base_hook {
     pequod_set_member_hook member_hook_;
   private:
     Server* server_;
-    inline void notify_insert(Datum* d, SourceRange::notify_type notifier);
+    inline void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
 
     friend class Server;
 };
@@ -418,10 +418,10 @@ inline int ServerRangeSet::total_size() const {
     return r_.size();
 }
 
-inline void Table::notify_insert(Datum* d, SourceRange::notify_type notifier) {
+inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        it->notify(d, notifier);
+        it->notify(d, old_value, notifier);
 }
 
 template <typename F>
@@ -429,12 +429,12 @@ void Table::modify(const String& key, F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
-    String new_value = func(d, p.second);
-    if (!is_unchanged_marker(new_value)) {
-        d->value_ = new_value;
+    String value = func(d, p.second);
+    if (!is_unchanged_marker(value)) {
+        std::swap(d->value_, value);
         if (p.second)
             store_.insert_commit(*d, cd);
-        notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
+        notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     } else if (p.second)
         delete d;
 }

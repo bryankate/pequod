@@ -51,7 +51,7 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void CopySourceRange::notify(const Datum* src, int notifier) const {
+void CopySourceRange::notify(const Datum* src, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key()))
 	for (auto& s : resultkeys_) {
@@ -64,7 +64,7 @@ void CopySourceRange::notify(const Datum* src, int notifier) const {
 }
 
 
-void CountSourceRange::notify(const Datum* src, int notifier) const {
+void CountSourceRange::notify(const Datum* src, const String&, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
     if (notifier && join_->back_source().match(src->key())) {
@@ -89,7 +89,7 @@ void CountSourceAccumulator::save_reset(Str dst_key) {
 }
 
 
-void JVSourceRange::notify(const Datum* src, int notifier) const {
+void JVSourceRange::notify(const Datum* src, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         JoinValue jv(join_->jvt());
