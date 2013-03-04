@@ -73,34 +73,28 @@ struct JoinValue {
     inline bool copy_last() const {
         return jvt_ == jvt_copy_last;
     }
-    inline bool operator()(Datum* d, bool insert) {
-        if (insert) {
-            d->value_ = value();
-            return true;
-        }
+    inline String operator()(Datum* d, bool insert) {
+        if (insert)
+            return value();
         switch (jvt_) {
         case jvt_copy_last:
-            d->value_ = string_value_.ref_;
-            break;
+            return string_value_.ref_;
         case jvt_min_last:
-            if (d->value_ > string_value_.ref_) {
-                d->value_ = string_value_.ref_;
-                return true;
-            } else
-                return false;
+            if (d->value_ > string_value_.ref_)
+                return string_value_.ref_;
+            else
+                return unchanged_marker();
         case jvt_max_last:
-            if (d->value_ < string_value_.ref_) {
-                d->value_ = string_value_.ref_;
-                return true;
-            } else
-                return false;
+            if (d->value_ < string_value_.ref_)
+                return string_value_.ref_;
+            else
+                return unchanged_marker();
         case jvt_count_match:
-            d->value_ = String(int_value_ + atoi(d->value_.c_str()));
-            break;
+            return String(int_value_ + atoi(d->value_.c_str()));
         default:
             mandatory_assert(0, "bad JoinValueType");
+            return String();
         }
-        return true;
     }
     inline void accum(const Str &key, const String &v, bool key_safe, bool value_safe) {
         switch (jvt_) {
@@ -435,12 +429,13 @@ void Table::modify(const String& key, F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
-    bool change = func(d, p.second);
-    if (change && p.second)
-        store_.insert_commit(*d, cd);
-    if (change)
+    String new_value = func(d, p.second);
+    if (!is_unchanged_marker(new_value)) {
+        d->value_ = new_value;
+        if (p.second)
+            store_.insert_commit(*d, cd);
         notify_insert(d, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
-    else if (p.second)
+    } else if (p.second)
         delete d;
 }
 

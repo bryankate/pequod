@@ -87,6 +87,7 @@ COMMON_OBJS = \
 	$(OBJDIR)/clp.o
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
+	$(OBJDIR)/pqbase.o \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqserver.o \

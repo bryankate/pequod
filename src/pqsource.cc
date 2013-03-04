@@ -71,9 +71,8 @@ void CountSourceRange::notify(const Datum* src, int notifier) const {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
             dst_table_->modify(s, [=](Datum* dst, bool insert) {
-                    dst->value_ = String(notifier
-                                         + (insert ? 0 : dst->value_.to_i()));
-                    return true;
+                    return String(notifier
+                                  + (insert ? 0 : dst->value_.to_i()));
                 });
         }
     }
