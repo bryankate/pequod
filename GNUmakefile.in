@@ -88,6 +88,7 @@ COMMON_OBJS = \
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
+	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqhackernews.o \
