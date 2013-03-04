@@ -1,6 +1,6 @@
 #ifndef PEQUOD_SERVER_HH
-#define PEQUOD_SERVER_HH 1
-#include <boost/intrusive/set.hpp>
+#define PEQUOD_SERVER_HH
+#include "pqdatum.hh"
 #include "interval_tree.hh"
 #include "local_vector.hh"
 #include "hashtable.hh"
@@ -10,60 +10,7 @@
 class Json;
 
 namespace pq {
-
 namespace bi = boost::intrusive;
-typedef bi::set_base_hook<bi::link_mode<bi::normal_link>,
-			  bi::optimize_size<true> > pequod_set_base_hook;
-typedef bi::set_member_hook<bi::link_mode<bi::normal_link>,
-			    bi::optimize_size<true> > pequod_set_member_hook;
-
-class Datum : public pequod_set_base_hook {
-  public:
-    explicit Datum(const String& key)
-	: key_(key) {
-    }
-    Datum(const String& key, const String& value)
-	: key_(key), value_(value) {
-    }
-
-    const String& key() const {
-	return key_;
-    }
-    const String& value() const {
-        return value_;
-    }
-
-  private:
-    String key_;
-  public:
-    String value_;
-    pequod_set_member_hook member_hook_;
-};
-
-struct DatumCompare {
-    template <typename T>
-    inline bool operator()(const Datum& a, const String_base<T>& b) const {
-	return a.key() < b;
-    }
-    inline bool operator()(const Datum& a, Str b) const {
-	return a.key() < b;
-    }
-    template <typename T>
-    inline bool operator()(const String_base<T>& a, const Datum& b) const {
-	return a < b.key();
-    }
-    inline bool operator()(Str a, const Datum& b) const {
-	return a < b.key();
-    }
-};
-
-struct DatumDispose {
-    inline void operator()(Datum* ptr) {
-	delete ptr;
-    }
-};
-
-typedef bi::set<Datum> ServerStore;
 
 class ServerRange {
   public:
@@ -210,16 +157,6 @@ class Server {
     bi::set<Table> tables_by_name_;
     friend class const_iterator;
 };
-
-inline bool operator<(const Datum& a, const Datum& b) {
-    return a.key() < b.key();
-}
-inline bool operator==(const Datum& a, const Datum& b) {
-    return a.key() == b.key();
-}
-inline bool operator>(const Datum& a, const Datum& b) {
-    return a.key() > b.key();
-}
 
 inline bool operator<(const Table& a, const Table& b) {
     return a.key() < b.key();
