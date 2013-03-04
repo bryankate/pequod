@@ -225,6 +225,25 @@ class JVSourceRange : public SourceRange {
     virtual void notify(const Datum* d, int notifier) const;
 };
 
+class SourceAccumulator {
+  public:
+    inline SourceAccumulator(Table* dst_table);
+    virtual ~SourceAccumulator() {}
+    virtual void notify(const Datum* d) = 0;
+    virtual void save_reset(Str dst_key) = 0;
+  protected:
+    Table* dst_table_;
+};
+
+class CountSourceAccumulator : public SourceAccumulator {
+  public:
+    inline CountSourceAccumulator(Table* dst_table);
+    virtual void notify(const Datum* d);
+    virtual void save_reset(Str dst_key);
+  private:
+    long n_;
+};
+
 class ServerRange {
   public:
     enum range_type {
@@ -262,7 +281,8 @@ class ServerRange {
 
     inline ServerRange(Str first, Str last, range_type type, Join* join);
     ~ServerRange() = default;
-    void validate(Match& mf, Match& ml, int joinpos, Server& server);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server,
+                  SourceAccumulator* accum);
 };
 
 class ServerRangeSet {
@@ -468,6 +488,14 @@ inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match&
 
 inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
     : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline SourceAccumulator::SourceAccumulator(Table* dst_table)
+    : dst_table_(dst_table) {
+}
+
+inline CountSourceAccumulator::CountSourceAccumulator(Table* dst_table)
+    : SourceAccumulator(dst_table), n_(0) {
 }
 
 inline JVSourceRange::JVSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)

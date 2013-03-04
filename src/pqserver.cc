@@ -81,6 +81,16 @@ void CountSourceRange::notify(const Datum* d, int notifier) const {
     }
 }
 
+void CountSourceAccumulator::notify(const Datum*) {
+    ++n_;
+}
+
+void CountSourceAccumulator::save_reset(Str dst_key) {
+    if (n_)
+        dst_table_->insert(dst_key, String(n_));
+    n_ = 0;
+}
+
 void JVSourceRange::notify(const Datum* d, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(d->key())) {
@@ -126,16 +136,19 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        validate(mf, ml, 0, server);
+        validate(mf, ml, 0, server, 0);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
-    uint8_t kf[128], kl[128];
+
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
+                           SourceAccumulator* accum) {
+    uint8_t kf[128], kl[128], kaccum[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
+    int kaccumlen = 0;
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
@@ -146,28 +159,61 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server) {
     if (joinpos + 1 == join_->nsource())
         r = join_->make_source(server, mf, Str(kf, kflen), Str(kl, kllen));
 
+    bool check_accum = false;
+    if (joinpos == join_->completion_source()
+        && (accum = join_->make_accumulator(server))) {
+        kaccumlen = join_->sink().expand_first(kaccum, mf);
+        check_accum = !join_->sink().match_complete(mf)
+            || !join_->sink().match_same(Str(kaccum, kaccumlen), ml);
+        if (check_accum)
+            kaccumlen = 0;
+    }
+
     auto it = server.lower_bound(Str(kf, kflen));
     auto ilast = server.lower_bound(Str(kl, kllen));
 
     Match mk(mf);
     mk &= ml;
     Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
+    const Pattern& pat = join_->source(joinpos);
 
     for (; it != ilast; ++it) {
-	if (it->key().length() != join_->source(joinpos).key_length())
+	if (it->key().length() != pat.key_length())
             continue;
+
+        if (r && !accum) {
+            r->notify(it.operator->(), SourceRange::notify_insert);
+            continue;
+        }
+
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
-        if (r)
-            r->notify(it.operator->(), SourceRange::notify_insert);
-        else if (join_->source(joinpos).match(it->key(), mk)) {
-            join_->source(joinpos).match(it->key(), mf);
-            join_->source(joinpos).match(it->key(), ml);
-            validate(mf, ml, joinpos + 1, server);
-            mf.restore(mfstate);
-            ml.restore(mlstate);
+        if (pat.match(it->key(), mk)) {
+            if (check_accum
+                && !join_->sink().match_same(Str(kaccum, kaccumlen), mk)) {
+                if (kaccumlen)
+                    accum->save_reset(Str(kaccum, kaccumlen));
+                kaccumlen = join_->sink().expand_first(kaccum, mk);
+            }
+
+            if (r)
+                accum->notify(it.operator->());
+            else {
+                pat.match(it->key(), mf);
+                pat.match(it->key(), ml);
+                validate(mf, ml, joinpos + 1, server, accum);
+                mf.restore(mfstate);
+                ml.restore(mlstate);
+            }
         }
+
         mk.restore(mkstate);
+    }
+
+    if (accum && joinpos == join_->completion_source()) {
+        if (kaccumlen)
+            accum->save_reset(Str(kaccum, kaccumlen));
+        delete accum;
     }
 
     if (r) {

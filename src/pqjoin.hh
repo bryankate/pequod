@@ -11,6 +11,7 @@ class String;
 namespace pq {
 class Join;
 class SourceRange;
+class SourceAccumulator;
 class Server;
 
 enum { slot_capacity = 5 };
@@ -52,9 +53,11 @@ class Pattern {
     inline bool has_slot(int si) const;
     inline int slot_length(int si) const;
 
+    inline bool match_complete(const Match& m) const;
+    inline bool match_same(Str str, const Match& m) const;
+
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
-    inline bool match_complete(const Match& m) const;
 
     inline int expand_first(uint8_t* s, const Match& m) const;
     inline String expand_first(const Match& m) const;
@@ -107,6 +110,7 @@ class Join {
 
     SourceRange* make_source(Server& server, const Match& m,
                              Str ibegin, Str iend);
+    SourceAccumulator* make_accumulator(Server& server);
 
     bool assign_parse(Str str);
 
@@ -219,9 +223,19 @@ inline bool Pattern::match(Str s, Match& m) const {
 }
 
 inline bool Pattern::match_complete(const Match& m) const {
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p >= 128 && m.slotlen(*p - 128) != slotlen_[*p - 128])
+    for (int i = 0; i != slot_capacity; ++i)
+	if (slotlen_[i] && m.slotlen(i) != slotlen_[i])
 	    return false;
+    return true;
+}
+
+inline bool Pattern::match_same(Str s, const Match& m) const {
+    if (s.length() != key_length())
+        return false;
+    for (int i = 0; i != slot_capacity; ++i)
+        if (slotlen_[i] && (m.slotlen(i) != slotlen_[i]
+                            || memcmp(s.data() + slotpos_[i], m.slot(i), slotlen_[i]) != 0))
+            return false;
     return true;
 }
 

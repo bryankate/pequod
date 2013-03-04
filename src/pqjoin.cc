@@ -58,6 +58,13 @@ SourceRange* Join::make_source(Server& server, const Match& m,
         return new JVSourceRange(server, this, m, ibegin, iend);
 }
 
+SourceAccumulator* Join::make_accumulator(Server& server) {
+    if (jvt() == jvt_count_match)
+        return new CountSourceAccumulator(&server.make_table(sink().table_name()));
+    else
+        return 0;
+}
+
 bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
     plen_ = klen_ = 0;
     for (auto s = str.ubegin(); s != str.uend(); ) {
