@@ -12,6 +12,7 @@ namespace  {
 
 typedef void (*test_func)();
 std::vector<std::pair<String, test_func> > tests_;
+std::vector<std::pair<String, test_func> > exptests_;
 
 void simple() {
     pq::Server server;
@@ -482,6 +483,7 @@ void test_swap() {
 
 void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
+#define ADD_EXP_TEST(test) exptests_.push_back(std::pair<String, test_func>(#test, test))
     ADD_TEST(simple);
     ADD_TEST(recursive);
     ADD_TEST(count);
@@ -492,11 +494,15 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_count_validate1);
     ADD_TEST(test_min);
     ADD_TEST(test_max);
-    ADD_TEST(test_karma);
-    ADD_TEST(test_swap);
+    ADD_EXP_TEST(test_karma);
+    ADD_EXP_TEST(test_swap);
     for (auto& t : tests_)
-        if ((testcases.empty() && t.first != "test_karma" && t.first != "test_swap")
-            || testcases.find(t.first) != testcases.end()) {
+        if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
+            std::cerr << "Testing " << t.first << std::endl;
+            t.second();
+        }
+    for (auto& t : exptests_)
+        if (testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
             t.second();
         }
