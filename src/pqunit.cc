@@ -474,7 +474,8 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_max);
     ADD_TEST(test_karma);
     for (auto& t : tests_)
-        if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
+        if ((testcases.empty() && t.first != "test_karma")
+            || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
             t.second();
         }
