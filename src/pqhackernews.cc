@@ -3,11 +3,12 @@
 #include <sys/resource.h>
 #include "json.hh"
 #include "time.hh"
+#include "sp_key.hh"
 
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : nusers_(param["nusers"].as_i(5)),
+    : log_(true), nusers_(param["nusers"].as_i(5)),
       karma_(param["nusers"].as_i(5)*50*10),
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
@@ -24,8 +25,9 @@ void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
     }
 }
 
-void HackernewsRunner::post_comment(uint32_t commentor, uint32_t author, uint32_t aid) {
+void HackernewsRunner::post_comment(uint32_t commentor, uint32_t aid) {
     char buf[128];
+    uint32_t author = hp_.articles()[aid];
     sprintf(buf, "a|%05d%05d|c|%05d|%05d", author, aid, hp_.next_comment(), commentor);
     server_.insert(Str(buf, 27), Str("lalalalala", 10));
     if (hp_.log()) {
@@ -33,33 +35,46 @@ void HackernewsRunner::post_comment(uint32_t commentor, uint32_t author, uint32_
     }
 }
 
-bool HackernewsRunner::vote(uint32_t voter, uint32_t author, uint32_t aid) {
+bool HackernewsRunner::vote(uint32_t voter, uint32_t aid) {
     char buf[128];
+    uint32_t author = hp_.articles()[aid];
     if (hp_.vote(aid, voter)) {
-        sprintf(buf, "a|%05d%05d|v|%05d", author, aid, voter);
-        server_.insert(Str(buf, 21), Str("1", 1));
+        sprintf(buf, "v|%05d%05d|%05d", author, aid, voter);
+        server_.insert(Str(buf, 18), Str("1", 1));
         if (hp_.log()) {
-            printf("vote %.20s\n", buf);
+            printf("vote %.18s\n", buf);
         }
         return true;
     }
     return false;
 }
 
-void HackernewsRunner::read_article(uint32_t aid, uint32_t* author) {
+void HackernewsRunner::read_article(uint32_t aid) {
     char buf1[128], buf2[128];
     mandatory_assert(aid < hp_.narticles());
-    *author = hp_.articles()[aid];
-    sprintf(buf1, "a|%05d%05d|", *author, aid);
-    sprintf(buf2, "a|%05d%05d}", *author, aid);
-    auto bit = server_.lower_bound(Str(buf1, 17)),
-        eit = server_.lower_bound(Str(buf2, 17));
-    if (hp_.log()) {
-        std::cout << ": scan [" << buf1 << "," << buf2 << ")\n";
-        for (; bit != eit; ++bit)
+    uint32_t author = hp_.articles()[aid];
+    sprintf(buf1, "a|%05d%05d|", author, aid);
+    sprintf(buf2, "a|%05d%05d}", author, aid);
+    auto bit = server_.lower_bound(Str(buf1, 13)),
+        eit = server_.lower_bound(Str(buf2, 13));
+    for (; bit != eit; ++bit) {
+        if (hp_.log())
             std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+        String field = extract_spkey(2, bit->key());
+        if (field == "c") {
+            String commenter = extract_spkey(4, bit->key());
+            char buf3[128], buf4[128];
+            sprintf(buf3, "k|%s|", commenter.c_str());
+            sprintf(buf4, "k|%s}", commenter.c_str());
+            auto kbit = server_.lower_bound(Str(buf3, 8)),
+                keit = server_.lower_bound(Str(buf2, 8));
+            for (; kbit != keit; ++kbit) {
+                uint32_t karma = atoi(kbit->value().c_str());
+                if (hp_.log())
+                    std::cout << "  karma " << commenter << ": " << karma << "\n";
+            }
+        }
     }
-    // TODO:  For each comment user, get karma
     // TODO:  Measure performance of alternative ma| materialization
 }
 
@@ -77,19 +92,19 @@ void HackernewsRunner::populate() {
         for (uint32_t j = 1; j <= ncomment; ++j) {
             nc++;
             const uint32_t commentor = rng(hp_.nusers());
-            post_comment(commentor, author, aid);
+            post_comment(commentor, aid);
         }
         const uint32_t nvote = rng(10);
         for (uint32_t j = 0; j < nvote; ++j) {
             const uint32_t voter = rng(hp_.nusers());
-            if (vote(voter, author, aid))
+            if (vote(voter, aid))
                 nv++;
         }
     }
     pq::Join* j = new pq::Join;
     bool valid = j->assign_parse("k|<author:5> "
                                  "a|<aid:10>|a|<author> "
-                                 "a|<aid>|v|<voter:5>");
+                                 "v|<aid>|<voter:5>");
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
     server_.add_join("k|", "k}", j);
@@ -101,7 +116,7 @@ void HackernewsRunner::run() {
     boost::mt19937 gen;
     gen.seed(13918);
     boost::random_number_generator<boost::mt19937> rng(gen);
-    const uint32_t nops = 1000;
+    const uint32_t nops = 10;
     const uint32_t nusers = hp_.nusers();
     const uint32_t narticles = hp_.narticles();
     struct rusage ru[2];
@@ -113,31 +128,31 @@ void HackernewsRunner::run() {
     server_.validate(Str(buf1, 2), Str(buf2, 2));
 
     if (hp_.log()) {
-        std::cout << ": scan [" << buf1 << "," << buf2 << ")\n";
+        std::cout << ": karma scan [" << buf1 << "," << buf2 << ")\n";
         auto bit = server_.lower_bound(Str(buf1, 2)),
             eit = server_.lower_bound(Str(buf2, 2));
         for (; bit != eit; ++bit)
             std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+        std::cout << ": end karma scan [" << buf1 << "," << buf2 << ")\n";
     }
 
     getrusage(RUSAGE_SELF, &ru[0]);
     for (uint32_t i = 0; i < nops; ++i) {
-        uint32_t a = rng(100);
-        uint32_t u = rng(nusers);
-        if (a < 3) {
-            post_article(u, hp_.next_aid());
+        uint32_t p = rng(100);
+        uint32_t user = rng(nusers);
+        if (p < 3) {
+            post_article(user, hp_.next_aid());
             npost++;
         } else {
             uint32_t aid = rng(narticles);
-            uint32_t author;
-            read_article(aid, &author);
+            read_article(aid);
             nread++;
-            if (a < 10) {
-                vote(u, author, aid);
+            if (p < 10) {
+                vote(user, aid);
                 nvote++;
             }
-            if (a < 12) {
-                post_comment(u, author, aid);
+            if (p < 2) {
+                post_comment(user, aid);
                 ncomment++;
             }
         }

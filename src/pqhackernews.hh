@@ -56,9 +56,9 @@ class HackernewsRunner {
     HackernewsPopulator& hp_;
 
     void post_article(uint32_t author, uint32_t aid);
-    void post_comment(uint32_t commentor, uint32_t author, uint32_t aid);
-    bool vote(uint32_t voter, uint32_t author, uint32_t aid);
-    void read_article(uint32_t aid, uint32_t* author);
+    void post_comment(uint32_t commentor, uint32_t aid);
+    bool vote(uint32_t voter, uint32_t aid);
+    void read_article(uint32_t aid);
 };
 
 inline uint32_t HackernewsPopulator::nusers() const {
