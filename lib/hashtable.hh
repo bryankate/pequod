@@ -798,11 +798,9 @@ class HashTable {
 
     /** @brief Swap the contents of this hash table and @a x. */
     void swap(HashTable<K, V> &x) {
+	using std::swap;
 	_rep.swap(x._rep);
-
-	V odefault_value(_default_value);
-	_default_value = x._default_value;
-	x._default_value = odefault_value;
+	swap(_default_value, x._default_value);
     }
 
 
@@ -1070,13 +1068,13 @@ inline bool operator!=(const HashTable_const_iterator<T> &a, const HashTable_con
 
 
 template <typename K, typename V>
-inline void click_swap(HashTable<K, V> &a, HashTable<K, V> &b)
+inline void swap(HashTable<K, V>& a, HashTable<K, V>& b)
 {
     a.swap(b);
 }
 
 template <typename K, typename V>
-inline void clear_by_swap(HashTable<K, V> &x)
+inline void clear_by_swap(HashTable<K, V>& x)
 {
     // specialization avoids losing x's default value
     HashTable<K, V> tmp(x.default_value());

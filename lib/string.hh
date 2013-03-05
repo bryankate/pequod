@@ -733,10 +733,8 @@ inline String operator"" _S(const char *s, size_t len) {
 }
 #endif
 
-namespace std {
-inline void swap(::String& a, ::String& b) {
+inline void swap(String& a, String& b) {
     a.swap(b);
-}
 }
 
 #undef STRING_CONSTEXPR
