@@ -362,7 +362,9 @@ static Clp_Option options[] = {
     { "listen", 'l', 1004, Clp_ValInt, Clp_Optional },
     { "log", 0, 1005, 0, Clp_Negate },
     { "tests", 0, 1006, 0, 0 },
-    { "hn", 'h', 1007, 0, Clp_Negate }
+    { "hn", 'h', 1007, 0, Clp_Negate },
+    { "narticles", 'a', 1008, Clp_ValInt, 0 },
+    { "nops", 'o', 1009, Clp_ValInt, 0 }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
@@ -380,6 +382,10 @@ int main(int argc, char** argv) {
 	    tp_param.set("push", !clp->negated);
 	else if (clp->option->long_name == String("nusers"))
 	    tp_param.set("nusers", clp->val.i);
+	else if (clp->option->long_name == String("narticles"))
+	    tp_param.set("narticles", clp->val.i);
+	else if (clp->option->long_name == String("nops"))
+	    tp_param.set("nops", clp->val.i);
 	else if (clp->option->long_name == String("shape"))
 	    tp_param.set("shape", clp->val.d);
 	else if (clp->option->long_name == String("facebook"))
