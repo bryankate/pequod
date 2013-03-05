@@ -140,7 +140,7 @@ void HackernewsRunner::run() {
     const uint32_t nusers = hp_.nusers();
     struct rusage ru[2];
     uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
-    hp_.set_log(true);
+    hp_.set_log(false);
 
     char buf1[128], buf2[128];
     sprintf(buf1, "k|");

@@ -142,7 +142,7 @@ inline uint32_t HackernewsPopulator::comment_rate() const {
 }
 
 inline uint32_t HackernewsPopulator::post_rate() const {
-    return param_["post_rate"].as_i(3);
+    return param_["post_rate"].as_i(0);
 }
 
 inline HackernewsRunner::HackernewsRunner(Server& server, HackernewsPopulator& hp)
