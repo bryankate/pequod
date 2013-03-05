@@ -12,7 +12,7 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
       pre_(param["narticles"].as_i(1000)),
-      narticles_(0), ncomments_(0) {
+      narticles_(0), ncomments_(0), materialize_inline_(false) {
 }
 
 void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
@@ -68,16 +68,36 @@ void HackernewsRunner::read_article(uint32_t aid) {
             if (hp_.log())
                 std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
         } else if (field == "c") {
+            String commenter = extract_spkey(4, bit->key());
             if (hp_.log())
-                std::cout << "  c " << bit->key() << ": " << bit->value();
+                std::cout << "  c "  << bit->key() << ": " << bit->value();
+            if (hp_.m()) {
+                // we'll get the karma eventually in the "k" field
+                if (hp_.log())
+                    std::cout << "\n";
+            } else {
+                // Retrieve karma
+                char buf3[128];
+                sprintf(buf3, "k|%s", commenter.c_str());
+                auto kbit = server_.find(Str(buf3, 7));
+                uint32_t karma = 0;
+                if (kbit != NULL) {
+                    karma = atoi(kbit->value().c_str());
+                    uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
+                    mandatory_assert(karma == my_karma && "Karma mismatch");
+                    if (hp_.log())
+                        std::cout << " karma " << ":" << karma << "\n";
+                } else {
+                    if (hp_.log()) 
+                        std::cout << "\n";
+                }
+            }
         } else if (field == "k") {
+            mandatory_assert(hp_.m() && "Why k if we're not  materializing inline?");
             String commenter = extract_spkey(4, bit->key());
             uint32_t karma = atoi(bit->value().c_str());
             uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
-            if (karma != my_karma) {
-                std::cout << "\nkarma mismatch for " << commenter << "! mine: " << my_karma << " store: " << karma << "\n";
-                mandatory_assert(false);
-            }
+            mandatory_assert(karma == my_karma && "Karma mismatch");
             if (hp_.log())
                 std::cout << " karma " << ":" << karma << "\n";
         } else if (field == "v") {
@@ -114,13 +134,26 @@ void HackernewsRunner::populate() {
         }
     }
     pq::Join* j = new pq::Join;
-    bool valid = j->assign_parse("a|<aid2:10>|k|<cid:5>|<commenter:5> "
-                                 "a|<aid2:10>|c|<cid:5>|<commenter> "
-                                 "a|<aid:10>|a|<commenter> "
-                                 "a|<aid>|v|<voter:5>");
+    String join_str;
+    String start, end;
+    if (hp_.m()) {
+        join_str = "a|<aid2:10>|k|<cid:5>|<commenter:5> "
+            "a|<aid2:10>|c|<cid:5>|<commenter> "
+            "a|<aid:10>|a|<commenter> "
+            "a|<aid>|v|<voter:5>";
+        start = "a|";
+        end = "a}";
+    } else {
+        join_str = "k|<author:5> "
+            "a|<aid:10>|a|<author> "
+            "a|<aid>|v|<voter:5>";
+        start = "k|";
+        end = "k}";
+    }
+    bool valid = j->assign_parse(join_str);
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
-    server_.add_join("a|", "a}", j);
+    server_.add_join(start, end, j);
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
 }
@@ -135,8 +168,15 @@ void HackernewsRunner::run() {
     uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
 
     char buf1[128], buf2[128];
-    sprintf(buf1, "a|");
-    sprintf(buf2, "a}");
+    if (hp_.m()) {
+        std::cout << "Materializing karma inline with articles.\n";
+        sprintf(buf1, "a|");
+        sprintf(buf2, "a}");
+    } else {
+        std::cout << "Materializing separate karma table.\n";
+        sprintf(buf1, "k|");
+        sprintf(buf2, "k}");
+    }
     server_.validate(Str(buf1, 2), Str(buf2, 2));
     std::cout << "Finished validate.\n";
     if (hp_.log()) {

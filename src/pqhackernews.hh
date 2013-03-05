@@ -34,6 +34,7 @@ class HackernewsPopulator {
     inline uint32_t vote_rate() const;
     inline uint32_t comment_rate() const;
     inline uint32_t post_rate() const;
+    inline bool m() const;
 
   private:
     Json param_;
@@ -48,6 +49,7 @@ class HackernewsPopulator {
     uint32_t pre_;
     uint32_t narticles_;
     uint32_t ncomments_;
+    bool materialize_inline_;
 };
 
 class HackernewsRunner {
@@ -143,6 +145,10 @@ inline uint32_t HackernewsPopulator::comment_rate() const {
 
 inline uint32_t HackernewsPopulator::post_rate() const {
     return param_["post_rate"].as_i(0);
+}
+
+inline bool HackernewsPopulator::m() const {
+    return materialize_inline_;
 }
 
 inline HackernewsRunner::HackernewsRunner(Server& server, HackernewsPopulator& hp)
