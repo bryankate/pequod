@@ -2,6 +2,8 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <set>
+#include <sys/prctl.h>
+#include <sys/wait.h>
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "json.hh"
@@ -418,6 +420,17 @@ void test_karma_online() {
         auto k0 = server.find(String(buf));
         mandatory_assert(k0);
         CHECK_EQ(k0->value_, String(1));
+    }
+    // perf profiling
+    enum { do_perf = 0 };
+    if (do_perf) {
+        String me(getpid());
+        pid_t pid = fork();
+        if (!pid) {
+            prctl(PR_SET_PDEATHSIG, SIGINT);
+            execlp("perf", "perf", "record", "-g", "-p", me.c_str(), NULL);
+            exit(0);
+        }
     }
     // online votes
     struct rusage ru[2];
