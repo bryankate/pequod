@@ -54,7 +54,9 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
     // need to validate the source ranges in case they have not been
     // expanded yet.
     // XXX PERFORMANCE this is not always necessary
-    server.validate(Str(kf, kflen), Str(kl, kllen));
+    // XXX For now don't do this if the join is recursive
+    if (table_name(Str(kf, kflen)) != join_->sink().table_name())
+        server.validate(Str(kf, kflen), Str(kl, kllen));
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
