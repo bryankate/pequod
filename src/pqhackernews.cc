@@ -138,10 +138,10 @@ void HackernewsRunner::populate() {
     String join_str;
     String start, end;
     if (hp_.m()) {
-        join_str = "a|<aid2:10>|k|<cid:5>|<commenter:5> "
-            "a|<aid2:10>|c|<cid:5>|<commenter> "
-            "a|<aid:10>|a|<commenter> "
-            "a|<aid>|v|<voter:5>";
+        join_str = "a|<author:5><seqid1:5>|kk|<cid:5>|<commenter:5> "
+            "a|<author><seqid1>|c|<cid>|<commenter> "
+            "a|<commenter><seqid2:5>|a|<blah:5> "
+            "a|<commenter><seqid2>|v|<voter:5>";
         start = "a|";
         end = "a}";
     } else {
