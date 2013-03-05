@@ -8,7 +8,7 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : log_(true), nusers_(param["nusers"].as_i(25)),
+    : param_(param), log_(true), nusers_(param["nusers"].as_i(25)),
       karma_(param["nusers"].as_i(5)*50*10),
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
@@ -18,20 +18,20 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
 void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
     char buf[128];
     hp_.post_article(author, aid);
-    sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, 0, author);
-    server_.insert(Str(buf, 24), Str("lalalalala", 10));
+    sprintf(buf, "a|%05d%05d|a|%05d", author, aid, author);
+    server_.insert(Str(buf, 20), Str("lalalalala", 10));
     if (hp_.log()) {
-        printf("article %.24s\n", buf);
+        printf("post %.20s\n", buf);
     }
 }
 
 void HackernewsRunner::post_comment(uint32_t commentor, uint32_t aid) {
     char buf[128];
     uint32_t author = hp_.articles()[aid];
-    sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, hp_.next_comment(), commentor);
-    server_.insert(Str(buf, 25), Str("calalalala", 10));
+    sprintf(buf, "a|%05d%05d|c|%05d|%05d", author, aid, hp_.next_comment(), commentor);
+    server_.insert(Str(buf, 26), Str("calalalala", 10));
     if (hp_.log()) {
-        printf("  %.24s\n", buf);
+        printf("comment  %.26s\n", buf);
     }
 }
 
@@ -39,10 +39,10 @@ bool HackernewsRunner::vote(uint32_t voter, uint32_t aid) {
     char buf[128];
     uint32_t author = hp_.articles()[aid];
     if (hp_.vote(aid, voter)) {
-        sprintf(buf, "v|%05d%05d|%05d", author, aid, voter);
-        server_.insert(Str(buf, 18), Str("1", 1));
+        sprintf(buf, "a|%05d%05d|v|%05d", author, aid, voter);
+        server_.insert(Str(buf, 20), Str("1", 1));
         if (hp_.log()) {
-            printf("vote %.18s\n", buf);
+            printf("vote %.20s\n", buf);
         }
         return true;
     }
@@ -59,10 +59,13 @@ void HackernewsRunner::read_article(uint32_t aid) {
         eit = server_.lower_bound(Str(buf2, 13));
     for (; bit != eit; ++bit) {
         String field = extract_spkey(2, bit->key());
-        if (field != "00000") {
+        if (field == "a") {
             if (hp_.log())
-                std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-            String commenter = extract_spkey(3, bit->key());
+                std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
+        } else {
+            if (hp_.log())
+                std::cout << "  c " << bit->key() << ": " << bit->value();
+            String commenter = extract_spkey(4, bit->key());
             char buf3[128];
 
             sprintf(buf3, "k|%s", commenter.c_str());
@@ -72,11 +75,13 @@ void HackernewsRunner::read_article(uint32_t aid) {
                 karma = atoi(kbit->value().c_str());
                 uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
                 if (karma != my_karma) {
-                    std::cout << "karma mismatch! " << my_karma << " " << karma << "\n";
+                    std::cout << "\nkarma mismatch! " << my_karma << " " << karma << "\n";
                     mandatory_assert(false);
                 }
                 if (hp_.log())
-                    std::cout << "  karma " << ": " << commenter << "->" << karma << "\n";
+                    std::cout << " karma " << ":" << karma << "\n";
+            } else {
+                std::cout << "\n";
             }
         }
     }
@@ -108,8 +113,8 @@ void HackernewsRunner::populate() {
     }
     pq::Join* j = new pq::Join;
     bool valid = j->assign_parse("k|<author:5> "
-                                 "a|<aid:10>|00000|<author> "
-                                 "v|<aid>|<voter:5>");
+                                 "a|<aid:10>|a|<author> "
+                                 "a|<aid>|v|<voter:5>");
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
     server_.add_join("k|", "k}", j);
@@ -156,7 +161,7 @@ void HackernewsRunner::run() {
                 vote(user, aid);
                 nvote++;
             }
-            if (p < 2) {
+            if (p < 30) {
                 post_comment(user, aid);
                 ncomment++;
             }

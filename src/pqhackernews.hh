@@ -31,6 +31,7 @@ class HackernewsPopulator {
     inline uint32_t pre() const;
 
   private:
+    Json param_;
     bool log_;
     uint32_t nusers_;
     // author -> karma
