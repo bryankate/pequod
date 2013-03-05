@@ -169,7 +169,7 @@ tamer/compiler/tamer $(LIBTAMER): tamer-update tamer/config.status
 	cd tamer && $(MAKE) compiler tamer
 
 tamer-update:
-	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
 
 $(OBJDIR)/stamp $(DEPSDIR)/stamp:
 	mkdir -p $(dir $@)
