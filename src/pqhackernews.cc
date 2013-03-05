@@ -8,10 +8,10 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
+    : param_(param), log_(true), nusers_(param["nusers"].as_i(500)),
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
-      pre_(param["narticles"].as_i(100000)),
+      pre_(param["narticles"].as_i(10)),
       narticles_(0), ncomments_(0) {
 }
 
@@ -70,25 +70,16 @@ void HackernewsRunner::read_article(uint32_t aid) {
         } else if (field == "c") {
             if (hp_.log())
                 std::cout << "  c " << bit->key() << ": " << bit->value();
+        } else if (field == "k") {
             String commenter = extract_spkey(4, bit->key());
-            char buf3[128];
-
-            sprintf(buf3, "k|%s", commenter.c_str());
-            auto kbit = server_.find(Str(buf3, 7));
-            uint32_t karma = 0;
-            if (kbit != NULL) {
-                karma = atoi(kbit->value().c_str());
-                uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
-                if (karma != my_karma) {
-                    std::cout << "\nkarma mismatch for " << commenter << "! mine: " << my_karma << " store: " << karma << "\n";
-                    mandatory_assert(false);
-                }
-                if (hp_.log())
-                    std::cout << " karma " << ":" << karma << "\n";
-            } else {
-                if (hp_.log()) 
-                    std::cout << "\n";
+            uint32_t karma = atoi(bit->value().c_str());
+            uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
+            if (karma != my_karma) {
+                std::cout << "\nkarma mismatch for " << commenter << "! mine: " << my_karma << " store: " << karma << "\n";
+                mandatory_assert(false);
             }
+            if (hp_.log())
+                std::cout << " karma " << ":" << karma << "\n";
         } else if (field == "v") {
             if (hp_.log())
                 std::cout << "  v " << bit->key() << ": " << bit->value() << "\n";
@@ -123,12 +114,13 @@ void HackernewsRunner::populate() {
         }
     }
     pq::Join* j = new pq::Join;
-    bool valid = j->assign_parse("k|<author:5> "
-                                 "a|<aid:10>|a|<author> "
+    bool valid = j->assign_parse("a|<aid2:10>|k|<cid:5>|<commenter:5> "
+                                 "a|<aid2:10>|c|<cid:5>|<commenter> "
+                                 "a|<aid:10>|a|<commenter> "
                                  "a|<aid>|v|<voter:5>");
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
-    server_.add_join("k|", "k}", j);
+    server_.add_join("a|", "a}", j);
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
 }
@@ -141,11 +133,10 @@ void HackernewsRunner::run() {
     const uint32_t nusers = hp_.nusers();
     struct rusage ru[2];
     uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
-    hp_.set_log(false);
 
     char buf1[128], buf2[128];
-    sprintf(buf1, "k|");
-    sprintf(buf2, "k}");
+    sprintf(buf1, "a|");
+    sprintf(buf2, "a}");
     server_.validate(Str(buf1, 2), Str(buf2, 2));
 
     if (hp_.log()) {
