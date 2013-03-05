@@ -680,5 +680,9 @@ inline bool operator!=(StringAccum &sa, const char *cstr) {
     return strcmp(sa.c_str(), cstr) != 0;
 }
 
+inline void swap(StringAccum& a, StringAccum& b) {
+    a.swap(b);
+}
+
 #undef LCDF_SNPRINTF_ATTR
 #endif

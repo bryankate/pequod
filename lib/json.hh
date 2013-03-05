@@ -2362,9 +2362,10 @@ inline Json &Json::operator+=(double x) {
 
 /** @brief Swap this Json with @a x. */
 inline void Json::swap(Json &x) {
-    std::swap(_type, x._type);
+    using std::swap;
+    swap(_type, x._type);
     _str.swap(x._str);
-    std::swap(_cjson, x._cjson);
+    swap(_cjson, x._cjson);
 }
 
 
@@ -2428,6 +2429,10 @@ template <typename T, typename U>
 inline bool operator!=(const Json_proxy_base<T> &a,
 		       const Json_proxy_base<U> &b) {
     return !(a == b);
+}
+
+inline void swap(Json& a, Json& b) {
+    a.swap(b);
 }
 
 #endif

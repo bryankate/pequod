@@ -404,6 +404,7 @@ void rbrep1<T, C, R>::insert_node(T* x) {
 
 template <typename T, typename C, typename R>
 void rbtree<T, C, R>::delete_node(T* victim_node) {
+    using std::swap;
     // find the node's color
     rbnodeptr<T> victim(victim_node, false);
     rbnodeptr<T> p = victim.black_parent();
@@ -420,7 +421,7 @@ void rbtree<T, C, R>::delete_node(T* victim_node) {
             p.child(child) = succ.change_color(p.child(child).red());
         else
             r_.root_ = succ.node();
-        std::swap(succ.node()->rblinks_, victim.node()->rblinks_);
+        swap(succ.node()->rblinks_, victim.node()->rblinks_);
         if (schild)
             succ.child(schild) = victim.change_color(succ.child(schild).red());
         succ.child(0).parent() = succ.child(1).parent() = succ.node();
