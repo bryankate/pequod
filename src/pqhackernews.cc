@@ -11,7 +11,7 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
     : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
-      pre_(param["narticles"].as_i(100000)),
+      pre_(param["narticles"].as_i(1000)),
       narticles_(0), ncomments_(0) {
 }
 
