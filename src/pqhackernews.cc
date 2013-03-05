@@ -8,7 +8,7 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : log_(true), nusers_(param["nusers"].as_i(5)),
+    : log_(true), nusers_(param["nusers"].as_i(25)),
       karma_(param["nusers"].as_i(5)*50*10),
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
@@ -29,7 +29,7 @@ void HackernewsRunner::post_comment(uint32_t commentor, uint32_t aid) {
     char buf[128];
     uint32_t author = hp_.articles()[aid];
     sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, hp_.next_comment(), commentor);
-    server_.insert(Str(buf, 25), Str("lalalalala", 10));
+    server_.insert(Str(buf, 25), Str("calalalala", 10));
     if (hp_.log()) {
         printf("  %.24s\n", buf);
     }
@@ -58,20 +58,25 @@ void HackernewsRunner::read_article(uint32_t aid) {
     auto bit = server_.lower_bound(Str(buf1, 13)),
         eit = server_.lower_bound(Str(buf2, 13));
     for (; bit != eit; ++bit) {
-        if (hp_.log())
-            std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
         String field = extract_spkey(2, bit->key());
-        if (field == "c") {
-            String commenter = extract_spkey(4, bit->key());
-            char buf3[128], buf4[128];
-            sprintf(buf3, "k|%s|", commenter.c_str());
-            sprintf(buf4, "k|%s}", commenter.c_str());
-            auto kbit = server_.lower_bound(Str(buf3, 8)),
-                keit = server_.lower_bound(Str(buf2, 8));
-            for (; kbit != keit; ++kbit) {
-                uint32_t karma = atoi(kbit->value().c_str());
+        if (field != "00000") {
+            if (hp_.log())
+                std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
+            String commenter = extract_spkey(3, bit->key());
+            char buf3[128];
+
+            sprintf(buf3, "k|%s", commenter.c_str());
+            auto kbit = server_.find(Str(buf3, 7));
+            uint32_t karma = 0;
+            if (kbit != NULL) {
+                karma = atoi(kbit->value().c_str());
+                uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
+                if (karma != my_karma) {
+                    std::cout << "karma mismatch! " << my_karma << " " << karma << "\n";
+                    mandatory_assert(false);
+                }
                 if (hp_.log())
-                    std::cout << "  karma " << commenter << ": " << karma << "\n";
+                    std::cout << "  karma " << ": " << commenter << "->" << karma << "\n";
             }
         }
     }
