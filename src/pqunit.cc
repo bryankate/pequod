@@ -422,12 +422,15 @@ void test_karma_online() {
         CHECK_EQ(k0->value_, String(1));
     }
     // perf profiling
-    String me(getpid());
-    pid_t pid = fork();
-    if (!pid) {
-        prctl(PR_SET_PDEATHSIG, SIGINT);
-        execlp("perf", "perf", "record", "-g", "-p", me.c_str(), NULL);
-        exit(0);
+    enum { do_perf = 0 };
+    if (do_perf) {
+        String me(getpid());
+        pid_t pid = fork();
+        if (!pid) {
+            prctl(PR_SET_PDEATHSIG, SIGINT);
+            execlp("perf", "perf", "record", "-g", "-p", me.c_str(), NULL);
+            exit(0);
+        }
     }
     // online votes
     struct rusage ru[2];
