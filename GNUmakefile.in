@@ -81,7 +81,6 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
-src/pqtwitter.cc:
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
