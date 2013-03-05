@@ -138,7 +138,7 @@ void HackernewsRunner::run() {
     sprintf(buf1, "a|");
     sprintf(buf2, "a}");
     server_.validate(Str(buf1, 2), Str(buf2, 2));
-
+    std::cout << "Finished validate.\n";
     if (hp_.log()) {
         std::cout << ": karma scan [" << buf1 << "," << buf2 << ")\n";
         auto bit = server_.lower_bound(Str(buf1, 2)),
