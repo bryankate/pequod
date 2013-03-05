@@ -16,6 +16,8 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
+TAMER_COMMIT = 4dafe30c7a2e2c9db32b0525bcca4114abc9383f
+
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
@@ -158,8 +160,11 @@ $(OBJDIR)/benchproto: $(COMMON_OBJS) $(OBJDIR)/benchproto.o $(OBJDIR)/micro1.pb.
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 $(OBJDIR)/benchproto.o: $(PROTOGENDIR)/micro1.pb.h $(PROTOGENDIR)/micro2.px.hh
 
-tamer/compiler/tamer $(LIBTAMER): tamer/config.status always
+tamer/compiler/tamer $(LIBTAMER): tamer-update tamer/config.status
 	cd tamer && $(MAKE) compiler tamer
+
+tamer-update:
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
 
 $(OBJDIR)/stamp $(DEPSDIR)/stamp:
 	mkdir -p $(dir $@)
@@ -194,7 +199,7 @@ endif
 always:
 	@:
 
-.PHONY: all clean distclean always
+.PHONY: all clean distclean always tamer-update
 .PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
 	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh \
 	$(OBJ)/%.cc
