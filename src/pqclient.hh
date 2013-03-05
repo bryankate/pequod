@@ -4,19 +4,24 @@
 #include <tamer/tamer.hh>
 namespace pq {
 using tamer::event;
+using tamer::preevent;
 
 class DirectClient {
   public:
     inline DirectClient(Server& server);
 
+    template <typename R>
     inline void add_join(const String& first, const String& last,
-                         const String& join_text, event<> e);
+                         const String& join_text, preevent<R> e);
 
-    inline void insert(const String& key, const String& value, event<> e);
-    inline void erase(const String& key, event<> e);
+    template <typename R>
+    inline void insert(const String& key, const String& value, preevent<R> e);
+    template <typename R>
+    inline void erase(const String& key, preevent<R> e);
 
+    template <typename R>
     inline void count(const String& first, const String& last,
-                      event<size_t> e);
+                      preevent<R, size_t> e);
 
     class scan_result {
       public:
@@ -29,10 +34,12 @@ class DirectClient {
         iterator first_;
         iterator last_;
     };
+    template <typename R>
     inline void scan(const String& first, const String& last,
-                     event<scan_result> e);
+                     preevent<R, scan_result> e);
 
-    inline void stats(event<Json> e);
+    template <typename R>
+    inline void stats(preevent<R, Json> e);
 
   private:
     Server& server_;
@@ -43,27 +50,31 @@ inline DirectClient::DirectClient(Server& server)
     : server_(server) {
 }
 
+template <typename R>
 inline void DirectClient::add_join(const String& first, const String& last,
-                                   const String& join_text, event<> e) {
+                                   const String& join_text, preevent<R> e) {
     Join* j = new Join;
     j->assign_parse(join_text);
     server_.add_join(first, last, j);
     e();
 }
 
+template <typename R>
 inline void DirectClient::insert(const String& key, const String& value,
-                                 event<> e) {
+                                 preevent<R> e) {
     server_.insert(key, value);
     e();
 }
 
-inline void DirectClient::erase(const String& key, event<> e) {
+template <typename R>
+inline void DirectClient::erase(const String& key, preevent<R> e) {
     server_.erase(key);
     e();
 }
 
+template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
-                                event<size_t> e) {
+                                preevent<R, size_t> e) {
     server_.validate(first, last);
     e(server_.count(first, last));
 }
@@ -80,14 +91,16 @@ inline auto DirectClient::scan_result::end() const -> iterator {
     return last_;
 }
 
+template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
-                               event<scan_result> e) {
+                               preevent<R, scan_result> e) {
     server_.validate(first, last);
     e(scan_result(server_.lower_bound(first),
                   server_.lower_bound(last)));
 }
 
-inline void DirectClient::stats(event<Json> e) {
+template <typename R>
+inline void DirectClient::stats(preevent<R, Json> e) {
     e(server_.stats());
 }
 

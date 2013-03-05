@@ -14,6 +14,7 @@
 #include "pqserver.hh"
 namespace pq {
 using tamer::event;
+using tamer::preevent;
 
 class TwitterPopulator {
   public:
@@ -69,7 +70,8 @@ class TwitterRunner {
     S& server_;
     TwitterPopulator& tp_;
 
-    tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
+    tamed void post(uint32_t u, uint32_t time, Str value,
+                    preevent<tamer::gather_rendezvous> e);
 };
 
 inline uint32_t TwitterPopulator::nusers() const {
@@ -111,8 +113,8 @@ inline TwitterRunner<S>::TwitterRunner(S& server, TwitterPopulator& tp)
 
 tamed template <typename S>
 void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
-                            event<> e) {
-    tvars { char buf[128]; }
+                            preevent<tamer::gather_rendezvous> e) {
+    tvars { char buf[128]; event<> savee; }
     twait {
         sprintf(buf, "p|%05d|%010u", u, time);
         server_.insert(Str(buf, 18), value, make_event());
@@ -122,8 +124,11 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                 sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
                 server_.insert(Str(buf, 24), value, make_event());
             }
+        // XXX this is super ugly to write
+        if (tamer_closure_.tamer_gather_rendezvous_.has_waiting())
+            savee = event<>(std::move(e));
     }
-    e();
+    e(); savee();
 }
 
 tamed template <typename S>
