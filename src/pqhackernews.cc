@@ -8,10 +8,10 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(true), nusers_(param["nusers"].as_i(25)),
-      karma_(param["nusers"].as_i(25)),
+    : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
+      karma_(param["nusers"].as_i(500)),
       articles_(1000000),
-      pre_(param["narticles"].as_i(10)),
+      pre_(param["narticles"].as_i(100000)),
       narticles_(0), ncomments_(0) {
 }
 
@@ -86,7 +86,8 @@ void HackernewsRunner::read_article(uint32_t aid) {
                 if (hp_.log())
                     std::cout << " karma " << ":" << karma << "\n";
             } else {
-                std::cout << "\n";
+                if (hp_.log()) 
+                    std::cout << "\n";
             }
         } else if (field == "v") {
             if (hp_.log())
