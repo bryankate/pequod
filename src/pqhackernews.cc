@@ -18,20 +18,20 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
 void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
     char buf[128];
     hp_.post_article(author, aid);
-    sprintf(buf, "a|%05d%05d|a|%05d", author, aid, author);
-    server_.insert(Str(buf, 21), Str("lalalalala", 10));
+    sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, 0, author);
+    server_.insert(Str(buf, 24), Str("lalalalala", 10));
     if (hp_.log()) {
-        printf("article %.20s\n", buf);
+        printf("article %.24s\n", buf);
     }
 }
 
 void HackernewsRunner::post_comment(uint32_t commentor, uint32_t aid) {
     char buf[128];
     uint32_t author = hp_.articles()[aid];
-    sprintf(buf, "a|%05d%05d|c|%05d|%05d", author, aid, hp_.next_comment(), commentor);
-    server_.insert(Str(buf, 27), Str("lalalalala", 10));
+    sprintf(buf, "a|%05d%05d|%05d|%05d", author, aid, hp_.next_comment(), commentor);
+    server_.insert(Str(buf, 25), Str("lalalalala", 10));
     if (hp_.log()) {
-        printf("  %.26s\n", buf);
+        printf("  %.24s\n", buf);
     }
 }
 
@@ -103,7 +103,7 @@ void HackernewsRunner::populate() {
     }
     pq::Join* j = new pq::Join;
     bool valid = j->assign_parse("k|<author:5> "
-                                 "a|<aid:10>|a|<author> "
+                                 "a|<aid:10>|00000|<author> "
                                  "v|<aid>|<voter:5>");
     mandatory_assert(valid && "Invalid join");
     j->set_jvt(jvt_count_match);
