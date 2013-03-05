@@ -9,7 +9,7 @@ namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
     : param_(param), log_(true), nusers_(param["nusers"].as_i(25)),
-      karma_(param["nusers"].as_i(5)*50*10),
+      karma_(param["nusers"].as_i(25)),
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
       narticles_(0), ncomments_(0) {
@@ -22,6 +22,11 @@ void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
     server_.insert(Str(buf, 20), Str("lalalalala", 10));
     if (hp_.log()) {
         printf("post %.20s\n", buf);
+    }
+    sprintf(buf, "a|%05d%05d|v|%05d", author, aid, author);
+    server_.insert(Str(buf, 20), Str("1", 1));
+    if (hp_.log()) {
+        printf("vote %.20s\n", buf);
     }
 }
 
@@ -62,7 +67,7 @@ void HackernewsRunner::read_article(uint32_t aid) {
         if (field == "a") {
             if (hp_.log())
                 std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
-        } else {
+        } else if (field == "c") {
             if (hp_.log())
                 std::cout << "  c " << bit->key() << ": " << bit->value();
             String commenter = extract_spkey(4, bit->key());
@@ -75,7 +80,7 @@ void HackernewsRunner::read_article(uint32_t aid) {
                 karma = atoi(kbit->value().c_str());
                 uint32_t my_karma = hp_.karma(atoi(commenter.c_str()));
                 if (karma != my_karma) {
-                    std::cout << "\nkarma mismatch! " << my_karma << " " << karma << "\n";
+                    std::cout << "\nkarma mismatch for " << commenter << "! mine: " << my_karma << " store: " << karma << "\n";
                     mandatory_assert(false);
                 }
                 if (hp_.log())
@@ -83,6 +88,11 @@ void HackernewsRunner::read_article(uint32_t aid) {
             } else {
                 std::cout << "\n";
             }
+        } else if (field == "v") {
+            if (hp_.log())
+                std::cout << "  v " << bit->key() << ": " << bit->value() << "\n";
+        } else {
+            mandatory_assert("Unknown field in key");
         }
     }
     // TODO:  Measure performance of alternative ma| materialization
@@ -126,11 +136,11 @@ void HackernewsRunner::run() {
     boost::mt19937 gen;
     gen.seed(13918);
     boost::random_number_generator<boost::mt19937> rng(gen);
-    const uint32_t nops = 10;
+    const uint32_t nops = hp_.nops();
     const uint32_t nusers = hp_.nusers();
-    const uint32_t narticles = hp_.narticles();
     struct rusage ru[2];
     uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
+    hp_.set_log(true);
 
     char buf1[128], buf2[128];
     sprintf(buf1, "k|");
@@ -150,18 +160,18 @@ void HackernewsRunner::run() {
     for (uint32_t i = 0; i < nops; ++i) {
         uint32_t p = rng(100);
         uint32_t user = rng(nusers);
-        if (p < 3) {
+        if (p < hp_.post_rate()) {
             post_article(user, hp_.next_aid());
             npost++;
         } else {
-            uint32_t aid = rng(narticles);
+            uint32_t aid = rng(hp_.narticles());
             read_article(aid);
             nread++;
-            if (p < 10) {
+            if (p < hp_.vote_rate()) {
                 vote(user, aid);
                 nvote++;
             }
-            if (p < 30) {
+            if (p < hp_.comment_rate()) {
                 post_comment(user, aid);
                 ncomment++;
             }

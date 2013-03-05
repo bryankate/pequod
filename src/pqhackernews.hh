@@ -26,9 +26,14 @@ class HackernewsPopulator {
     inline uint32_t narticles() const;
     inline void set_narticles(uint32_t n);
     inline uint32_t karma(uint32_t author) const;
+    inline void set_log(bool val);
     inline bool log() const;
     inline const std::vector<uint32_t>& articles() const;
     inline uint32_t pre() const;
+    inline uint32_t nops() const;
+    inline uint32_t vote_rate() const;
+    inline uint32_t comment_rate() const;
+    inline uint32_t post_rate() const;
 
   private:
     Json param_;
@@ -38,7 +43,7 @@ class HackernewsPopulator {
     std::vector<uint32_t> karma_;
     // article -> author
     std::vector<uint32_t> articles_;
-    // article -> users who voted on it
+    // article -> users
     std::map<uint32_t, std::set<uint32_t> > votes_;
     uint32_t pre_;
     uint32_t narticles_;
@@ -67,11 +72,14 @@ inline uint32_t HackernewsPopulator::nusers() const {
 }
     
 inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article) {
+    auto it = votes_.find(article);
+    mandatory_assert(it == votes_.end());
     articles_[article] = author;
     auto s = std::set<uint32_t>();
     s.insert(author);
     votes_.insert(std::pair<uint32_t, std::set<uint32_t> >(article, s));
-    narticles_++;
+    ++narticles_;
+    ++karma_[author];  // one vote
 }
 
 inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
@@ -115,6 +123,26 @@ inline uint32_t HackernewsPopulator::karma(uint32_t author) const {
 
 inline bool HackernewsPopulator::log() const {
     return log_;
+}
+
+inline void HackernewsPopulator::set_log(bool val) {
+    log_ = val;
+}
+
+inline uint32_t HackernewsPopulator::nops() const {
+    return param_["nops"].as_i(1000);
+}
+
+inline uint32_t HackernewsPopulator::vote_rate() const {
+    return param_["vote_rate"].as_i(10);
+}
+
+inline uint32_t HackernewsPopulator::comment_rate() const {
+    return param_["comment_rate"].as_i(5);
+}
+
+inline uint32_t HackernewsPopulator::post_rate() const {
+    return param_["post_rate"].as_i(3);
 }
 
 inline HackernewsRunner::HackernewsRunner(Server& server, HackernewsPopulator& hp)
