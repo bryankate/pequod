@@ -339,6 +339,12 @@ inline hashcode_t hashcode(const String_base<T> &x) {
     return String_generic::hashcode(x.data(), x.length());
 }
 
+// boost's spelling
+template <typename T>
+inline size_t hash_value(const String_base<T>& x) {
+    return String_generic::hashcode(x.data(), x.length());
+}
+
 template <typename T>
 inline typename T::substring_type String_generic::ltrim(const T &str) {
     const char *b = str.begin(), *e = str.end();
