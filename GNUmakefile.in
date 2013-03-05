@@ -91,6 +91,7 @@ COMMON_OBJS = \
 	$(OBJDIR)/compiler.o \
 	$(OBJDIR)/encoding.o \
 	$(OBJDIR)/hashallocator.o \
+	$(OBJDIR)/sp_key.o \
 	$(OBJDIR)/clp.o
 
 PQSERVER_OBJS = $(COMMON_OBJS) \
