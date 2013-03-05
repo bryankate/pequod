@@ -12,7 +12,8 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
       pre_(param["narticles"].as_i(1000)),
-      narticles_(0), ncomments_(0), materialize_inline_(false) {
+      narticles_(0), ncomments_(0), 
+      materialize_inline_(param["materialize"].as_b(false)) {
 }
 
 void HackernewsRunner::post_article(uint32_t author, uint32_t aid) {
