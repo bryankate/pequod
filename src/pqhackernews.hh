@@ -130,7 +130,7 @@ inline void HackernewsPopulator::set_log(bool val) {
 }
 
 inline uint32_t HackernewsPopulator::nops() const {
-    return param_["nops"].as_i(10);
+    return param_["nops"].as_i(1000000);
 }
 
 inline uint32_t HackernewsPopulator::vote_rate() const {
