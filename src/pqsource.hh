@@ -123,6 +123,24 @@ class MaxSourceAccumulator : public SourceAccumulator {
 };
 
 
+class SumSourceRange : public SourceRange {
+  public:
+    inline SumSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class SumSourceAccumulator : public SourceAccumulator {
+  public:
+    inline SumSourceAccumulator(Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    long sum_;
+    bool any_;
+};
+
+
 inline Str SourceRange::ibegin() const {
     return ibegin_;
 }
@@ -183,5 +201,13 @@ inline MaxSourceAccumulator::MaxSourceAccumulator(Table* dst_table)
     : SourceAccumulator(dst_table), any_(false) {
 }
 
+
+inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline SumSourceAccumulator::SumSourceAccumulator(Table* dst_table)
+    : SourceAccumulator(dst_table), sum_(0), any_(false) {
+}
 }
 #endif
