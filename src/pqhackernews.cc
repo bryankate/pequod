@@ -8,7 +8,7 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(true), nusers_(param["nusers"].as_i(500)),
+    : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
       pre_(param["narticles"].as_i(1000)),
@@ -114,20 +114,36 @@ void HackernewsRunner::populate() {
         }
     }
 
-    // Materialize karma between articles and votes
-    pq::Join* j = new pq::Join;
-    String join_str = "k|<author:5> "
-        "a|<author:5><seqid:5> "
-        "v|<author><seqid>|<voter:5>";
-    String start = "k|";
-    String end = "k}";
-    bool valid = j->assign_parse(join_str);
-    mandatory_assert(valid && "Invalid karma join");
-    j->set_jvt(jvt_count_match);
-    server_.add_join(start, end, j);
+    String start, end, join_str;
+    bool valid;
+    pq::Join* j;
 
-    start = "ma|";
-    end = "ma}";
+    if (hp_.m()) {
+        // Materialize karma inline
+        std::cout << "Materializing karma inline with articles.\n";
+        join_str = "ma|<aid:10>|k|<cid:5>|<commenter:5> "
+            "c|<aid>|<cid>|<commenter> "
+            "v|<commenter><seq:5>|<voter:5>";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|karma join");
+        j->set_jvt(jvt_count_match);
+        start = "ma|";
+        end = "ma}";
+        server_.add_join(start, end, j);
+    } else {
+        // Materialize karma in a separate table
+        j = new pq::Join;
+        join_str = "k|<author:5> "
+            "a|<author:5><seqid:5> "
+            "v|<author><seqid>|<voter:5>";
+        start = "k|";
+        end = "k}";
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid karma join");
+        j->set_jvt(jvt_count_match);
+        server_.add_join(start, end, j);
+    }
 
     // Materialize articles
     join_str = "ma|<author:5><seqid:5>|a "
@@ -153,19 +169,7 @@ void HackernewsRunner::populate() {
     valid = j->assign_parse(join_str);
     mandatory_assert(valid && "Invalid ma|comments join");
     server_.add_join(start, end, j);
-    
-    if (hp_.m()) {
-        // Materialize karma inline
-        std::cout << "Materializing karma inline with articles.\n";
-        join_str = "ma|<aid:10>|k|<cid:5>|<commenter:5> "
-            "c|<aid>|<cid>|<commenter> "
-            "v|<commenter><seq:5>|<voter:5>";
-        j = new pq::Join;
-        valid = j->assign_parse(join_str);
-        mandatory_assert(valid && "Invalid ma|karma join");
-        j->set_jvt(jvt_count_match);
-        server_.add_join(start, end, j);
-    }
+
 
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;

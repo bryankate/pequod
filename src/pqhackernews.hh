@@ -137,11 +137,11 @@ inline uint32_t HackernewsPopulator::nops() const {
 }
 
 inline uint32_t HackernewsPopulator::vote_rate() const {
-    return param_["vote_rate"].as_i(10);
+    return param_["vote_rate"].as_i(1);
 }
 
 inline uint32_t HackernewsPopulator::comment_rate() const {
-    return param_["comment_rate"].as_i(5);
+    return param_["comment_rate"].as_i(1);
 }
 
 inline uint32_t HackernewsPopulator::post_rate() const {
