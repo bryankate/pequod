@@ -43,6 +43,36 @@ const Json Json::null_json;
 static const String array_string("[Array]", 7);
 static const String object_string("[Object]", 8);
 
+// Array internals
+
+Json::ArrayJson* Json::ArrayJson::make(int n) {
+    int cap = n < 8 ? 8 : n;
+    char* buf = new char[sizeof(ArrayJson) + cap * sizeof(Json)];
+    return new((void*) buf) ArrayJson(cap);
+}
+
+Json::ArrayJson* Json::ArrayJson::grow(ArrayJson* aj, int ncap) {
+    if (aj && ncap < aj->capacity)
+        ncap = aj->capacity < 65536 ? 2 * aj->capacity : aj->capacity + 65536;
+    else if (ncap < 8)
+        ncap = 8;
+    ArrayJson* naj = ArrayJson::make(ncap);
+    if (aj && aj->size) {
+        memcpy(naj->a, aj->a, sizeof(Json) * aj->size);
+        naj->size = aj->size;
+    }
+    delete[] reinterpret_cast<char*>(aj);
+    return naj;
+}
+
+void Json::ArrayJson::destroy(ArrayJson* aj) {
+    if (aj)
+        for (int i = 0; i != aj->size; ++i)
+            aj->a[i].~Json();
+    delete[] reinterpret_cast<char*>(aj);
+}
+
+
 // Object internals
 
 Json::ObjectJson::ObjectJson(const ObjectJson &x)
@@ -166,11 +196,12 @@ Json::size_type Json::ObjectJson::erase(Str key)
 
 namespace {
 template <typename T> bool string_to_int_key(const char *first,
-					     const char *last, T &x)
+					     const char *last, T& x)
 {
     if (first == last || !isdigit((unsigned char) *first)
 	|| (first[0] == '0' && first + 1 != last))
 	return false;
+    // XXX integer overflow
     x = *first - '0';
     for (++first; first != last && isdigit((unsigned char) *first); ++first)
 	x = 10 * x + *first - '0';
@@ -178,49 +209,66 @@ template <typename T> bool string_to_int_key(const char *first,
 }
 }
 
-void Json::hard_uniqueify(int type)
-{
-    if (type < 0) {
-	assert(_type == j_null || _type == -type);
-	type = -type;
-    }
+void Json::hard_uniqueify_array(bool convert, int ncap) {
+    if (!convert)
+        assert(_type == j_null || _type == j_array);
+    if (_type == j_array && u_.a.a && ncap < u_.a.a->capacity)
+        ncap = u_.a.a->capacity;
+    else if (ncap < 8)
+        ncap = 8;
+    ArrayJson* naj = ArrayJson::make(ncap);
+    if (_type == j_array && u_.a.a) {
+        naj->size = u_.a.a->size;
+        memcpy(naj->a, u_.a.a->a, sizeof(Json) * naj->size);
+        for (Json* it = naj->a; it != naj->a + naj->size; ++it) {
+            if (it->_type == j_string)
+                it->u_.str.ref();
+            else if ((it->_type == j_array || it->_type == j_object)
+                     && it->u_.c)
+                it->u_.c->ref();
+        }
+        ArrayJson::destroy(u_.a.a);
+    } else if (_type == j_object && u_.o.o) {
+        ObjectItem *ob = u_.o.o->os_, *oe = ob + u_.o.o->n_;
+        unsigned i;
+        for (; ob != oe; ++ob)
+            if (ob->next_ > -2
+                && string_to_int_key(ob->v_.first.begin(),
+                                     ob->v_.first.end(), i)) {
+                if (i >= unsigned(naj->capacity))
+                    naj = ArrayJson::grow(naj, i + 1);
+                if (i >= unsigned(naj->size)) {
+                    memset(&naj->a[naj->size], 0, sizeof(Json) * (i + 1 - naj->size));
+                    naj->size = i + 1;
+                }
+                naj->a[i] = ob->v_.second;
+            }
+        u_.o.o->deref(j_object);
+    } else if (_type == j_string)
+        u_.str.deref();
+    _type = j_array;
+    u_.a.a = naj;
+}
 
-    ComplexJson *old_cjson = _cjson;
-    if (old_cjson && type == _type && type == j_object)
-	_cjson = new ObjectJson(*static_cast<ObjectJson *>(old_cjson));
-    else if (old_cjson && type == _type && type == j_array)
-	_cjson = new ArrayJson(*static_cast<ArrayJson *>(old_cjson));
-    else if (type == j_object) {
-	_cjson = new ObjectJson;
-	if (old_cjson) {
-	    ArrayJson *old_ajson = static_cast<ArrayJson *>(old_cjson);
-	    ObjectJson *ojson = static_cast<ObjectJson *>(_cjson);
-	    for (JsonVector::size_type i = 0;
-		 i != old_ajson->values.size();
-		 ++i)
-		ojson->find_insert(String(i), old_ajson->values[i]);
-	}
+void Json::hard_uniqueify_object(bool convert) {
+    if (!convert)
+        assert(_type == j_null || _type == j_object);
+    ObjectJson* noj;
+    if (_type == j_object && u_.o.o) {
+        noj = new ObjectJson(*u_.o.o);
+        u_.o.o->deref(j_object);
+    } else if (_type == j_array && u_.a.a) {
+        noj = new ObjectJson;
+        for (int i = 0; i != u_.a.a->size; ++i)
+            noj->find_insert(String(i), u_.a.a->a[i]);
+        u_.a.a->deref(j_array);
     } else {
-	_cjson = new ArrayJson;
-	if (old_cjson) {
-	    ObjectJson *old_ojson = static_cast<ObjectJson *>(old_cjson);
-	    ArrayJson *ajson = static_cast<ArrayJson *>(_cjson);
-	    ObjectItem *ob = old_ojson->os_, *oe = ob + old_ojson->n_;
-	    JsonVector::size_type i;
-	    for (; ob != oe; ++ob)
-		if (ob->next_ > -2
-		    && string_to_int_key(ob->v_.first.begin(),
-					 ob->v_.first.end(), i)) {
-		    if (i < ajson->values.size())
-			ajson->values.resize(i + 1);
-		    ajson->values[i] = ob->v_.second;
-		}
-	}
+        noj = new ObjectJson();
+        if (_type == j_string)
+            u_.str.deref();
     }
-
-    if (old_cjson)
-	old_cjson->deref(_type);
-    _type = (json_type) type;
+    _type = j_object;
+    u_.o.o = noj;
 }
 
 
@@ -342,34 +390,45 @@ String Json::hard_to_s() const
 const Json& Json::hard_get(Str key) const
 {
     ArrayJson *aj;
-    JsonVector::size_type i;
+    unsigned i;
     if (_type == j_array && (aj = ajson())
 	&& string_to_int_key(key.begin(), key.end(), i)
-	&& i < aj->values.size())
-	return aj->values[i];
+	&& i < unsigned(aj->size))
+	return aj->a[i];
     else
 	return make_null();
 }
 
-const Json &Json::hard_get(size_type x) const
-{
-    if (_type == j_object && _cjson)
+const Json& Json::hard_get(size_type x) const {
+    if (_type == j_object && u_.o.o)
 	return get(String(x));
     else
 	return make_null();
 }
 
-Json &Json::hard_get_insert(size_type x)
-{
+Json& Json::hard_get_insert(size_type x) {
     if (_type == j_object)
 	return get_insert(String(x));
     else {
-	uniqueify_array(true);
-	ArrayJson *aj = ajson();
-	if (JsonVector::size_type(x) >= aj->values.size())
-	    aj->values.resize(x + 1);
-	return aj->values[x];
+	uniqueify_array(true, x + 1);
+        if (u_.a.a->size <= x) {
+            memset(&u_.a.a->a[u_.a.a->size], 0, sizeof(Json) * (x + 1 - u_.a.a->size));
+            u_.a.a->size = x + 1;
+        }
+	return u_.a.a->a[x];
     }
+}
+
+bool operator==(const Json& a, const Json& b) {
+    if (a.type() != b.type())
+        return false;
+    if (a.type() == Json::j_string)
+        return a.as_s() == b.as_s();
+    if (a.type() == Json::j_int || a.type() == Json::j_bool)
+        return a.u_.u == b.u_.u;
+    if (a.type() == Json::j_array || a.type() == Json::j_object)
+        return a.u_.c == b.u_.c;
+    return true;
 }
 
 
@@ -388,10 +447,9 @@ bool Json::unparse_is_complex() const
 	}
     } else if (_type == j_array) {
 	if (ArrayJson *aj = ajson()) {
-	    if (aj->values.size() > 8)
+	    if (aj->size > 8)
 		return true;
-	    for (JsonVector::const_iterator it = aj->values.begin();
-		 it != aj->values.end(); ++it)
+	    for (Json* it = aj->a; it != aj->a + aj->size; ++it)
 		if (!it->empty() && !it->is_primitive())
 		    return true;
 	}
@@ -431,10 +489,9 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
 	unparse_indent(sa, m, depth);
 	sa << '}';
     } else if (_type == j_array) {
-	const char *q = "[\n";
-	ArrayJson *aj = ajson();
-	for (JsonVector::const_iterator it = aj->values.begin();
-	     it != aj->values.end(); ++it) {
+	const char* q = "[\n";
+	ArrayJson* aj = ajson();
+	for (Json* it = aj->a; it != aj->a + aj->size; ++it) {
 	    sa.append(q, 2);
 	    unparse_indent(sa, m, depth + 1);
 	    it->hard_unparse(sa, m, depth + 1);
@@ -467,9 +524,8 @@ void Json::unparse(StringAccum &sa) const
 	sa << '}';
     } else if (_type == j_array) {
 	char q = '[';
-	if (ArrayJson *aj = ajson())
-	    for (JsonVector::const_iterator it = aj->values.begin();
-		 it != aj->values.end(); ++it) {
+	if (ArrayJson* aj = ajson())
+	    for (Json* it = aj->a; it != aj->a + aj->size; ++it) {
 		sa << q << *it;
 		q = ',';
 	    }
@@ -723,12 +779,12 @@ Json::parse_string(String &result, const String &str, const char *s, const char 
 const char *
 Json::parse_primitive(const String&, const char *begin, const char *end)
 {
-    if (_cjson)
-	_cjson->deref(_type);
     if (_type == j_string)
         u_.str.deref();
-    _cjson = 0;
+    else if ((_type == j_array || _type == j_object) && u_.c)
+        u_.c->deref(_type);
     _type = j_null;
+    u_.c = 0;
 
     const char *s = begin;
     switch (*s) {
