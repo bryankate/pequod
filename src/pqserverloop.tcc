@@ -3,11 +3,18 @@
 #include <stdio.h>
 #include <string.h>
 #include "pqserver.hh"
+#include "mpfd.hh"
 
 namespace {
 
 tamed void connector(tamer::fd cfd) {
-    fprintf(stderr, "connection received (and closed)\n");
+    tvars {
+        Json j;
+        msgpack_fd mpfd(cfd);
+    }
+    while (cfd) {
+        twait { mpfd.read(make_event(j)); }
+    }
     cfd.close();
 }
 

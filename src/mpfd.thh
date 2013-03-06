@@ -1,0 +1,46 @@
+// -*- mode: c++ -*-
+#ifndef PEQUOD_MPFD_HH
+#define PEQUOD_MPFD_HH
+#include <tamer/tamer.hh>
+#include <tamer/fd.hh>
+#include <sys/uio.h>
+#include "msgpack.hh"
+#include <vector>
+
+class msgpack_fd {
+  public:
+    inline msgpack_fd(tamer::fd fd);
+    ~msgpack_fd();
+
+    tamed void read(tamer::event<Json> done);
+    void write(const Json& j, tamer::event<> done);
+
+  private:
+    tamer::fd fd_;
+
+    struct wrelem {
+        String s;
+        tamer::event<> done;
+    };
+    std::vector<wrelem> wrelem_;
+    std::vector<struct iovec> wriov_;
+    size_t wrpos_;
+    tamer::event<> wrwake_;
+    tamer::event<> wrkill_;
+
+    char* rdbuf_;
+    size_t rdcap_;
+    size_t rdpos_;
+    size_t rdlen_;
+    msgpack::streaming_parser rdparser_;
+
+    tamed void writer_coroutine();
+};
+
+inline msgpack_fd::msgpack_fd(tamer::fd fd)
+    : fd_(fd), wrpos_(0),
+      rdbuf_(new char[1 << 17]), rdcap_(1 << 17), rdpos_(0), rdlen_(0) {
+    writer_coroutine();
+}
+
+#endif

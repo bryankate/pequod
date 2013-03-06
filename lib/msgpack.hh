@@ -231,6 +231,7 @@ class streaming_parser {
 
     const uint8_t* consume(const uint8_t* first, const uint8_t* last);
     inline const char* consume(const char* first, const char* last);
+    inline size_t consume(const char* first, size_t length);
 
     inline Json& result();
     inline const Json& result() const;
@@ -418,6 +419,11 @@ inline const char* streaming_parser::consume(const char* first,
     return reinterpret_cast<const char*>
         (consume(reinterpret_cast<const uint8_t*>(first),
                  reinterpret_cast<const uint8_t*>(last)));
+}
+
+inline size_t streaming_parser::consume(const char* first, size_t length) {
+    const uint8_t* ufirst = reinterpret_cast<const uint8_t*>(first);
+    return consume(ufirst, ufirst + length) - ufirst;
 }
 
 inline Json& streaming_parser::result() {

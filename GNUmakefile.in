@@ -81,6 +81,7 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
+$(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -103,7 +104,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
-	$(OBJDIR)/pqunit.o
+	$(OBJDIR)/pqunit.o \
+	$(OBJDIR)/mpfd.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
