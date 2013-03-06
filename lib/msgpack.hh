@@ -1,7 +1,7 @@
 #ifndef GSTORE_MSGPACK_HH
 #define GSTORE_MSGPACK_HH
-#include "string.hh"
-#include "str.hh"
+#include "json.hh"
+#include "local_vector.hh"
 #include <vector>
 namespace msgpack {
 
@@ -217,14 +217,34 @@ class fast_unparser {
     }
 };
 
-template <int DEPTH>
-class consumer {
+class streaming_parser {
   public:
-    consumer();
+    inline streaming_parser();
+    inline void reset();
+
+    inline bool complete() const;
+    inline bool done() const;
+    inline bool error() const;
+
+    const uint8_t* consume(const uint8_t* first, const uint8_t* last);
+    inline const char* consume(const char* first, const char* last);
+
+    inline Json& result();
+    inline const Json& result() const;
+
   private:
-    uint32_t nleft_[DEPTH];
-    uint8_t state_[DEPTH + 1];
-    char buf_[8];
+    enum {
+        st_final = -2, st_error = -1, st_normal = 0, st_partial = 1,
+        st_string = 2
+    };
+    struct selem {
+        Json* jp;
+        int size;
+    };
+    int state_;
+    local_vector<selem, 2> stack_;
+    String str_;
+    Json json_;
 };
 
 class parser {
@@ -360,6 +380,43 @@ parser& parser::parse(::std::vector<T>& x) {
         parse(x.back());
     }
     return *this;
+}
+
+inline streaming_parser::streaming_parser()
+    : state_(st_normal) {
+}
+
+inline void streaming_parser::reset() {
+    state_ = st_normal;
+    stack_.clear();
+    json_ = Json();
+}
+
+inline bool streaming_parser::complete() const {
+    return state_ < 0;
+}
+
+inline bool streaming_parser::done() const {
+    return state_ == st_final;
+}
+
+inline bool streaming_parser::error() const {
+    return state_ == st_error;
+}
+
+inline const char* streaming_parser::consume(const char* first,
+                                             const char* last) {
+    return reinterpret_cast<const char*>
+        (consume(reinterpret_cast<const uint8_t*>(first),
+                 reinterpret_cast<const uint8_t*>(last)));
+}
+
+inline Json& streaming_parser::result() {
+    return json_;
+}
+
+inline const Json& streaming_parser::result() const {
+    return json_;
 }
 
 }
