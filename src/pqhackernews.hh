@@ -66,6 +66,7 @@ class HackernewsRunner {
     void post_article(uint32_t author, uint32_t aid);
     void post_comment(uint32_t commentor, uint32_t aid);
     bool vote(uint32_t voter, uint32_t aid);
+    void get_karma(String user);
     void read_article(uint32_t aid);
 };
 
@@ -136,11 +137,11 @@ inline uint32_t HackernewsPopulator::nops() const {
 }
 
 inline uint32_t HackernewsPopulator::vote_rate() const {
-    return param_["vote_rate"].as_i(10);
+    return param_["vote_rate"].as_i(1);
 }
 
 inline uint32_t HackernewsPopulator::comment_rate() const {
-    return param_["comment_rate"].as_i(5);
+    return param_["comment_rate"].as_i(1);
 }
 
 inline uint32_t HackernewsPopulator::post_rate() const {
