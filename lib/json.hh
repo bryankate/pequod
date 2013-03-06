@@ -53,19 +53,20 @@ class Json { public:
     inline Json(bool x);
     inline Json(const String &x);
     inline Json(Str x);
-    inline Json(const char *x);
-    template <typename T> inline Json(const std::vector<T> &x);
+    inline Json(const char* x);
+    template <typename T> inline Json(const std::vector<T>& x);
     template <typename T> inline Json(T first, T last);
-    template <typename T> inline Json(const HashTable<String, T> &x);
+    template <typename T> inline Json(const HashTable<String, T>& x);
     inline ~Json();
 
     static inline const Json& make_null();
     static inline Json make_array();
     template <typename T, typename... U>
     static inline Json make_array(T first, U... rest);
+    static inline Json make_array_reserve(int n);
     static inline Json make_object();
-    static inline Json make_string(const String &x);
-    static inline Json make_string(const char *s, int len);
+    static inline Json make_string(const String& x);
+    static inline Json make_string(const char* s, int len);
 
     // Type information
     inline operator unspecified_bool_type() const;
@@ -1407,6 +1408,13 @@ inline Json Json::make_array(T first, U... rest) {
     j._type = j_array;
     j.push_back(first);
     j.insert_back(rest...);
+    return j;
+}
+/** @brief Return an empty array-valued Json with reserved space for @a n items. */
+inline Json Json::make_array_reserve(int n) {
+    Json j;
+    j._type = j_array;
+    j.u_.a.a = n ? ArrayJson::make(n) : 0;
     return j;
 }
 /** @brief Return an empty object-valued Json. */
