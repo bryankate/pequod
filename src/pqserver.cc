@@ -295,7 +295,8 @@ static Clp_Option options[] = {
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
-    putenv("TAMER_NOLIBEVENT=1");
+    String envstr("TAMER_NOLIBEVENT=1");
+    putenv(envstr.mutable_data());
     tamer::initialize();
 
     int mode = mode_unknown, listen_port = 8000;
