@@ -131,11 +131,8 @@ void TwitterRunner<S>::populate() {
     tp_.create_subscriptions(gen);
 
     twait {
-        for (auto& x : tp_.subscriptions()) {
+        for (auto& x : tp_.subscriptions())
             server_.follow(x.first, x.second, make_event());
-            if (tp_.log())
-                printf("subscribe s|%05d|%05d\n", x.first, x.second);
-        }
     }
 
 #if 0
@@ -178,8 +175,6 @@ void TwitterRunner<S>::run() {
         u = rng(nusers);
         a = rng(100);
         if (time < post_end_time || a < 2) {
-            if (tp_.log())
-                printf("%d: post p|%05d|%010d\n", time, u, time);
             twait { post(u, time, "?!?#*", make_event()); }
             ++npost;
         } else {
@@ -188,18 +183,6 @@ void TwitterRunner<S>::run() {
             ++(full ? nfull : nupdate);
             twait {
                 server_.refresh(u, &load_times[u], full, time, make_event(refresh_result));
-            }
-            if (tp_.log()) {
-                std::cout << time << ": refresh " << u << " since " << tx << "\n";
-                String &r = refresh_result.second;
-                int pos = 0, pos2;
-                while ((pos2 = r.find_left('\254', pos)) >= 0) {
-                    Str key(r.data() + pos, r.data() + pos2);
-                    if ((pos = r.find_left('\255', pos2)) == -1)
-                        pos = r.length();
-                    Str value(r.data() + pos2 + 1, r.data() + pos);
-                    std::cout << "  " << key << ": " << value << "\n";
-                }
             }
             nread += refresh_result.first;
         }

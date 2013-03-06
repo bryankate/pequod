@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
             tr.populate();
             tr.run();
         } else {
-            pq::PQTwitter<pq::Server> dc(tp.push(), server);
+            pq::PQTwitter<pq::Server> dc(tp.push(), tp.log(), server);
             pq::TwitterRunner<pq::PQTwitter<pq::Server> > tr(dc, tp);
             tr.populate();
             tr.run();

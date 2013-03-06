@@ -121,7 +121,7 @@ void MemcachedTwitter::stats(preevent<R, Json> e) {
 template <typename S>
 class PQTwitter {
   public:
-    PQTwitter(bool push, S &server) : push_(push), server_(server) {
+    PQTwitter(bool push, bool log, S &server) : push_(push), log_(log), server_(server) {
         if (!push) {
             pq::Join* j = new pq::Join;
             auto r = j->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
@@ -144,6 +144,7 @@ class PQTwitter {
     void stats(preevent<R, Json> e);
   private:
     bool push_;
+    bool log_;
     S &server_;
 };
 
@@ -154,6 +155,8 @@ void PQTwitter<S>::post(uint32_t author, const String &tweet, uint32_t time,
         mandatory_assert("unimplemented: getting followers from pequod");
     char buf[128];
     sprintf(buf, "p|%05d|%010u", author, time);
+    if (log_)
+        printf("%d: post %s\n", time, buf);
     server_.insert(Str(buf, 18), tweet);
     if (push_)
         for (auto i = fr->first; i != fr->second; ++i) {
@@ -186,6 +189,11 @@ void PQTwitter<S>::refresh(uint32_t user, uint32_t *state, bool full,
         str.append(&c, 1);
     }
     *state = now;
+    if (log_) {
+        std::cout << now << ": scan [" << first << ", " << last << ")" << "\n";
+        for (auto it = ib; it != ie; ++it)
+            std::cout << "  " << it->key() << ": " << it->value() << "\n";
+    }
     e(RefreshResult(n, str));
 }
 
@@ -194,6 +202,8 @@ void PQTwitter<S>::follow(uint32_t ua, uint32_t ub, preevent<R> e) {
     char buf[128];
     sprintf(buf, "s|%05d|%05d", ua, ub);
     server_.insert(Str(buf, 13), Str("1", 1));
+    if (log_)
+        std::cout << "subscribe " << Str(buf, 13) << "\n";
     e();
 }
 
