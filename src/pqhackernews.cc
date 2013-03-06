@@ -157,12 +157,13 @@ void HackernewsRunner::populate() {
     if (hp_.m()) {
         // Materialize karma inline
         std::cout << "Materializing karma inline with articles.\n";
-        join_str = "ma|<author:5><seqid:5>|k|<commenter:5> "
-            "c|<author><seqid>|<cid:5>|<commenter> "
-            "k|<commenter>";
+        join_str = "ma|<aid:10>|k|<cid:5>|<commenter:5> "
+            "c|<aid>|<cid>|<commenter> "
+            "v|<commenter><seq:5>|<voter:5>";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|karma join");
+        j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
     }
 
