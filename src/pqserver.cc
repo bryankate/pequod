@@ -10,6 +10,7 @@
 #include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
+#include "twitter_client.hh"
 
 namespace pq {
 
@@ -285,7 +286,8 @@ static Clp_Option options[] = {
     { "hn", 'h', 1007, 0, Clp_Negate },
     { "narticles", 'a', 1008, Clp_ValInt, 0 },
     { "nops", 'o', 1009, Clp_ValInt, 0 },
-    { "materialize", 'm', 1010, 0, Clp_Negate }
+    { "materialize", 'm', 1010, 0, Clp_Negate },
+    { "memcached", 'd', 1011, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
@@ -311,6 +313,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("shape", clp->val.d);
 	else if (clp->option->long_name == String("materialize"))
 	    tp_param.set("materialize", !clp->negated);
+        else if (clp->option->long_name == String("memcached"))
+            tp_param.set("memcached", !clp->negated);
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
@@ -340,10 +344,18 @@ int main(int argc, char** argv) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
-        pq::DirectClient dc(server);
-        pq::TwitterRunner<pq::DirectClient> tr(dc, tp);
-        tr.populate();
-        tr.run();
+        if (tp_param["memcached"]) {
+            mandatory_assert(tp_param["push"], "memcached pull is not supported");
+            pq::MemcachedTwitter dc;
+            pq::TwitterRunner<pq::MemcachedTwitter> tr(dc, tp);
+            tr.populate();
+            tr.run();
+        } else {
+            pq::PQTwitter<pq::Server> dc(tp.push(), tp.log(), server);
+            pq::TwitterRunner<pq::PQTwitter<pq::Server> > tr(dc, tp);
+            tr.populate();
+            tr.run();
+        }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);
         pq::HackernewsRunner hr(server, hp);
