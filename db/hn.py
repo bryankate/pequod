@@ -55,10 +55,8 @@ class HNPopulator:
                 f.write(format_string.format(obj))
             
     def load(self, fn, db, user):
-        stdout, stderr = Popen(['psql -d %s < schema.sql' % db], shell=True, stdout=PIPE, stderr=PIPE).communicate()
-        if 'ERROR' in stderr:
-            print stdout, stderr
-            exit(1)
+        self.psql("schema.sql", db, user)
+        self.psql("views.sql", db, user)
         conn = psycopg2.connect("user=%s dbname=%s" % (user, db))
         curs = conn.cursor()
         for table in ['articles', 'votes', 'comments']:
@@ -66,6 +64,11 @@ class HNPopulator:
         conn.commit()
         conn.close()
 
+    def psql(self, fn, db, user):
+        stdout, stderr = Popen(['psql -d %s < %s' % (db, fn)], shell=True, stdout=PIPE, stderr=PIPE).communicate()
+        if 'ERROR' in stderr:
+            print stdout, stderr
+            exit(1)
 
 if __name__ == "__main__":
     hn = HNPopulator()

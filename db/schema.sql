@@ -31,7 +31,12 @@ SET default_with_oids = false;
 --
 -- Name: articles; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
 --
-DROP TABLE IF EXISTS articles;
+
+DROP VIEW IF EXISTS karma_v;
+DROP TABLE IF EXISTS matviews;
+DROP TABLE IF EXISTS karma_mv;
+
+DROP TABLE IF EXISTS articles CASCADE;
 
 CREATE TABLE articles (
     aid integer NOT NULL,
@@ -46,7 +51,7 @@ CREATE TABLE articles (
 -- Name: comments; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
 --
 
-DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS comments CASCADE;
 
 CREATE TABLE comments (
     cid integer NOT NULL,
@@ -62,7 +67,7 @@ CREATE TABLE comments (
 -- Name: votes; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
 --
 
-DROP TABLE IF EXISTS votes;
+DROP TABLE IF EXISTS votes CASCADE;
 
 CREATE TABLE votes (
     aid integer,
@@ -103,7 +108,7 @@ ALTER TABLE ONLY comments
     ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
 
 
-CREATE VIEW karma AS
+CREATE VIEW karma_v AS
 SELECT
   articles.author,
   COUNT(*) AS karma
