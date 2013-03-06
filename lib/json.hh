@@ -40,6 +40,7 @@ class Json { public:
     // Constructors
     inline Json();
     inline Json(const Json& x);
+    template <typename P> inline Json(const Json_proxy_base<P>& x);
 #if HAVE_CXX_RVALUE_REFERENCES
     inline Json(Json&& x);
 #endif
@@ -183,6 +184,7 @@ class Json { public:
     inline Json& back();
 
     template <typename T> inline Json& push_back(T x);
+    template <typename P> inline Json& push_back(const Json_proxy_base<P>& x);
 #if HAVE_CXX_RVALUE_REFERENCES
     inline Json& push_back(Json&& x);
 #endif
@@ -1015,6 +1017,9 @@ class Json_proxy_base {
     template <typename T> Json& push_back(T x) {
 	return value().push_back(x);
     }
+    template <typename Q> inline Json& push_back(const Json_proxy_base<Q>& x) {
+        return value().push_back(x);
+    }
 #if HAVE_CXX_RVALUE_REFERENCES
     Json& push_back(Json&& x) {
 	return value().push_back(std::move(x));
@@ -1292,6 +1297,14 @@ inline Json::Json()
 /** @brief Construct a Json copy of @a x. */
 inline Json::Json(const Json& x)
     : _type(x._type), u_(x.u_) {
+    if (_type == j_string)
+        u_.str.ref();
+    if ((_type == j_array || _type == j_object) && u_.c)
+        u_.c->ref();
+}
+/** @overload */
+template <typename P> inline Json::Json(const Json_proxy_base<P>& x)
+    : _type(x.cvalue()._type), u_(x.cvalue().u_) {
     if (_type == j_string)
         u_.str.ref();
     if ((_type == j_array || _type == j_object) && u_.c)
@@ -2203,6 +2216,14 @@ inline Json& Json::back() {
 template <typename T> inline Json& Json::push_back(T x) {
     uniqueify_array(false, u_.a.a ? u_.a.a->size + 1 : 1);
     new((void*) &u_.a.a->a[u_.a.a->size]) Json(x);
+    ++u_.a.a->size;
+    return *this;
+}
+
+/** @overload */
+template <typename P> inline Json& Json::push_back(const Json_proxy_base<P>& x) {
+    uniqueify_array(false, u_.a.a ? u_.a.a->size + 1 : 1);
+    new((void*) &u_.a.a->a[u_.a.a->size]) Json(x.cvalue());
     ++u_.a.a->size;
     return *this;
 }
