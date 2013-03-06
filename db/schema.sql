@@ -12,7 +12,7 @@ SET client_min_messages = warning;
 -- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: 
 --
 
---CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
 
 --
@@ -102,6 +102,14 @@ ALTER TABLE ONLY articles
 ALTER TABLE ONLY comments
     ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
 
+
+CREATE VIEW karma AS
+SELECT
+  articles.author,
+  COUNT(*) AS karma
+FROM articles, votes
+WHERE articles.aid = votes.aid
+GROUP BY articles.author;
 
 --
 -- Name: public; Type: ACL; Schema: -; Owner: postgres
