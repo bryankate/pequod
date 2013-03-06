@@ -2,6 +2,7 @@
 #define GSTORE_MSGPACK_HH
 #include "json.hh"
 #include "local_vector.hh"
+#include "straccum.hh"
 #include <vector>
 namespace msgpack {
 
@@ -122,6 +123,8 @@ class compact_unparser {
             s = unparse(s, *it);
         return s;
     }
+    void unparse(StringAccum& sa, const Json& j);
+    inline String unparse(const Json& j);
 };
 
 class fast_unparser {
@@ -359,6 +362,12 @@ void parser::hard_parse_int(T& x) {
         s_ += 9;
         break;
     }
+}
+
+inline String compact_unparser::unparse(const Json& j) {
+    StringAccum sa;
+    unparse(sa, j);
+    return sa.take_string();
 }
 
 template <typename T>
