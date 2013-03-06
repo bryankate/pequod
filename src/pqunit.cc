@@ -20,7 +20,7 @@ typedef void (*test_func)();
 std::vector<std::pair<String, test_func> > tests_;
 std::vector<std::pair<String, test_func> > exptests_;
 
-void simple() {
+void test_simple() {
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -35,11 +35,6 @@ void simple() {
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
 
-    std::cerr << "Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
-
     pq::Join j;
     j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
 		   "f|<user_id>|<poster_id> "
@@ -47,26 +42,15 @@ void simple() {
     j.ref();
     server.add_join("t|", "t}", &j);
 
-    server.validate("t|00001|0000000001", "t|00001}");
-
-    std::cerr << "After processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
+    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00001}"), size_t(4));
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
 
-    std::cerr << "After processing add_copy:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-	std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
-
-    server.print(std::cerr);
-    std::cerr << std::endl;
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
 }
 
-void count() {
+void test_count() {
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -80,7 +64,6 @@ void count() {
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
-    std::cerr << std::endl;
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -104,7 +87,7 @@ void count() {
     CHECK_EQ(server.validate_count("j|", "j}"), size_t(0));
 }
 
-void recursive() {
+void test_recursive() {
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -115,11 +98,6 @@ void recursive() {
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
-
-    std::cerr << "RECURSIVE: Before processing join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
 
     pq::Join j1;
     j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
@@ -135,23 +113,17 @@ void recursive() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    server.validate("e|00003|0000000001", "e|00003}");
-
-    std::cerr << "After processing recursive join:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
+    CHECK_EQ(server.validate_count("e|00003|0000000001", "e|00003}"), size_t(2));
+    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
 
     server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003");
     server.insert("b|00002|0000002000", "As should this");
 
-    std::cerr << "After processing inserts:\n";
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
+    CHECK_EQ(server.count("e|00003|0000000001", "e|00003}"), size_t(4));
+    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(4));
 }
 
-void annotation() {
+void test_annotation() {
     pq::Server server;
 
     std::pair<const char*, const char*> values[] = {
@@ -185,65 +157,37 @@ void annotation() {
     j2.set_staleness(0.5);
     server.add_join("f|", "f}", &j2);
 
-    server.validate("c|00001|0000000001", "c|00001}");
-
     // should NOT have a validrange for c|00001 or a copy for b|00002
-    std::cerr << "After validating [c|00001|0000000001, c|00001})" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
+    server.validate("c|00001|0000000001", "c|00001}");
+    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
 
     // should NOT trigger the insertion of a new c|00001 key
     server.insert("b|00002|0000000005", "b3");
-
-    std::cerr << "After inserting new b|00002 key" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
-
-    server.validate("f|00003|0000000001", "f|00003|0000000005");
+    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
 
     // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
-    std::cerr << "After validating [f|00003|0000000001, f|00003|0000000005)" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
-
-    server.insert("e|00004|0000000003", "e4");
+    server.validate("f|00003|0000000001", "f|00003|0000000005");
+    CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000005"), size_t(2));
 
     // should NOT trigger the insertion of a new f|00003 key
-    std::cerr << "After inserting new e|00004 key" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    std::cerr << std::endl;
+    server.insert("e|00004|0000000003", "e4");
+    CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000005"), size_t(2));
 
     // should NOT re-validate the lower part of the range.
-    server.validate("f|00003|0000000001", "f|00003|0000000010");
-
     // SHOULD have 2 validranges for f|00003 (that expire) but NO copies of e|00004
-    std::cerr << "After validating [f|00003|0000000001, f|00003|0000000010)" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl;
+    server.validate("f|00003|0000000001", "f|00003|0000000015");
+    CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000015"), size_t(3));
 
     sleep(1);
 
     // SHOULD re-validate the whole range
-    server.validate("f|00003|0000000001", "f|00003|0000000010");
-
     // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
     // MIGHT have 2 expired validranges for f|00003 we implement cleanup of expired ranges
-    std::cerr << "After sleep and validating [f|00003|0000000001, f|00003|0000000010)" << std::endl;
-    for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
-    server.print(std::cerr);
-    std::cerr << std::endl << std::endl;
+    server.validate("f|00003|0000000001", "f|00003|0000000015");
+    CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000015"), size_t(4));
 }
 
-void srs() {
+void test_srs() {
     pq::Server server;
     pq::ServerRangeSet srs("a001", "a}",
                        pq::ServerRange::joinsink | pq::ServerRange::validjoin);
@@ -282,7 +226,7 @@ void test_join1() {
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
-void test_count() {
+void test_op_count() {
     pq::Server server;
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
@@ -318,7 +262,7 @@ void test_count() {
 }
 
 // One Server::validate produces multiple grouped keys
-void test_count_validate1() {
+void test_op_count_validate1() {
     pq::Server server;
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
@@ -508,7 +452,7 @@ void test_karma_online() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
-void test_min() {
+void test_op_min() {
     pq::Server server;
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
@@ -543,7 +487,7 @@ void test_min() {
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
-void test_max() {
+void test_op_max() {
     pq::Server server;
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("k|<uid:5> "
@@ -582,7 +526,7 @@ void test_max() {
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
-void test_sum() {
+void test_op_sum() {
     pq::Server server;
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("sum|<sid:5> "
@@ -647,17 +591,17 @@ void test_swap() {
 void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
 #define ADD_EXP_TEST(test) exptests_.push_back(std::pair<String, test_func>(#test, test))
-    ADD_TEST(simple);
-    ADD_TEST(recursive);
-    ADD_TEST(count);
-    ADD_TEST(annotation);
-    ADD_TEST(srs);
-    ADD_TEST(test_join1);
+    ADD_TEST(test_simple);
+    ADD_TEST(test_recursive);
     ADD_TEST(test_count);
-    ADD_TEST(test_count_validate1);
-    ADD_TEST(test_min);
-    ADD_TEST(test_max);
-    ADD_TEST(test_sum);
+    ADD_TEST(test_annotation);
+    ADD_TEST(test_srs);
+    ADD_TEST(test_join1);
+    ADD_TEST(test_op_count);
+    ADD_TEST(test_op_count_validate1);
+    ADD_TEST(test_op_min);
+    ADD_TEST(test_op_max);
+    ADD_TEST(test_op_sum);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

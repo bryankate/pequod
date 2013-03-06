@@ -1,10 +1,11 @@
 #ifndef GSTORE_MSGPACK_HH
-#define GSTORE_MSGPACK_HH 1
-#include "string.hh"
-#include "str.hh"
+#define GSTORE_MSGPACK_HH
+#include "json.hh"
+#include "local_vector.hh"
 #include <vector>
+namespace msgpack {
 
-class msgpack_compact_unparser {
+class compact_unparser {
   public:
     inline uint8_t* unparse_null(uint8_t* s) {
 	*s++ = 0xC0;
@@ -123,7 +124,7 @@ class msgpack_compact_unparser {
     }
 };
 
-class msgpack_fast_unparser {
+class fast_unparser {
   public:
     inline uint8_t* unparse_null(uint8_t* s) {
 	*s++ = 0xC0;
@@ -216,12 +217,42 @@ class msgpack_fast_unparser {
     }
 };
 
-class msgpack_parser {
+class streaming_parser {
   public:
-    explicit inline msgpack_parser(const uint8_t* s)
+    inline streaming_parser();
+    inline void reset();
+
+    inline bool complete() const;
+    inline bool done() const;
+    inline bool error() const;
+
+    const uint8_t* consume(const uint8_t* first, const uint8_t* last);
+    inline const char* consume(const char* first, const char* last);
+
+    inline Json& result();
+    inline const Json& result() const;
+
+  private:
+    enum {
+        st_final = -2, st_error = -1, st_normal = 0, st_partial = 1,
+        st_string = 2
+    };
+    struct selem {
+        Json* jp;
+        int size;
+    };
+    int state_;
+    local_vector<selem, 2> stack_;
+    String str_;
+    Json json_;
+};
+
+class parser {
+  public:
+    explicit inline parser(const uint8_t* s)
         : s_(s), str_() {
     }
-    explicit inline msgpack_parser(const String& str)
+    explicit inline parser(const String& str)
         : s_(reinterpret_cast<const uint8_t*>(str.begin())), str_(str) {
     }
     inline const char* position() const {
@@ -238,12 +269,12 @@ class msgpack_parser {
         assert((uint32_t) (int8_t) *s_ + 32 < 160);
         return (int8_t) *s_++;
     }
-    inline msgpack_parser& parse_tiny_int(int& x) {
+    inline parser& parse_tiny_int(int& x) {
         x = parse_tiny_int();
         return *this;
     }
     template <typename T>
-    inline msgpack_parser& parse_int(T& x) {
+    inline parser& parse_int(T& x) {
         if ((uint32_t) (int8_t) *s_ + 32 < 160) {
             x = (int8_t) *s_;
             ++s_;
@@ -253,36 +284,47 @@ class msgpack_parser {
         }
         return *this;
     }
-    inline msgpack_parser& parse(int& x) { return parse_int(x); }
-    inline msgpack_parser& parse(long& x) { return parse_int(x); }
-    inline msgpack_parser& parse(long long& x) { return parse_int(x); }
-    inline msgpack_parser& parse(unsigned& x) { return parse_int(x); }
-    inline msgpack_parser& parse(unsigned long& x) { return parse_int(x); }
-    inline msgpack_parser& parse(unsigned long long& x) { return parse_int(x); }
-    inline msgpack_parser& parse(bool& x) {
+    inline parser& parse(int& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(long& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(long long& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(unsigned& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(unsigned long& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(unsigned long long& x) {
+        return parse_int(x);
+    }
+    inline parser& parse(bool& x) {
         assert((uint32_t) *s_ - 0xC2 < 2);
         x = *s_ != 0xC2;
         ++s_;
         return *this;
     }
-    inline msgpack_parser& parse(double& x) {
+    inline parser& parse(double& x) {
         assert(*s_ == 0xCB);
         x = net_to_host_order(*reinterpret_cast<const double*>(s_ + 1));
         s_ += 9;
         return *this;
     }
-    msgpack_parser& parse(Str& x);
-    msgpack_parser& parse(String& x);
-    template <typename T> msgpack_parser& parse(::std::vector<T>& x);
+    parser& parse(Str& x);
+    parser& parse(String& x);
+    template <typename T> parser& parse(::std::vector<T>& x);
   private:
     const uint8_t* s_;
     String str_;
-    template <typename T>
-    void hard_parse_int(T& x);
+    template <typename T> void hard_parse_int(T& x);
 };
 
 template <typename T>
-void msgpack_parser::hard_parse_int(T& x) {
+void parser::hard_parse_int(T& x) {
     switch (*s_) {
     case 0xCC:
         x = s_[1];
@@ -320,7 +362,7 @@ void msgpack_parser::hard_parse_int(T& x) {
 }
 
 template <typename T>
-msgpack_parser& msgpack_parser::parse(::std::vector<T>& x) {
+parser& parser::parse(::std::vector<T>& x) {
     uint32_t sz;
     if ((uint32_t) *s_ - 0x90 < 16) {
         sz = *s_ - 0x90;
@@ -340,4 +382,42 @@ msgpack_parser& msgpack_parser::parse(::std::vector<T>& x) {
     return *this;
 }
 
+inline streaming_parser::streaming_parser()
+    : state_(st_normal) {
+}
+
+inline void streaming_parser::reset() {
+    state_ = st_normal;
+    stack_.clear();
+    json_ = Json();
+}
+
+inline bool streaming_parser::complete() const {
+    return state_ < 0;
+}
+
+inline bool streaming_parser::done() const {
+    return state_ == st_final;
+}
+
+inline bool streaming_parser::error() const {
+    return state_ == st_error;
+}
+
+inline const char* streaming_parser::consume(const char* first,
+                                             const char* last) {
+    return reinterpret_cast<const char*>
+        (consume(reinterpret_cast<const uint8_t*>(first),
+                 reinterpret_cast<const uint8_t*>(last)));
+}
+
+inline Json& streaming_parser::result() {
+    return json_;
+}
+
+inline const Json& streaming_parser::result() const {
+    return json_;
+}
+
+}
 #endif

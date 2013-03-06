@@ -30,6 +30,7 @@ class local_vector {
     inline T& back();
     inline const T& back() const;
 
+    inline void clear();
     inline void push_back(const T& x);
     inline void push_back(T&& x);
     inline void pop_back();
@@ -167,7 +168,16 @@ inline void local_vector<T, N, A>::push_back(T&& x) {
 
 template <typename T, int N, typename A>
 inline void local_vector<T, N, A>::pop_back() {
+    assert(r_.size_ > 0);
     --r_.size_;
+    r_.destroy(&r_.v_[r_.size_]);
+}
+
+template <typename T, int N, typename A>
+inline void local_vector<T, N, A>::clear() {
+    for (int i = 0; i != r_.size_; ++i)
+        r_.destroy(&r_.v_[i]);
+    r_.size_ = 0;
 }
 
 #endif

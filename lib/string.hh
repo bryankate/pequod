@@ -107,9 +107,10 @@ class String : public String_base<String> {
     inline void swap(String &x);
 
     inline void append(const String &x);
-    inline void append(const char *cstr);
-    inline void append(const char *s, int len);
-    inline void append(const char *first, const char *last);
+    inline void append(const char* cstr);
+    inline void append(const char* s, int len);
+    inline void append(const char* first, const char* last);
+    inline void append(const unsigned char* first, const unsigned char* last);
     void append_fill(int c, int len);
     char *append_uninitialized(int len);
 
@@ -161,11 +162,15 @@ class String : public String_base<String> {
 	const char *data;
 	int length;
 	memo_t *memo;
-	inline rep_t() {
-	}
-	inline STRING_CONSTEXPR rep_t(const char *d, int l, memo_t *m)
-	    : data(d), length(l), memo(m) {
-	}
+
+        inline void ref() const {
+            if (memo)
+                ++memo->refcount;
+        }
+        inline void deref() const {
+            if (memo && --memo->refcount == 0)
+                String::delete_memo(memo);
+        }
     };
 
     struct null_memo {
@@ -224,16 +229,20 @@ class String : public String_base<String> {
 	    ++memo->refcount;
     }
 
+    inline String(const rep_t& r)
+        : _r(r) {
+        if (_r.memo)
+            ++_r.memo->refcount;
+    }
     inline String(const char *data, int length, memo_t *memo) {
 	assign_memo(data, length, memo);
     }
     inline STRING_CONSTEXPR String(const char *data, int length, const null_memo &)
-	: _r(data, length, 0) {
+	: _r{data, length, 0} {
     }
 
     inline void deref() const {
-	if (_r.memo && --_r.memo->refcount == 0)
-	    delete_memo(_r.memo);
+        _r.deref();
     }
 
     void assign(const char *s, int len, bool need_deref);
@@ -260,18 +269,21 @@ class String : public String_base<String> {
 
     friend struct rep_t;
     friend class StringAccum;
+    friend class Json;
 
 };
 
 
 /** @brief Construct an empty String (with length 0). */
 inline STRING_CONSTEXPR String::String()
-    : _r(String_generic::empty_data, 0, 0) {
+    : _r{String_generic::empty_data, 0, 0} {
 }
 
 /** @brief Construct a copy of the String @a x. */
-inline String::String(const String &x) {
-    assign_memo(x._r.data, x._r.length, x._r.memo);
+inline String::String(const String& x)
+    : _r(x._r) {
+    if (_r.memo)
+        ++_r.memo->refcount;
 }
 
 #if HAVE_CXX_RVALUE_REFERENCES
@@ -339,7 +351,7 @@ inline String::String(const std::string &str) {
 /** @brief Construct a String equal to "true" or "false" depending on the
     value of @a x. */
 inline STRING_CONSTEXPR String::String(bool x)
-    : _r(String_generic::bool_data + (-x & 6), 5 - x, 0) {
+    : _r{String_generic::bool_data + (-x & 6), 5 - x, 0} {
     // bool_data equals "false\0true\0"
 }
 
@@ -612,6 +624,12 @@ inline void String::append(const char *s, int len) {
 inline void String::append(const char *first, const char *last) {
     if (first < last)
 	append(first, last - first);
+}
+/** @overload */
+inline void String::append(const unsigned char* first,
+                           const unsigned char* last) {
+    if (first < last)
+	append(reinterpret_cast<const char*>(first), last - first);
 }
 
 /** @brief Append @a x to this string.

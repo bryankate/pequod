@@ -20,6 +20,14 @@
 
 #define CHECK(x) do { if (!(x)) { std::cerr << __FILE__ << ":" << __LINE__ << ": test '" << #x << "' failed\n"; exit(1); } } while (0)
 
+#if 0
+template <typename T> void incr(T& x) __attribute__((noinline));
+template <typename T>
+void incr(T& x) {
+    ++x;
+}
+#endif
+
 int main(int argc, char** argv) {
     Json j;
     CHECK(j.empty());
@@ -194,6 +202,16 @@ int main(int argc, char** argv) {
 	j.set("foo", String::make_out_of_memory()).set(String::make_out_of_memory(), 2);
 	CHECK(j.unparse() == "{\"foo\":\"\360\237\222\243ENOMEM\360\237\222\243\",\"\360\237\222\243ENOMEM\360\237\222\243\":2}");
     }
+
+#if 0
+    {
+        Json j = Json::make_array(1, 2, 3);
+        //int j[3] = {1, 2, 3};
+        for (int i = 0; i < 1000000; ++i)
+            incr(j[1].value());
+        std::cout << j << "\n";
+    }
+#endif
 
     std::cout << "All tests pass!\n";
     return 0;

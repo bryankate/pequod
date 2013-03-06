@@ -707,10 +707,17 @@ inline uint64_t host_to_net_order(uint64_t x) {
 }
 #endif
 /** @overload */
+inline double host_to_net_order(float x) {
+    union { float f; uint32_t i; } v;
+    v.f = x;
+    v.i = host_to_net_order(v.i);
+    return v.f;
+}
+/** @overload */
 inline double host_to_net_order(double x) {
-    union { double d; uint64_t q; } v;
+    union { double d; uint64_t i; } v;
     v.d = x;
-    v.q = host_to_net_order(v.q);
+    v.i = host_to_net_order(v.i);
     return v.d;
 }
 
@@ -785,6 +792,10 @@ inline uint64_t net_to_host_order(uint64_t x) {
     return ntohq(x);
 }
 #endif
+/** @overload */
+inline double net_to_host_order(float x) {
+    return host_to_net_order(x);
+}
 /** @overload */
 inline double net_to_host_order(double x) {
     return host_to_net_order(x);

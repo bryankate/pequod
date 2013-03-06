@@ -1,6 +1,188 @@
 #include "msgpack.hh"
+namespace msgpack {
 
-msgpack_parser& msgpack_parser::parse(Str& x) {
+namespace {
+const uint8_t nbytes[] = {
+    /* 0xC0-0xC9 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 0xCA float */ 5, /* 0xCB double */ 9,
+    /* 0xCC-0xD3 ints */ 2, 3, 5, 9, 2, 3, 5, 9,
+    /* 0xD4-0xD9 */ 0, 0, 0, 0, 0, 0,
+    /* 0xDA-0xDF */ 3, 5, 3, 5, 3, 5
+};
+
+template <typename T> T grab(const uint8_t* x) {
+    return net_to_host_order(*reinterpret_cast<const T*>(x));
+}
+}
+
+const uint8_t* streaming_parser::consume(const uint8_t* first,
+                                         const uint8_t* last) {
+    Json j;
+    int n;
+
+    if (state_ < 0)
+        return first;
+    if (state_ == st_partial || state_ == st_string) {
+        int nneed;
+        if (state_ == st_partial)
+            nneed = nbytes[str_.udata()[0] - 0xC0];
+        else
+            nneed = stack_.back().size;
+        const uint8_t* next;
+        if (last - first < nneed - str_.length())
+            next = last;
+        else
+            next = first + (nneed - str_.length());
+        str_.append(first, next);
+        if (str_.length() != nneed)
+            return next;
+        first = next;
+        if (state_ == st_string) {
+            j = Json(str_);
+            stack_.pop_back();
+            goto next;
+        } else {
+            state_ = st_normal;
+            consume(str_.ubegin(), str_.uend());
+            if (state_ != st_normal)
+                return next;
+        }
+    }
+
+    while (first != last) {
+        if ((uint8_t) (*first + 0x20) < 0xA0) {
+            j = Json(int(int8_t(*first)));
+            ++first;
+        } else if (*first == 0xC0) {
+            j = Json();
+            ++first;
+        } else if ((*first | 1) == 0xC3) {
+            j = Json(bool(*first == 0xC3));
+            ++first;
+        } else if ((uint8_t) (*first - 0x80) < 0x10) {
+            n = *first - 0x80;
+            ++first;
+        map:
+            j = Json::make_object();
+        } else if ((uint8_t) (*first - 0x90) < 0x10) {
+            n = *first - 0x90;
+            ++first;
+        array:
+            j = Json::make_array_reserve(n);
+        } else if ((uint8_t) (*first - 0xA0) < 0x10) {
+            n = *first - 0xA0;
+            ++first;
+        raw:
+            if (last - first < n) {
+                str_ = String(first, last);
+                stack_.push_back(selem{0, n});
+                state_ = st_string;
+                return last;
+            }
+            j = Json(String(first, n));
+            first += n;
+        } else {
+            uint8_t type = *first - 0xC0;
+            if (!nbytes[type])
+                goto error;
+            if (last - first < nbytes[type]) {
+                str_ = String(first, last);
+                state_ = st_partial;
+                return last;
+            }
+            first += nbytes[type];
+            switch (type) {
+            case 0x0A:
+                j = Json(grab<float>(first - 4));
+                break;
+            case 0x0B:
+                j = Json(grab<double>(first - 8));
+                break;
+            case 0x0C:
+                j = Json(first[-1]);
+                break;
+            case 0x0D:
+                j = Json(grab<uint16_t>(first - 2));
+                break;
+            case 0x0E:
+                j = Json(grab<uint32_t>(first - 4));
+                break;
+            case 0x0F:
+                j = Json(grab<uint64_t>(first - 8));
+                break;
+            case 0x10:
+                j = Json(int8_t(first[-1]));
+                break;
+            case 0x11:
+                j = Json(grab<int16_t>(first - 2));
+                break;
+            case 0x12:
+                j = Json(grab<int32_t>(first - 4));
+                break;
+            case 0x13:
+                j = Json(grab<int64_t>(first - 8));
+                break;
+            case 0x1A:
+                n = grab<uint16_t>(first - 2);
+                goto raw;
+            case 0x1B:
+                n = grab<uint32_t>(first - 4);
+                goto raw;
+            case 0x1C:
+                n = grab<uint16_t>(first - 2);
+                goto array;
+            case 0x1D:
+                n = grab<uint32_t>(first - 4);
+                goto array;
+            case 0x1E:
+                n = grab<uint16_t>(first - 2);
+                goto map;
+            case 0x1F:
+                n = grab<uint32_t>(first - 4);
+                goto map;
+            }
+        }
+
+        // Add it
+    next:
+        Json* jp = stack_.size() ? stack_.back().jp : &json_;
+        if (jp->is_o()) {
+            // Reading a key for some object Json
+            if (!j.is_s() && !j.is_i())
+                goto error;
+            --stack_.back().size;
+            stack_.push_back(selem{&jp->get_insert(j.to_s()), 0});
+            continue;
+        }
+
+        if (jp->is_a()) {
+            jp->push_back(std::move(j));
+            jp = &jp->back();
+            --stack_.back().size;
+        } else
+            swap(*jp, j);
+
+        if ((jp->is_a() || jp->is_o()) && n != 0)
+            stack_.push_back(selem{jp, n});
+        else {
+            while (!stack_.empty() && stack_.back().size == 0)
+                stack_.pop_back();
+            if (stack_.empty()) {
+                state_ = st_final;
+                return first;
+            }
+        }
+    }
+
+    state_ = st_normal;
+    return first;
+
+ error:
+    state_ = st_error;
+    return first;
+}
+
+parser& parser::parse(Str& x) {
     uint32_t len;
     if ((uint32_t) *s_ - 0xA0 < 32) {
         len = *s_ - 0xA0;
@@ -18,7 +200,7 @@ msgpack_parser& msgpack_parser::parse(Str& x) {
     return *this;
 }
 
-msgpack_parser& msgpack_parser::parse(String& x) {
+parser& parser::parse(String& x) {
     Str s;
     parse(s);
     if (str_)
@@ -26,4 +208,6 @@ msgpack_parser& msgpack_parser::parse(String& x) {
     else
         x.assign(s.begin(), s.end());
     return *this;
+}
+
 }
