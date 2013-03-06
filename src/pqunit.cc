@@ -1,9 +1,12 @@
+#define DO_PERF 0
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
 #include <unistd.h>
 #include <set>
+#if DO_PERF
 #include <sys/prctl.h>
 #include <sys/wait.h>
+#endif
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "json.hh"
@@ -421,9 +424,9 @@ void test_karma_online() {
         mandatory_assert(k0);
         CHECK_EQ(k0->value_, String(1));
     }
+#if DO_PERF
     // perf profiling
-    enum { do_perf = 0 };
-    if (do_perf) {
+    {
         String me(getpid());
         pid_t pid = fork();
         if (!pid) {
@@ -432,6 +435,7 @@ void test_karma_online() {
             exit(0);
         }
     }
+#endif
     // online votes
     struct rusage ru[2];
     getrusage(RUSAGE_SELF, &ru[0]);
