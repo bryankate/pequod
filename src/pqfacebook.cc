@@ -1,9 +1,11 @@
 #include "pqfacebook.hh"
+#include "time.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 #include <math.h>
+#include <sys/resource.h>
 
 using namespace std;
 
@@ -140,5 +142,84 @@ void FacebookPopulator::report_counts(std::ostream& stream){
 
 uint32_t* FacebookPopulator::get_visit_list(){ return (uint32_t*)1; }
 
+
+void facebook_like(Server& server, FacebookPopulator& fp,
+                  uint32_t u, uint32_t p, Str value) {
+    char buf[128];
+    sprintf(buf, "l|%06d|%06d", u, p);
+    server.insert(Str(buf, 15), value);
+    if (fp.push())
+          std::cerr << "NOT IMPLEMENTED" << std::endl;
+//        for (auto it = tp.begin_followers(u); it != tp.end_followers(u); ++it) {
+//            sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+//            server.insert(Str(buf, 24), value);
+//        }
 }
 
+void facebook_populate(Server& server, FacebookPopulator& fp) {
+    boost::mt19937 gen;
+    gen.seed(0);
+
+    fp.populate_likes(gen);
+    fp.generate_friends(gen);
+    fp.nusers();
+    for (auto& x : fp.get_base_data()) {
+        server.insert(x.first, Str("1", 1));
+    }
+    fp.report_counts(std::cout);
+
+    if (!fp.push()) {
+        pq::Join* j = new pq::Join;
+        j->assign_parse("c|<user_id:6>|<page_id:6>|<fuser_id:6> "
+                        "l|<fuser_id>|<page_id> "
+                        "f|<user_id>|<fuser_id>");
+        server.add_join("c|", "c}", j);
+    }
+}
+
+void facebook_run(Server& server, FacebookPopulator& fp) {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    struct rusage ru[2];
+
+    uint32_t time = 10000000;
+    uint32_t nusers = fp.nusers();
+    uint32_t npages = fp.npages();
+    uint32_t post_end_time = time + nusers * 5;
+    uint32_t end_time = post_end_time + 10000;
+    uint32_t* load_times = new uint32_t[nusers];
+    for (uint32_t i = 0; i != nusers; ++i)
+        load_times[i] = 0;
+    char buf1[128], buf2[128];
+    uint32_t nlike = 0;
+    size_t nvisit = 0;
+    getrusage(RUSAGE_SELF, &ru[0]);
+
+    while (time != end_time) {
+        uint32_t u = rng(nusers);
+        uint32_t p = rng(npages);
+        uint32_t l = rng(100);
+        // u should always visit p
+        sprintf(buf1, "c|%06d|%06d", u, p);
+        sprintf(buf2, "c|%06d|%06d}", u, p);
+        server.validate(Str(buf1, 15), Str(buf2, 16));
+        nvisit += server.count(Str(buf1, 15), Str(buf2, 16));
+        load_times[u] = time;
+        // 3% u should also like the page
+        if (l < 3) {
+           facebook_like(server, fp, u, p, "1");
+           ++nlike;
+        }
+        ++time;
+    }
+
+    getrusage(RUSAGE_SELF, &ru[1]);
+    Json stats = Json().set("nlikes", nlike)
+        .set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    stats.merge(server.stats());
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    delete[] load_times;
+}
+
+}

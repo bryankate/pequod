@@ -1,5 +1,6 @@
 #ifndef PQFACEBOOK_HH
 #define PQFACEBOOK_HH 1
+#include "pqserver.hh"
 #include <boost/random.hpp>
 #include <boost/unordered_map.hpp>
 #include <utility>
@@ -68,5 +69,14 @@ inline bool FacebookPopulator::push() const {
     return push_;
 }
 
+
+void facebook_like(Server& server, FacebookPopulator& fp,
+                  uint32_t u, uint32_t p, Str value);
+void facebook_populate(Server& server, FacebookPopulator& fp);
+void facebook_run(Server& server, FacebookPopulator& fp);
+
 } // namespace pq
+
+
+
 #endif
