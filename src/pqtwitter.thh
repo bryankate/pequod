@@ -166,6 +166,7 @@ void TwitterRunner<S>::run() {
         size_t nread = 0;
         pq::RefreshResult refresh_result;
         Json stats;
+        bool full;
     }
     gen.seed(13918);
 
@@ -183,13 +184,10 @@ void TwitterRunner<S>::run() {
             ++npost;
         } else {
             tx = load_times[u];
-            if (!tx || a < 3) {
-                tx = time - 32000;
-                ++nfull;
-            } else
-                ++nupdate;
+            full = !tx || a < 3;
+            ++(full ? nfull : nupdate);
             twait {
-                server_.refresh(u, tx, make_event(refresh_result));
+                server_.refresh(u, &load_times[u], full, time, make_event(refresh_result));
             }
             if (tp_.log()) {
                 std::cout << time << ": refresh " << u << " since " << tx << "\n";
@@ -204,7 +202,6 @@ void TwitterRunner<S>::run() {
                 }
             }
             nread += refresh_result.first;
-            load_times[u] = time;
         }
         ++time;
     }

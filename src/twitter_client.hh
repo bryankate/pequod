@@ -16,11 +16,11 @@ typedef std::pair<const uint32_t *, const uint32_t *> FollowerRange;
 typedef std::pair<int, String> RefreshResult;
 
 // On mat, start memcached as:
-//   $/home/ydmao/install/bin/memcached -t 1 -p 11211 -m 2000
+//   ydmao@mat:~/install/memcached_offset/bin$ ./memcached -t 1 -m 2000 -p 11211 -B binary
 class MemcachedTwitter {
   public:
     MemcachedTwitter() {
-        const char *config = "--SERVER=localhost";
+        const char *config = "--SERVER=localhost --BINARY-PROTOCOL";
         c_ = ::memcached(config, strlen(config));
         mandatory_assert(c_);
         expire_at_ = ::time(NULL) + 20 * 60 * 60; // never expire
@@ -29,7 +29,8 @@ class MemcachedTwitter {
     void post(uint32_t author, const String &tweet, uint32_t time,
               preevent<R> e, FollowerRange *f);
     template <typename R>
-    void refresh(uint32_t user, uint32_t since, preevent<R, RefreshResult> e);
+    void refresh(uint32_t user, uint32_t *state, bool full, uint32_t now,
+                 preevent<R, RefreshResult> e);
     // ua follow ub
     template <typename R>
     void follow(uint32_t ua, uint32_t ub, preevent<R> e);
@@ -51,8 +52,9 @@ void MemcachedTwitter::post(uint32_t author, const String &tweet,
                             uint32_t time, preevent<R> e, FollowerRange *fr) {
     if (!fr)
         mandatory_assert(0, "unimplemented: getting followers from memcached");
-    const size_t len = tweet.length() + 18;
-    char *buf = new char[len];
+    const size_t alloclen = tweet.length() + 18;
+    const size_t len = alloclen;
+    char *buf = new char[alloclen];
     // store the tweet itself
     sprintf(buf, "p|%05d|%010u", author, time);
     auto r = memcached_set(c_, buf, 18, tweet.data(), tweet.length(), expire_at_, 0);
@@ -64,7 +66,8 @@ void MemcachedTwitter::post(uint32_t author, const String &tweet,
         // append author|time/tweet to t|*i
         String t("t|");
         t += String(*i);
-        sprintf(buf, "%05u|%010u\254", author, time);
+        sprintf(buf, "%05u|%010u", author, time);
+        buf[16] = '\254';
         r = memcached_append(c_, t.data(), t.length(), buf, len, expire_at_, 0);
         if (r == MEMCACHED_NOTSTORED)
             r = memcached_set(c_, t.data(), t.length(), buf, len, expire_at_, 0);
@@ -75,19 +78,24 @@ void MemcachedTwitter::post(uint32_t author, const String &tweet,
 }
 
 template <typename R>
-void MemcachedTwitter::refresh(uint32_t user, uint32_t, preevent<R, RefreshResult> e) {
+void MemcachedTwitter::refresh(uint32_t user, uint32_t *state, bool full,
+                               uint32_t, preevent<R, RefreshResult> e) {
+    int32_t offset = full ? 0 : *state;
     String t("t|");
     t += String(user);
+    t += String("@");
+    t += String(offset);
     size_t value_length;
     uint32_t flags;
     memcached_return_t error;
-    // XXX: unfair! We are retriving the whole timeline!
     char *v = memcached_get(c_, t.data(), t.length(), &value_length, &flags, 
                             &error);
     check_error(error);
     int n = 0;
     Str str(v, value_length);
-    for (ssize_t pos = 0; pos != -1; pos = str.find_left('\254', pos + 1), ++n);
+    ssize_t pos = 0;
+    for (; (pos = str.find_left('\254', pos + 1)) != -1; ++n);
+    *state = offset + value_length;
     e(RefreshResult(n, String(v, value_length)));
     delete v;
 }
@@ -127,7 +135,8 @@ class PQTwitter {
     void post(uint32_t author, const String &tweet, uint32_t time,
               preevent<R> e, FollowerRange *f);
     template <typename R>
-    void refresh(uint32_t user, uint32_t since, preevent<R, RefreshResult> e);
+    void refresh(uint32_t user, uint32_t *state, bool full, uint32_t now,
+                 preevent<R, RefreshResult> e);
     // ua follow ub
     template <typename R>
     void follow(uint32_t ua, uint32_t ub, preevent<R> e);
@@ -140,7 +149,7 @@ class PQTwitter {
 
 template <typename S> template <typename R>
 void PQTwitter<S>::post(uint32_t author, const String &tweet, uint32_t time,
-                     preevent<R> e, FollowerRange *fr) {
+                        preevent<R> e, FollowerRange *fr) {
     if (!fr)
         mandatory_assert("unimplemented: getting followers from pequod");
     char buf[128];
@@ -155,10 +164,11 @@ void PQTwitter<S>::post(uint32_t author, const String &tweet, uint32_t time,
 }
 
 template <typename S> template <typename R>
-void PQTwitter<S>::refresh(uint32_t user, uint32_t since,
-                          preevent<R, RefreshResult> e) {
+void PQTwitter<S>::refresh(uint32_t user, uint32_t *state, bool full,
+                           uint32_t now, preevent<R, RefreshResult> e) {
+    uint32_t tx = full ? 0 : *state;
     char buf1[128], buf2[128];
-    sprintf(buf1, "t|%05d|%010d", user, since);
+    sprintf(buf1, "t|%05d|%010d", user, tx);
     sprintf(buf2, "t|%05d}", user);
     Str first(buf1, 18);
     Str last(buf2, 8);
@@ -175,6 +185,7 @@ void PQTwitter<S>::refresh(uint32_t user, uint32_t since,
         c = '\255';
         str.append(&c, 1);
     }
+    *state = now;
     e(RefreshResult(n, str));
 }
 
