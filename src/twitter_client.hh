@@ -71,8 +71,7 @@ void HashTwitter<C>::refresh(uint32_t user, uint32_t *state, bool full,
     const char *v = c_.get(t, offset, &value_length);
     int n = 0;
     Str str(v, value_length);
-    ssize_t pos = 0;
-    for (; (pos = str.find_left('\254', pos + 1)) != -1; ++n);
+    for (size_t pos = 0; (pos = str.find_left('\254', pos + 1)) != -1; ++n);
     *state = offset + value_length;
     e(RefreshResult(n, String(v, value_length)));
     c_.done_get(v);
