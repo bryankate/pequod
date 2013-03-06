@@ -210,4 +210,57 @@ parser& parser::parse(String& x) {
     return *this;
 }
 
+void compact_unparser::unparse(StringAccum& sa, const Json& j) {
+    if (j.is_null())
+        sa << '\xC0';
+    else if (j.is_b())
+        sa << (char) ('\xC2' + j.as_b());
+    else if (j.is_i()) {
+        uint8_t* x = (uint8_t*) sa.reserve(9);
+        sa.adjust_length(unparse(x, (int64_t) j.as_i()) - x);
+    } else if (j.is_d()) {
+        uint8_t* x = (uint8_t*) sa.reserve(9);
+        sa.adjust_length(unparse(x, j.as_d()) - x);
+    } else if (j.is_s()) {
+        uint8_t* x = (uint8_t*) sa.reserve(j.as_s().length() + 5);
+        sa.adjust_length(unparse(x, j.as_s()) - x);
+    } else if (j.is_a()) {
+        uint8_t* x = (uint8_t*) sa.reserve(5);
+        if (j.size() < 16) {
+            *x = 0x90 + j.size();
+            sa.adjust_length(1);
+        } else if (j.size() < 65536) {
+            *x = 0xDC;
+            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
+            sa.adjust_length(3);
+        } else {
+            *x = 0xDD;
+            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
+            sa.adjust_length(5);
+        }
+        for (auto it = j.cabegin(); it != j.caend(); ++it)
+            unparse(sa, *it);
+    } else if (j.is_o()) {
+        uint8_t* x = (uint8_t*) sa.reserve(5);
+        if (j.size() < 16) {
+            *x = 0x90 + j.size();
+            sa.adjust_length(1);
+        } else if (j.size() < 65536) {
+            *x = 0xDE;
+            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
+            sa.adjust_length(3);
+        } else {
+            *x = 0xDF;
+            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
+            sa.adjust_length(5);
+        }
+        for (auto it = j.cobegin(); it != j.coend(); ++it) {
+            uint8_t* x = (uint8_t*) sa.reserve(it.key().length() + 5);
+            sa.adjust_length(unparse(x, it.key()) - x);
+            unparse(sa, it.value());
+        }
+    } else
+        sa << '\xC0';
+}
+
 }
