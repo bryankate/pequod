@@ -66,6 +66,7 @@ class HackernewsRunner {
     void post_article(uint32_t author, uint32_t aid);
     void post_comment(uint32_t commentor, uint32_t aid);
     bool vote(uint32_t voter, uint32_t aid);
+    void get_karma(String user);
     void read_article(uint32_t aid);
 };
 
