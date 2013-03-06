@@ -68,6 +68,8 @@ class HackernewsRunner {
     bool vote(uint32_t voter, uint32_t aid);
     void get_karma(String user);
     void read_article(uint32_t aid);
+    void read_materialized(uint32_t aid);
+    void read_tables(uint32_t aid);
 };
 
 inline uint32_t HackernewsPopulator::nusers() const {

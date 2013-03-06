@@ -70,6 +70,13 @@ void HackernewsRunner::get_karma(String user) {
 }
 
 void HackernewsRunner::read_article(uint32_t aid) {
+    if (hp_.m()) 
+        read_materialized(aid);
+    else
+        read_tables(aid);
+}
+
+void HackernewsRunner::read_materialized(uint32_t aid) {
     char buf1[128], buf2[128];
     mandatory_assert(aid < hp_.narticles());
     uint32_t author = hp_.articles()[aid];
@@ -84,9 +91,44 @@ void HackernewsRunner::read_article(uint32_t aid) {
                 std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
             else
                 std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
-        if (!hp_.m() && field == "c")
-            get_karma(extract_spkey(4, bit->key()));
         }
+    }
+}
+
+void HackernewsRunner::read_tables(uint32_t aid) {
+    char buf1[128], buf2[128];
+    mandatory_assert(aid < hp_.narticles());
+    uint32_t author = hp_.articles()[aid];
+
+    // Article
+    sprintf(buf1, "a|%05d%05d", author, aid);
+    auto ait = server_.find(Str(buf1, 12));
+    mandatory_assert(ait != NULL);
+    if (hp_.log())
+        std::cout << "read " << ait->key() << ":" << ait->value() << "\n";
+
+    // Comments and Karma
+    sprintf(buf1, "c|%05d%05d|", author, aid);
+    sprintf(buf2, "c|%05d%05d}", author, aid);
+    auto bit = server_.lower_bound(Str(buf1, 13)),
+        eit = server_.lower_bound(Str(buf2, 13));
+    for (; bit != eit; ++bit) {
+        if (hp_.log()) {
+            std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
+            get_karma(extract_spkey(3, bit->key()));
+        }
+    }
+
+    // Votes
+    sprintf(buf1, "v|%05d%05d|", author, aid);
+    sprintf(buf2, "v|%05d%05d}", author, aid);
+    auto cit = server_.lower_bound(Str(buf1, 13)),
+        ceit = server_.lower_bound(Str(buf2, 13));
+    uint32_t votect = 0;
+    for (; cit != ceit; ++cit) {
+        votect++;
+        if (hp_.log())
+            std::cout << "  v " << cit->key() << ": " << cit->value() << "\n";
     }
 }
 
@@ -119,6 +161,33 @@ void HackernewsRunner::populate() {
     pq::Join* j;
 
     if (hp_.m()) {
+        start = "ma|";
+        end = "ma}";
+        // Materialize articles
+        join_str = "ma|<author:5><seqid:5>|a "
+            "a|<author><seqid> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|article join");
+        server_.add_join(start, end, j);
+        
+        // Materialize votes
+        join_str = "ma|<author:5><seqid:5>|v "
+            "v|<author><seqid>|<voter:5> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|votes join");
+        j->set_jvt(jvt_count_match);
+        server_.add_join(start, end, j);
+
+        // Materialize comments
+        join_str = "ma|<author:5><seqid:5>|c|<cid:5>|<commenter:5> "
+            "c|<author><seqid>|<cid>|<commenter> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|comments join");
+        server_.add_join(start, end, j);
+        
         // Materialize karma inline
         std::cout << "Materializing karma inline with articles.\n";
         join_str = "ma|<aid:10>|k|<cid:5>|<commenter:5> "
@@ -144,32 +213,6 @@ void HackernewsRunner::populate() {
         j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
     }
-
-    // Materialize articles
-    join_str = "ma|<author:5><seqid:5>|a "
-        "a|<author><seqid> ";
-    j = new pq::Join;
-    valid = j->assign_parse(join_str);
-    mandatory_assert(valid && "Invalid ma|article join");
-    server_.add_join(start, end, j);
-    
-    // Materialize votes
-    join_str = "ma|<author:5><seqid:5>|v "
-        "v|<author><seqid>|<voter:5> ";
-    j = new pq::Join;
-    valid = j->assign_parse(join_str);
-    mandatory_assert(valid && "Invalid ma|votes join");
-    j->set_jvt(jvt_count_match);
-    server_.add_join(start, end, j);
-
-    // Materialize comments
-    join_str = "ma|<author:5><seqid:5>|c|<cid:5>|<commenter:5> "
-        "c|<author><seqid>|<cid>|<commenter> ";
-    j = new pq::Join;
-    valid = j->assign_parse(join_str);
-    mandatory_assert(valid && "Invalid ma|comments join");
-    server_.add_join(start, end, j);
-
 
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
