@@ -111,6 +111,9 @@ $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 $(OBJDIR)/rbtest: $(OBJDIR)/rb.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
+$(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
 # create files needed by exp/ directory
 $(OBJDIR)/gstore_server: $(PROTOGENDIR)/gstore.pb.h
 
