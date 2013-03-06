@@ -8,7 +8,7 @@
 namespace pq {
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
+    : param_(param), log_(true), nusers_(param["nusers"].as_i(500)),
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
       pre_(param["narticles"].as_i(1000)),
@@ -65,7 +65,7 @@ void HackernewsRunner::get_karma(String user) {
         uint32_t my_karma = hp_.karma(atoi(user.c_str()));
         mandatory_assert(karma == my_karma && "Karma mismatch");
         if (hp_.log())
-            std::cout << "  k " << ":" << karma << "\n";
+            std::cout << "  k " << user << ":" << karma << "\n";
     }
 }
 
@@ -84,9 +84,9 @@ void HackernewsRunner::read_article(uint32_t aid) {
                 std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
             else
                 std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
-        }
         if (!hp_.m() && field == "c")
             get_karma(extract_spkey(4, bit->key()));
+        }
     }
 }
 
@@ -131,7 +131,7 @@ void HackernewsRunner::populate() {
 
     // Materialize articles
     join_str = "ma|<author:5><seqid:5>|a "
-        "a|<author><seqid1> ";
+        "a|<author><seqid> ";
     j = new pq::Join;
     valid = j->assign_parse(join_str);
     mandatory_assert(valid && "Invalid ma|article join");
@@ -147,7 +147,7 @@ void HackernewsRunner::populate() {
     server_.add_join(start, end, j);
 
     // Materialize comments
-    join_str = "ma|<author:5><seqid:5>|c|<commenter:5><cid:5> "
+    join_str = "ma|<author:5><seqid:5>|c|<cid:5>|<commenter:5> "
         "c|<author><seqid>|<cid>|<commenter> ";
     j = new pq::Join;
     valid = j->assign_parse(join_str);
@@ -156,6 +156,7 @@ void HackernewsRunner::populate() {
     
     if (hp_.m()) {
         // Materialize karma inline
+        std::cout << "Materializing karma inline with articles.\n";
         join_str = "ma|<author:5><seqid:5>|k|<commenter:5> "
             "c|<author><seqid>|<cid:5>|<commenter> "
             "k|<commenter>";
@@ -179,17 +180,9 @@ void HackernewsRunner::run() {
     uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
 
     char buf1[128], buf2[128];
-    if (hp_.m()) {
-        std::cout << "Materializing karma inline with articles.\n";
-        sprintf(buf1, "a|");
-        sprintf(buf2, "a}");
-    } else {
-        std::cout << "Materializing separate karma table.\n";
-        sprintf(buf1, "k|");
-        sprintf(buf2, "k}");
-    }
+    sprintf(buf1, "k|");
+    sprintf(buf2, "k}");
     server_.validate(Str(buf1, 2), Str(buf2, 2));
-    std::cout << "Finished validate.\n";
     if (hp_.log()) {
         std::cout << ": karma scan [" << buf1 << "," << buf2 << ")\n";
         auto bit = server_.lower_bound(Str(buf1, 2)),
@@ -199,6 +192,20 @@ void HackernewsRunner::run() {
         std::cout << ": end karma scan [" << buf1 << "," << buf2 << ")\n";
     }
 
+    sprintf(buf1, "ma|");
+    sprintf(buf2, "ma}");
+    server_.validate(Str(buf1, 3), Str(buf2, 3));
+
+    if (hp_.log()) {
+        std::cout << ": ma scan [" << buf1 << "," << buf2 << ")\n";
+        auto bit = server_.lower_bound(Str(buf1, 3)),
+            eit = server_.lower_bound(Str(buf2, 3));
+        for (; bit != eit; ++bit)
+            std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+        std::cout << ": end ma scan [" << buf1 << "," << buf2 << ")\n";
+    }
+
+    std::cout << "Finished validate.\n";
     getrusage(RUSAGE_SELF, &ru[0]);
     for (uint32_t i = 0; i < nops; ++i) {
         uint32_t p = rng(100);
