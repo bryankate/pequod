@@ -235,28 +235,20 @@ long Json::hard_to_i() const
     case j_object:
 	return size();
     case j_bool:
-	return _str[0] == 't';
     case j_int:
+        return u_.i;
     case j_double:
+        return long(u_.d);
     case j_string:
     default:
-	const char *b = _str.c_str();
+	const char *b = reinterpret_cast<const String&>(u_.str).c_str();
 	char *s;
 	long x = strtol(b, &s, 0);
-	if (s == b + _str.length())
+	if (s == b + u_.str.length)
 	    return x;
 	else
 	    return (long) strtod(b, 0);
     }
-}
-
-long Json::hard_as_i() const
-{
-    const char *b = _str.c_str();
-    char *s;
-    long x = strtol(b, &s, 0);
-    assert(s == b + _str.length());
-    return x;
 }
 
 uint64_t Json::hard_to_u64() const
@@ -268,128 +260,27 @@ uint64_t Json::hard_to_u64() const
     case j_object:
 	return size();
     case j_bool:
-	return _str[0] == 't';
     case j_int:
+	return u_.i;
     case j_double:
+        return uint64_t(u_.d);
     case j_string:
     default:
-	const char *b = _str.c_str();
+	const char* b = reinterpret_cast<const String&>(u_.str).c_str();
 	char *s;
 #if SIZEOF_LONG >= 8
 	unsigned long x = strtoul(b, &s, 0);
 #else
 	unsigned long long x = strtoull(b, &s, 0);
 #endif
-	if (s == b + _str.length())
+	if (s == b + u_.str.length)
 	    return x;
 	else
 	    return (uint64_t) strtod(b, 0);
     }
 }
 
-/** @brief Extract this integer Json's value into @a x.
-    @param[out] x value storage
-    @return True iff this Json stores an integer value.
-
-    If false is returned (!is_number() or the number is not parseable as a
-    pure integer), @a x remains unchanged. */
-bool Json::to_i(int &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	long v = strtol(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @overload */
-bool Json::to_i(unsigned &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	unsigned long v = strtoul(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @overload */
-bool Json::to_i(long &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	long v = strtol(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @overload */
-bool Json::to_i(unsigned long &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	unsigned long v = strtoul(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @overload */
-bool Json::to_i(long long &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	long v = strtoll(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @overload */
-bool Json::to_i(unsigned long long &x) const
-{
-    if (_type == j_int || _type == j_double) {
-	const char *b = _str.c_str();
-	char *s;
-	unsigned long v = strtoull(b, &s, 0);
-	if (s == b + _str.length()) {
-	    x = v;
-	    return true;
-	}
-    }
-    return false;
-}
-
-/** @brief Return this Json converted to a double.
-
-    Converts any Json to an integer value. Numeric Jsons convert as you'd
-    expect. Null Jsons convert to 0; false boolean Jsons to 0 and true
-    boolean Jsons to 1; string Jsons to a number parsed from their initial
-    portions; and array and object Jsons to size().
-    @sa as_d() */
-double Json::to_d() const
+double Json::hard_to_d() const
 {
     switch (_type) {
     case j_null:
@@ -398,12 +289,13 @@ double Json::to_d() const
     case j_object:
 	return size();
     case j_bool:
-	return _str[0] == 't';
     case j_int:
+	return u_.i;
     case j_double:
+        return u_.d;
     case j_string:
     default:
-	return strtod(_str.c_str(), 0);
+	return strtod(reinterpret_cast<const String&>(u_.str).c_str(), 0);
     }
 }
 
@@ -416,18 +308,17 @@ bool Json::hard_to_b() const
     case j_object:
 	return !empty();
     case j_bool:
-	return _str[0] == 't';
     case j_int:
-	return to_i() != 0;
+	return u_.i;
     case j_double:
-	return to_d() != 0;
+	return u_.d;
     case j_string:
     default:
-	return !_str.empty();
+	return u_.str.length != 0;
     }
 }
 
-const String &Json::hard_to_s() const
+String Json::hard_to_s() const
 {
     switch (_type) {
     case j_null:
@@ -437,15 +328,18 @@ const String &Json::hard_to_s() const
     case j_object:
 	return object_string;
     case j_bool:
+        return String(bool(u_.i));
     case j_int:
+        return String(u_.i);
     case j_double:
+        return String(u_.d);
     case j_string:
     default:
-	return _str;
+	return String(u_.str);
     }
 }
 
-const Json &Json::hard_get(Str key) const
+const Json& Json::hard_get(Str key) const
 {
     ArrayJson *aj;
     JsonVector::size_type i;
@@ -583,13 +477,16 @@ void Json::unparse(StringAccum &sa) const
 	    sa << q;
 	sa << ']';
     } else if (_type == j_string)
-	sa << '\"' << _str.encode_json() << '\"';
+	sa << '\"' << reinterpret_cast<const String&>(u_.str).encode_json() << '\"';
     else if (_type == j_null)
 	sa.append("null", 4);
-    else {
-	assert(_str);
-	sa << _str;
-    }
+    else if (_type == j_bool) {
+        bool b = u_.i;
+        sa.append("false\0true" + (-b & 6), 5 - b);
+    } else if (_type == j_int)
+        sa << u_.i;
+    else if (_type == j_double)
+        sa << u_.d;
 }
 
 
@@ -824,11 +721,14 @@ Json::parse_string(String &result, const String &str, const char *s, const char 
 }
 
 const char *
-Json::parse_primitive(const String &str, const char *begin, const char *end)
+Json::parse_primitive(const String&, const char *begin, const char *end)
 {
     if (_cjson)
 	_cjson->deref(_type);
+    if (_type == j_string)
+        u_.str.deref();
     _cjson = 0;
+    _type = j_null;
 
     const char *s = begin;
     switch (*s) {
@@ -870,30 +770,31 @@ Json::parse_primitive(const String &str, const char *begin, const char *end)
 	    for (++s; s != end && isdigit((unsigned char) *s); )
 		++s;
 	}
-	if (begin >= str.begin() && s <= str.end())
-	    _str = str.substring(begin, s);
-	else
-	    _str = String(begin, s);
+        if (s == begin + 1)
+            u_.i = *begin - '0';
+        else if (_type == j_int)
+            u_.i = strtoll(String(begin, s).c_str(), 0, 0);
+        else
+            u_.d = strtod(String(begin, s).c_str(), 0);
 	_type = type;
 	return s;
     }
     case 't':
 	if (s + 4 <= end && s[1] == 'r' && s[2] == 'u' && s[3] == 'e') {
-	    _str = String(true);
+	    u_.i = 1;
 	    _type = j_bool;
 	    return s + 4;
 	} else
 	    return 0;
     case 'f':
 	if (s + 5 <= end && s[1] == 'a' && s[2] == 'l' && s[3] == 's' && s[4] == 'e') {
-	    _str = String(false);
+	    u_.i = 0;
 	    _type = j_bool;
 	    return s + 5;
 	} else
 	    return 0;
     case 'n':
 	if (s + 4 <= end && s[1] == 'u' && s[2] == 'l' && s[3] == 'l') {
-	    _str = String();
 	    _type = j_null;
 	    return s + 4;
 	} else

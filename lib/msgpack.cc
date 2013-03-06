@@ -1,6 +1,7 @@
 #include "msgpack.hh"
+namespace msgpack {
 
-msgpack_parser& msgpack_parser::parse(Str& x) {
+parser& parser::parse(Str& x) {
     uint32_t len;
     if ((uint32_t) *s_ - 0xA0 < 32) {
         len = *s_ - 0xA0;
@@ -18,7 +19,7 @@ msgpack_parser& msgpack_parser::parse(Str& x) {
     return *this;
 }
 
-msgpack_parser& msgpack_parser::parse(String& x) {
+parser& parser::parse(String& x) {
     Str s;
     parse(s);
     if (str_)
@@ -26,4 +27,6 @@ msgpack_parser& msgpack_parser::parse(String& x) {
     else
         x.assign(s.begin(), s.end());
     return *this;
+}
+
 }

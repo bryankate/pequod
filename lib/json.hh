@@ -95,16 +95,16 @@ class Json { public:
     // Primitive extractors
     inline long to_i() const;
     inline uint64_t to_u64() const;
-    bool to_i(int &x) const;
-    bool to_i(unsigned &x) const;
-    bool to_i(long &x) const;
-    bool to_i(unsigned long &x) const;
-    bool to_i(long long &x) const;
-    bool to_i(unsigned long long &x) const;
+    inline bool to_i(int &x) const;
+    inline bool to_i(unsigned &x) const;
+    inline bool to_i(long &x) const;
+    inline bool to_i(unsigned long &x) const;
+    inline bool to_i(long long &x) const;
+    inline bool to_i(unsigned long long &x) const;
     inline long as_i() const;
     inline long as_i(long default_value) const;
 
-    double to_d() const;
+    inline double to_d() const;
     inline bool to_d(double &x) const;
     inline double as_d() const;
     inline double as_d(double default_value) const;
@@ -114,12 +114,11 @@ class Json { public:
     inline bool as_b() const;
     inline bool as_b(bool default_value) const;
 
-    inline const String &to_s() const;
+    inline String to_s() const;
     inline bool to_s(Str &x) const;
     inline bool to_s(String &x) const;
     inline const String& as_s() const;
     inline const String& as_s(const String& default_value) const;
-    inline const char *c_str() const;
 
     // Object methods
     inline size_type count(Str key) const;
@@ -131,7 +130,7 @@ class Json { public:
     inline long get_i(Str key) const;
     inline double get_d(Str key) const;
     inline bool get_b(Str key) const;
-    inline const String &get_s(Str key) const;
+    inline String get_s(Str key) const;
 
     inline const Json_get_proxy get(Str key, Json &x) const;
     inline const Json_get_proxy get(Str key, int &x) const;
@@ -233,21 +232,23 @@ class Json { public:
     static inline Json parse(const char *first, const char *last);
 
     // Assignment
-    inline Json &operator=(const Json &x);
+    inline Json &operator=(const Json& x);
 #if HAVE_CXX_RVALUE_REFERENCES && !(__clang__ && __APPLE__)
-    inline Json &operator=(Json &&x);
+    inline Json &operator=(Json&& x);
 #endif
-    template <typename P> inline Json &operator=(const Json_proxy_base<P> &x);
+    template <typename P> inline Json& operator=(const Json_proxy_base<P>& x);
 
-    inline Json &operator++();
+    inline Json& operator++();
     inline void operator++(int);
-    inline Json &operator--();
+    inline Json& operator--();
     inline void operator--(int);
-    inline Json &operator+=(int x);
-    inline Json &operator+=(long x);
-    inline Json &operator+=(double x);
+    inline Json& operator+=(int x);
+    inline Json& operator+=(long x);
+    inline Json& operator+=(double x);
 
-    inline void swap(Json &x);
+    friend bool operator==(const Json& a, const Json& b);
+
+    inline void swap(Json& x);
 
   private:
 
@@ -278,17 +279,21 @@ class Json { public:
     struct ObjectJson;
 
     json_type _type;
-    String _str;
+    union {
+        int64_t i;
+        double d;
+        String::rep_t str;
+    } u_;
     ComplexJson *_cjson;
 
     inline ObjectJson *ojson() const;
     inline ArrayJson *ajson() const;
 
     long hard_to_i() const;
-    long hard_as_i() const;
     uint64_t hard_to_u64() const;
+    double hard_to_d() const;
     bool hard_to_b() const;
-    const String &hard_to_s() const;
+    String hard_to_s() const;
     inline void force_number();
 
     const Json &hard_get(Str key) const;
@@ -312,7 +317,6 @@ class Json { public:
     friend class const_object_iterator;
     friend class array_iterator;
     friend class const_array_iterator;
-    friend bool operator==(const Json &a, const Json &b);
 
 };
 
@@ -869,7 +873,7 @@ class Json_proxy_base {
     bool as_b(bool default_value) const {
 	return cvalue().as_b(default_value);
     }
-    const String &to_s() const {
+    String to_s() const {
 	return cvalue().to_s();
     }
     bool to_s(Str &x) const {
@@ -883,9 +887,6 @@ class Json_proxy_base {
     }
     const String& as_s(const String& default_value) const {
 	return cvalue().as_s(default_value);
-    }
-    const char *c_str() const {
-	return cvalue().c_str();
     }
     Json::size_type count(Str key) const {
 	return cvalue().count(key);
@@ -911,7 +912,7 @@ class Json_proxy_base {
     bool get_b(Str key) const {
 	return cvalue().get_b(key);
     }
-    const String &get_s(Str key) const {
+    String get_s(Str key) const {
 	return cvalue().get_s(key);
     }
     inline const Json_get_proxy get(Str key, Json &x) const;
@@ -1277,50 +1278,64 @@ inline Json::Json()
 }
 /** @brief Construct a Json copy of @a x. */
 inline Json::Json(const Json &x)
-    : _type(x._type), _str(x._str), _cjson(x._cjson) {
+    : _type(x._type), u_(x.u_), _cjson(x._cjson) {
+    if (_type == j_string)
+        u_.str.ref();
     if (_cjson)
 	_cjson->ref();
 }
 #if HAVE_CXX_RVALUE_REFERENCES && !(__clang__ && __APPLE__)
 /** @overload */
 inline Json::Json(Json &&x)
-    : _type(x._type), _str(std::move(x._str)), _cjson(x._cjson) {
+    : _type(x._type), u_(std::move(x.u_)), _cjson(x._cjson) {
+    x._type = j_null;
     x._cjson = 0;
 }
 #endif
 /** @brief Construct simple Json values. */
 inline Json::Json(int x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(unsigned x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(long x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(unsigned long x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(long long x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(unsigned long long x)
-    : _type(j_int), _str(x), _cjson() {
+    : _type(j_int), u_{x}, _cjson() {
 }
 inline Json::Json(double x)
-    : _type(j_double), _str(x), _cjson() {
+    : _type(j_double), _cjson() {
+    u_.d = x;
 }
 inline Json::Json(bool x)
-    : _type(j_bool), _str(x), _cjson() {
+    : _type(j_bool), u_{x}, _cjson() {
 }
-inline Json::Json(const String &x)
-    : _type(j_string), _str(x), _cjson() {
+inline Json::Json(const String& x)
+    : _type(j_string), _cjson() {
+    u_.str = x._r;
+    u_.str.ref();
 }
 inline Json::Json(Str x)
-    : _type(j_string), _str(x), _cjson() {
+    : _type(j_string), _cjson() {
+    using std::swap;
+    u_.str.memo = 0;
+    String str(x);
+    swap(u_.str, str._r);
 }
 inline Json::Json(const char *x)
-    : _type(j_string), _str(x), _cjson() {
+    : _type(j_string), _cjson() {
+    using std::swap;
+    u_.str.memo = 0;
+    String str(x);
+    swap(u_.str, str._r);
 }
 /** @brief Construct an array Json containing the elements of @a x. */
 template <typename T>
@@ -1351,6 +1366,8 @@ inline Json::Json(const HashTable<String, T> &x)
     }
 }
 inline Json::~Json() {
+    if (_type == j_string)
+        u_.str.deref();
     if (_cjson)
 	_cjson->deref(_type);
 }
@@ -1479,18 +1496,95 @@ inline Json::size_type Json::size() const {
     portions; and array and object Jsons to size().
     @sa as_i() */
 inline long Json::to_i() const {
-    if (_type == j_int && _str.length() == 1)
-	return _str[0] - '0';
+    if (_type == j_int)
+	return u_.i;
     else
 	return hard_to_i();
+}
+
+/** @brief Extract this integer Json's value into @a x.
+    @param[out] x value storage
+    @return True iff this Json stores an integer value.
+
+    If false is returned (!is_number() or the number is not parseable as a
+    pure integer), @a x remains unchanged. */
+inline bool Json::to_i(int &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double(int(u_.d))) {
+        x = int(u_.d);
+        return true;
+    } else
+        return false;
+}
+
+/** @overload */
+inline bool Json::to_i(unsigned &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double(unsigned(u_.d))) {
+        x = unsigned(u_.d);
+        return true;
+    } else
+        return false;
+}
+
+/** @overload */
+inline bool Json::to_i(long &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double(long(u_.d))) {
+        x = long(u_.d);
+        return true;
+    } else
+        return false;
+}
+
+/** @overload */
+inline bool Json::to_i(unsigned long &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double((unsigned long) u_.d)) {
+        x = (unsigned long) u_.d;
+        return true;
+    } else
+        return false;
+}
+
+/** @overload */
+inline bool Json::to_i(long long &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double((long long) u_.d)) {
+        x = (long long) u_.d;
+        return true;
+    } else
+        return false;
+}
+
+/** @overload */
+inline bool Json::to_i(unsigned long long &x) const {
+    if (_type == j_int) {
+        x = u_.i;
+        return true;
+    } else if (_type == j_double && u_.d == double((unsigned long long) u_.d)) {
+        x = (unsigned long long) u_.d;
+        return true;
+    } else
+        return false;
 }
 
 /** @brief Return this Json converted to a 64-bit unsigned integer.
 
     See to_i() for the conversion rules. */
 inline uint64_t Json::to_u64() const {
-    if (_type == j_int && _str.length() == 1)
-	return _str[0] - '0';
+    if (_type == j_int)
+	return u_.i;
     else
 	return hard_to_u64();
 }
@@ -1500,10 +1594,7 @@ inline uint64_t Json::to_u64() const {
     @sa to_i() */
 inline long Json::as_i() const {
     assert(_type == j_int || _type == j_double);
-    if (_str.length() == 1)
-	return _str[0] - '0';
-    else
-	return hard_as_i();
+    return _type == j_int ? u_.i : long(u_.d);
 }
 
 /** @brief Return the integer value of this numeric Json or @a default_value. */
@@ -1512,6 +1603,20 @@ inline long Json::as_i(long default_value) const {
         return default_value;
     else
         return as_i();
+}
+
+/** @brief Return this Json converted to a double.
+
+    Converts any Json to an integer value. Numeric Jsons convert as you'd
+    expect. Null Jsons convert to 0; false boolean Jsons to 0 and true
+    boolean Jsons to 1; string Jsons to a number parsed from their initial
+    portions; and array and object Jsons to size().
+    @sa as_d() */
+inline double Json::to_d() const {
+    if (_type == j_double)
+        return u_.d;
+    else
+        return hard_to_d();
 }
 
 /** @brief Extract this numeric Json's value into @a x.
@@ -1532,15 +1637,15 @@ inline bool Json::to_d(double &x) const {
     @sa to_d() */
 inline double Json::as_d() const {
     assert(_type == j_double || _type == j_int);
-    return to_d();
+    return _type == j_double ? u_.d : double(u_.i);
 }
 
 /** @brief Return the double value of this numeric Json or @a default_value. */
 inline double Json::as_d(double default_value) const {
-    if (_type != j_int && _type != j_double)
+    if (_type != j_double && _type != j_int)
         return default_value;
     else
-        return to_d();
+        return as_d();
 }
 
 /** @brief Return this Json converted to a boolean.
@@ -1552,7 +1657,7 @@ inline double Json::as_d(double default_value) const {
     @sa as_b() */
 inline bool Json::to_b() const {
     if (_type == j_bool)
-	return _str[0] == 't';
+	return u_.i;
     else
 	return hard_to_b();
 }
@@ -1564,7 +1669,7 @@ inline bool Json::to_b() const {
     If !is_bool(), @a x remains unchanged. */
 inline bool Json::to_b(bool &x) const {
     if (_type == j_bool) {
-	x = _str[0] == 't';
+	x = u_.i;
 	return true;
     } else
 	return false;
@@ -1575,7 +1680,7 @@ inline bool Json::to_b(bool &x) const {
     @sa to_b() */
 inline bool Json::as_b() const {
     assert(_type == j_bool);
-    return _str[0] == 't';
+    return u_.i;
 }
 
 /** @brief Return the boolean value of this numeric Json or @a default_value. */
@@ -1583,7 +1688,7 @@ inline bool Json::as_b(bool default_value) const {
     if (_type != j_bool)
         return default_value;
     else
-        return _str[0] == 't';
+        return as_b();
 }
 
 /** @brief Return this Json converted to a string.
@@ -1593,9 +1698,9 @@ inline bool Json::as_b(bool default_value) const {
     values; boolean Jsons to "false" or "true"; and array and object Jsons to
     "[Array]" and "[Object]", respectively.
     @sa as_s() */
-inline const String &Json::to_s() const {
+inline String Json::to_s() const {
     if (_type == j_string)
-	return _str;
+	return String(u_.str);
     else
 	return hard_to_s();
 }
@@ -1605,9 +1710,9 @@ inline const String &Json::to_s() const {
     @return True iff is_string().
 
     If !is_string(), @a x remains unchanged. */
-inline bool Json::to_s(Str &x) const {
+inline bool Json::to_s(Str& x) const {
     if (_type == j_string) {
-	x.assign(_str.data(), _str.length());
+	x.assign(u_.str.data, u_.str.length);
 	return true;
     } else
 	return false;
@@ -1618,9 +1723,11 @@ inline bool Json::to_s(Str &x) const {
     @return True iff is_string().
 
     If !is_string(), @a x remains unchanged. */
-inline bool Json::to_s(String &x) const {
+inline bool Json::to_s(String& x) const {
     if (_type == j_string) {
-	x = _str;
+        u_.str.ref();
+        x._r.deref();
+        x._r = u_.str;
 	return true;
     } else
 	return false;
@@ -1629,9 +1736,9 @@ inline bool Json::to_s(String &x) const {
 /** @brief Return the value of this string Json.
     @pre is_string()
     @sa to_s() */
-inline const String &Json::as_s() const {
+inline const String& Json::as_s() const {
     assert(_type == j_string);
-    return _str;
+    return reinterpret_cast<const String&>(u_.str);
 }
 
 /** @brief Return the value of this string Json or @a default_value. */
@@ -1639,19 +1746,14 @@ inline const String& Json::as_s(const String& default_value) const {
     if (_type != j_string)
         return default_value;
     else
-        return _str;
-}
-
-/** @brief Return to_s().c_str(). */
-inline const char *Json::c_str() const {
-    return to_s().c_str();
+        return as_s();
 }
 
 inline void Json::force_number() {
     assert(_type == j_null || _type == j_int || _type == j_double);
     if (_type == j_null) {
 	_type = j_int;
-	_str = String::make_zero();
+        u_.i = 0;
     }
 }
 
@@ -1719,7 +1821,7 @@ inline bool Json::get_b(Str key) const {
 }
 
 /** @brief Return get(@a key).to_s(). */
-inline const String &Json::get_s(Str key) const {
+inline String Json::get_s(Str key) const {
     return get(key).to_s();
 }
 
@@ -2296,25 +2398,27 @@ inline Json Json::parse(const char *first, const char *last) {
 
 // Assignment
 
-inline Json &Json::operator=(const Json &x) {
-    _str = x._str;
-    if (_cjson != x._cjson) {
-	if (_cjson)
-	    _cjson->deref(_type);
-	_cjson = x._cjson;
-	if (_cjson)
-	    _cjson->ref();
-    }
+inline Json &Json::operator=(const Json& x) {
+    if (x._type == j_string)
+        x.u_.str.ref();
+    if (_type == j_string)
+        u_.str.deref();
+    u_ = x.u_;
+    if (x._cjson)
+        x._cjson->ref();
+    if (_cjson)
+        _cjson->deref(_type);
+    _cjson = x._cjson;
     _type = x._type;
     return *this;
 }
 
 #if HAVE_CXX_RVALUE_REFERENCES && !(__clang__ && __APPLE__)
-inline Json &Json::operator=(Json &&x) {
-    _type = x._type;
-    _str = std::move(x._str);
-    _cjson = x._cjson;
-    x._cjson = 0;
+inline Json &Json::operator=(Json&& x) {
+    using std::swap;
+    swap(_type, x._type);
+    swap(u_, x.u_);
+    swap(_cjson, x._cjson);
     return *this;
 }
 #endif
@@ -2341,22 +2445,23 @@ inline void Json::operator--(int) {
 inline Json &Json::operator+=(int x) {
     force_number();
     if (_type == j_int)
-	_str = String(as_i() + x);
+        u_.i += x;
     else
-	_str = String(as_d() + x);
+        u_.d += x;
     return *this;
 }
 inline Json &Json::operator+=(long x) {
     force_number();
     if (_type == j_int)
-	_str = String(as_i() + x);
+	u_.i += x;
     else
-	_str = String(as_d() + x);
+	u_.d += x;
     return *this;
 }
 inline Json &Json::operator+=(double x) {
     force_number();
-    _str = String(as_d() + x);
+    u_.d = as_d() + x;
+    _type = j_double;
     return *this;
 }
 
@@ -2364,7 +2469,7 @@ inline Json &Json::operator+=(double x) {
 inline void Json::swap(Json &x) {
     using std::swap;
     swap(_type, x._type);
-    _str.swap(x._str);
+    swap(u_, x.u_);
     swap(_cjson, x._cjson);
 }
 
@@ -2392,7 +2497,9 @@ inline std::ostream &operator<<(std::ostream &f, const Json_proxy_base<P> &json)
 
 inline bool operator==(const Json &a, const Json &b) {
     return a.type() == b.type()
-	&& (a.is_primitive() ? a._str == b._str : a._cjson == b._cjson);
+        && (a.is_primitive()
+            ? (a.type() == Json::j_string ? a.as_s() == b.as_s() : a.u_.i == b.u_.i)
+            : a._cjson == b._cjson);
 }
 
 template <typename T>
