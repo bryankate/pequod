@@ -3,6 +3,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <set>
+#include <vector>
 #if DO_PERF
 #include <sys/prctl.h>
 #include <sys/wait.h>
@@ -115,7 +116,7 @@ void recursive() {
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
 
-    std::cerr << "Before processing join:\n";
+    std::cerr << "RECURSIVE: Before processing join:\n";
     for (auto it = server.begin(); it != server.end(); ++it)
         std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
     std::cerr << std::endl;
@@ -390,6 +391,56 @@ void test_karma() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
+void test_ma() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<author:5> "
+                               "a|<author:5><seqid:5> "
+                               "v|<author><seqid>|<voter:5>"));
+    CHECK_EQ(j1.nsource(), 2);
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    String begin("k|");
+    String end("k}");
+    String mab("ma|");
+    String mae("ma}");
+
+    pq::Join j2;
+    CHECK_TRUE(j2.assign_parse("ma|<author:5><seqid:5>|k "
+                               "a|<author><seqid> "
+                               "k|<author>"));
+    CHECK_EQ(j2.nsource(), 2);
+
+    j2.ref();
+    server.add_join("ma|", "ma}", &j2);
+
+    int nuser = 10;
+    int nvotes_per_aid = 4;
+    String aid;
+    char buf[20];
+    
+    for (int i = 0; i < nuser; ++i) {
+        sprintf(buf, "a|%05d%05d", i, i);
+        server.insert(String(buf), "article");
+        for (int j = 0; j < nvotes_per_aid; ++j) {
+            sprintf(buf, "v|%05d%05d|%05d", i, i, j + 1);            
+            server.insert(String(buf), "1");
+        }
+    }
+
+    server.validate(begin, end);
+    CHECK_EQ(server.count(begin, end), size_t(nuser));
+    server.validate(mab, mae);
+    // FAILS
+    CHECK_EQ(server.count(mab, mae), size_t(nuser));
+
+    for (auto it = server.begin(); it != server.end(); ++it)
+        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+}
+
 void test_karma_online() {
     pq::Server server;
     pq::Join j1;
@@ -608,6 +659,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_max);
     ADD_TEST(test_sum);
     ADD_EXP_TEST(test_karma);
+    ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
     for (auto& t : tests_)
