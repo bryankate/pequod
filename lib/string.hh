@@ -107,9 +107,10 @@ class String : public String_base<String> {
     inline void swap(String &x);
 
     inline void append(const String &x);
-    inline void append(const char *cstr);
-    inline void append(const char *s, int len);
-    inline void append(const char *first, const char *last);
+    inline void append(const char* cstr);
+    inline void append(const char* s, int len);
+    inline void append(const char* first, const char* last);
+    inline void append(const unsigned char* first, const unsigned char* last);
     void append_fill(int c, int len);
     char *append_uninitialized(int len);
 
@@ -623,6 +624,12 @@ inline void String::append(const char *s, int len) {
 inline void String::append(const char *first, const char *last) {
     if (first < last)
 	append(first, last - first);
+}
+/** @overload */
+inline void String::append(const unsigned char* first,
+                           const unsigned char* last) {
+    if (first < last)
+	append(reinterpret_cast<const char*>(first), last - first);
 }
 
 /** @brief Append @a x to this string.
