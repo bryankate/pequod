@@ -531,6 +531,46 @@ void test_max() {
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
+void test_sum() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("sum|<sid:5> "
+                               "a|<sid>|<aid:5> "
+                               "b|<aid>|<bid:5>"));
+    CHECK_EQ(j1.nsource(), 2);
+
+    j1.set_jvt(pq::jvt_sum_match);
+    j1.ref();
+    server.add_join("sum|", "sum}", &j1);
+
+    String begin("sum|");
+    String end("sum}");
+    server.insert("a|00000|00000", "");
+    server.insert("a|00000|00001", "");
+    server.insert("a|00001|00003", "");
+    server.insert("b|00000|00000", "10");
+    CHECK_EQ(server.count(begin, end), size_t(0));
+
+    server.validate(begin, end);                        // sum|00000 = 10
+    CHECK_EQ(server.count(begin, end), size_t(1));
+    auto sum0 = server.find("sum|00000");
+    CHECK_TRUE(sum0);
+    CHECK_EQ(sum0->value_, "10");
+
+    server.insert("b|00000|00000", "5");                // sum|00000 = 5
+    server.insert("b|00001|00000", "3");                // sum|00000 = 8
+    server.insert("b|00000|00001", "77");               // sum|00000 = 85
+    server.insert("b|00003|00000", "8");                // sum|00001 = 8
+    server.erase("b|00000|00000");                      // sum|00000 = 80
+    CHECK_EQ(server.count(begin, end), size_t(2));
+    auto sum1 = server.find("sum|00001");
+    CHECK_TRUE(sum1);
+    auto sum3 = server.find("sum|00003");
+    CHECK_TRUE(!sum3);
+    CHECK_EQ(sum0->value_, "80");
+    CHECK_EQ(sum1->value_, "8");
+}
+
 void test_swap() {
     String s1("abcde");
     String s2("ghijk");
@@ -566,6 +606,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_count_validate1);
     ADD_TEST(test_min);
     ADD_TEST(test_max);
+    ADD_TEST(test_sum);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);

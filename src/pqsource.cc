@@ -152,4 +152,42 @@ void MaxSourceAccumulator::commit(Str dst_key) {
     val_ = String();
 }
 
+
+void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+    if (join_->back_source().match(src->key())) {
+        for (auto& s : resultkeys_) {
+            join_->expand(s.mutable_udata(), src->key());
+            dst_table_->modify(s, [&](Datum* dst, bool insert) {
+                if (insert)
+                    return src->value_;
+                else {
+                    long diff = (notifier == notify_update) ?
+                            src->value_.to_i() - old_value.to_i() :
+                            src->value_.to_i();
+
+                    if (notifier == notify_erase)
+                        diff *= -1;
+
+                    if (diff)
+                        return String(dst->value_.to_i() + diff);
+                    else
+                        return unchanged_marker();
+                }
+            });
+        }
+    }
+}
+
+void SumSourceAccumulator::notify(const Datum* src) {
+    sum_ += src->value_.to_i();
+    any_ = true;
+}
+
+void SumSourceAccumulator::commit(Str dst_key) {
+    if (any_)
+        dst_table_->insert(dst_key, String(sum_));
+    any_ = false;
+    sum_ = 0;
+}
+
 } // namespace pq
