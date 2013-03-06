@@ -1,6 +1,5 @@
 #ifndef TWITTER_CLIENT_HH
 #define TWITTER_CLIENT_HH
-#include <libmemcached/memcached.hpp>
 #include <tamer/tamer.hh>
 #include <time.h>
 #include "pqserver.hh"
@@ -17,14 +16,10 @@ typedef std::pair<int, String> RefreshResult;
 
 // On mat, start memcached as:
 //   ydmao@mat:~/install/memcached_offset/bin$ ./memcached -t 1 -m 2000 -p 11211 -B binary
-class MemcachedTwitter {
+template <typename C>
+class HashTwitter {
   public:
-    MemcachedTwitter() {
-        const char *config = "--SERVER=localhost --BINARY-PROTOCOL";
-        c_ = ::memcached(config, strlen(config));
-        mandatory_assert(c_);
-        expire_at_ = ::time(NULL) + 20 * 60 * 60; // never expire
-    }
+    HashTwitter() {}
     template <typename R>
     void post(uint32_t author, const String &tweet, uint32_t time,
               preevent<R> e, FollowerRange *f);
@@ -37,19 +32,12 @@ class MemcachedTwitter {
     template <typename R>
     void stats(preevent<R, Json> e);
   private:
-    void check_error(memcached_return_t r) {
-        if (r != MEMCACHED_SUCCESS) {
-            std::cerr << memcached_strerror(NULL, r) << std::endl;
-            mandatory_assert(0);
-        }
-    }
-    memcached_st *c_;
-    time_t expire_at_;
+    C c_;
 };
 
-template <typename R>
-void MemcachedTwitter::post(uint32_t author, const String &tweet,
-                            uint32_t time, preevent<R> e, FollowerRange *fr) {
+template <typename C> template <typename R>
+void HashTwitter<C>::post(uint32_t author, const String &tweet,
+                          uint32_t time, preevent<R> e, FollowerRange *fr) {
     if (!fr)
         mandatory_assert(0, "unimplemented: getting followers from memcached");
     const size_t alloclen = tweet.length() + 18;
@@ -57,8 +45,7 @@ void MemcachedTwitter::post(uint32_t author, const String &tweet,
     char *buf = new char[alloclen];
     // store the tweet itself
     sprintf(buf, "p|%05d|%010u", author, time);
-    auto r = memcached_set(c_, buf, 18, tweet.data(), tweet.length(), expire_at_, 0);
-    CHECK_EQ(r, MEMCACHED_SUCCESS);
+    c_.set(Str(buf, 18), tweet);
     // push to all followers
     memcpy(buf + 17, tweet.data(), tweet.length());
     buf[len - 1] = '\255';
@@ -68,53 +55,41 @@ void MemcachedTwitter::post(uint32_t author, const String &tweet,
         t += String(*i);
         sprintf(buf, "%05u|%010u", author, time);
         buf[16] = '\254';
-        r = memcached_append(c_, t.data(), t.length(), buf, len, expire_at_, 0);
-        if (r == MEMCACHED_NOTSTORED)
-            r = memcached_set(c_, t.data(), t.length(), buf, len, expire_at_, 0);
-        check_error(r);
+        c_.append(t, Str(buf, len));
     }
     delete buf;
     e();
 }
 
-template <typename R>
-void MemcachedTwitter::refresh(uint32_t user, uint32_t *state, bool full,
-                               uint32_t, preevent<R, RefreshResult> e) {
+template <typename C> template <typename R>
+void HashTwitter<C>::refresh(uint32_t user, uint32_t *state, bool full,
+                             uint32_t, preevent<R, RefreshResult> e) {
     int32_t offset = full ? 0 : *state;
     String t("t|");
     t += String(user);
-    t += String("@");
-    t += String(offset);
     size_t value_length;
-    uint32_t flags;
-    memcached_return_t error;
-    char *v = memcached_get(c_, t.data(), t.length(), &value_length, &flags, 
-                            &error);
-    check_error(error);
+    const char *v = c_.get(t, offset, &value_length);
     int n = 0;
     Str str(v, value_length);
     ssize_t pos = 0;
     for (; (pos = str.find_left('\254', pos + 1)) != -1; ++n);
     *state = offset + value_length;
     e(RefreshResult(n, String(v, value_length)));
-    delete v;
+    c_.done_get(v);
 }
 
-template <typename R>
-void MemcachedTwitter::follow(uint32_t ua, uint32_t ub, preevent<R> e) {
+template <typename C> template <typename R>
+void HashTwitter<C>::follow(uint32_t ua, uint32_t ub, preevent<R> e) {
     String s("s|");
     s += String(ua);
     char buf[20];
     sprintf(buf, "%05u", ub);
-    auto r = memcached_append(c_, s.data(), s.length(), buf, 5, expire_at_, 0);
-    if (r == MEMCACHED_NOTSTORED)
-        r = memcached_set(c_, s.data(), s.length(), buf, 5, expire_at_, 0);
-    check_error(r);
+    c_.append(s, Str(buf, 5));
     e();
 }
 
-template <typename R>
-void MemcachedTwitter::stats(preevent<R, Json> e) {
+template <typename C> template <typename R>
+void HashTwitter<C>::stats(preevent<R, Json> e) {
     e(Json());
 }
 
