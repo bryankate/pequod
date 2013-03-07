@@ -21,7 +21,7 @@ TAMER_COMMIT = 0ed822ad72e7d621ab1a590e70fbb95b4d069e4d
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
-	-lev -lprotobuf -lmemcached @MALLOC_LIBS@
+	-lev -lprotobuf -lpq -lmemcached @MALLOC_LIBS@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -103,7 +103,6 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
-	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
@@ -121,6 +120,9 @@ $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/pghn: $(COMMON_OBJS) $(OBJDIR)/pghackernews.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 # create files needed by exp/ directory
