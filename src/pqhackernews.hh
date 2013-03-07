@@ -256,7 +256,7 @@ void HackernewsRunner::run() {
             std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
         std::cout << ": end karma scan [" << buf1 << "," << buf2 << ")\n";
         std::cout << ": my karma table:\n";
-        for (int i = 0; i < hp_.nusers(); i++)
+        for (uint32_t i = 0; i < hp_.nusers(); i++)
             std::cout << " k " << i << ": " << hp_.karma(i) << "\n";
         std::cout << ": end my karma table\n";
     }
