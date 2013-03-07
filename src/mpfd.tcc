@@ -36,7 +36,8 @@ tamed void msgpack_fd::reader_coroutine() {
         }
 
         if (rdpos_ != rdlen_)
-            rdpos_ += rdparser_.consume(rdbuf_ + rdpos_, rdlen_ - rdpos_);
+            rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_,
+                                        rdlen_ - rdpos_, rdbuf_);
         if (rdparser_.complete()) {
             //if (++nr % 1024 == 0)
             // std::cerr << rdparser_.result() << "\n";
@@ -50,10 +51,20 @@ tamed void msgpack_fd::reader_coroutine() {
         }
 
         assert(rdpos_ == rdlen_);
-        twait { fd_.read_once(rdbuf_, rdcap_, rdlen_, make_event(r)); }
+        if (rdcap - rdpos_ >= 4096)
+            /* do nothing */;
+        else {
+            if (rdbuf_.data_shared())
+                rdbuf_ = String::make_uninitialized(rdcap);
+            rdpos_ = 0;
+        }
+        twait {
+            fd_.read_once(const_cast<char*>(rdbuf_.data()) + rdpos_,
+                          rdcap - rdpos_, rdlen_, make_event(r));
+        }
         if (r < 0)
             fd_.error_close(r);
-        rdpos_ = 0;
+        rdlen_ += rdpos_;
     }
 
     kill();
