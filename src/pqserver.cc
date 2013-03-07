@@ -290,7 +290,8 @@ static Clp_Option options[] = {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 'd', 1011, 0, Clp_Negate },
 #endif
-    { "builtinhash", 'b', 1012, 0, Clp_Negate }
+    { "builtinhash", 'b', 1012, 0, Clp_Negate },
+    { "duration", 'd', 1012, Clp_ValInt, 0 }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
@@ -309,6 +310,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("push", !clp->negated);
 	else if (clp->option->long_name == String("nusers"))
 	    tp_param.set("nusers", clp->val.i);
+	else if (clp->option->long_name == String("duration"))
+	    tp_param.set("duration", clp->val.i);
 	else if (clp->option->long_name == String("narticles"))
 	    tp_param.set("narticles", clp->val.i);
 	else if (clp->option->long_name == String("nops"))
