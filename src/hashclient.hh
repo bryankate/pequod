@@ -82,5 +82,109 @@ class BuiltinHashClient {
     HashTable<String, String> h_;
 };
 
+
+template <typename S>
+class TwitterHashShim {
+  public:
+    TwitterHashShim(S& server);
+
+    template <typename R>
+    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+    template <typename R>
+    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    template <typename R>
+    inline void initialize(bool push, tamer::preevent<R> e);
+    inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
+    template <typename R>
+    inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
+    typedef DirectClient::scan_result scan_result;
+    template <typename R>
+    inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
+    template <typename R>
+    inline void timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    template <typename R>
+    inline void stats(tamer::preevent<R, Json> e);
+
+  private:
+    S& server_;
+    char buf_[128];
+    int buflen_;
+    struct tlstatus {
+        uint32_t time;
+        size_t pos;
+        tlstatus() : time(0), pos(0) {}
+    };
+    std::vector<tlstatus> last_refresh_;
+};
+
+template <typename S>
+TwitterHashShim<S>::TwitterHashShim(S& server)
+    : server_(server) {
 }
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::initialize(bool, tamer::preevent<R> done) {
+    done();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+    sprintf(buf_, "s|%05u %05u", subscriber, poster);
+    server_.append(Str(buf_, 7), Str(buf_ + 9, 5));
+    done();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> done) {
+    sprintf(buf_, "p|%05u|%010u", poster, time);
+    server_.set(Str(buf_, 18), value);
+    done();
+}
+
+template <typename S>
+inline void TwitterHashShim<S>::prepare_push_post(uint32_t poster, uint32_t time, Str value) {
+    sprintf(buf_, "t|%05u %05u|%010u\254", 0, poster, time);
+    assert(sizeof(buf_) >= size_t(value.length()) + 26);
+    memcpy(buf_ + 25, value.data(), value.length());
+    buflen_ = 25 + value.length();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
+    sprintf(buf_ + 2, "%05u", subscriber);
+    server_.append(Str(buf_, 7), Str(buf_ + 8, buflen_ - 8));
+    done();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
+    (void) subscriber, (void) start_time;
+    assert(0);
+    done.unblock();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> done) {
+    if (last_refresh_.size() <= subscriber)
+        last_refresh_.resize(subscriber + 1);
+    tlstatus& tls = last_refresh_[subscriber];
+    if (tls.time < start_time)
+        tls.pos = 0;
+    tls.time = now;
+    sprintf(buf_, "t|%05u", subscriber);
+    const char* v = server_.get(Str(buf_, 7), tls.pos, &tls.pos);
+    Str str(v, tls.pos);
+    size_t n = 0;
+    for (int pos = 0; (pos = str.find_left('\254', pos)) != -1; ++pos)
+        ++n;
+    done(n);
+    server_.done_get(v);
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::stats(tamer::preevent<R, Json> done) {
+    done(Json());
+}
+
+} // namespace pq
 #endif

@@ -10,7 +10,7 @@
 #include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
-// #include "hashclient.hh"
+#include "hashclient.hh"
 
 namespace pq {
 
@@ -367,15 +367,12 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["builtinhash"]) {
-#if 0
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
-            pq::HashTwitter<pq::BuiltinHashClient> dc;
-            pq::TwitterRunner<pq::HashTwitter<pq::BuiltinHashClient> > tr(dc, tp);
+            pq::BuiltinHashClient client;
+            pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
+            pq::TwitterRunner<pq::TwitterHashShim<pq::BuiltinHashClient> > tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
-#else
-            mandatory_assert(false);
-#endif
         } else if (client_port >= 0) {
             run_twitter_remote(tp, client_port);
         } else {
