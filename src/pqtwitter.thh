@@ -12,7 +12,6 @@
 #include "json.hh"
 #include "pqjoin.hh"
 #include "pqserver.hh"
-#include "twitter_client.hh"
 namespace pq {
 using tamer::event;
 using tamer::preevent;
@@ -114,25 +113,36 @@ inline TwitterRunner<S>::TwitterRunner(S& server, TwitterPopulator& tp)
 tamed template <typename S>
 void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
-    tvars { pq::FollowerRange fr; }
+    tvars { char buf[128]; }
     twait {
-        fr.first = tp_.begin_followers(u);
-        fr.second = tp_.end_followers(u);
-        server_.post(u, value, time, make_event(),
-                     tp_.push() ? &fr : NULL);
+        sprintf(buf, "p|%05d|%010u", u, time);
+        server_.insert(Str(buf, 18), value, make_event());
+        if (tp_.push())
+            for (auto it = tp_.begin_followers(u);
+                 it != tp_.end_followers(u); ++it) {
+                sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
+                server_.insert(Str(buf, 24), value, make_event());
+            }
     }
     e();
 }
 
 tamed template <typename S>
 void TwitterRunner<S>::populate() {
-    tvars { boost::mt19937 gen; }
+    tvars {
+        boost::mt19937 gen;
+        char buf[128];
+    }
     gen.seed(0);
     tp_.create_subscriptions(gen);
 
     twait {
-        for (auto& x : tp_.subscriptions())
-            server_.follow(x.first, x.second, make_event());
+        for (auto& x : tp_.subscriptions()) {
+            sprintf(buf, "s|%05d|%05d", x.first, x.second);
+            server_.insert(Str(buf, 13), Str("1", 1), make_event());
+            if (tp_.log())
+                printf("subscribe %.13s\n", buf);
+        }
     }
 
 #if 0
@@ -146,6 +156,15 @@ void TwitterRunner<S>::populate() {
 #endif
 
     tp_.print_subscription_statistics(std::cout);
+
+    twait {
+        if (!tp_.push())
+            server_.add_join("t|", "t}",
+                             "t|<user_id:5>|<time:10>|<poster_id:5> "
+                             "s|<user_id>|<poster_id> "
+                             "p|<poster_id>|<time>",
+                             make_event());
+    }
 }
 
 tamed template <typename S>
@@ -159,11 +178,11 @@ void TwitterRunner<S>::run() {
         uint32_t post_end_time = time + nusers * 5;
         uint32_t end_time = post_end_time + 1000000;
         uint32_t* load_times = new uint32_t[nusers];
+        char buf1[128], buf2[128];
         uint32_t npost = 0, nfull = 0, nupdate = 0, a, u, tx;
-        size_t nread = 0;
-        pq::RefreshResult refresh_result;
+        size_t nread = 0, count_result = 0;
+        typename S::scan_result scan_result;
         Json stats;
-        bool full;
     }
     gen.seed(13918);
 
@@ -175,16 +194,32 @@ void TwitterRunner<S>::run() {
         u = rng(nusers);
         a = rng(100);
         if (time < post_end_time || a < 2) {
+            if (tp_.log())
+                printf("%d: post p|%05d|%010d\n", time, u, time);
             twait { post(u, time, "?!?#*", make_event()); }
             ++npost;
         } else {
             tx = load_times[u];
-            full = !tx || a < 3;
-            ++(full ? nfull : nupdate);
-            twait {
-                server_.refresh(u, &load_times[u], full, time, make_event(refresh_result));
+            if (!tx || a < 3) {
+                tx = time - 32000;
+                ++nfull;
+            } else
+                ++nupdate;
+            sprintf(buf1, "t|%05d|%010d", u, tx);
+            sprintf(buf2, "t|%05d}", u);
+            if (tp_.log()) {
+                std::cout << time << ": scan [" << buf1 << "," << buf2 << ")\n";
+                twait {
+                    server_.scan(Str(buf1, 18), Str(buf2, 8), make_event(scan_result));
+                }
+                for (auto it = scan_result.begin(); it != scan_result.end();
+                     ++it, ++nread)
+                    std::cout << "  " << it->key() << ": " << it->value() << "\n";
+            } else {
+                twait { server_.count(Str(buf1, 18), Str(buf2, 8), make_event(count_result)); }
+                nread += count_result;
             }
-            nread += refresh_result.first;
+            load_times[u] = time;
         }
         ++time;
     }
