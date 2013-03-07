@@ -372,7 +372,8 @@ int main(int argc, char** argv) {
 #endif
         } else {
             pq::DirectClient dc(server);
-            pq::TwitterRunner<pq::DirectClient> tr(dc, tp);
+            pq::TwitterShim<pq::DirectClient> shim(dc);
+            pq::TwitterRunner<pq::TwitterShim<pq::DirectClient> > tr(shim, tp);
             tr.populate();
             tr.run();
         }

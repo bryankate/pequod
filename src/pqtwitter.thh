@@ -59,6 +59,91 @@ class TwitterPopulator {
 };
 
 template <typename S>
+class TwitterShim {
+  public:
+    TwitterShim(S& server);
+
+    template <typename R>
+    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+    template <typename R>
+    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    template <typename R>
+    inline void initialize(bool push, tamer::preevent<R> e);
+    inline void prepare_push_post(uint32_t poster, uint32_t time);
+    template <typename R>
+    inline void push_post(Str value, uint32_t subscriber, tamer::preevent<R> e);
+    typedef typename S::scan_result scan_result;
+    template <typename R>
+    inline void timeline_scan(uint32_t subscriber, uint32_t start_time, tamer::preevent<R, scan_result> e);
+    template <typename R>
+    inline void timeline_count(uint32_t subscriber, uint32_t start_time, tamer::preevent<R, size_t> e);
+    template <typename R>
+    inline void stats(tamer::preevent<R, Json> e);
+
+  private:
+    S& server_;
+    char buf_[128];
+};
+
+template <typename S>
+TwitterShim<S>::TwitterShim(S& server)
+    : server_(server) {
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::initialize(bool push, tamer::preevent<R> done) {
+    if (push)
+        done();
+    else
+        server_.add_join("t|", "t}",
+                         "t|<user_id:5>|<time:10>|<poster_id:5> "
+                         "s|<user_id>|<poster_id> "
+                         "p|<poster_id>|<time>",
+                         done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+    sprintf(buf_, "s|%05u|%05u", subscriber, poster);
+    server_.insert(Str(buf_, 13), Str("1", 1), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> done) {
+    sprintf(buf_, "p|%05u|%010u", poster, time);
+    server_.insert(Str(buf_, 18), value, done);
+}
+
+template <typename S>
+inline void TwitterShim<S>::prepare_push_post(uint32_t poster, uint32_t time) {
+    sprintf(buf_, "t|%05u|%010u|%05u", 0, time, poster);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::push_post(Str value, uint32_t subscriber, tamer::preevent<R> done) {
+    sprintf(buf_ + 2, "%05u", subscriber);
+    buf_[7] = '|'; // replace terminating null
+    server_.insert(Str(buf_, 24), value, done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, tamer::preevent<R, scan_result> done) {
+    sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
+    server_.scan(Str(buf_, 18), Str(buf_ + 19, 8), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::timeline_count(uint32_t subscriber, uint32_t start_time, tamer::preevent<R, size_t> done) {
+    sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
+    server_.count(Str(buf_, 18), Str(buf_ + 19, 8), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::stats(tamer::preevent<R, Json> done) {
+    server_.stats(done);
+}
+
+template <typename S>
 class TwitterRunner {
   public:
     TwitterRunner(S& server, TwitterPopulator& tp);
@@ -115,14 +200,13 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
     tvars { char buf[128]; }
     twait {
-        sprintf(buf, "p|%05d|%010u", u, time);
-        server_.insert(Str(buf, 18), value, make_event());
-        if (tp_.push())
+        server_.post(u, time, value, make_event());
+        if (tp_.push()) {
+            server_.prepare_push_post(u, time);
             for (auto it = tp_.begin_followers(u);
-                 it != tp_.end_followers(u); ++it) {
-                sprintf(buf, "t|%05u|%010u|%05u", *it, time, u);
-                server_.insert(Str(buf, 24), value, make_event());
-            }
+                 it != tp_.end_followers(u); ++it)
+                server_.push_post(value, *it, make_event());
+        }
     }
     e();
 }
@@ -138,8 +222,7 @@ void TwitterRunner<S>::populate() {
 
     twait {
         for (auto& x : tp_.subscriptions()) {
-            sprintf(buf, "s|%05d|%05d", x.first, x.second);
-            server_.insert(Str(buf, 13), Str("1", 1), make_event());
+            server_.subscribe(x.first, x.second, make_event());
             if (tp_.log())
                 printf("subscribe %.13s\n", buf);
         }
@@ -157,14 +240,7 @@ void TwitterRunner<S>::populate() {
 
     tp_.print_subscription_statistics(std::cout);
 
-    twait {
-        if (!tp_.push())
-            server_.add_join("t|", "t}",
-                             "t|<user_id:5>|<time:10>|<poster_id:5> "
-                             "s|<user_id>|<poster_id> "
-                             "p|<poster_id>|<time>",
-                             make_event());
-    }
+    twait { server_.initialize(tp_.push(), make_event()); }
 }
 
 tamed template <typename S>
@@ -205,18 +281,16 @@ void TwitterRunner<S>::run() {
                 ++nfull;
             } else
                 ++nupdate;
-            sprintf(buf1, "t|%05d|%010d", u, tx);
-            sprintf(buf2, "t|%05d}", u);
             if (tp_.log()) {
-                std::cout << time << ": scan [" << buf1 << "," << buf2 << ")\n";
+                printf("%d: scan [t|%05u|%010u, t|%05u})\n", time, u, tx, u);
                 twait {
-                    server_.scan(Str(buf1, 18), Str(buf2, 8), make_event(scan_result));
+                    server_.timeline_scan(u, tx, make_event(scan_result));
                 }
                 for (auto it = scan_result.begin(); it != scan_result.end();
                      ++it, ++nread)
                     std::cout << "  " << it->key() << ": " << it->value() << "\n";
             } else {
-                twait { server_.count(Str(buf1, 18), Str(buf2, 8), make_event(count_result)); }
+                twait { server_.timeline_count(u, tx, make_event(count_result)); }
                 nread += count_result;
             }
             load_times[u] = time;
