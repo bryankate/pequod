@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 66ca4e90ac072fda9678a7f5f305b133677915ea
+TAMER_COMMIT = f02e01aa375ed37653ff0b8aa215268bb68a9046
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
@@ -73,10 +73,10 @@ $(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) $< > $@
+	$(TAMER) -o $@ $<
 
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) $< > $@
+	$(TAMER) -o $@ $<
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
