@@ -23,7 +23,6 @@ class PGHackernewsRunner {
         uint32_t nc = 0;
     
         for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
-            std::cout << "Num users: " << hp_.nusers() << "\n";
             const uint32_t author = rng(hp_.nusers());
             post_article(author, aid);
             const uint32_t ncomment = rng(10);
@@ -80,17 +79,30 @@ class PGHackernewsRunner {
 
     void read_article(uint32_t aid) {
         mandatory_assert(aid < hp_.narticles());
+        if (hp_.m()) {
+            // query the ma table which doesn't exist yet
+            mandatory_assert(false);
+        }
         char buf[512];
         sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
                 "comments.cid,comments.comment,karma_mv.karma,count(votes.aid) "
                 "as vote_count FROM articles,comments,votes,karma_mv "
-                "WHERE articles.aid = 4 AND comments.aid = articles.aid "
+                "WHERE articles.aid = %d AND comments.aid = articles.aid "
                 "AND votes.aid = articles.aid AND karma_mv.author=comments.commenter "
-                "GROUP BY articles.aid,comments.cid,karma_mv.karma");
-        pg_.query(buf);
-        if (hp_.log()) {
-            std::cout << "read " << aid << "\n";
+                "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
+        PGresult* res = pg_.query(buf);
+        
+        // aid author link cid comment karma votes
+        for (int i = 0; i < PQntuples(res); i++) {
+            for (int j = 0; j < PQnfields(res); j++) {
+                if (hp_.log()) {
+                    std::cout << PQgetvalue(res, i, j) << " ";
+                }
+            }
+            if (hp_.log()) 
+                std::cout << "\n";
         }
+        pg_.done(res);
     }
 
     void run() {
