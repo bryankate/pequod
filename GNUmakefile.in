@@ -21,7 +21,7 @@ TAMER_COMMIT = c34077cda5515a8af43cd9ae953a11486b2a2c0e
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
-	-lev -lprotobuf -lmemcached @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
+	-lev -lprotobuf @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
