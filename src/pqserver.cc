@@ -13,6 +13,13 @@
 #include "time.hh"
 #include "hashclient.hh"
 
+#if HAVE_POSTGRES
+#include <postgresql/libpq-fe.h>
+#include "pgclient.hh"
+#include "pghackernews.hh"
+#endif
+
+
 namespace pq {
 
 // XXX check circular expansion
@@ -305,7 +312,8 @@ static Clp_Option options[] = {
     { "proactive", 0, 1020, 0, Clp_Negate },
     { "buffer", 0, 1021, 0, Clp_Negate },
     { "seed", 0, 1022, Clp_ValInt, 0 },
-    { "pread", 0, 1023, Clp_ValInt, 0 }
+    { "pread", 0, 1023, Clp_ValInt, 0 },
+    { "pg", 0, 1024, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
@@ -350,6 +358,8 @@ int main(int argc, char** argv) {
             tp_param.set("buffer", !clp->negated);
         else if (clp->option->long_name == String("seed"))
             tp_param.set("seed", clp->val.i);
+        else if (clp->option->long_name == String("pg"))
+            tp_param.set("pg", !clp->negated);
         else if (clp->option->long_name == String("pread"))
             tp_param.set("pread", clp->val.i);
 	else if (clp->option->long_name == String("facebook"))
@@ -414,9 +424,20 @@ int main(int argc, char** argv) {
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);
-        pq::HackernewsRunner hr(server, hp);
-        hr.populate();
-        hr.run();
+        if (tp_param["pg"]) {
+#if HAVE_POSTGRES
+            pq::PostgresClient pg;
+            pq::PGHackernewsRunner hr(pg, hp);
+            hr.populate();
+            hr.run();
+#else
+            mandatory_assert(false);
+#endif
+        } else {
+            pq::HackernewsRunner hr(server, hp);
+            hr.populate();
+            hr.run();
+        }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 5);

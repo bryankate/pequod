@@ -122,9 +122,6 @@ $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
 $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
-$(OBJDIR)/pghn: $(COMMON_OBJS) $(OBJDIR)/pghackernews.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
 # create files needed by exp/ directory
 $(OBJDIR)/gstore_server: $(PROTOGENDIR)/gstore.pb.h
 

@@ -33,7 +33,7 @@ AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define
 AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
 AC_SUBST([MEMCACHED_LIB])
 
-AC_SEARCH_LIBS([pg_available], [pq], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
+AC_SEARCH_LIBS([PQuser], [pq], [AC_DEFINE([HAVE_POSTGRES], [1], [Define if you have libpq.])])
 
 dnl Builtins
 
