@@ -174,7 +174,7 @@ tamed template <typename S>
 void HackernewsRunner<S>::read_article(uint32_t aid) {
     mandatory_assert(aid < hp_.narticles());
     twait {
-        server_.read_article(aid, hp_.articles()[aid], hp_.karmas());
+        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), make_event());
     }
 }
 
