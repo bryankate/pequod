@@ -194,6 +194,8 @@ class Json { public:
     template <typename T, typename... U>
     inline Json& insert_back(T first, U... rest);
 
+    inline Json* array_data();
+
     // Iteration
     inline const_object_iterator obegin() const;
     inline const_object_iterator oend() const;
@@ -2261,6 +2263,12 @@ inline Json& Json::insert_back(T first, U... rest) {
     push_back(first);
     insert_back(rest...);
     return *this;
+}
+
+
+inline Json* Json::array_data() {
+    assert(_type == j_null || _type == j_array);
+    return u_.a.a ? u_.a.a->a : 0;
 }
 
 
