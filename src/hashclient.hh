@@ -168,12 +168,14 @@ inline void TwitterHashShim<S>::timeline_count(uint32_t subscriber, uint32_t sta
     if (last_refresh_.size() <= subscriber)
         last_refresh_.resize(subscriber + 1);
     tlstatus& tls = last_refresh_[subscriber];
-    if (tls.time < start_time)
+    if (tls.time > start_time)
         tls.pos = 0;
     tls.time = now;
     sprintf(buf_, "t|%05u", subscriber);
-    const char* v = server_.get(Str(buf_, 7), tls.pos, &tls.pos);
-    Str str(v, tls.pos);
+    size_t len;
+    const char* v = server_.get(Str(buf_, 7), tls.pos, &len);
+    tls.pos += len;
+    Str str(v, len);
     size_t n = 0;
     for (int pos = 0; (pos = str.find_left('\254', pos)) != -1; ++pos)
         ++n;
