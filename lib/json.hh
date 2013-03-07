@@ -250,6 +250,11 @@ class Json { public:
     inline Json& operator+=(int x);
     inline Json& operator+=(long x);
     inline Json& operator+=(double x);
+    inline Json& operator+=(const Json& x);
+    inline Json& operator-=(int x);
+    inline Json& operator-=(long x);
+    inline Json& operator-=(double x);
+    inline Json& operator-=(const Json& x);
 
     friend bool operator==(const Json& a, const Json& b);
 
@@ -1071,6 +1076,21 @@ class Json_proxy_base {
     }
     Json& operator+=(double x) {
 	return value() += x;
+    }
+    Json& operator+=(const Json& x) {
+	return value() += x;
+    }
+    Json& operator-=(int x) {
+	return value() -= x;
+    }
+    Json& operator-=(long x) {
+	return value() -= x;
+    }
+    Json& operator-=(double x) {
+	return value() -= x;
+    }
+    Json& operator-=(const Json& x) {
+	return value() -= x;
     }
     Json::const_object_iterator obegin() const {
 	return cvalue().obegin();
@@ -2521,6 +2541,33 @@ inline Json& Json::operator+=(double x) {
     force_number();
     u_.d = as_d() + x;
     _type = j_double;
+    return *this;
+}
+inline Json& Json::operator+=(const Json& x) {
+    if (x._type != j_null) {
+        // XXX what if both are integers
+        force_number();
+        u_.d = as_d() + x.as_d();
+        _type = j_double;
+    }
+    return *this;
+}
+inline Json& Json::operator-=(int x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(long x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(double x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(const Json& x) {
+    if (x._type != j_null) {
+        // XXX what if both are integers
+        force_number();
+        u_.d = as_d() - x.as_d();
+        _type = j_double;
+    }
     return *this;
 }
 

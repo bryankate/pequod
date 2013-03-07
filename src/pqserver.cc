@@ -241,6 +241,8 @@ void Table::erase(const String& key) {
 
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, sink_ranges_size = 0;
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
     for (auto& t : tables_) {
         store_size += t.store_.size();
         source_ranges_size += t.source_ranges_.size();
@@ -248,7 +250,9 @@ Json Server::stats() const {
     }
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
-	.set("sink_ranges_size", sink_ranges_size);
+	.set("sink_ranges_size", sink_ranges_size)
+        .set("server_user_time", to_real(ru.ru_utime))
+        .set("server_system_time", to_real(ru.ru_stime));
 }
 
 void Server::print(std::ostream& stream) {

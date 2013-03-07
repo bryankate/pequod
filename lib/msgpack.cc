@@ -16,7 +16,8 @@ template <typename T> T grab(const uint8_t* x) {
 }
 
 const uint8_t* streaming_parser::consume(const uint8_t* first,
-                                         const uint8_t* last) {
+                                         const uint8_t* last,
+                                         const String& str) {
     Json j;
     int n;
 
@@ -38,12 +39,12 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             return next;
         first = next;
         if (state_ == st_string) {
-            j = Json(str_);
+            j = Json(std::move(str_));
             stack_.pop_back();
             goto next;
         } else {
             state_ = st_normal;
-            consume(str_.ubegin(), str_.uend());
+            consume(str_.ubegin(), str_.uend(), str_);
             if (state_ != st_normal)
                 return next;
         }
@@ -79,7 +80,12 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 state_ = st_string;
                 return last;
             }
-            j = Json(String(first, n));
+            if (first < str.ubegin() || first + n >= str.uend())
+                j = Json(String(first, n));
+            else {
+                const char* s = reinterpret_cast<const char*>(first);
+                j = Json(str.fast_substring(s, s + n));
+            }
             first += n;
         } else {
             uint8_t type = *first - 0xC0;
