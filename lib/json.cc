@@ -104,13 +104,14 @@ void Json::ObjectJson::grow(bool copy)
 	new_capacity = 8;
     ObjectItem *new_os = reinterpret_cast<ObjectItem *>(operator new[](sizeof(ObjectItem) * new_capacity));
     ObjectItem *ob = os_, *oe = ob + n_;
-    for (ObjectItem *oi = new_os; ob != oe; ++oi, ++ob)
-	if (ob->next_ > -2) {
-	    new((void *) oi) ObjectItem(ob->v_.first, ob->v_.second, ob->next_);
-	    if (!copy)
-		ob->~ObjectItem();
-	} else
-	    oi->next_ = -2;
+    for (ObjectItem *oi = new_os; ob != oe; ++oi, ++ob) {
+	if (ob->next_ == -2)
+            oi->next_ = -2;
+        else if (copy)
+            new((void*) oi) ObjectItem(ob->v_.first, ob->v_.second, ob->next_);
+        else
+            memcpy(oi, ob, sizeof(ObjectItem));
+    }
     if (!copy)
 	operator delete[](reinterpret_cast<void *>(os_));
     os_ = new_os;
@@ -269,6 +270,37 @@ void Json::hard_uniqueify_object(bool convert) {
     }
     _type = j_object;
     u_.o.o = noj;
+}
+
+void Json::clear() {
+    if (_type == j_array) {
+        if (u_.a.a && u_.a.a->refcount == 1) {
+            Json* last = u_.a.a->a + u_.a.a->size;
+            for (Json* it = u_.a.a->a; it != last; ++it)
+                it->~Json();
+            u_.a.a->size = 0;
+        } else if (u_.a.a) {
+            u_.a.a->deref(j_array);
+            u_.a.a = 0;
+        }
+    } else if (_type == j_object) {
+        if (u_.o.o && u_.o.o->refcount == 1) {
+            ObjectItem* last = u_.o.o->os_ + u_.o.o->n_;
+            for (ObjectItem* it = u_.o.o->os_; it != last; ++it)
+                if (it->next_ != -2)
+                    it->~ObjectItem();
+            u_.o.o->n_ = u_.o.o->nremoved_ = 0;
+            u_.o.o->hash_.assign(u_.o.o->hash_.size(), -1);
+        } else if (u_.o.o) {
+            u_.o.o->deref(j_object);
+            u_.o.o = 0;
+        }
+    } else {
+        if (_type == j_string)
+            u_.str.deref();
+        _type = j_null;
+        u_.c = 0;
+    }
 }
 
 

@@ -94,6 +94,8 @@ class Json { public:
     inline bool empty() const;
     inline size_type size() const;
 
+    void clear();
+
     // Primitive extractors
     inline long to_i() const;
     inline uint64_t to_u64() const;
@@ -423,7 +425,7 @@ inline Json::ObjectJson* Json::ojson() const {
 
 inline void Json::uniqueify_array(bool convert, int ncap) {
     if (_type != j_array || !u_.a.a || u_.a.a->refcount > 1
-        || (ncap > 0 && ncap > u_.a.a->size))
+        || (ncap > 0 && ncap > u_.a.a->capacity))
 	hard_uniqueify_array(convert, ncap);
     assert(_type == j_array);
 }

@@ -1,6 +1,6 @@
 #ifndef HASHCLIENT_HH
 #define HASHCLIENT_HH
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#if ENABLE_MEMCACHED
 #include <libmemcached/memcached.hpp>
 #endif
 #include "str.hh"
@@ -9,7 +9,7 @@
 
 namespace pq {
 
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#if ENABLE_MEMCACHED
 class MemcachedClient {
   public:
     MemcachedClient() {
