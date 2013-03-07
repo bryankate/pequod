@@ -177,8 +177,12 @@ inline void TwitterHashShim<S>::timeline_count(uint32_t subscriber, uint32_t sta
     tls.pos += len;
     Str str(v, len);
     size_t n = 0;
-    for (int pos = 0; (pos = str.find_left('\254', pos)) != -1; ++pos)
-        ++n;
+    for (int pos = 0; (pos = str.find_left('\254', pos)) != -1; ++pos) {
+        const char *p;
+        for (p = v + pos; *p != '|'; --p);
+        if (uint32_t(atoi(p + 1)) >= start_time)
+            ++n;
+    }
     done(n);
     server_.done_get(v);
 }
