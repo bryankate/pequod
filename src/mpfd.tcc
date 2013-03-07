@@ -14,7 +14,7 @@ void msgpack_fd::write(const Json& j, tamer::event<> done) {
     //std::cerr << "want to write " << j.unparse() << "\n";
     wrelem_.push_back(wrelem{msgpack::compact_unparser().unparse(j), done});
     wriov_.push_back(iovec{(void*) wrelem_.back().s.data(),
-                wrelem_.back().s.length()});
+                (size_t) wrelem_.back().s.length()});
     wrwake_();
 }
 
