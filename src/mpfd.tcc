@@ -1,5 +1,9 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
+#include <limits.h>
+#ifndef IOV_MAX
+#define IOV_MAX 1024
+#endif
 
 msgpack_fd::~msgpack_fd() {
     wrkill_();
@@ -41,11 +45,12 @@ void msgpack_fd::write(const Json& j, tamer::event<> done) {
 tamed void msgpack_fd::writer_coroutine() {
     tvars {
         tamer::event<> kill;
-        tamer::rendezvous<> r;
+        tamer::rendezvous<> rendez;
         ssize_t amt;
+        size_t wrendpos;
     }
 
-    kill = wrkill_ = tamer::make_event(r);
+    kill = wrkill_ = tamer::make_event(rendez);
 
     while (kill && fd_) {
         if (wrpos_ == wriov_.size()) {
@@ -65,16 +70,19 @@ tamed void msgpack_fd::writer_coroutine() {
         if (wrpos_ == wriov_.size())
             twait { wrwake_ = make_event(); }
         else {
-            amt = writev(fd_.value(), wriov_.data() + wrpos_, wriov_.size() - wrpos_);
+            wrendpos = wriov_.size();
+            if (wrendpos - wrpos_ > IOV_MAX)
+                wrendpos = wrpos_ + IOV_MAX;
+            amt = writev(fd_.value(), wriov_.data() + wrpos_, wrendpos - wrpos_);
             if (amt != 0 && amt != (ssize_t) -1) {
-                while (wrpos_ != wriov_.size()
+                while (wrpos_ != wrendpos
                        && size_t(amt) >= wriov_[wrpos_].iov_len) {
                     amt -= wriov_[wrpos_].iov_len;
                     wrelem_[wrpos_].s = String();
                     wrelem_[wrpos_].done();
                     ++wrpos_;
                 }
-                if (wrpos_ != wriov_.size() && amt != 0) {
+                if (wrpos_ != wrendpos && amt != 0) {
                     wriov_[wrpos_].iov_base = (char*) wriov_[wrpos_].iov_base + amt;
                     wriov_[wrpos_].iov_len -= amt;
                 }
