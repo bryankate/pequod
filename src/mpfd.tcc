@@ -10,9 +10,9 @@ msgpack_fd::~msgpack_fd() {
     rdkill_();
 }
 
-void msgpack_fd::write(const Json& j, tamer::event<> done) {
+void msgpack_fd::write(const Json& j) {
     //std::cerr << "want to write " << j.unparse() << "\n";
-    wrelem_.push_back(wrelem{msgpack::compact_unparser().unparse(j), done});
+    wrelem_.push_back(wrelem{msgpack::compact_unparser().unparse(j)});
     wriov_.push_back(iovec{(void*) wrelem_.back().s.data(),
                 (size_t) wrelem_.back().s.length()});
     wrwake_();
@@ -107,7 +107,6 @@ tamed void msgpack_fd::writer_coroutine() {
                        && size_t(amt) >= wriov_[wrpos_].iov_len) {
                     amt -= wriov_[wrpos_].iov_len;
                     wrelem_[wrpos_].s = String();
-                    wrelem_[wrpos_].done();
                     ++wrpos_;
                 }
                 if (wrpos_ != wrendpos && amt != 0) {

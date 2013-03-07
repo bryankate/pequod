@@ -14,16 +14,15 @@ class msgpack_fd {
     ~msgpack_fd();
 
     inline void read(tamer::event<Json> done);
-    void write(const Json& j, tamer::event<> done);
-    inline void write(const Json& j);
+    void write(const Json& j);
     inline void call(const Json& j, tamer::event<Json> reply);
 
   private:
     tamer::fd fd_;
 
+    enum { wrcap = 1 << 17, wrlowat = 1 << 12 };
     struct wrelem {
         String s;
-        tamer::event<> done;
     };
     std::vector<wrelem> wrelem_;
     std::vector<struct iovec> wriov_;
@@ -55,10 +54,6 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd)
 inline void msgpack_fd::read(tamer::event<Json> done) {
     rdwait_.push_back(done);
     rdwake_();
-}
-
-inline void msgpack_fd::write(const Json& j) {
-    write(j, tamer::event<>());
 }
 
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
