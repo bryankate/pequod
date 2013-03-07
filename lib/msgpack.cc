@@ -243,7 +243,7 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
     } else if (j.is_o()) {
         uint8_t* x = (uint8_t*) sa.reserve(5);
         if (j.size() < 16) {
-            *x = 0x90 + j.size();
+            *x = 0x80 + j.size();
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
             *x = 0xDE;
