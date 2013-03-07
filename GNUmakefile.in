@@ -78,8 +78,9 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) -o $@ $<
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.cc $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteserver.o: $(OBJDIR)/pqremoteserver.cc $(OBJDIR)/pqremoteserver.hh

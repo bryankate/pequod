@@ -45,7 +45,7 @@ class MemcachedClient {
     void done_get(const char *v) {
         delete v;
     }
-    void increment(const Str key) {
+    void increment(const Str) {
         mandatory_assert(0, "unimplemented: need to change the server side");
     }
   private:

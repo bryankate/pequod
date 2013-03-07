@@ -1,0 +1,262 @@
+#ifndef PQHACKERNEWS_HH
+#define PQHACKERNEWS_HH
+#include <boost/random.hpp>
+#include <utility>
+#include <vector>
+#include <map>
+#include <set>
+#include <iostream>
+#include <stdint.h>
+#include <sys/resource.h>
+#include <tamer/tamer.hh>
+#include "json.hh"
+#include "pqjoin.hh"
+#include "json.hh"
+#include "time.hh"
+#include "sp_key.hh"
+
+namespace pq {
+using tamer::event;
+using tamer::preevent;
+
+class HackernewsPopulator {
+  public:
+    HackernewsPopulator(const Json& param);
+
+    void post_article(uint32_t author, uint32_t article);
+    bool vote(uint32_t author, uint32_t user);
+    inline uint32_t next_aid();
+    inline uint32_t next_comment();
+
+    inline void set_nusers(uint32_t);
+    inline uint32_t nusers() const;
+    inline uint32_t narticles() const;
+    inline void set_narticles(uint32_t n);
+    inline uint32_t karma(uint32_t author) const;
+    inline void set_log(bool val);
+    inline bool log() const;
+    inline const std::vector<uint32_t>& articles() const;
+    inline const std::vector<uint32_t>& karmas() const;
+    inline uint32_t pre() const;
+    inline uint32_t nops() const;
+    inline uint32_t vote_rate() const;
+    inline uint32_t comment_rate() const;
+    inline uint32_t post_rate() const;
+    inline bool m() const;
+
+  private:
+    Json param_;
+    bool log_;
+    uint32_t nusers_;
+    // author -> karma
+    std::vector<uint32_t> karma_;
+    // article -> author
+    std::vector<uint32_t> articles_;
+    // article -> users
+    std::map<uint32_t, std::set<uint32_t> > votes_;
+    uint32_t pre_;
+    uint32_t narticles_;
+    uint32_t ncomments_;
+    bool materialize_inline_;
+};
+
+template <typename S>
+class HackernewsRunner {
+  public:
+    HackernewsRunner(S& server, HackernewsPopulator& hp);
+    tamed void populate();
+    tamed void run();
+
+  private:
+    tamed void post_article(uint32_t author, uint32_t aid);
+    tamed void post_comment(uint32_t commentor, uint32_t aid);
+    tamed bool vote(uint32_t voter, uint32_t aid);
+    tamed void read_article(uint32_t aid);
+
+    S& server_;
+    HackernewsPopulator& hp_;
+};
+
+inline uint32_t HackernewsPopulator::nusers() const {
+    return nusers_;
+}
+    
+inline uint32_t HackernewsPopulator::next_aid() {
+    mandatory_assert(narticles_ < articles_.size());
+    return narticles_++;
+}
+
+inline uint32_t HackernewsPopulator::next_comment() {
+    return ncomments_++;
+}
+
+inline uint32_t HackernewsPopulator::narticles() const {
+    return narticles_;
+}
+
+inline uint32_t HackernewsPopulator::pre() const {
+    return pre_;
+}
+
+inline void HackernewsPopulator::set_narticles(uint32_t n) {
+    narticles_ = n;
+}
+
+inline const std::vector<uint32_t>& HackernewsPopulator::articles() const {
+    return articles_;
+}
+
+inline const std::vector<uint32_t>& HackernewsPopulator::karmas() const {
+    return karma_;
+}
+
+inline uint32_t HackernewsPopulator::karma(uint32_t author) const {
+    return karma_[author];
+}
+
+inline bool HackernewsPopulator::log() const {
+    return log_;
+}
+
+inline void HackernewsPopulator::set_log(bool val) {
+    log_ = val;
+}
+
+inline uint32_t HackernewsPopulator::nops() const {
+    return param_["nops"].as_i(1000000);
+}
+
+inline uint32_t HackernewsPopulator::vote_rate() const {
+    return param_["vote_rate"].as_i(1);
+}
+
+inline uint32_t HackernewsPopulator::comment_rate() const {
+    return param_["comment_rate"].as_i(1);
+}
+
+inline uint32_t HackernewsPopulator::post_rate() const {
+    return param_["post_rate"].as_i(0);
+}
+
+inline bool HackernewsPopulator::m() const {
+    return materialize_inline_;
+}
+
+template <typename S>
+inline HackernewsRunner<S>::HackernewsRunner(S& server, HackernewsPopulator& hp)
+    : server_(server), hp_(hp) {
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::post_article(uint32_t author, uint32_t aid) {
+    hp_.post_article(author, aid);
+    twait {
+        server_.post_article(author, aid, Str("lalalalala", 10), make_event());
+    }
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::post_comment(uint32_t commentor, uint32_t aid) {
+    twait {
+        server_.post_comment(commentor, hp_.articles()[aid], aid, hp_.next_comment(),
+                             Str("calalalala", 10), make_event());
+    }
+}
+
+tamed template <typename S>
+bool HackernewsRunner<S>::vote(uint32_t voter, uint32_t aid) {
+    if (hp_.vote(aid, voter)) {
+        twait {
+            server_.vote(voter, hp_.articles()[aid], aid, make_event());
+        }
+        return true;
+    }
+    return false;
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::read_article(uint32_t aid) {
+    mandatory_assert(aid < hp_.narticles());
+    twait {
+        server_.read_article(aid, hp_.articles()[aid], hp_.karmas());
+    }
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::populate() {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    uint32_t nv = 0;
+    uint32_t nc = 0;
+    
+    for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
+        const uint32_t author = rng(hp_.nusers());
+        post_article(author, aid);
+        const uint32_t ncomment = rng(10);
+        for (uint32_t j = 1; j <= ncomment; ++j) {
+            nc++;
+            const uint32_t commentor = rng(hp_.nusers());
+            post_comment(commentor, aid);
+        }
+        const uint32_t nvote = rng(10);
+        for (uint32_t j = 0; j < nvote; ++j) {
+            const uint32_t voter = rng(hp_.nusers());
+            if (vote(voter, aid))
+                nv++;
+        }
+    }
+    twait {
+        server_.initialize(hp_.log(), hp_.m(), make_event());
+    }
+    if (hp_.log()) {
+        std::cout << ": my karma table:\n";
+        for (int i = 0; i < hp_.nusers(); i++)
+            std::cout << " k " << i << ": " << hp_.karma(i) << "\n";
+        std::cout << ": end my karma table\n";
+    }
+    std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
+              << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::run() {
+    boost::mt19937 gen;
+    gen.seed(13918);
+    boost::random_number_generator<boost::mt19937> rng(gen);
+    const uint32_t nops = hp_.nops();
+    const uint32_t nusers = hp_.nusers();
+    struct rusage ru[2];
+    uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
+    getrusage(RUSAGE_SELF, &ru[0]);
+    for (uint32_t i = 0; i < nops; ++i) {
+        uint32_t p = rng(100);
+        uint32_t user = rng(nusers);
+        if (p < hp_.post_rate()) {
+            post_article(user, hp_.next_aid());
+            npost++;
+        } else {
+            uint32_t aid = rng(hp_.narticles());
+            read_article(aid);
+            nread++;
+            if (p < hp_.vote_rate()) {
+                vote(user, aid);
+                nvote++;
+            }
+            if (p < hp_.comment_rate()) {
+                post_comment(user, aid);
+                ncomment++;
+            }
+        }
+    }
+    getrusage(RUSAGE_SELF, &ru[1]);
+    Json stats = Json().set("nread", nread).set("npost", npost)
+	.set("ncomment", ncomment).set("nvote", nvote)
+	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
+    stats.merge(server_.stats());
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+}
+
+};
+
+#endif
