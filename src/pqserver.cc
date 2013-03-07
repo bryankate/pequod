@@ -359,10 +359,11 @@ int main(int argc, char** argv) {
         if (tp_param["memcached"]) {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
-            pq::HashTwitter<pq::MemcachedClient> dc;
-            pq::TwitterRunner<pq::HashTwitter<pq::MemcachedClient> > tr(dc, tp);
+            pq::MemcachedClient client;
+            pq::TwitterHashShim<pq::MemcachedClient> shim(client);
+            pq::TwitterRunner<pq::TwitterHashShim<pq::MemcachedClient> > tr(shim, tp);
             tr.populate();
-            tr.run(event<>());
+            tr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
