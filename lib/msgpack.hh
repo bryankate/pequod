@@ -229,9 +229,12 @@ class streaming_parser {
     inline bool done() const;
     inline bool error() const;
 
-    const uint8_t* consume(const uint8_t* first, const uint8_t* last);
-    inline const char* consume(const char* first, const char* last);
+    inline size_t consume(const char* first, size_t length, const String& str);
     inline size_t consume(const char* first, size_t length);
+    inline const uint8_t* consume(const uint8_t* first, const uint8_t* last);
+    inline const char* consume(const char* first, const char* last);
+    const uint8_t* consume(const uint8_t* first, const uint8_t* last,
+                           const String& str);
 
     inline Json& result();
     inline const Json& result() const;
@@ -414,16 +417,27 @@ inline bool streaming_parser::error() const {
     return state_ == st_error;
 }
 
+inline const uint8_t* streaming_parser::consume(const uint8_t* first,
+                                                const uint8_t* last) {
+    return consume(first, last, String());
+}
+
 inline const char* streaming_parser::consume(const char* first,
                                              const char* last) {
     return reinterpret_cast<const char*>
         (consume(reinterpret_cast<const uint8_t*>(first),
-                 reinterpret_cast<const uint8_t*>(last)));
+                 reinterpret_cast<const uint8_t*>(last), String()));
 }
 
 inline size_t streaming_parser::consume(const char* first, size_t length) {
     const uint8_t* ufirst = reinterpret_cast<const uint8_t*>(first);
-    return consume(ufirst, ufirst + length) - ufirst;
+    return consume(ufirst, ufirst + length, String()) - ufirst;
+}
+
+inline size_t streaming_parser::consume(const char* first, size_t length,
+                                        const String& str) {
+    const uint8_t* ufirst = reinterpret_cast<const uint8_t*>(first);
+    return consume(ufirst, ufirst + length, str) - ufirst;
 }
 
 inline Json& streaming_parser::result() {
