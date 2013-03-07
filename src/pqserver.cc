@@ -415,8 +415,8 @@ int main(int argc, char** argv) {
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);
-        pq::PQHackerNewsShim<pq::Server> shim(hp.log(), server);
-        pq::HackernewsRunner<pq::PQHackerNews<pq::Server> > hr(shim, hp);
+        pq::PQHackerNewsShim<pq::Server> shim(server);
+        pq::HackernewsRunner<pq::PQHackerNewsShim<pq::Server> > hr(shim, hp);
         hr.populate();
         hr.run();
     } else if (mode == mode_facebook) {

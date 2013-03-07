@@ -66,6 +66,10 @@ class HashHackerNews {
         c_.done_get(cl);
         e();
     }
+    template <typename R>
+    void stats(preevent<R, Json> e) {
+        e(Json());
+    }
   private:
     C c_;
 };
@@ -108,6 +112,10 @@ class PQHackerNewsShim {
     template <typename R>
     void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas,
                       preevent<R> e);
+    template <typename R>
+    void stats(preevent<R, Json> e) {
+        e(server_.stats());
+    }
   private:
     void read_materialized(uint32_t aid, uint32_t author, karmas_type& check_karmas);
     void read_tables(uint32_t aid, uint32_t author, karmas_type& check_karmas);
