@@ -425,7 +425,7 @@ inline Json::ObjectJson* Json::ojson() const {
 
 inline void Json::uniqueify_array(bool convert, int ncap) {
     if (_type != j_array || !u_.a.a || u_.a.a->refcount > 1
-        || (ncap > 0 && ncap > u_.a.a->size))
+        || (ncap > 0 && ncap > u_.a.a->capacity))
 	hard_uniqueify_array(convert, ncap);
     assert(_type == j_array);
 }
