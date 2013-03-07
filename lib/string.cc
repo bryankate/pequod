@@ -756,9 +756,16 @@ hard_printable(const String &s, int pos, int type)
     const unsigned char *x = reinterpret_cast<const unsigned char *>(s.data());
     int len = s.length();
     for (; pos < len; pos++) {
-	if (x[pos] >= 32 && x[pos] < 127)
+        if (type == 2 && (x[pos] == '\\' || x[pos] == '\"'))
+            sa << '\\' << x[pos];
+	else if (x[pos] >= 32 && x[pos] < 127)
 	    sa << x[pos];
-	else if (x[pos] < 32 && type != 1)
+        else if (x[pos] < 32 && type == 2) {
+            if (x[pos] >= 9 && x[pos] <= 13)
+                sa << '\\' << ("tnvfr"[x[pos] - 9]);
+            else if (char *buf = sa.extend(4, 1))
+                sprintf(buf, "\\%03o", x[pos]);
+	} else if (x[pos] < 32 && type != 1)
 	    sa << '^' << (unsigned char)(x[pos] + 64);
 	else if (char *buf = sa.extend(4, 1))
 	    sprintf(buf, "\\%03o", x[pos]);
@@ -773,7 +780,7 @@ hard_printable(const String &s, int pos, int type)
     "control" sequences, such as "^@" for the null character, and characters
     127-255 into octal escape sequences, such as "\377" for 255. Quoting
     type 1 translates all characters outside of 32-126 into octal escape
-    sequences. */
+    sequences. Quoting type 2 uses C escapes, including "\\" and "\"". */
 String
 String::printable(int type) const
 {
@@ -783,6 +790,17 @@ String::printable(int type) const
 	    if (_r.data[i] < 32 || _r.data[i] > 126)
 		return hard_printable(*this, i, type);
     return *this;
+}
+
+String String::to_hex() const {
+    StringAccum sa;
+    static const char hexval[] = "0123456789ABCDEF";
+    char* x = sa.extend(2 * _r.length);
+    for (int i = 0; i != _r.length; ++i) {
+        *x++ = hexval[(unsigned char) _r.data[i] >> 4];
+        *x++ = hexval[_r.data[i] & 15];
+    }
+    return sa.take_string();
 }
 
 /** @brief Return the substring with left whitespace removed. */

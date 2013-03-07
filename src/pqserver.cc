@@ -10,7 +10,6 @@
 #include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
-#include "twitter_client.hh"
 #include "hashclient.hh"
 
 namespace pq {
@@ -288,10 +287,15 @@ static Clp_Option options[] = {
     { "narticles", 'a', 1008, Clp_ValInt, 0 },
     { "nops", 'o', 1009, Clp_ValInt, 0 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
-    { "memcached", 'd', 1011, 0, Clp_Negate },
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+    { "memcached", 0, 1011, 0, Clp_Negate },
+#endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
     { "vote_rate", 'v', 1013, Clp_ValInt, 0 },
     { "comment_rate", 'c', 1014, Clp_ValInt, 0 }
+    { "builtinhash", 'b', 1015, 0, Clp_Negate },
+    { "client", 'c', 1016, Clp_ValInt, Clp_Optional },
+    { "duration", 'd', 1017, Clp_ValInt, 0 }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
@@ -301,7 +305,7 @@ int main(int argc, char** argv) {
     putenv(envstr.mutable_data());
     tamer::initialize();
 
-    int mode = mode_unknown, listen_port = 8000;
+    int mode = mode_unknown, listen_port = 8000, client_port = -1;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -310,6 +314,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("push", !clp->negated);
 	else if (clp->option->long_name == String("nusers"))
 	    tp_param.set("nusers", clp->val.i);
+	else if (clp->option->long_name == String("duration"))
+	    tp_param.set("duration", clp->val.i);
 	else if (clp->option->long_name == String("narticles"))
 	    tp_param.set("narticles", clp->val.i);
 	else if (clp->option->long_name == String("vote_rate"))
@@ -338,7 +344,9 @@ int main(int argc, char** argv) {
             mode = mode_listen;
             if (clp->have_val)
                 listen_port = clp->val.i;
-        } else if (clp->option->long_name == String("log"))
+        } else if (clp->option->long_name == String("client"))
+            client_port = clp->have_val ? clp->val.i : 8000;
+        else if (clp->option->long_name == String("log"))
             tp_param.set("log", !clp->negated);
         else
             testcases.insert(clp->vstr);
@@ -356,22 +364,31 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
         if (tp_param["memcached"]) {
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
-            pq::HashTwitter<pq::MemcachedClient> dc;
-            pq::TwitterRunner<pq::HashTwitter<pq::MemcachedClient> > tr(dc, tp);
+            pq::MemcachedClient client;
+            pq::TwitterHashShim<pq::MemcachedClient> shim(client);
+            pq::TwitterRunner<pq::TwitterHashShim<pq::MemcachedClient> > tr(shim, tp);
             tr.populate();
-            tr.run();
+            tr.run(tamer::event<>());
+#else
+            mandatory_assert(false);
+#endif
         } else if (tp_param["builtinhash"]) {
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
-            pq::HashTwitter<pq::BuiltinHashClient> dc;
-            pq::TwitterRunner<pq::HashTwitter<pq::BuiltinHashClient> > tr(dc, tp);
+            pq::BuiltinHashClient client;
+            pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
+            pq::TwitterRunner<pq::TwitterHashShim<pq::BuiltinHashClient> > tr(shim, tp);
             tr.populate();
-            tr.run();
+            tr.run(tamer::event<>());
+        } else if (client_port >= 0) {
+            run_twitter_remote(tp, client_port);
         } else {
-            pq::PQTwitter<pq::Server> dc(tp.push(), tp.log(), server);
-            pq::TwitterRunner<pq::PQTwitter<pq::Server> > tr(dc, tp);
+            pq::DirectClient dc(server);
+            pq::TwitterShim<pq::DirectClient> shim(dc);
+            pq::TwitterRunner<pq::TwitterShim<pq::DirectClient> > tr(shim, tp);
             tr.populate();
-            tr.run();
+            tr.run(tamer::event<>());
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);

@@ -28,7 +28,7 @@ if test -z "$ac_cv_header_evpp_h"; then
 fi
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
-
+AC_CHECK_HEADERS([libmemcached/memcached.hpp])
 
 dnl Builtins
 

@@ -72,6 +72,8 @@ int main(int argc, char** argv) {
     TEST("\x93\x00\x01\x02", 5, 4, "[0,1,2]");
     TEST("\x90     ", 5, 1, "[]");
     TEST("\xDC\x00\x00     ", 5, 3, "[]");
+    TEST("\224\002\322\000\001\242\321\262p|00356|1000000000\245?!?#*\225\001\322\000\001\242\322\242t|\242t}\332\000Rt|<user_id:5>|<time:10>|<poster_id:5> s|<user_id>|<poster_id> p|<poster_id>|<time>",
+         130, 32, "[2,107217,\"p|00356|1000000000\",\"?!?#*\"]", status_ok);
 
     std::cout << "All tests pass!\n";
 }

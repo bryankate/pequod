@@ -69,7 +69,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             ++first;
         array:
             j = Json::make_array_reserve(n);
-        } else if ((uint8_t) (*first - 0xA0) < 0x10) {
+        } else if ((uint8_t) (*first - 0xA0) < 0x20) {
             n = *first - 0xA0;
             ++first;
         raw:
@@ -243,7 +243,7 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
     } else if (j.is_o()) {
         uint8_t* x = (uint8_t*) sa.reserve(5);
         if (j.size() < 16) {
-            *x = 0x90 + j.size();
+            *x = 0x80 + j.size();
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
             *x = 0xDE;

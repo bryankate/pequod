@@ -1,0 +1,99 @@
+// -*- mode: c++ -*-
+#ifndef PEQUOD_REMOTECLIENT_HH
+#define PEQUOD_REMOTECLIENT_HH
+#include <tamer/tamer.hh>
+#include "mpfd.hh"
+#include "pqrpc.hh"
+namespace pq {
+using tamer::event;
+
+class RemoteClient {
+  public:
+    inline RemoteClient(tamer::fd fd);
+
+    tamed void add_join(const String& first, const String& last,
+                        const String& joinspec, event<> e);
+
+    tamed void insert(const String& key, const String& value, event<> e);
+
+    tamed void erase(const String& key, event<> e);
+
+    tamed void count(const String& first, const String& last,
+                     event<size_t> e);
+
+    class iterator;
+    class scanpair {
+      public:
+        scanpair() = default;
+        scanpair(const Json* it)
+            : it_(it) {
+        }
+        const String& key() const {
+            return it_[0].as_s();
+        }
+        const String& value() const {
+            return it_[1].as_s();
+        }
+      private:
+        const Json* it_;
+        friend class iterator;
+    };
+    class iterator {
+      public:
+        iterator() = default;
+        explicit iterator(const Json* it)
+            : it_(it) {
+        }
+
+        void operator++() {
+            it_.it_ += 2;
+        }
+
+        bool operator==(iterator x) const {
+            return it_.it_ == x.it_.it_;
+        }
+        bool operator!=(iterator x) const {
+            return it_.it_ != x.it_.it_;
+        }
+
+        scanpair operator*() const {
+            return it_;
+        }
+        const scanpair* operator->() const {
+            return &it_;
+        }
+      private:
+        scanpair it_;
+    };
+    class scan_result {
+      public:
+        scan_result() = default;
+        inline scan_result(Json&& x)
+            : result_(std::move(x)) {
+        }
+        inline iterator begin() const {
+            return iterator(result_.array_data());
+        }
+        inline iterator end() const {
+            return iterator(result_.array_data() + result_.size());
+        }
+      private:
+        mutable Json result_;
+    };
+    tamed void scan(const String& first, const String& last,
+                    event<scan_result> e);
+
+    tamed void stats(event<Json> e);
+
+  private:
+    msgpack_fd fd_;
+    unsigned long seq_;
+};
+
+
+inline RemoteClient::RemoteClient(tamer::fd fd)
+    : fd_(fd), seq_(0) {
+}
+
+} // namespace pq
+#endif

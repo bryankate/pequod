@@ -64,6 +64,7 @@ class String : public String_base<String> {
     String lower() const;
     String upper() const;
     String printable(int type = 0) const;
+    String to_hex() const;
 
     enum {
 	utf_strip_bom = 1,
