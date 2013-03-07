@@ -28,6 +28,8 @@ if test -z "$ac_cv_header_evpp_h"; then
 fi
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
+AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
+AC_SUBST([MEMCACHED_LIB])
 
 dnl Builtins
 
@@ -315,15 +317,6 @@ AC_ARG_ENABLE([timing],
     [], [enable_timing=0])
 if test "$enable_timing" = yes; then
     AC_DEFINE_UNQUOTED([TIMING], [1], [Define to enable server side timing.])
-fi
-
-AC_ARG_ENABLE([memcached],
-    [AS_HELP_STRING([--enable-memcached], [Enable memcached comparison code.])],
-    [], [enable_memcached=0])
-if test "$enable_memcached" = yes; then
-    AC_CHECK_HEADERS([libmemcached/memcached.hpp], [],
-                     [AC_MSG_ERROR([Cannot find <libmemcached/memcached.hpp>, must --disable-memcached])])
-    AC_DEFINE_UNQUOTED([ENABLE_MEMCACHED], [1], [Define to enable memcached comparison.])
 fi
 
 AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
