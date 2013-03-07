@@ -94,6 +94,8 @@ class Json { public:
     inline bool empty() const;
     inline size_type size() const;
 
+    void clear();
+
     // Primitive extractors
     inline long to_i() const;
     inline uint64_t to_u64() const;
