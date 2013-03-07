@@ -222,10 +222,7 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
 
 tamed template <typename S>
 void TwitterRunner<S>::populate() {
-    tvars {
-        boost::mt19937 gen;
-        char buf[128];
-    }
+    tvars { boost::mt19937 gen; }
     gen.seed(0);
     tp_.create_subscriptions(gen);
 
@@ -233,7 +230,7 @@ void TwitterRunner<S>::populate() {
         for (auto& x : tp_.subscriptions()) {
             server_.subscribe(x.first, x.second, make_event());
             if (tp_.log())
-                printf("subscribe %.13s\n", buf);
+                printf("subscribe s|%05d|%05d\n", x.first, x.second);
         }
     }
 
@@ -258,22 +255,24 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         boost::mt19937 gen;
         boost::random_number_generator<boost::mt19937> rng(gen);
         struct rusage ru[2];
+        struct timeval tv[2];
         uint32_t time = 1000000000;
         uint32_t nusers = this->tp_.nusers();
         uint32_t post_end_time = time + nusers * 5;
         uint32_t end_time = post_end_time + this->tp_.duration();
         uint32_t* load_times = new uint32_t[nusers];
-        char buf1[128], buf2[128];
         uint32_t npost = 0, nfull = 0, nupdate = 0, a, u, tx;
         size_t nread = 0, count_result = 0;
         typename S::scan_result scan_result;
-        Json stats;
+        Json old_stats, stats;
     }
     gen.seed(13918);
 
     for (uint32_t i = 0; i != nusers; ++i)
         load_times[i] = 0;
+    twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
+    gettimeofday(&tv[0], 0);
 
     while (time != end_time) {
         u = rng(nusers);
@@ -308,10 +307,17 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     }
 
     getrusage(RUSAGE_SELF, &ru[1]);
+    gettimeofday(&tv[1], 0);
     twait { server_.stats(make_event(stats)); }
+    if (stats.get("server_user_time")) {
+        stats["server_user_time"] -= old_stats["server_user_time"];
+        stats["server_system_time"] -= old_stats["server_system_time"];
+    }
     stats = Json().set("nposts", npost).set("nfull", nfull)
 	.set("nupdate", nupdate).set("nposts_read", nread)
-	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+        .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
+        .set("real_time", to_real(tv[1] - tv[0]))
         .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] load_times;

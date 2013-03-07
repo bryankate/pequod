@@ -70,7 +70,7 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
             break;
         }
 
-        mpfd.write(rj, tamer::event<>());
+        mpfd.write(rj);
     }
     cfd.close();
 }

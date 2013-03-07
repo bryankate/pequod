@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include "string.hh"
 #include "encoding.hh"
+#include <utility>
 #if __GNUC__ > 4
 # define LCDF_SNPRINTF_ATTR __attribute__((__format__(__printf__, 3, 4)))
 #else
@@ -30,7 +31,7 @@ class StringAccum { public:
     inline StringAccum(const String_base<T> &str);
     inline StringAccum(const StringAccum &x);
 #if HAVE_CXX_RVALUE_REFERENCES
-    inline StringAccum(StringAccum &&x);
+    inline StringAccum(StringAccum&& x);
 #endif
     inline ~StringAccum();
 
@@ -201,9 +202,9 @@ inline StringAccum::StringAccum(const StringAccum &x) {
 
 #if HAVE_CXX_RVALUE_REFERENCES
 /** @brief Move-construct a StringAccum from @a x. */
-inline StringAccum::StringAccum(StringAccum &&x)
-    : r_(x.r_) {
-    x.r_.cap = 0;
+inline StringAccum::StringAccum(StringAccum&& x) {
+    using std::swap;
+    swap(r_, x.r_);
 }
 #endif
 

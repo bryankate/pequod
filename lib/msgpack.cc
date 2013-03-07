@@ -16,7 +16,9 @@ template <typename T> T grab(const uint8_t* x) {
 }
 
 const uint8_t* streaming_parser::consume(const uint8_t* first,
-                                         const uint8_t* last) {
+                                         const uint8_t* last,
+                                         const String& str) {
+    using std::swap;
     Json j;
     int n;
 
@@ -38,12 +40,12 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             return next;
         first = next;
         if (state_ == st_string) {
-            j = Json(str_);
+            j = Json(std::move(str_));
             stack_.pop_back();
             goto next;
         } else {
             state_ = st_normal;
-            consume(str_.ubegin(), str_.uend());
+            consume(str_.ubegin(), str_.uend(), str_);
             if (state_ != st_normal)
                 return next;
         }
@@ -63,12 +65,20 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             n = *first - 0x80;
             ++first;
         map:
-            j = Json::make_object();
+            if (stack_.empty() && json_.is_o()) {
+                swap(j, json_);
+                j.clear();
+            } else
+                j = Json::make_object();
         } else if ((uint8_t) (*first - 0x90) < 0x10) {
             n = *first - 0x90;
             ++first;
         array:
-            j = Json::make_array_reserve(n);
+            if (stack_.empty() && json_.is_a()) {
+                swap(j, json_);
+                j.clear();
+            } else
+                j = Json::make_array_reserve(n);
         } else if ((uint8_t) (*first - 0xA0) < 0x20) {
             n = *first - 0xA0;
             ++first;
@@ -79,7 +89,12 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 state_ = st_string;
                 return last;
             }
-            j = Json(String(first, n));
+            if (first < str.ubegin() || first + n >= str.uend())
+                j = Json(String(first, n));
+            else {
+                const char* s = reinterpret_cast<const char*>(first);
+                j = Json(str.fast_substring(s, s + n));
+            }
             first += n;
         } else {
             uint8_t type = *first - 0xC0;
@@ -146,7 +161,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
         // Add it
     next:
         Json* jp = stack_.size() ? stack_.back().jp : &json_;
-        if (jp->is_o()) {
+        if (jp->is_o() && stack_.size()) {
             // Reading a key for some object Json
             if (!j.is_s() && !j.is_i())
                 goto error;
@@ -155,7 +170,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             continue;
         }
 
-        if (jp->is_a()) {
+        if (jp->is_a() && stack_.size()) {
             jp->push_back(std::move(j));
             jp = &jp->back();
             --stack_.back().size;

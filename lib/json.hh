@@ -94,6 +94,8 @@ class Json { public:
     inline bool empty() const;
     inline size_type size() const;
 
+    void clear();
+
     // Primitive extractors
     inline long to_i() const;
     inline uint64_t to_u64() const;
@@ -250,6 +252,11 @@ class Json { public:
     inline Json& operator+=(int x);
     inline Json& operator+=(long x);
     inline Json& operator+=(double x);
+    inline Json& operator+=(const Json& x);
+    inline Json& operator-=(int x);
+    inline Json& operator-=(long x);
+    inline Json& operator-=(double x);
+    inline Json& operator-=(const Json& x);
 
     friend bool operator==(const Json& a, const Json& b);
 
@@ -418,7 +425,7 @@ inline Json::ObjectJson* Json::ojson() const {
 
 inline void Json::uniqueify_array(bool convert, int ncap) {
     if (_type != j_array || !u_.a.a || u_.a.a->refcount > 1
-        || (ncap > 0 && ncap > u_.a.a->size))
+        || (ncap > 0 && ncap > u_.a.a->capacity))
 	hard_uniqueify_array(convert, ncap);
     assert(_type == j_array);
 }
@@ -1071,6 +1078,21 @@ class Json_proxy_base {
     }
     Json& operator+=(double x) {
 	return value() += x;
+    }
+    Json& operator+=(const Json& x) {
+	return value() += x;
+    }
+    Json& operator-=(int x) {
+	return value() -= x;
+    }
+    Json& operator-=(long x) {
+	return value() -= x;
+    }
+    Json& operator-=(double x) {
+	return value() -= x;
+    }
+    Json& operator-=(const Json& x) {
+	return value() -= x;
     }
     Json::const_object_iterator obegin() const {
 	return cvalue().obegin();
@@ -2521,6 +2543,33 @@ inline Json& Json::operator+=(double x) {
     force_number();
     u_.d = as_d() + x;
     _type = j_double;
+    return *this;
+}
+inline Json& Json::operator+=(const Json& x) {
+    if (x._type != j_null) {
+        // XXX what if both are integers
+        force_number();
+        u_.d = as_d() + x.as_d();
+        _type = j_double;
+    }
+    return *this;
+}
+inline Json& Json::operator-=(int x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(long x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(double x) {
+    return *this += -x;
+}
+inline Json& Json::operator-=(const Json& x) {
+    if (x._type != j_null) {
+        // XXX what if both are integers
+        force_number();
+        u_.d = as_d() - x.as_d();
+        _type = j_double;
+    }
     return *this;
 }
 

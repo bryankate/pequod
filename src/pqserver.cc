@@ -7,6 +7,7 @@
 #include "pqtwitter.hh"
 #include "pqfacebook.hh"
 #include "pqhackernews.hh"
+#include "pqanalytics.hh"
 #include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
@@ -240,6 +241,8 @@ void Table::erase(const String& key) {
 
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, sink_ranges_size = 0;
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
     for (auto& t : tables_) {
         store_size += t.store_.size();
         source_ranges_size += t.source_ranges_.size();
@@ -247,7 +250,9 @@ Json Server::stats() const {
     }
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
-	.set("sink_ranges_size", sink_ranges_size);
+	.set("sink_ranges_size", sink_ranges_size)
+        .set("server_user_time", to_real(ru.ru_utime))
+        .set("server_system_time", to_real(ru.ru_stime));
 }
 
 void Server::print(std::ostream& stream) {
@@ -287,17 +292,23 @@ static Clp_Option options[] = {
     { "narticles", 'a', 1008, Clp_ValInt, 0 },
     { "nops", 'o', 1009, Clp_ValInt, 0 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#if ENABLE_MEMCACHED
     { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
     { "vote_rate", 'v', 1013, Clp_ValInt, 0 },
     { "comment_rate", 'r', 1014, Clp_ValInt, 0 },
     { "client", 'c', 1016, Clp_ValInt, Clp_Optional },
-    { "duration", 'd', 1017, Clp_ValInt, 0 }
+    { "duration", 'd', 1017, Clp_ValInt, 0 },
+    { "analytics", 0, 1018, 0, Clp_Negate },
+    { "popduration", 0, 1019, Clp_ValInt, 0 },
+    { "proactive", 0, 1020, 0, Clp_Negate },
+    { "buffer", 0, 1021, 0, Clp_Negate },
+    { "seed", 0, 1022, Clp_ValInt, 0 },
+    { "pread", 0, 1023, Clp_ValInt, 0 }
 };
 
-enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
+enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
     String envstr("TAMER_NOLIBEVENT=1");
@@ -331,12 +342,24 @@ int main(int argc, char** argv) {
             tp_param.set("memcached", !clp->negated);
         else if (clp->option->long_name == String("builtinhash"))
             tp_param.set("builtinhash", !clp->negated);
+        else if (clp->option->long_name == String("popduration"))
+            tp_param.set("popduration", clp->val.i);
+        else if (clp->option->long_name == String("proactive"))
+            tp_param.set("proactive", !clp->negated);
+        else if (clp->option->long_name == String("buffer"))
+            tp_param.set("buffer", !clp->negated);
+        else if (clp->option->long_name == String("seed"))
+            tp_param.set("seed", clp->val.i);
+        else if (clp->option->long_name == String("pread"))
+            tp_param.set("pread", clp->val.i);
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
             mode = mode_twitter;
         else if (clp->option->long_name == String("hn"))
             mode = mode_hn;
+        else if (clp->option->long_name == String("analytics"))
+            mode = mode_analytics;
         else if (clp->option->long_name == String("tests"))
             mode = mode_tests;
         else if (clp->option->long_name == String("listen")) {
@@ -363,7 +386,7 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
         if (tp_param["memcached"]) {
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#if ENABLE_MEMCACHED
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
@@ -394,15 +417,17 @@ int main(int argc, char** argv) {
         pq::HackernewsRunner hr(server, hp);
         hr.populate();
         hr.run();
-    } else {
-        //server.print(std::cout);
+    } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 5);
         pq::FacebookPopulator fp(tp_param);
         pq::facebook_populate(server, fp);
         pq::facebook_run(server, fp);
+    } else if (mode == mode_analytics) {
+        pq::AnalyticsRunner ar(server, tp_param);
+        ar.populate();
+        ar.run();
     }
-    //server.print(std::cout);
 
     tamer::loop();
     tamer::cleanup();

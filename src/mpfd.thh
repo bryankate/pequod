@@ -14,25 +14,24 @@ class msgpack_fd {
     ~msgpack_fd();
 
     inline void read(tamer::event<Json> done);
-    void write(const Json& j, tamer::event<> done);
-    inline void write(const Json& j);
+    void write(const Json& j);
     inline void call(const Json& j, tamer::event<Json> reply);
 
   private:
     tamer::fd fd_;
 
+    enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
     struct wrelem {
-        String s;
-        tamer::event<> done;
+        StringAccum sa;
+        int pos;
     };
-    std::vector<wrelem> wrelem_;
-    std::vector<struct iovec> wriov_;
-    size_t wrpos_;
+    std::deque<wrelem> wrelem_;
+    bool wrblocked_;
     tamer::event<> wrwake_;
     tamer::event<> wrkill_;
 
-    char* rdbuf_;
-    size_t rdcap_;
+    enum { rdcap = 1 << 17 };
+    String rdbuf_;
     size_t rdpos_;
     size_t rdlen_;
     msgpack::streaming_parser rdparser_;
@@ -41,13 +40,19 @@ class msgpack_fd {
     tamer::event<> rdwake_;
     tamer::event<> rdkill_;
 
+    void check();
+    void write_once();
     tamed void writer_coroutine();
     tamed void reader_coroutine();
 };
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : fd_(fd), wrpos_(0),
-      rdbuf_(new char[1 << 17]), rdcap_(1 << 17), rdpos_(0), rdlen_(0) {
+    : fd_(fd), wrblocked_(false),
+      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0) {
+    wrelem_.push_back(wrelem());
+    wrelem_.back().sa.reserve(wrcap);
+    wrelem_.back().pos = 0;
+
     writer_coroutine();
     reader_coroutine();
 }
@@ -55,10 +60,6 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd)
 inline void msgpack_fd::read(tamer::event<Json> done) {
     rdwait_.push_back(done);
     rdwake_();
-}
-
-inline void msgpack_fd::write(const Json& j) {
-    write(j, tamer::event<>());
 }
 
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
