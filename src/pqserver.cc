@@ -7,6 +7,7 @@
 #include "pqtwitter.hh"
 #include "pqfacebook.hh"
 #include "pqhackernews.hh"
+#include "pqanalytics.hh"
 #include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
@@ -291,11 +292,17 @@ static Clp_Option options[] = {
     { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
-    { "client", 'c', 1011, Clp_ValInt, Clp_Optional },
-    { "duration", 'd', 1012, Clp_ValInt, 0 }
+    { "client", 'c', 1013, Clp_ValInt, Clp_Optional },
+    { "duration", 'd', 1014, Clp_ValInt, 0 },
+    { "analytics", 0, 1015, 0, Clp_Negate },
+    { "popduration", 0, 1016, Clp_ValInt, 0 },
+    { "proactive", 0, 1017, 0, Clp_Negate },
+    { "buffer", 0, 1018, 0, Clp_Negate },
+    { "seed", 0, 1019, Clp_ValInt, 0 },
+    { "pread", 0, 1020, Clp_ValInt, 0 }
 };
 
-enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_listen, mode_tests };
+enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
 
 int main(int argc, char** argv) {
     String envstr("TAMER_NOLIBEVENT=1");
@@ -325,12 +332,24 @@ int main(int argc, char** argv) {
             tp_param.set("memcached", !clp->negated);
         else if (clp->option->long_name == String("builtinhash"))
             tp_param.set("builtinhash", !clp->negated);
+        else if (clp->option->long_name == String("popduration"))
+            tp_param.set("popduration", clp->val.i);
+        else if (clp->option->long_name == String("proactive"))
+            tp_param.set("proactive", !clp->negated);
+        else if (clp->option->long_name == String("buffer"))
+            tp_param.set("buffer", !clp->negated);
+        else if (clp->option->long_name == String("seed"))
+            tp_param.set("seed", clp->val.i);
+        else if (clp->option->long_name == String("pread"))
+            tp_param.set("pread", clp->val.i);
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
             mode = mode_twitter;
         else if (clp->option->long_name == String("hn"))
             mode = mode_hn;
+        else if (clp->option->long_name == String("analytics"))
+            mode = mode_analytics;
         else if (clp->option->long_name == String("tests"))
             mode = mode_tests;
         else if (clp->option->long_name == String("listen")) {
@@ -388,15 +407,17 @@ int main(int argc, char** argv) {
         pq::HackernewsRunner hr(server, hp);
         hr.populate();
         hr.run();
-    } else {
-        //server.print(std::cout);
+    } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 5);
         pq::FacebookPopulator fp(tp_param);
         pq::facebook_populate(server, fp);
         pq::facebook_run(server, fp);
+    } else if (mode == mode_analytics) {
+        pq::AnalyticsRunner ar(server, tp_param);
+        ar.populate();
+        ar.run();
     }
-    //server.print(std::cout);
 
     tamer::loop();
     tamer::cleanup();
