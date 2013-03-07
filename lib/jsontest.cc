@@ -29,6 +29,8 @@ void incr(T& x) {
 #endif
 
 int main(int argc, char** argv) {
+    (void) argc, (void) argv;
+
     Json j;
     CHECK(j.empty());
     CHECK(!j);
@@ -201,6 +203,9 @@ int main(int argc, char** argv) {
 	Json j = Json::parse("{}");
 	j.set("foo", String::make_out_of_memory()).set(String::make_out_of_memory(), 2);
 	CHECK(j.unparse() == "{\"foo\":\"\360\237\222\243ENOMEM\360\237\222\243\",\"\360\237\222\243ENOMEM\360\237\222\243\":2}");
+        j.clear();
+        CHECK(j.unparse() == "{}");
+        CHECK(j.get("foo") == Json());
     }
 
 #if 0
