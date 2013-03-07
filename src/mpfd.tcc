@@ -39,19 +39,27 @@ tamed void msgpack_fd::reader_coroutine() {
             continue;
         }
 
-        if (rdpos_ != rdlen_)
+        if (rdpos_ != rdlen_) {
+            if (rdparser_.complete()) {
+                if (rdwait_.front().__get_slot0())
+                    rdparser_.reset(*rdwait_.front().__get_slot0());
+                else
+                    rdparser_.reset();
+            }
+
             rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_,
                                         rdlen_ - rdpos_, rdbuf_);
-        if (rdparser_.complete()) {
-            //if (++nr % 1024 == 0)
-            // std::cerr << rdparser_.result() << "\n";
-            if (rdparser_.done())
-                rdwait_.front()(std::move(rdparser_.result()));
-            else
-                rdwait_.front()(Json());
-            rdwait_.pop_front();
-            rdparser_.reset();
-            continue;
+
+            if (rdparser_.complete()) {
+                //if (++nr % 1024 == 0)
+                // std::cerr << rdparser_.result() << "\n";
+                if (rdparser_.done())
+                    rdwait_.front()(std::move(rdparser_.result()));
+                else
+                    rdwait_.front()(Json());
+                rdwait_.pop_front();
+                continue;
+            }
         }
 
         assert(rdpos_ == rdlen_);
