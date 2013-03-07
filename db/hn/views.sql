@@ -15,6 +15,10 @@ SET client_min_messages = warning;
 
 CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
+
+DROP VIEW IF EXISTS karma_v CASCADE;
+DROP TABLE IF EXISTS karma_mv CASCADE;
+
 DROP TABLE IF EXISTS matviews CASCADE;
 DROP INDEX IF EXISTS author_idx;
 
@@ -23,6 +27,15 @@ CREATE TABLE matviews (
   , v_name NAME NOT NULL
   , last_refresh TIMESTAMP WITH TIME ZONE
 );
+
+CREATE VIEW karma_v AS
+SELECT
+  articles.author,
+  COUNT(*) AS karma
+FROM articles, votes
+WHERE articles.aid = votes.aid
+GROUP BY articles.author;
+
 
 CREATE OR REPLACE FUNCTION create_matview(NAME, NAME)
  RETURNS VOID
