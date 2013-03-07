@@ -45,6 +45,9 @@ class MemcachedClient {
     void done_get(const char *v) {
         delete v;
     }
+    void increment(const Str key) {
+        mandatory_assert(0, "unimplemented: need to change the server side");
+    }
   private:
     void check_error(memcached_return_t r) {
         if (r != MEMCACHED_SUCCESS) {
@@ -77,6 +80,13 @@ class BuiltinHashClient {
         return it->second.data() + offset;
     }
     void done_get(const char *) {
+    }
+    void increment(const Str k) {
+        auto& ev = h_[k];
+        if (ev.empty())
+            ev = String(1);
+        else
+            ev = String(ev.to_i() + 1);
     }
   private:
     HashTable<String, String> h_;

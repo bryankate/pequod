@@ -74,8 +74,8 @@ tamed void msgpack_fd::reader_coroutine() {
             fd_.read_once(const_cast<char*>(rdbuf_.data()) + rdpos_,
                           rdcap - rdpos_, rdlen_, make_event(r));
         }
-        if (r < 0)
-            fd_.error_close(r);
+        if (r < 0 || rdlen_ == 0)
+            fd_.close(r);
         rdlen_ += rdpos_;
     }
 
@@ -130,7 +130,7 @@ void msgpack_fd::write_once() {
     } else if (errno == EAGAIN || errno == EWOULDBLOCK)
         wrblocked_ = true;
     else if (errno != EINTR) {
-        fd_.error_close(-errno);
+        fd_.close(-errno);
         wrblocked_ = false;
     }
 }
