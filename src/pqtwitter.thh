@@ -71,9 +71,9 @@ class TwitterShim {
     inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
     template <typename R>
     inline void initialize(bool push, tamer::preevent<R> e);
-    inline void prepare_push_post(uint32_t poster, uint32_t time);
+    inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
     template <typename R>
-    inline void push_post(Str value, uint32_t subscriber, tamer::preevent<R> e);
+    inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
     typedef typename S::scan_result scan_result;
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, tamer::preevent<R, scan_result> e);
@@ -85,6 +85,7 @@ class TwitterShim {
   private:
     S& server_;
     char buf_[128];
+    Str value_;
 };
 
 template <typename S>
@@ -117,15 +118,17 @@ inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, Str value, tame
 }
 
 template <typename S>
-inline void TwitterShim<S>::prepare_push_post(uint32_t poster, uint32_t time) {
+inline void TwitterShim<S>::prepare_push_post(uint32_t poster, uint32_t time,
+                                              Str value) {
     sprintf(buf_, "t|%05u|%010u|%05u", 0, time, poster);
+    value_ = value;
 }
 
 template <typename S> template <typename R>
-inline void TwitterShim<S>::push_post(Str value, uint32_t subscriber, tamer::preevent<R> done) {
+inline void TwitterShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     sprintf(buf_ + 2, "%05u", subscriber);
     buf_[7] = '|'; // replace terminating null
-    server_.insert(Str(buf_, 24), value, done);
+    server_.insert(Str(buf_, 24), value_, done);
 }
 
 template <typename S> template <typename R>
@@ -208,10 +211,10 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
     twait {
         server_.post(u, time, value, make_event());
         if (tp_.push()) {
-            server_.prepare_push_post(u, time);
+            server_.prepare_push_post(u, time, value);
             for (auto it = tp_.begin_followers(u);
                  it != tp_.end_followers(u); ++it)
-                server_.push_post(value, *it, make_event());
+                server_.push_post(*it, make_event());
         }
     }
     e();
