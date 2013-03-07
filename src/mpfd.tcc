@@ -18,6 +18,8 @@ void msgpack_fd::write(const Json& j) {
     }
     msgpack::compact_unparser().unparse(wrelem_.back().sa, j);
     wrwake_();
+    if (!wrblocked_ && wrelem_.front().sa.length() >= wrlowat)
+        write_once();
 }
 
 tamed void msgpack_fd::reader_coroutine() {
@@ -86,52 +88,62 @@ void msgpack_fd::check() {
                || wrelem_[0].sa.empty());
 }
 
+void msgpack_fd::write_once() {
+    // check();
+    assert(!wrelem_.front().sa.empty());
+
+    struct iovec iov[3];
+    int iov_count = (wrelem_.size() > 3 ? 3 : (int) wrelem_.size());
+    size_t total = 0;
+    for (int i = 0; i != iov_count; ++i) {
+        iov[i].iov_base = wrelem_[i].sa.data() + wrelem_[i].pos;
+        iov[i].iov_len = wrelem_[i].sa.length() - wrelem_[i].pos;
+        total += iov[i].iov_len;
+    }
+
+    ssize_t amt = writev(fd_.value(), iov, iov_count);
+
+    if (amt != 0 && amt != (ssize_t) -1) {
+        wrblocked_ = total != (size_t) amt;
+        while (wrelem_.size() > 1
+               && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
+            amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
+            wrelem_.pop_front();
+        }
+        wrelem_.front().pos += amt;
+        if (wrelem_.front().pos == wrelem_.front().sa.length()) {
+            assert(wrelem_.size() == 1);
+            wrelem_.front().sa.clear();
+            wrelem_.front().pos = 0;
+        }
+    } else if (amt == 0) {
+        fd_.close();
+        wrblocked_ = false;
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK)
+        wrblocked_ = true;
+    else if (errno != EINTR) {
+        fd_.error_close(-errno);
+        wrblocked_ = false;
+    }
+}
+
 tamed void msgpack_fd::writer_coroutine() {
     tvars {
         tamer::event<> kill;
         tamer::rendezvous<> rendez;
-        ssize_t amt;
-        size_t wrendpos;
-        struct iovec iov[3];
-        int iov_count;
     }
 
     kill = wrkill_ = tamer::make_event(rendez);
 
     while (kill && fd_) {
-        //check();
         if (wrelem_.size() == 1 && wrelem_.front().sa.empty())
             twait { wrwake_ = make_event(); }
-        else {
-            iov_count = (wrelem_.size() > 3 ? 3 : (int) wrelem_.size());
-            for (int i = 0; i != iov_count; ++i) {
-                iov[i].iov_base = wrelem_[i].sa.data() + wrelem_[i].pos;
-                iov[i].iov_len = wrelem_[i].sa.length() - wrelem_[i].pos;
-            }
-
-            amt = writev(fd_.value(), iov, iov_count);
-
-            if (amt != 0 && amt != (ssize_t) -1) {
-                while (wrelem_.size() > 1
-                       && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
-                    amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
-                    wrelem_.pop_front();
-                }
-                wrelem_.front().pos += amt;
-                if (wrelem_.front().pos == wrelem_.front().sa.length()) {
-                    assert(wrelem_.size() == 1);
-                    wrelem_.front().sa.clear();
-                    wrelem_.front().pos = 0;
-                }
-            } else if (amt == 0)
-                fd_.close();
-            else if (errno == EAGAIN || errno == EWOULDBLOCK)
-                twait { tamer::at_fd_write(fd_.value(), make_event()); }
-            else if (errno != EINTR)
-                fd_.error_close(-errno);
-        }
+        else if (wrblocked_) {
+            twait { tamer::at_fd_write(fd_.value(), make_event()); }
+            wrblocked_ = false;
+        } else
+            write_once();
     }
 
     kill();
 }
-
