@@ -20,12 +20,12 @@ class msgpack_fd {
   private:
     tamer::fd fd_;
 
-    enum { wrcap = 1 << 17, wrlowat = 1 << 12 };
+    enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
     struct wrelem {
-        String s;
+        StringAccum sa;
+        int pos;
     };
-    std::vector<wrelem> wrelem_;
-    std::vector<struct iovec> wriov_;
+    std::deque<wrelem> wrelem_;
     size_t wrpos_;
     tamer::event<> wrwake_;
     tamer::event<> wrkill_;
@@ -42,11 +42,16 @@ class msgpack_fd {
 
     tamed void writer_coroutine();
     tamed void reader_coroutine();
+    void check();
 };
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
     : fd_(fd), wrpos_(0),
       rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0) {
+    wrelem_.push_back(wrelem());
+    wrelem_.back().sa.reserve(wrcap);
+    wrelem_.back().pos = 0;
+
     writer_coroutine();
     reader_coroutine();
 }
