@@ -53,12 +53,12 @@ tamed void msgpack_fd::writer_coroutine() {
             wriov_.clear();
             wrpos_ = 0;
         } else if (wrpos_ >= 4096) {
-            for (size_t i = 4096; i != wrelem_.size(); ++i) {
-                wrelem_[i - 4096] = wrelem_[i];
-                wriov_[i - 4096] = wriov_[i];
+            for (size_t i = wrpos_; i != wrelem_.size(); ++i) {
+                wrelem_[i - wrpos_] = wrelem_[i];
+                wriov_[i - wrpos_] = wriov_[i];
             }
-            wrelem_.resize(wrelem_.size() - 4096);
-            wriov_.resize(wriov_.size() - 4096);
+            wrelem_.resize(wrelem_.size() - wrpos_);
+            wriov_.resize(wriov_.size() - wrpos_);
             wrpos_ = 0;
         }
 
