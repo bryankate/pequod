@@ -2,6 +2,7 @@
 #include "time.hh"
 #include <sys/resource.h>
 
+using std::cout;
 using std::cerr;
 using std::endl;
 
@@ -91,10 +92,12 @@ void AnalyticsRunner::record_bps(uint32_t time) {
 
 void AnalyticsRunner::run() {
     struct rusage ru[2];
+    struct timeval tv[2];
     uint32_t nquery = 0;
     uint32_t nread = 0;
 
     getrusage(RUSAGE_SELF, &ru[0]);
+    gettimeofday(&tv[0], 0);
 
     for (uint32_t time = popduration_; time != popduration_ + duration_; ++time) {
         record_bps(time);
@@ -149,10 +152,12 @@ void AnalyticsRunner::run() {
 
     {
         getrusage(RUSAGE_SELF, &ru[1]);
+        gettimeofday(&tv[1], 0);
         Json stats = server_.stats().set("nquery", nquery)
                                         .set("npoints_read", nread)
-                                        .set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
-        std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+                                        .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
+                                        .set("real_time", to_real(tv[1] - tv[0]));
+        cout << stats.unparse(Json::indent_depth(4)) << endl;
         return;
     }
 
