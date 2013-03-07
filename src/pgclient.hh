@@ -1,5 +1,6 @@
 #ifndef PGCLIENT_HH
 #define PGCLIENT_HH
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
 #include "str.hh"
 #include "string.hh"
@@ -45,4 +46,5 @@ class PostgresClient {
     PGconn* conn_;
 };
 }
+#endif
 #endif
