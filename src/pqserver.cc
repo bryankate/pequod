@@ -288,7 +288,7 @@ static Clp_Option options[] = {
     { "nops", 'o', 1009, Clp_ValInt, 0 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
-    { "memcached", 'd', 1011, 0, Clp_Negate },
+    { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
     { "client", 'c', 1011, Clp_ValInt, Clp_Optional },
