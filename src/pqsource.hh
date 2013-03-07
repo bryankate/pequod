@@ -4,11 +4,12 @@
 #include "string.hh"
 #include "interval.hh"
 #include "rb.hh"
+#include "json.hh"
+#include "pqjoin.hh"
 #include "local_vector.hh"
 #include <iostream>
 namespace pq {
 class Server;
-class Join;
 class Match;
 class Datum;
 class Table;
@@ -44,8 +45,7 @@ class SourceRange {
     rblinks<SourceRange> rblinks_;
   protected:
     Join* join_;
-    Table* dst_table_;
-    // XXX?????    uint64_t expires_at_;
+    Table* dst_table_;  // todo: move this to the join?
     mutable local_vector<String, 4> resultkeys_;
   private:
     char buf_[32];
@@ -53,12 +53,27 @@ class SourceRange {
 
 class SourceAccumulator {
   public:
-    inline SourceAccumulator(Table* dst_table);
+    inline SourceAccumulator(Join *join, Table* dst_table);
     virtual ~SourceAccumulator() {}
     virtual void notify(const Datum* src) = 0;
     virtual void commit(Str dst_key) = 0;
   protected:
-    Table* dst_table_;
+    Join* join_;
+    Table* dst_table_;  // todo: move this to the join?
+};
+
+class Bounded {
+  public:
+    inline Bounded(const Json& param);
+
+    inline bool has_bounds() const;
+    inline bool in_bounds(long val) const;
+
+  private:
+    bool has_lower_;
+    bool has_upper_;
+    long lower_;
+    long upper_;
 };
 
 
@@ -70,16 +85,16 @@ class CopySourceRange : public SourceRange {
 };
 
 
-class CountSourceRange : public SourceRange {
+class CountSourceRange : public SourceRange, public Bounded {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
-class CountSourceAccumulator : public SourceAccumulator {
+class CountSourceAccumulator : public SourceAccumulator, public Bounded {
   public:
-    inline CountSourceAccumulator(Table* dst_table);
+    inline CountSourceAccumulator(Join *join, Table* dst_table);
     virtual void notify(const Datum* src);
     virtual void commit(Str dst_key);
   private:
@@ -96,7 +111,7 @@ class MinSourceRange : public SourceRange {
 
 class MinSourceAccumulator : public SourceAccumulator {
   public:
-    inline MinSourceAccumulator(Table* dst_table);
+    inline MinSourceAccumulator(Join *join, Table* dst_table);
     virtual void notify(const Datum* src);
     virtual void commit(Str dst_key);
   private:
@@ -114,7 +129,7 @@ class MaxSourceRange : public SourceRange {
 
 class MaxSourceAccumulator : public SourceAccumulator {
   public:
-    inline MaxSourceAccumulator(Table* dst_table);
+    inline MaxSourceAccumulator(Join *join, Table* dst_table);
     virtual void notify(const Datum* src);
     virtual void commit(Str dst_key);
   private:
@@ -123,16 +138,16 @@ class MaxSourceAccumulator : public SourceAccumulator {
 };
 
 
-class SumSourceRange : public SourceRange {
+class SumSourceRange : public SourceRange, public Bounded {
   public:
     inline SumSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
-class SumSourceAccumulator : public SourceAccumulator {
+class SumSourceAccumulator : public SourceAccumulator, public Bounded {
   public:
-    inline SumSourceAccumulator(Table* dst_table);
+    inline SumSourceAccumulator(Join *join, Table* dst_table);
     virtual void notify(const Datum* src);
     virtual void commit(Str dst_key);
   private:
@@ -165,8 +180,27 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline SourceAccumulator::SourceAccumulator(Table* dst_table)
-    : dst_table_(dst_table) {
+inline Bounded::Bounded(const Json& param)
+    : has_lower_(!param.get("lbound").is_null()),
+      has_upper_(!param.get("ubound").is_null()),
+      lower_(param["lbound"].as_i(0)),
+      upper_(param["ubound"].as_i(0)) {
+}
+
+inline bool Bounded::has_bounds() const {
+    return has_lower_ || has_upper_;
+}
+
+inline bool Bounded::in_bounds(long val) const {
+    if ((has_lower_ && val < lower_) ||
+        (has_upper_ && val > upper_))
+        return false;
+
+    return true;
+}
+
+inline SourceAccumulator::SourceAccumulator(Join *join, Table* dst_table)
+    : join_(join), dst_table_(dst_table) {
 }
 
 
@@ -176,11 +210,12 @@ inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match&
 
 
 inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
-    : SourceRange(server, join, m, ibegin, iend) {
+    : SourceRange(server, join, m, ibegin, iend), Bounded(join->jvt_config()) {
 }
 
-inline CountSourceAccumulator::CountSourceAccumulator(Table* dst_table)
-    : SourceAccumulator(dst_table), n_(0) {
+inline CountSourceAccumulator::CountSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), Bounded(join->jvt_config()),
+      n_(0) {
 }
 
 
@@ -188,8 +223,8 @@ inline MinSourceRange::MinSourceRange(Server& server, Join* join, const Match& m
     : SourceRange(server, join, m, ibegin, iend) {
 }
 
-inline MinSourceAccumulator::MinSourceAccumulator(Table* dst_table)
-    : SourceAccumulator(dst_table), any_(false) {
+inline MinSourceAccumulator::MinSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), any_(false) {
 }
 
 
@@ -197,17 +232,18 @@ inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m
     : SourceRange(server, join, m, ibegin, iend) {
 }
 
-inline MaxSourceAccumulator::MaxSourceAccumulator(Table* dst_table)
-    : SourceAccumulator(dst_table), any_(false) {
+inline MaxSourceAccumulator::MaxSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), any_(false) {
 }
 
 
 inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
-    : SourceRange(server, join, m, ibegin, iend) {
+    : SourceRange(server, join, m, ibegin, iend), Bounded(join->jvt_config()) {
 }
 
-inline SumSourceAccumulator::SumSourceAccumulator(Table* dst_table)
-    : SourceAccumulator(dst_table), sum_(0), any_(false) {
+inline SumSourceAccumulator::SumSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), Bounded(join->jvt_config()),
+      sum_(0), any_(false) {
 }
 }
 #endif

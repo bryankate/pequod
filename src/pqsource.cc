@@ -64,10 +64,28 @@ void CopySourceRange::notify(const Datum* src, const String&, int notifier) cons
 }
 
 
-void CountSourceRange::notify(const Datum* src, const String&, int notifier) const {
+void CountSourceRange::notify(const Datum* src, const String& old, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
-    if (notifier && join_->back_source().match(src->key())) {
+    if (join_->back_source().match(src->key())) {
+        if (has_bounds()) {
+            long srcval = src->value_.to_i();
+            if ((notifier != 0 && !in_bounds(srcval)))
+                return;
+            else if (notifier == 0) {
+                long oldval = old.to_i();
+                if (!in_bounds(oldval)) {
+                    if (in_bounds(srcval))
+                        notifier = 1;
+                }
+                else if (!in_bounds(srcval))
+                    notifier = -1;
+            }
+        }
+
+        if (!notifier)
+            return;
+
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
             dst_table_->modify(s, [=](Datum* dst, bool insert) {
@@ -78,8 +96,13 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
     }
 }
 
-void CountSourceAccumulator::notify(const Datum*) {
-    ++n_;
+void CountSourceAccumulator::notify(const Datum* d) {
+    if (has_bounds()) {
+        if (in_bounds(d->value_.to_i()))
+            ++n_;
+    }
+    else
+        ++n_;
 }
 
 void CountSourceAccumulator::commit(Str dst_key) {

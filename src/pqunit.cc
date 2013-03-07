@@ -566,6 +566,54 @@ void test_op_sum() {
     CHECK_EQ(sum1->value_, "8");
 }
 
+void test_op_bounds() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("o|<oid:5> "
+                               "a|<oid>|<aid:5> "
+                               "b|<aid>|<bid:5>"));
+    CHECK_EQ(j1.nsource(), 2);
+
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+
+    Json param;
+    param.set("lbound", 5).set("ubound", 10);
+    j1.set_jvt_config(param);
+
+    server.add_join("o|", "o}", &j1);
+
+    String begin("o|");
+    String end("o}");
+    server.insert("a|00000|00000", "");
+    server.insert("b|00000|00000", "6");
+    server.insert("b|00000|00001", "8");
+    server.insert("b|00000|00002", "12");
+    server.insert("b|00000|00003", "-1");
+    server.validate(begin, end);
+    CHECK_EQ(server.count(begin, end), size_t(1));
+
+    auto dst = server.find("o|00000");
+    mandatory_assert(dst);
+    CHECK_EQ(dst->value_, "2");
+
+    server.insert("b|00000|00004", "7");
+    server.insert("b|00000|00005", "3");
+    CHECK_EQ(dst->value_, "3");
+
+    server.insert("b|00000|00004", "8");
+    CHECK_EQ(dst->value_, "3");
+
+    server.insert("b|00000|00004", "0");
+    CHECK_EQ(dst->value_, "2");
+
+    server.erase("b|00000|00003");
+    CHECK_EQ(dst->value_, "2");
+
+    server.erase("b|00000|00001");
+    CHECK_EQ(dst->value_, "1");
+}
+
 void test_swap() {
     String s1("abcde");
     String s2("ghijk");
@@ -602,6 +650,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_min);
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
+    ADD_TEST(test_op_bounds);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

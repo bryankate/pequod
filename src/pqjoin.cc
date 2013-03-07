@@ -66,13 +66,13 @@ SourceRange* Join::make_source(Server& server, const Match& m,
 
 SourceAccumulator* Join::make_accumulator(Server& server) {
     if (jvt() == jvt_count_match)
-        return new CountSourceAccumulator(&server.make_table(sink().table_name()));
+        return new CountSourceAccumulator(this, &server.make_table(sink().table_name()));
     else if (jvt() == jvt_min_last)
-        return new MinSourceAccumulator(&server.make_table(sink().table_name()));
+        return new MinSourceAccumulator(this, &server.make_table(sink().table_name()));
     else if (jvt() == jvt_max_last)
-        return new MaxSourceAccumulator(&server.make_table(sink().table_name()));
+        return new MaxSourceAccumulator(this, &server.make_table(sink().table_name()));
     else if (jvt() == jvt_sum_match)
-        return new SumSourceAccumulator(&server.make_table(sink().table_name()));
+        return new SumSourceAccumulator(this, &server.make_table(sink().table_name()));
     else
         return 0;
 }
