@@ -6,14 +6,17 @@
 #include <sys/uio.h>
 #include "msgpack.hh"
 #include <vector>
+#include <deque>
 
 class msgpack_fd {
   public:
     inline msgpack_fd(tamer::fd fd);
     ~msgpack_fd();
 
-    tamed void read(tamer::event<Json> done);
+    inline void read(tamer::event<Json> done);
     void write(const Json& j, tamer::event<> done);
+    inline void write(const Json& j);
+    inline void call(const Json& j, tamer::event<Json> reply);
 
   private:
     tamer::fd fd_;
@@ -34,13 +37,33 @@ class msgpack_fd {
     size_t rdlen_;
     msgpack::streaming_parser rdparser_;
 
+    std::deque<tamer::event<Json> > rdwait_;
+    tamer::event<> rdwake_;
+    tamer::event<> rdkill_;
+
     tamed void writer_coroutine();
+    tamed void reader_coroutine();
 };
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
     : fd_(fd), wrpos_(0),
       rdbuf_(new char[1 << 17]), rdcap_(1 << 17), rdpos_(0), rdlen_(0) {
     writer_coroutine();
+    reader_coroutine();
+}
+
+inline void msgpack_fd::read(tamer::event<Json> done) {
+    rdwait_.push_back(done);
+    rdwake_();
+}
+
+inline void msgpack_fd::write(const Json& j) {
+    write(j, tamer::event<>());
+}
+
+inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
+    write(j);
+    read(done);
 }
 
 #endif

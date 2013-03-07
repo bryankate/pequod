@@ -7,39 +7,56 @@
 
 msgpack_fd::~msgpack_fd() {
     wrkill_();
-}
-
-tamed void msgpack_fd::read(tamer::event<Json> done) {
-    // XXX locking (several clients calling read: need to enforce order)
-    tvars { int r; }
-
-    rdparser_.reset();
-    while (fd_ && done) {
-        if (rdpos_ != rdlen_)
-            rdpos_ += rdparser_.consume(rdbuf_ + rdpos_, rdlen_ - rdpos_);
-        if (rdparser_.complete()) {
-            if (rdparser_.done())
-                done(std::move(rdparser_.result()));
-            else
-                done(Json());
-            return;
-        }
-
-        assert(rdpos_ == rdlen_);
-        r = -10000;
-        twait { fd_.read_once(rdbuf_, rdcap_, rdlen_, make_event(r)); }
-        rdpos_ = 0;
-        std::cerr << "read from fd once, pos " << rdpos_ << ", r=" << r << "\n";
-    }
-
-    done(Json());
+    rdkill_();
 }
 
 void msgpack_fd::write(const Json& j, tamer::event<> done) {
-    wrelem_.push_back(wrelem{j.unparse(), done});
+    //std::cerr << "want to write " << j.unparse() << "\n";
+    wrelem_.push_back(wrelem{msgpack::compact_unparser().unparse(j), done});
     wriov_.push_back(iovec{(void*) wrelem_.back().s.data(),
                 wrelem_.back().s.length()});
     wrwake_();
+}
+
+tamed void msgpack_fd::reader_coroutine() {
+    tvars {
+        tamer::event<> kill;
+        tamer::rendezvous<> rendez;
+        ssize_t amt;
+        int r;
+        // size_t nr = 0;
+    }
+
+    kill = rdkill_ = tamer::make_event(rendez);
+
+    while (kill && fd_) {
+        if (rdwait_.empty()) {
+            twait { rdwake_ = make_event(); }
+            continue;
+        }
+
+        if (rdpos_ != rdlen_)
+            rdpos_ += rdparser_.consume(rdbuf_ + rdpos_, rdlen_ - rdpos_);
+        if (rdparser_.complete()) {
+            //if (++nr % 1024 == 0)
+            // std::cerr << rdparser_.result() << "\n";
+            if (rdparser_.done())
+                rdwait_.front()(std::move(rdparser_.result()));
+            else
+                rdwait_.front()(Json());
+            rdwait_.pop_front();
+            rdparser_.reset();
+            continue;
+        }
+
+        assert(rdpos_ == rdlen_);
+        twait { fd_.read_once(rdbuf_, rdcap_, rdlen_, make_event(r)); }
+        if (r < 0)
+            fd_.error_close(r);
+        rdpos_ = 0;
+    }
+
+    kill();
 }
 
 tamed void msgpack_fd::writer_coroutine() {
