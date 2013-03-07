@@ -292,8 +292,7 @@ static Clp_Option options[] = {
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
     { "vote_rate", 'v', 1013, Clp_ValInt, 0 },
-    { "comment_rate", 'c', 1014, Clp_ValInt, 0 }
-    { "builtinhash", 'b', 1015, 0, Clp_Negate },
+    { "comment_rate", 'r', 1014, Clp_ValInt, 0 },
     { "client", 'c', 1016, Clp_ValInt, Clp_Optional },
     { "duration", 'd', 1017, Clp_ValInt, 0 }
 };
