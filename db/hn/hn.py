@@ -76,6 +76,10 @@ class HNPopulator:
         conn.commit()
         conn.close()
 
+    def clear(self):
+        self.psql("schema.sql")
+        self.psql("views.sql")
+
     def psql(self, fn):
         stdout, stderr = Popen(['psql -d %s < %s' % (self.db, fn)], shell=True, stdout=PIPE, stderr=PIPE).communicate()
         if 'ERROR' in stderr:
@@ -102,6 +106,8 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2 and sys.argv[1] == "bench":
         hn.make_benchmark("bench.sql", 1000)
         hn.bench()
+    elif len(sys.argv) == 2 and sys.argv[1] == "clear":
+        hn.clear()
     else:
         print "Usage: %s <file> <db>" %  sys.argv[0]
         print "   or: %s bench" %  sys.argv[0]
