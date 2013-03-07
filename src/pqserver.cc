@@ -296,14 +296,16 @@ static Clp_Option options[] = {
     { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
-    { "client", 'c', 1013, Clp_ValInt, Clp_Optional },
-    { "duration", 'd', 1014, Clp_ValInt, 0 },
-    { "analytics", 0, 1015, 0, Clp_Negate },
-    { "popduration", 0, 1016, Clp_ValInt, 0 },
-    { "proactive", 0, 1017, 0, Clp_Negate },
-    { "buffer", 0, 1018, 0, Clp_Negate },
-    { "seed", 0, 1019, Clp_ValInt, 0 },
-    { "pread", 0, 1020, Clp_ValInt, 0 }
+    { "vote_rate", 'v', 1013, Clp_ValInt, 0 },
+    { "comment_rate", 'r', 1014, Clp_ValInt, 0 },
+    { "client", 'c', 1016, Clp_ValInt, Clp_Optional },
+    { "duration", 'd', 1017, Clp_ValInt, 0 },
+    { "analytics", 0, 1018, 0, Clp_Negate },
+    { "popduration", 0, 1019, Clp_ValInt, 0 },
+    { "proactive", 0, 1020, 0, Clp_Negate },
+    { "buffer", 0, 1021, 0, Clp_Negate },
+    { "seed", 0, 1022, Clp_ValInt, 0 },
+    { "pread", 0, 1023, Clp_ValInt, 0 }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
@@ -326,6 +328,10 @@ int main(int argc, char** argv) {
 	    tp_param.set("duration", clp->val.i);
 	else if (clp->option->long_name == String("narticles"))
 	    tp_param.set("narticles", clp->val.i);
+	else if (clp->option->long_name == String("vote_rate"))
+	    tp_param.set("vote_rate", clp->val.i);
+	else if (clp->option->long_name == String("comment_rate"))
+	    tp_param.set("comment_rate", clp->val.i);
 	else if (clp->option->long_name == String("nops"))
 	    tp_param.set("nops", clp->val.i);
 	else if (clp->option->long_name == String("shape"))

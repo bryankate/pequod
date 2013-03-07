@@ -85,9 +85,15 @@ tamed void acceptor(tamer::fd listenfd, pq::Server& server) {
     }
 }
 
+tamed void interrupt_catcher() {
+    twait { tamer::at_signal(SIGINT, make_event()); }
+    exit(0);
+}
+
 } // namespace
 
 void server_loop(int port, pq::Server& server) {
     std::cerr << "listening on port " << port << "\n";
     acceptor(tamer::tcp_listen(port), server);
+    interrupt_catcher();
 }
