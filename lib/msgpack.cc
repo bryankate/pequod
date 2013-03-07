@@ -69,7 +69,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             ++first;
         array:
             j = Json::make_array_reserve(n);
-        } else if ((uint8_t) (*first - 0xA0) < 0x10) {
+        } else if ((uint8_t) (*first - 0xA0) < 0x20) {
             n = *first - 0xA0;
             ++first;
         raw:
