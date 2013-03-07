@@ -79,9 +79,11 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 	$(TAMER) $< > $@
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
-$(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh
+$(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqremoteserver.o: $(OBJDIR)/pqremoteserver.cc $(OBJDIR)/pqremoteserver.hh
+$(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -105,7 +107,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
 	$(OBJDIR)/pqunit.o \
-	$(OBJDIR)/mpfd.o
+	$(OBJDIR)/mpfd.o \
+	$(OBJDIR)/pqremoteclient.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
@@ -216,4 +219,4 @@ always:
 .PHONY: all clean distclean always tamer-update
 .PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
 	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh \
-	$(OBJ)/%.cc
+	$(OBJ)/%.cc $(OBJ)/%.hh

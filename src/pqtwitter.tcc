@@ -2,6 +2,7 @@
 #include "pqtwitter.hh"
 #include "json.hh"
 #include "pqjoin.hh"
+#include "pqremoteclient.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -129,4 +130,28 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
     delete[] num_followers;
 }
 
+tamed void run_twitter_remote(TwitterPopulator& tp, int client_port) {
+    tvars {
+        tamer::fd fd;
+        RemoteClient* rc;
+        TwitterShim<RemoteClient>* shim;
+        TwitterRunner<TwitterShim<RemoteClient> >* tr;
+    }
+    std::cerr << "connecting to port " << client_port << "\n";
+    twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, client_port, make_event(fd)); }
+    if (!fd) {
+        std::cerr << "port " << client_port << ": "
+                  << strerror(-fd.error()) << "\n";
+        exit(1);
+    }
+    rc = new RemoteClient(fd);
+    shim = new TwitterShim<RemoteClient>(*rc);
+    tr = new TwitterRunner<TwitterShim<RemoteClient> >(*shim, tp);
+    tr->populate();
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete rc;
 }
+
+} // namespace pq

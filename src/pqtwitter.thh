@@ -151,7 +151,7 @@ class TwitterRunner {
     TwitterRunner(S& server, TwitterPopulator& tp);
 
     tamed void populate();
-    tamed void run();
+    tamed void run(tamer::event<> done);
 
   private:
     S& server_;
@@ -250,7 +250,7 @@ void TwitterRunner<S>::populate() {
 }
 
 tamed template <typename S>
-void TwitterRunner<S>::run() {
+void TwitterRunner<S>::run(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
         boost::random_number_generator<boost::mt19937> rng(gen);
@@ -312,7 +312,11 @@ void TwitterRunner<S>::run() {
         .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] load_times;
+
+    done();
 }
+
+tamed void run_twitter_remote(TwitterPopulator& tp, int client_port);
 
 } // namespace pq
 #endif

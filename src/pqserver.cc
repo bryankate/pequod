@@ -291,6 +291,7 @@ static Clp_Option options[] = {
     { "memcached", 'd', 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
+    { "client", 'c', 1011, Clp_ValInt, Clp_Optional },
     { "duration", 'd', 1012, Clp_ValInt, 0 }
 };
 
@@ -301,7 +302,7 @@ int main(int argc, char** argv) {
     putenv(envstr.mutable_data());
     tamer::initialize();
 
-    int mode = mode_unknown, listen_port = 8000;
+    int mode = mode_unknown, listen_port = 8000, client_port = -1;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -336,7 +337,9 @@ int main(int argc, char** argv) {
             mode = mode_listen;
             if (clp->have_val)
                 listen_port = clp->val.i;
-        } else if (clp->option->long_name == String("log"))
+        } else if (clp->option->long_name == String("client"))
+            client_port = clp->have_val ? clp->val.i : 8000;
+        else if (clp->option->long_name == String("log"))
             tp_param.set("log", !clp->negated);
         else
             testcases.insert(clp->vstr);
@@ -359,7 +362,7 @@ int main(int argc, char** argv) {
             pq::HashTwitter<pq::MemcachedClient> dc;
             pq::TwitterRunner<pq::HashTwitter<pq::MemcachedClient> > tr(dc, tp);
             tr.populate();
-            tr.run();
+            tr.run(event<>());
 #else
             mandatory_assert(false);
 #endif
@@ -369,16 +372,18 @@ int main(int argc, char** argv) {
             pq::HashTwitter<pq::BuiltinHashClient> dc;
             pq::TwitterRunner<pq::HashTwitter<pq::BuiltinHashClient> > tr(dc, tp);
             tr.populate();
-            tr.run();
+            tr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
+        } else if (client_port >= 0) {
+            run_twitter_remote(tp, client_port);
         } else {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
             pq::TwitterRunner<pq::TwitterShim<pq::DirectClient> > tr(shim, tp);
             tr.populate();
-            tr.run();
+            tr.run(tamer::event<>());
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);

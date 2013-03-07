@@ -82,6 +82,5 @@ class BuiltinHashClient {
     HashTable<String, String> h_;
 };
 
-};
-
+}
 #endif
