@@ -289,7 +289,7 @@ class Json { public:
     struct ObjectJson;
 
     json_type _type;
-    union {
+    union rep_t {
         int64_t i;
         uint64_t u;
         double d;
@@ -348,7 +348,6 @@ struct Json::ArrayJson : public ComplexJson {
         : size(0), capacity(cap) {
     }
     static ArrayJson* make(int n);
-    static ArrayJson* grow(ArrayJson* a, int ncap);
     static void destroy(ArrayJson* a);
 };
 
@@ -1408,7 +1407,7 @@ inline Json::Json(T first, T last)
     u_.a.a = ArrayJson::make(0);
     while (first != last) {
         if (u_.a.a->size == u_.a.a->capacity)
-            u_.a.a = ArrayJson::grow(u_.a.a, 0);
+            hard_uniqueify_array(false, u_.a.a->size + 1);
         new((void*) &u_.a.a->a[u_.a.a->size]) Json(*first);
         ++u_.a.a->size;
 	++first;

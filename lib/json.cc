@@ -51,20 +51,6 @@ Json::ArrayJson* Json::ArrayJson::make(int n) {
     return new((void*) buf) ArrayJson(cap);
 }
 
-Json::ArrayJson* Json::ArrayJson::grow(ArrayJson* aj, int ncap) {
-    if (aj && ncap < aj->capacity)
-        ncap = aj->capacity < 65536 ? 2 * aj->capacity : aj->capacity + 65536;
-    else if (ncap < 8)
-        ncap = 8;
-    ArrayJson* naj = ArrayJson::make(ncap);
-    if (aj && aj->size) {
-        memcpy(naj->a, aj->a, sizeof(Json) * aj->size);
-        naj->size = aj->size;
-    }
-    delete[] reinterpret_cast<char*>(aj);
-    return naj;
-}
-
 void Json::ArrayJson::destroy(ArrayJson* aj) {
     if (aj)
         for (int i = 0; i != aj->size; ++i)
@@ -210,45 +196,52 @@ template <typename T> bool string_to_int_key(const char *first,
 }
 }
 
-void Json::hard_uniqueify_array(bool convert, int ncap) {
+void Json::hard_uniqueify_array(bool convert, int ncap_in) {
     if (!convert)
         assert(_type == j_null || _type == j_array);
-    if (_type == j_array && u_.a.a && ncap < u_.a.a->capacity)
-        ncap = u_.a.a->capacity;
-    else if (ncap < 8)
-        ncap = 8;
-    ArrayJson* naj = ArrayJson::make(ncap);
-    if (_type == j_array && u_.a.a) {
-        naj->size = u_.a.a->size;
-        memcpy(naj->a, u_.a.a->a, sizeof(Json) * naj->size);
-        for (Json* it = naj->a; it != naj->a + naj->size; ++it) {
-            if (it->_type == j_string)
-                it->u_.str.ref();
-            else if ((it->_type == j_array || it->_type == j_object)
-                     && it->u_.c)
-                it->u_.c->ref();
-        }
-        ArrayJson::destroy(u_.a.a);
-    } else if (_type == j_object && u_.o.o) {
-        ObjectItem *ob = u_.o.o->os_, *oe = ob + u_.o.o->n_;
+
+    int old_type = _type;
+    rep_t old_u = u_;
+
+    unsigned ncap = std::max(ncap_in, 8);
+    if (old_type == j_array && old_u.a.a)
+        ncap = std::max(ncap, unsigned(old_u.a.a->size));
+    // New capacity: Round up to a power of 2, up to multiples of 1<<14.
+    unsigned xcap = iceil_log2(ncap);
+    if (xcap <= (1U << 14))
+        ncap = xcap;
+    else
+        ncap = ((ncap - 1) | ((1U << 14) - 1)) + 1;
+    _type = j_array;
+    u_.a.a = ArrayJson::make(ncap);
+
+    if (old_type == j_array && old_u.a.a && old_u.a.a->refcount == 1) {
+        u_.a.a->size = old_u.a.a->size;
+        memcpy(u_.a.a->a, old_u.a.a->a, sizeof(Json) * u_.a.a->size);
+        delete[] reinterpret_cast<char*>(old_u.a.a);
+    } else if (old_type == j_array && old_u.a.a) {
+        u_.a.a->size = old_u.a.a->size;
+        Json* last = u_.a.a->a + u_.a.a->size;
+        for (Json* it = u_.a.a->a, *oit = old_u.a.a->a; it != last; ++it, ++oit)
+            new((void*) it) Json(*oit);
+    } else if (old_type == j_object && old_u.o.o) {
+        ObjectItem *ob = old_u.o.o->os_, *oe = ob + old_u.o.o->n_;
         unsigned i;
         for (; ob != oe; ++ob)
             if (ob->next_ > -2
                 && string_to_int_key(ob->v_.first.begin(),
                                      ob->v_.first.end(), i)) {
-                if (i >= unsigned(naj->capacity))
-                    naj = ArrayJson::grow(naj, i + 1);
-                if (i >= unsigned(naj->size)) {
-                    memset(&naj->a[naj->size], 0, sizeof(Json) * (i + 1 - naj->size));
-                    naj->size = i + 1;
+                if (i >= unsigned(u_.a.a->capacity))
+                    hard_uniqueify_array(false, i + 1);
+                if (i >= unsigned(u_.a.a->size)) {
+                    memset(&u_.a.a->a[u_.a.a->size], 0, sizeof(Json) * (i + 1 - u_.a.a->size));
+                    u_.a.a->size = i + 1;
                 }
-                naj->a[i] = ob->v_.second;
+                u_.a.a->a[i] = ob->v_.second;
             }
-        u_.o.o->deref(j_object);
-    } else if (_type == j_string)
-        u_.str.deref();
-    _type = j_array;
-    u_.a.a = naj;
+        old_u.o.o->deref(j_object);
+    } else if (old_type == j_string)
+        old_u.str.deref();
 }
 
 void Json::hard_uniqueify_object(bool convert) {
