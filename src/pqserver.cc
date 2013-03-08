@@ -434,7 +434,7 @@ int main(int argc, char** argv) {
         } else if (tp_param["pg"]) {
 #if HAVE_POSTGRES
             pq::PostgresClient client;
-            pq::SQLHackerNewsShim<pq::PostgresClient> shim(client);
+            pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
