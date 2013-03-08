@@ -299,7 +299,7 @@ static Clp_Option options[] = {
     { "narticles", 'a', 1008, Clp_ValInt, 0 },
     { "nops", 'o', 1009, Clp_ValInt, 0 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
         if (tp_param["memcached"]) {
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
@@ -431,7 +431,7 @@ int main(int argc, char** argv) {
             hr.populate();
             hr.run();
         } else if (tp_param["memcached"]) {
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             pq::MemcachedClient client;
             pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);

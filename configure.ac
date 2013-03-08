@@ -30,6 +30,8 @@ fi
 AC_CHECK_HEADERS([postgresql/libpq-fe.h])
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
+
+AC_CHECK_HEADERS([libmemcached/memcached.hpp])
 AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
 AC_SUBST([MEMCACHED_LIB])
 
