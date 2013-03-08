@@ -568,6 +568,8 @@ void test_op_sum() {
 
 void test_op_bounds() {
     pq::Server server;
+
+    // tests count bounds
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("o|<oid:5> "
                                "a|<oid>|<aid:5> "
@@ -575,11 +577,8 @@ void test_op_bounds() {
     CHECK_EQ(j1.nsource(), 2);
 
     j1.set_jvt(pq::jvt_count_match);
+    j1.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
     j1.ref();
-
-    Json param;
-    param.set("lbound", 5).set("ubound", 10);
-    j1.set_jvt_config(param);
 
     server.add_join("o|", "o}", &j1);
 
@@ -612,6 +611,42 @@ void test_op_bounds() {
 
     server.erase("b|00000|00001");
     CHECK_EQ(dst->value_, "1");
+
+    // test copy bounds
+    pq::Join j2;
+    CHECK_TRUE(j2.assign_parse("e|<eid:5>|<cid:5> "
+                               "d|<eid>|<did:5> "
+                               "c|<did>|<cid>"));
+    CHECK_EQ(j2.nsource(), 2);
+
+    j2.set_jvt(pq::jvt_copy_last);
+    j2.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
+    j2.ref();
+
+    server.add_join("e|", "e}", &j2);
+
+    begin = "e|";
+    end = "e}";
+    server.insert("d|00000|00000", "");
+    server.insert("c|00000|00000", "6");
+    server.insert("c|00000|00001", "12");
+    server.insert("c|00000|00002", "9");
+    server.insert("c|00000|00003", "-2");
+    server.insert("c|00000|00004", "88");
+    server.validate(begin, end);
+    CHECK_EQ(server.count(begin, end), size_t(2));
+
+    server.insert("c|00000|00003", "7");
+    CHECK_EQ(server.count(begin, end), size_t(3));
+
+    server.insert("c|00000|00000", "8");
+    CHECK_EQ(server.count(begin, end), size_t(3));
+
+    server.erase("c|00000|00004");
+    CHECK_EQ(server.count(begin, end), size_t(3));
+
+    server.erase("c|00000|00003");
+    CHECK_EQ(server.count(begin, end), size_t(2));
 }
 
 void test_swap() {

@@ -51,9 +51,12 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void CopySourceRange::notify(const Datum* src, const String&, int notifier) const {
+void CopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key()))
+    if (join_->back_source().match(src->key())) {
+        if (!check_bounds(src->value_, oldval, notifier))
+            return;
+
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), src->key());
 	    if (notifier >= 0)
@@ -61,27 +64,16 @@ void CopySourceRange::notify(const Datum* src, const String&, int notifier) cons
             else
 		dst_table_->erase(s);
 	}
+    }
 }
 
 
-void CountSourceRange::notify(const Datum* src, const String& old, int notifier) const {
+void CountSourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
-        if (has_bounds()) {
-            long srcval = src->value_.to_i();
-            if ((notifier != 0 && !in_bounds(srcval)))
-                return;
-            else if (notifier == 0) {
-                long oldval = old.to_i();
-                if (!in_bounds(oldval)) {
-                    if (in_bounds(srcval))
-                        notifier = 1;
-                }
-                else if (!in_bounds(srcval))
-                    notifier = -1;
-            }
-        }
+        if (!check_bounds(src->value_, oldval, notifier))
+            return;
 
         if (!notifier)
             return;

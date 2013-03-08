@@ -68,6 +68,8 @@ class Bounded {
 
     inline bool has_bounds() const;
     inline bool in_bounds(long val) const;
+    inline bool check_bounds(const String&src, const String&old,
+                             int& notifier) const;
 
   private:
     bool has_lower_;
@@ -77,7 +79,7 @@ class Bounded {
 };
 
 
-class CopySourceRange : public SourceRange {
+class CopySourceRange : public SourceRange, public Bounded {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend);
@@ -138,14 +140,14 @@ class MaxSourceAccumulator : public SourceAccumulator {
 };
 
 
-class SumSourceRange : public SourceRange, public Bounded {
+class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 };
 
-class SumSourceAccumulator : public SourceAccumulator, public Bounded {
+class SumSourceAccumulator : public SourceAccumulator {
   public:
     inline SumSourceAccumulator(Join *join, Table* dst_table);
     virtual void notify(const Datum* src);
@@ -199,13 +201,34 @@ inline bool Bounded::in_bounds(long val) const {
     return true;
 }
 
+inline bool Bounded::check_bounds(const String& src, const String&old,
+                                  int& notifier) const {
+    if (!has_bounds())
+        return true;
+
+    long isrc = src.to_i();
+    if ((notifier != 0 && !in_bounds(isrc)))
+        return false;
+    else if (notifier == 0) {
+        long iold = old.to_i();
+        if (!in_bounds(iold)) {
+            if (in_bounds(isrc))
+                notifier = 1;
+        }
+        else if (!in_bounds(isrc))
+            notifier = -1;
+    }
+
+    return true;
+}
+
 inline SourceAccumulator::SourceAccumulator(Join *join, Table* dst_table)
     : join_(join), dst_table_(dst_table) {
 }
 
 
 inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
-    : SourceRange(server, join, m, ibegin, iend) {
+    : SourceRange(server, join, m, ibegin, iend), Bounded(join->jvt_config()) {
 }
 
 
@@ -238,12 +261,11 @@ inline MaxSourceAccumulator::MaxSourceAccumulator(Join *join, Table* dst_table)
 
 
 inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
-    : SourceRange(server, join, m, ibegin, iend), Bounded(join->jvt_config()) {
+    : SourceRange(server, join, m, ibegin, iend) {
 }
 
 inline SumSourceAccumulator::SumSourceAccumulator(Join *join, Table* dst_table)
-    : SourceAccumulator(join, dst_table), Bounded(join->jvt_config()),
-      sum_(0), any_(false) {
+    : SourceAccumulator(join, dst_table), sum_(0), any_(false) {
 }
 }
 #endif
