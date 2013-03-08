@@ -17,7 +17,8 @@ class PGHackernewsRunner {
 
     void populate() {
         mandatory_assert(system("psql -d hn < db/hn/schema.sql > /dev/null") == 0);
-        mandatory_assert(system("psql -d hn < db/hn/views.sql > /dev/null") == 0);
+        if (hp_.m())
+            mandatory_assert(system("psql -d hn < db/hn/views.sql > /dev/null") == 0);
         boost::mt19937 gen;
         gen.seed(13918);
         boost::random_number_generator<boost::mt19937> rng(gen);
@@ -82,17 +83,26 @@ class PGHackernewsRunner {
 
     void read_article(uint32_t aid) {
         mandatory_assert(aid < hp_.narticles());
-        if (hp_.m()) {
-            // query the ma table which doesn't exist yet
-            mandatory_assert(false);
-        }
         char buf[512];
-        sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                "comments.cid,comments.comment,karma_mv.karma,count(votes.aid) "
-                "as vote_count FROM articles,comments,votes,karma_mv "
-                "WHERE articles.aid = %d AND comments.aid = articles.aid "
-                "AND votes.aid = articles.aid AND karma_mv.author=comments.commenter "
-                "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
+        if (hp_.m()) {
+            // Materialized karma table, query it
+            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
+                    "comments.cid,comments.comment,karma_mv.karma,count(votes.aid) "
+                    "as vote_count FROM articles,comments,votes,karma_mv "
+                    "WHERE articles.aid = %d AND comments.aid = articles.aid "
+                    "AND votes.aid = articles.aid AND karma_mv.author=comments.commenter "
+                    "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
+        } else {
+            // No karma_mv
+            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
+                    "comments.cid,comments.comment,count(votes.aid) "
+                    "as vote_count, karma.karma FROM articles,comments,votes, "
+                    "(SELECT articles.author, count(*) as karma FROM articles, votes WHERE "
+                    "articles.aid = votes.aid GROUP BY articles.author) AS karma "
+                    "WHERE articles.aid = %d AND comments.aid = articles.aid "
+                    "AND votes.aid = articles.aid AND karma.author=comments.commenter "
+                    "GROUP BY articles.aid,comments.cid,karma.karma", aid);
+        }
         PGresult* res = pg_.query(buf);
         
         // aid author link cid comment karma votes

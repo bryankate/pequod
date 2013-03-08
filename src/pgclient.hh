@@ -23,6 +23,7 @@ class PostgresClient {
         PGresult* res = PQexec(conn_, query);        
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
             printf("No data\n");
+            std::cout << PQresultErrorMessage(res) << "\n";
             exit(0);
         }
         return res;
