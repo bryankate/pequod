@@ -208,6 +208,20 @@ int main(int argc, char** argv) {
         CHECK(j.get("foo") == Json());
     }
 
+    {
+        Json j = Json::make_array(1, 2, 3, 4, 5, 6, 7, 8);
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        Json jcopy = j;
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8]");
+        j.push_back(9);
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8,9]");
+        CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8]");
+        jcopy.push_back(10);
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8,9]");
+        CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8,10]");
+    }
+
 #if 0
     {
         Json j = Json::make_array(1, 2, 3);
