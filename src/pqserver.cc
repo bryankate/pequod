@@ -17,7 +17,6 @@
 #if HAVE_POSTGRES
 #include <postgresql/libpq-fe.h>
 #include "pgclient.hh"
-#include "pghackernews.hh"
 #endif
 
 
