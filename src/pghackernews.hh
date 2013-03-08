@@ -16,6 +16,8 @@ class PGHackernewsRunner {
     }
 
     void populate() {
+        mandatory_assert(system("psql -d hn < db/hn/schema.sql > /dev/null") == 0);
+        mandatory_assert(system("psql -d hn < db/hn/views.sql > /dev/null") == 0);
         boost::mt19937 gen;
         gen.seed(13918);
         boost::random_number_generator<boost::mt19937> rng(gen);
@@ -38,6 +40,7 @@ class PGHackernewsRunner {
                     nv++;
             }
         }
+        std::cout << "Finished populate.\n";
     }
 
     void post_article(uint32_t author, uint32_t aid) {

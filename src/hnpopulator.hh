@@ -51,7 +51,7 @@ class HackernewsPopulator {
 };
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(false), nusers_(param["nusers"].as_i(500)),
+    : param_(param), log_(param["log"].as_b(false)), nusers_(param["nusers"].as_i(500)),
       karma_(param["nusers"].as_i(500)),
       articles_(1000000),
       pre_(param["narticles"].as_i(1000)),
