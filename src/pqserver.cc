@@ -12,11 +12,11 @@
 #include "clp.h"
 #include "time.hh"
 #include "hashclient.hh"
+#include "hnshim.hh"
 
-#if HAVE_POSTGRES
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
 #include "pgclient.hh"
-#include "pghackernews.hh"
 #endif
 
 
@@ -299,7 +299,7 @@ static Clp_Option options[] = {
     { "narticles", 'a', 1008, Clp_ValInt, 0 },
     { "nops", 'o', 1009, Clp_ValInt, 0 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1011, 0, Clp_Negate },
 #endif
     { "builtinhash", 'b', 1012, 0, Clp_Negate },
@@ -317,10 +317,10 @@ static Clp_Option options[] = {
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
+static char envstr[] = "TAMER_NOLIBEVENT=1";
 
 int main(int argc, char** argv) {
-    String envstr("TAMER_NOLIBEVENT=1");
-    putenv(envstr.mutable_data());
+    putenv(envstr);
     tamer::initialize();
 
     int mode = mode_unknown, listen_port = 8000, client_port = -1;
@@ -396,11 +396,11 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterPopulator tp(tp_param);
         if (tp_param["memcached"]) {
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
-            pq::TwitterRunner<pq::TwitterHashShim<pq::MemcachedClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
 #else
@@ -410,7 +410,7 @@ int main(int argc, char** argv) {
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
-            pq::TwitterRunner<pq::TwitterHashShim<pq::BuiltinHashClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
         } else if (client_port >= 0) {
@@ -418,23 +418,41 @@ int main(int argc, char** argv) {
         } else {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
-            pq::TwitterRunner<pq::TwitterShim<pq::DirectClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);
-        if (tp_param["pg"]) {
-#if HAVE_POSTGRES
-            pq::PostgresClient pg;
-            pq::PGHackernewsRunner hr(pg, hp);
+        if (tp_param["builtinhash"]) {
+            pq::BuiltinHashClient client;
+            pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            hr.populate();
+            hr.run();
+        } else if (tp_param["memcached"]) {
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+            pq::MemcachedClient client;
+            pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            hr.populate();
+            hr.run();
+#else
+            mandatory_assert(false);
+#endif
+        } else if (tp_param["pg"]) {
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
+            pq::PostgresClient client;
+            pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
 #else
             mandatory_assert(false);
 #endif
         } else {
-            pq::HackernewsRunner hr(server, hp);
+            pq::PQHackerNewsShim<pq::Server> shim(server);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
         }

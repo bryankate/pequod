@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = c34077cda5515a8af43cd9ae953a11486b2a2c0e
+TAMER_COMMIT = 7699939cc5bcb58053159ba5ff2b5eb52b4a84b0
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
@@ -78,8 +78,9 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) -o $@ $<
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteserver.o: $(OBJDIR)/pqremoteserver.cc $(OBJDIR)/pqremoteserver.hh

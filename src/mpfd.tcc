@@ -22,61 +22,80 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
+void msgpack_fd::read(tamer::event<Json> receiver) {
+    while ((rdpos_ != rdlen_ || !rdblocked_)
+           && rdwait_.size() && read_once(rdwait_.front()))
+        rdwait_.pop_front();
+    if ((rdpos_ == rdlen_ && rdblocked_) || !read_once(receiver)) {
+        rdwait_.push_back(receiver);
+        rdwake_();
+    }
+}
+
+bool msgpack_fd::read_once(tamer::event<Json> receiver) {
+ readmore:
+    // if buffer empty, read more data
+    if (rdpos_ == rdlen_) {
+        // make new buffer or reuse existing buffer
+        if (rdcap - rdpos_ < 4096) {
+            if (rdbuf_.data_shared())
+                rdbuf_ = String::make_uninitialized(rdcap);
+            rdpos_ = rdlen_ = 0;
+        }
+
+        ssize_t amt = ::read(fd_.value(),
+                             const_cast<char*>(rdbuf_.data()) + rdpos_,
+                             rdcap - rdpos_);
+        rdblocked_ = amt == 0 || amt == (ssize_t) -1;
+
+        if (amt != 0 && amt != (ssize_t) -1)
+            rdlen_ += amt;
+        else if (amt == 0)
+            fd_.close();
+        else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+            fd_.close(-errno);
+
+        if (rdpos_ == rdlen_)
+            return false;
+    }
+
+    // process new data
+    if (rdparser_.complete()) {
+        if (receiver.has_result())
+            rdparser_.reset(receiver.result());
+        else
+            rdparser_.reset();
+    }
+
+    rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_, rdlen_ - rdpos_,
+                                rdbuf_);
+
+    if (rdparser_.done()) {
+        receiver(std::move(rdparser_.result()));
+        return true;
+    } else if (rdparser_.complete()) {
+        receiver(Json());       // XXX close connection?
+        return true;
+    } else
+        goto readmore;
+}
+
 tamed void msgpack_fd::reader_coroutine() {
     tvars {
         tamer::event<> kill;
         tamer::rendezvous<> rendez;
-        ssize_t amt;
-        int r;
-        // size_t nr = 0;
     }
 
     kill = rdkill_ = tamer::make_event(rendez);
 
     while (kill && fd_) {
-        if (rdwait_.empty()) {
+        if (rdwait_.empty())
             twait { rdwake_ = make_event(); }
-            continue;
-        }
-
-        if (rdpos_ != rdlen_) {
-            if (rdparser_.complete()) {
-                if (rdwait_.front().__get_slot0())
-                    rdparser_.reset(*rdwait_.front().__get_slot0());
-                else
-                    rdparser_.reset();
-            }
-
-            rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_,
-                                        rdlen_ - rdpos_, rdbuf_);
-
-            if (rdparser_.complete()) {
-                //if (++nr % 1024 == 0)
-                // std::cerr << rdparser_.result() << "\n";
-                if (rdparser_.done())
-                    rdwait_.front()(std::move(rdparser_.result()));
-                else
-                    rdwait_.front()(Json());
-                rdwait_.pop_front();
-                continue;
-            }
-        }
-
-        assert(rdpos_ == rdlen_);
-        if (rdcap - rdpos_ >= 4096)
-            /* do nothing */;
-        else {
-            if (rdbuf_.data_shared())
-                rdbuf_ = String::make_uninitialized(rdcap);
-            rdpos_ = 0;
-        }
-        twait {
-            fd_.read_once(const_cast<char*>(rdbuf_.data()) + rdpos_,
-                          rdcap - rdpos_, rdlen_, make_event(r));
-        }
-        if (r < 0 || rdlen_ == 0)
-            fd_.close(r);
-        rdlen_ += rdpos_;
+        else if (rdblocked_) {
+            twait { tamer::at_fd_read(fd_.value(), make_event()); }
+            rdblocked_ = false;
+        } else if (read_once(rdwait_.front()))
+            rdwait_.pop_front();
     }
 
     kill();
@@ -110,9 +129,9 @@ void msgpack_fd::write_once() {
     }
 
     ssize_t amt = writev(fd_.value(), iov, iov_count);
+    wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
-        wrblocked_ = total != (size_t) amt;
         while (wrelem_.size() > 1
                && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
             amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
@@ -124,15 +143,10 @@ void msgpack_fd::write_once() {
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
         }
-    } else if (amt == 0) {
+    } else if (amt == 0)
         fd_.close();
-        wrblocked_ = false;
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK)
-        wrblocked_ = true;
-    else if (errno != EINTR) {
+    else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
         fd_.close(-errno);
-        wrblocked_ = false;
-    }
 }
 
 tamed void msgpack_fd::writer_coroutine() {

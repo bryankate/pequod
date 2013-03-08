@@ -1,6 +1,6 @@
 #ifndef HASHCLIENT_HH
 #define HASHCLIENT_HH
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
 #include "str.hh"
@@ -9,7 +9,7 @@
 
 namespace pq {
 
-#if ENABLE_MEMCACHED
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 class MemcachedClient {
   public:
     MemcachedClient() {
@@ -39,13 +39,17 @@ class MemcachedClient {
         memcached_return_t error;
         const char *v = memcached_get(c_, k.data(), k.length(), value_length, &flags, 
                                       &error);
-        check_error(error);
+        if (error != MEMCACHED_SUCCESS) {
+            mandatory_assert(v == NULL);
+            *value_length = 0;
+        }
         return v;
     }
     void done_get(const char *v) {
-        delete v;
+        if (v)
+            delete v;
     }
-    void increment(const Str key) {
+    void increment(const Str) {
         mandatory_assert(0, "unimplemented: need to change the server side");
     }
   private:
@@ -74,7 +78,10 @@ class BuiltinHashClient {
     }
     const char *get(const Str k, int32_t offset, size_t *value_length) {
         auto it = h_.find(k);
-        mandatory_assert(it != h_.end());
+        if (it == h_.end()) {
+            *value_length = 0;
+            return NULL;
+        }
         mandatory_assert(it->second.length() >= offset);
         *value_length = it->second.length() - offset;
         return it->second.data() + offset;

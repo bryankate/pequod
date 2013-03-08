@@ -611,11 +611,17 @@ inline T iceil(T x, U y) {
     return x + (mod ? y - mod : 0);
 }
 
+/** @brief Return the smallest power of 2 greater than or equal to @a x.
+    @pre @a x != 0
+    @pre the result is representable in type T (that is, @a x can't be
+    larger than the largest power of 2 representable in type T) */
 template <typename T>
 inline T iceil_log2(T x) {
     return T(1) << (sizeof(T) * 8 - clz(x) - !(x & (x - 1)));
 }
 
+/** @brief Return the largest power of 2 less than or equal to @a x.
+    @pre @a x != 0 */
 template <typename T>
 inline T ifloor_log2(T x) {
     return T(1) << (sizeof(T) * 8 - 1 - clz(x));
@@ -626,6 +632,7 @@ inline T ifloor_log2(T x) {
  * 0 is the lowest-order nibble. Returns -1 if no nibbles are 0. */
 template <typename T>
 inline int find_lowest_zero_nibble(T x) {
+    static_assert(sizeof(T) <= sizeof(unsigned long long), "T is too big");
 #if SIZEOF_LONG_LONG == 16
     T h = T(0x88888888888888888888888888888888ULL), l = T(0x11111111111111111111111111111111ULL);
 #else

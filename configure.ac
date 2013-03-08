@@ -28,12 +28,18 @@ if test -z "$ac_cv_header_evpp_h"; then
 fi
 
 AC_CHECK_HEADERS([postgresql/libpq-fe.h])
+AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [POSTGRES_LIBS=])
+AC_SUBST([POSTGRES_LIBS])
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
-AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
-AC_SUBST([MEMCACHED_LIB])
 
-AC_SEARCH_LIBS([PQuser], [pq], [AC_DEFINE([HAVE_POSTGRES], [1], [Define if you have libpq.])])
+AC_SEARCH_LIBS([memcached], [memcached], [ac_cv_have_memcached=yes], [ac_cv_have_memcached=no])
+MEMCACHED_LIB=
+if test "$ac_cv_have_memcached" = yes; then
+    AC_CHECK_HEADERS([libmemcached/memcached.hpp])
+    MEMCACHED_LIB="-lmemcached"
+fi
+AC_SUBST([MEMCACHED_LIB])
 
 dnl Builtins
 
@@ -245,11 +251,6 @@ else
 fi
 AC_SUBST([MALLOC_LIBS])
 AC_SUBST([DEFAULT_MALLOC_ASSIGNMENT])
-
-POSTGRES_LIBS=
-AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"])
-
-AC_SUBST([POSTGRES_LIBS])
 
 dnl Types
 

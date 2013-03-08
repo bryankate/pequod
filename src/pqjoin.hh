@@ -4,6 +4,7 @@
 #include <string.h>
 #include "str.hh"
 #include "string.hh"
+#include "json.hh"
 template <typename K, typename V> class HashTable;
 class Json;
 class String;
@@ -107,6 +108,8 @@ class Join {
     inline void set_staleness(double s);
     inline void set_jvt(JoinValueType jvt);
     inline JoinValueType jvt() const;
+    inline void set_jvt_config(const Json& param);
+    inline const Json& jvt_config() const;
 
     SourceRange* make_source(Server& server, const Match& m,
                              Str ibegin, Str iend);
@@ -127,6 +130,7 @@ class Join {
     Pattern pat_[pcap];
     int refcount_;
     JoinValueType jvt_;
+    Json jvtparam_;
 
     bool analyze();
 };
@@ -309,7 +313,8 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 
 inline Join::Join()
     : npat_(0), maintained_(true),
-      staleness_(0), refcount_(0), jvt_(jvt_copy_last) {
+      staleness_(0), refcount_(0),
+      jvt_(jvt_copy_last), jvtparam_() {
 }
 
 inline void Join::ref() {
@@ -349,6 +354,14 @@ inline void Join::set_jvt(JoinValueType _jvt) {
 
 inline JoinValueType Join::jvt() const {
     return jvt_;
+}
+
+inline void Join::set_jvt_config(const Json& param) {
+    jvtparam_.merge(param);
+}
+
+inline const Json& Join::jvt_config() const {
+    return jvtparam_;
 }
 
 inline void Join::set_staleness(double s) {

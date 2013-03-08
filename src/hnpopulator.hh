@@ -1,5 +1,5 @@
-#ifndef PQHACKERNEWS_HH
-#define PQHACKERNEWS_HH
+#ifndef HNPOPULATOR_HH
+#define HNPOPULATOR_HH
 #include <utility>
 #include <vector>
 #include <map>
@@ -27,6 +27,7 @@ class HackernewsPopulator {
     inline void set_log(bool val);
     inline bool log() const;
     inline const std::vector<uint32_t>& articles() const;
+    inline const std::vector<uint32_t>& karmas() const;
     inline uint32_t pre() const;
     inline uint32_t nops() const;
     inline uint32_t vote_rate() const;
@@ -108,6 +109,10 @@ inline void HackernewsPopulator::set_narticles(uint32_t n) {
 
 inline const std::vector<uint32_t>& HackernewsPopulator::articles() const {
     return articles_;
+}
+
+inline const std::vector<uint32_t>& HackernewsPopulator::karmas() const {
+    return karma_;
 }
 
 inline uint32_t HackernewsPopulator::karma(uint32_t author) const {

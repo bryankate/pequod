@@ -13,8 +13,10 @@ class msgpack_fd {
     inline msgpack_fd(tamer::fd fd);
     ~msgpack_fd();
 
-    inline void read(tamer::event<Json> done);
     void write(const Json& j);
+    void read(tamer::event<Json> done);
+    template <typename R>
+    void read(tamer::preevent<R, Json> done);
     inline void call(const Json& j, tamer::event<Json> reply);
 
   private:
@@ -34,6 +36,7 @@ class msgpack_fd {
     String rdbuf_;
     size_t rdpos_;
     size_t rdlen_;
+    bool rdblocked_;
     msgpack::streaming_parser rdparser_;
 
     std::deque<tamer::event<Json> > rdwait_;
@@ -41,6 +44,7 @@ class msgpack_fd {
     tamer::event<> rdkill_;
 
     void check();
+    bool read_once(tamer::event<Json> receiver);
     void write_once();
     tamed void writer_coroutine();
     tamed void reader_coroutine();
@@ -48,7 +52,8 @@ class msgpack_fd {
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
     : fd_(fd), wrblocked_(false),
-      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0) {
+      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
+      rdblocked_(false) {
     wrelem_.push_back(wrelem());
     wrelem_.back().sa.reserve(wrcap);
     wrelem_.back().pos = 0;
@@ -57,14 +62,20 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd)
     reader_coroutine();
 }
 
-inline void msgpack_fd::read(tamer::event<Json> done) {
-    rdwait_.push_back(done);
-    rdwake_();
-}
-
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
     write(j);
     read(done);
+}
+
+template <typename R>
+void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
+    while ((rdpos_ != rdlen_ || !rdblocked_)
+           && rdwait_.size() && read_once(rdwait_.front()))
+        rdwait_.pop_front();
+    if ((rdpos_ == rdlen_ && rdblocked_) || !read_once(receiver)) {
+        rdwait_.push_back(receiver);
+        rdwake_();
+    }
 }
 
 #endif
