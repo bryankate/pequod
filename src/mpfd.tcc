@@ -23,9 +23,10 @@ void msgpack_fd::write(const Json& j) {
 }
 
 void msgpack_fd::read(tamer::event<Json> receiver) {
-    while (!rdblocked_ && rdwait_.size() && read_once(rdwait_.front()))
+    while ((rdpos_ != rdlen_ || !rdblocked_)
+           && rdwait_.size() && read_once(rdwait_.front()))
         rdwait_.pop_front();
-    if (rdblocked_ || !read_once(receiver)) {
+    if ((rdpos_ == rdlen_ && rdblocked_) || !read_once(receiver)) {
         rdwait_.push_back(receiver);
         rdwake_();
     }
