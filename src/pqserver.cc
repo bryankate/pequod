@@ -415,10 +415,18 @@ int main(int argc, char** argv) {
         }
     } else if (mode == mode_hn) {
         pq::HackernewsPopulator hp(tp_param);
-        pq::PQHackerNewsShim<pq::Server> shim(server);
-        pq::HackernewsRunner<pq::PQHackerNewsShim<pq::Server> > hr(shim, hp);
-        hr.populate();
-        hr.run();
+        if (tp_param["builtinhash"]) {
+            pq::BuiltinHashClient client;
+            pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
+            pq::HackernewsRunner<pq::HashHackerNewsShim<pq::BuiltinHashClient> > hr(shim, hp);
+            hr.populate();
+            hr.run();
+        } else {
+            pq::PQHackerNewsShim<pq::Server> shim(server);
+            pq::HackernewsRunner<pq::PQHackerNewsShim<pq::Server> > hr(shim, hp);
+            hr.populate();
+            hr.run();
+        }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 5);

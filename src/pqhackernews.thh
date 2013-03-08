@@ -187,7 +187,9 @@ void HackernewsRunner<S>::populate() {
         uint32_t nv = 0;
         uint32_t nc = 0;
     }
-    
+    twait {
+        server_.initialize(hp_.log(), hp_.m(), make_event());
+    }
     for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
         const uint32_t author = rng(hp_.nusers());
         post_article(author, aid);
@@ -206,12 +208,9 @@ void HackernewsRunner<S>::populate() {
             }
         }
     }
-    twait {
-        server_.initialize(hp_.log(), hp_.m(), make_event());
-    }
     if (hp_.log()) {
         std::cout << ": my karma table:\n";
-        for (int i = 0; i < hp_.nusers(); i++)
+        for (uint32_t i = 0; i < hp_.nusers(); i++)
             std::cout << " k " << i << ": " << hp_.karma(i) << "\n";
         std::cout << ": end my karma table\n";
     }
@@ -223,14 +222,14 @@ tamed template <typename S>
 void HackernewsRunner<S>::run() {
     tvars {
         boost::mt19937 gen;
-        gen.seed(13918);
         boost::random_number_generator<boost::mt19937> rng(gen);
-        const uint32_t nops = hp_.nops();
-        const uint32_t nusers = hp_.nusers();
+        const uint32_t nops = this->hp_.nops();
+        const uint32_t nusers = this->hp_.nusers();
         struct rusage ru[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
         Json stats, server_stats;
     }
+    gen.seed(13918);
     getrusage(RUSAGE_SELF, &ru[0]);
     for (uint32_t i = 0; i < nops; ++i) {
         uint32_t p = rng(100);
@@ -257,7 +256,7 @@ void HackernewsRunner<S>::run() {
 	.set("ncomment", ncomment).set("nvote", nvote)
 	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
     twait {
-        server_.stats(make_event(server_stats);
+        server_.stats(make_event(server_stats));
     }
     stats.merge(server_stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";

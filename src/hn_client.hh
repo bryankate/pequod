@@ -6,9 +6,10 @@ namespace pq {
 typedef const std::vector<uint32_t> karmas_type;
 
 template <typename C>
-class HashHackerNews {
+class HashHackerNewsShim {
   public:
-    HashHackerNews() {}
+    HashHackerNewsShim(C &c) : c_(c) {
+    }
     template <typename R>
     void initialize(bool, bool ma, preevent<R> e) {
         mandatory_assert(!ma, "unimplemented: materializing all");
@@ -24,13 +25,13 @@ class HashHackerNews {
     template <typename R>
     void post_comment(uint32_t commentor, uint32_t author, uint32_t aid,
                       uint32_t cid, const String &v, preevent<R> e) {
+        (void)author;
         // add c|cid/v
         c_.set(String("c|") + String(cid), v);
         // append commentor|cid to ac|aid
-        String av("commentor|");
-        av.append(String(aid));
-        av.append('\255');
-        c_.append(String("ac|") + String(aid), av);
+        char buf[128];
+        sprintf(buf, "%d|%d\255", commentor, aid);
+        c_.append(String("ac|") + String(aid), Str(buf, strlen(buf)));
         e();
     }
     template <typename R>
@@ -38,17 +39,19 @@ class HashHackerNews {
         // append voter to v|aid?
         c_.append(String("v|") + String(aid), String(voter) + String(","));
         // increment k|author
-        c_.increment(String("k|") + Str(author));
+        c_.increment(String("k|") + String(author));
         e();
     }
     template <typename R>
     void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas,
                       preevent<R> e) {
+        (void)author;
+        (void)check_karmas;
         // get h|aid/hv
         size_t value_length;
-        const char *hv = c_.get(String("h|") + String(aid), &value_length);
+        const char *hv = c_.get(String("h|") + String(aid), 0, &value_length);
         // get ac|aid/clist
-        const char *cl = c_.get(String("ac|") + String(aid), &value_length);
+        const char *cl = c_.get(String("ac|") + String(aid), 0, &value_length);
         // for each commentor/cid in clist:
         Str clist(cl, value_length);
         ssize_t ep;
@@ -58,9 +61,9 @@ class HashHackerNews {
             Str commentor(cl + s, cl + p);
             Str cid(cl + p + 1, cl + ep);
             // get c|cid/cv
-            c_.done_get(c_.get(String("c|") + cid, &value_length));
+            c_.done_get(c_.get(String("c|") + cid, 0, &value_length));
             // get k|commentor/kc
-            c_.done_get(c_.get(String("k|") + commentor, &value_length));
+            c_.done_get(c_.get(String("k|") + commentor, 0, &value_length));
         }
         c_.done_get(hv);
         c_.done_get(cl);
@@ -71,7 +74,7 @@ class HashHackerNews {
         e(Json());
     }
   private:
-    C c_;
+    C& c_;
 };
 
 template <typename S>
@@ -91,6 +94,7 @@ class PQHackerNewsShim {
         server_.insert(Str(buf, 18), Str("1", 1));
         if (log_)
             printf("vote %.18s\n", buf);
+        e();
     }
     template <typename R>
     void post_comment(uint32_t commentor, uint32_t author, uint32_t aid, uint32_t cid,
@@ -100,6 +104,7 @@ class PQHackerNewsShim {
         server_.insert(Str(buf, 24), v);
         if (log_)
             printf("comment  %.24s\n", buf);
+        e();
     }
     template <typename R>
     void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
@@ -108,6 +113,7 @@ class PQHackerNewsShim {
         server_.insert(Str(buf, 18), Str("", 0));
         if (log_)
             printf("vote %.18s\n", buf);
+        e();
     }
     template <typename R>
     void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas,
