@@ -32,10 +32,6 @@ SET default_with_oids = false;
 -- Name: articles; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
 --
 
-DROP VIEW IF EXISTS karma_v;
-DROP TABLE IF EXISTS matviews;
-DROP TABLE IF EXISTS karma_mv;
-
 DROP TABLE IF EXISTS articles CASCADE;
 
 CREATE TABLE articles (
@@ -60,6 +56,9 @@ CREATE TABLE comments (
     comment text
 );
 
+CREATE INDEX comments_aid ON comments (aid);
+CREATE INDEX comments_commenter ON comments (commenter);
+
 
 --ALTER TABLE public.comments OWNER TO neha;
 
@@ -74,6 +73,7 @@ CREATE TABLE votes (
     voter integer
 );
 
+CREATE INDEX votes_aid ON votes (aid);
 
 --ALTER TABLE public.votes OWNER TO neha;
 
@@ -107,14 +107,6 @@ ALTER TABLE ONLY articles
 ALTER TABLE ONLY comments
     ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
 
-
-CREATE VIEW karma_v AS
-SELECT
-  articles.author,
-  COUNT(*) AS karma
-FROM articles, votes
-WHERE articles.aid = votes.aid
-GROUP BY articles.author;
 
 --
 -- Name: public; Type: ACL; Schema: -; Owner: postgres

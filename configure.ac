@@ -27,9 +27,13 @@ if test -z "$ac_cv_header_evpp_h"; then
     AC_MSG_ERROR([Cannot find <ev++.h>])
 fi
 
+AC_CHECK_HEADERS([postgresql/libpq-fe.h])
+
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
 AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
 AC_SUBST([MEMCACHED_LIB])
+
+AC_SEARCH_LIBS([PQuser], [pq], [AC_DEFINE([HAVE_POSTGRES], [1], [Define if you have libpq.])])
 
 dnl Builtins
 
@@ -242,6 +246,10 @@ fi
 AC_SUBST([MALLOC_LIBS])
 AC_SUBST([DEFAULT_MALLOC_ASSIGNMENT])
 
+POSTGRES_LIBS=
+AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"])
+
+AC_SUBST([POSTGRES_LIBS])
 
 dnl Types
 
