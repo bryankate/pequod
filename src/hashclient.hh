@@ -39,7 +39,7 @@ class MemcachedClient {
         memcached_return_t error;
         const char *v = memcached_get(c_, k.data(), k.length(), value_length, &flags, 
                                       &error);
-        if (error != MEMCACHED_SUCCESS); {
+        if (error != MEMCACHED_SUCCESS) {
             mandatory_assert(v == NULL);
             *value_length = 0;
         }
