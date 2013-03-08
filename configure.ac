@@ -33,8 +33,12 @@ AC_SUBST([POSTGRES_LIBS])
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
 
-AC_CHECK_HEADERS([libmemcached/memcached.hpp])
-AC_SEARCH_LIBS([memcached_create], [memcached], [MEMCACHED_LIB=-lmemcached], [MEMCACHED_LIB=])
+AC_SEARCH_LIBS([memcached], [memcached], [ac_cv_have_memcached=yes], [ac_cv_have_memcached=no])
+MEMCACHED_LIB=
+if test "$ac_cv_have_memcached" = yes; then
+    AC_CHECK_HEADERS([libmemcached/memcached.hpp])
+    MEMCACHED_LIB="-lmemcached"
+fi
 AC_SUBST([MEMCACHED_LIB])
 
 dnl Builtins
