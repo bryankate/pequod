@@ -14,7 +14,7 @@
 #include "hashclient.hh"
 #include "hnshim.hh"
 
-#if HAVE_POSTGRES
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
 #include "pgclient.hh"
 #endif
@@ -441,7 +441,7 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["pg"]) {
-#if HAVE_POSTGRES
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
             pq::PostgresClient client;
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
