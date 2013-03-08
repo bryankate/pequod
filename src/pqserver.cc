@@ -430,6 +430,16 @@ int main(int argc, char** argv) {
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
+        } else if (tp_param["memcached"]) {
+#if ENABLE_MEMCACHED
+            pq::MemcachedClient client;
+            pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            hr.populate();
+            hr.run();
+#else
+            mandatory_assert(false);
+#endif
         } else if (tp_param["pg"]) {
 #if HAVE_POSTGRES
             pq::PostgresClient client;
