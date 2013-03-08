@@ -400,7 +400,7 @@ int main(int argc, char** argv) {
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
-            pq::TwitterRunner<pq::TwitterHashShim<pq::MemcachedClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
 #else
@@ -410,7 +410,7 @@ int main(int argc, char** argv) {
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
-            pq::TwitterRunner<pq::TwitterHashShim<pq::BuiltinHashClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
         } else if (client_port >= 0) {
@@ -418,7 +418,7 @@ int main(int argc, char** argv) {
         } else {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
-            pq::TwitterRunner<pq::TwitterShim<pq::DirectClient> > tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate();
             tr.run(tamer::event<>());
         }
@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
         if (tp_param["builtinhash"]) {
             pq::BuiltinHashClient client;
             pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
-            pq::HackernewsRunner<pq::HashHackerNewsShim<pq::BuiltinHashClient> > hr(shim, hp);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
         } else if (tp_param["pg"]) {
@@ -442,7 +442,7 @@ int main(int argc, char** argv) {
 #endif
         } else {
             pq::PQHackerNewsShim<pq::Server> shim(server);
-            pq::HackernewsRunner<pq::PQHackerNewsShim<pq::Server> > hr(shim, hp);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             hr.run();
         }
