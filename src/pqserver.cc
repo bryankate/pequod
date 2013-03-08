@@ -12,7 +12,7 @@
 #include "clp.h"
 #include "time.hh"
 #include "hashclient.hh"
-#include "hn_client.hh"
+#include "hnshim.hh"
 
 #if HAVE_POSTGRES
 #include <postgresql/libpq-fe.h>
