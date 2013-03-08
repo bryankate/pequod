@@ -61,8 +61,8 @@ bool msgpack_fd::read_once(tamer::event<Json> receiver) {
 
     // process new data
     if (rdparser_.complete()) {
-        if (receiver.__get_slot0())
-            rdparser_.reset(*receiver.__get_slot0());
+        if (receiver.has_result())
+            rdparser_.reset(receiver.result());
         else
             rdparser_.reset();
     }
