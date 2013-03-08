@@ -135,7 +135,7 @@ void HackernewsRunner<S>::run() {
             uint32_t aid = rng(hp_.narticles());
             read_article(aid);
             nread++;
-            if (p < hp_.vote_rate()) {
+            if (p < hp_.vote_rate() && hp_.vote(user, aid)) {
                 vote(user, aid);
                 ++nvote;
             }
