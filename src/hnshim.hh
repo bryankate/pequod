@@ -357,7 +357,7 @@ class SQLHackernewsShim {
                     "WHERE articles.aid = %d AND comments.aid = articles.aid "
                     "AND votes.aid = articles.aid AND karma.author=comments.commenter "
                     "GROUP BY articles.aid,comments.cid,karma.karma", aid);
-
+        // XXX: should use more general return type
         PGresult* res = pg_.query(buf);
         // aid author link cid comment karma votes
         if (log_)
