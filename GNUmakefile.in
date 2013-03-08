@@ -16,12 +16,12 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 7628019b85fe5cffc55fb1179565fa8002c8c9aa
+TAMER_COMMIT = fe76e323ce81c07f79ca1ae53e194be033d75a56
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
 	-lboost_system-mt -lboost_serialization-mt \
-	-lev -lprotobuf -lmemcached @MALLOC_LIBS@
+	-lev -lprotobuf @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -80,7 +80,7 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.cc $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteserver.o: $(OBJDIR)/pqremoteserver.cc $(OBJDIR)/pqremoteserver.hh
@@ -104,7 +104,6 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
-	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \

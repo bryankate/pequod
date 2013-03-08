@@ -51,9 +51,12 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void CopySourceRange::notify(const Datum* src, const String&, int notifier) const {
+void CopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key()))
+    if (join_->back_source().match(src->key())) {
+        if (!check_bounds(src->value_, oldval, notifier))
+            return;
+
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.mutable_udata(), src->key());
 	    if (notifier >= 0)
@@ -61,13 +64,20 @@ void CopySourceRange::notify(const Datum* src, const String&, int notifier) cons
             else
 		dst_table_->erase(s);
 	}
+    }
 }
 
 
-void CountSourceRange::notify(const Datum* src, const String&, int notifier) const {
+void CountSourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
-    if (notifier && join_->back_source().match(src->key())) {
+    if (join_->back_source().match(src->key())) {
+        if (!check_bounds(src->value_, oldval, notifier))
+            return;
+
+        if (!notifier)
+            return;
+
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
             dst_table_->modify(s, [=](Datum* dst, bool insert) {
@@ -78,8 +88,13 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
     }
 }
 
-void CountSourceAccumulator::notify(const Datum*) {
-    ++n_;
+void CountSourceAccumulator::notify(const Datum* d) {
+    if (has_bounds()) {
+        if (in_bounds(d->value_.to_i()))
+            ++n_;
+    }
+    else
+        ++n_;
 }
 
 void CountSourceAccumulator::commit(Str dst_key) {

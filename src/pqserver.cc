@@ -14,6 +14,13 @@
 #include "hashclient.hh"
 #include "hn_client.hh"
 
+#if HAVE_POSTGRES
+#include <postgresql/libpq-fe.h>
+#include "pgclient.hh"
+#include "pghackernews.hh"
+#endif
+
+
 namespace pq {
 
 // XXX check circular expansion
@@ -306,14 +313,15 @@ static Clp_Option options[] = {
     { "proactive", 0, 1020, 0, Clp_Negate },
     { "buffer", 0, 1021, 0, Clp_Negate },
     { "seed", 0, 1022, Clp_ValInt, 0 },
-    { "pread", 0, 1023, Clp_ValInt, 0 }
+    { "pread", 0, 1023, Clp_ValInt, 0 },
+    { "pg", 0, 1024, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
+static char envstr[] = "TAMER_NOLIBEVENT=1";
 
 int main(int argc, char** argv) {
-    String envstr("TAMER_NOLIBEVENT=1");
-    putenv(envstr.mutable_data());
+    putenv(envstr);
     tamer::initialize();
 
     int mode = mode_unknown, listen_port = 8000, client_port = -1;
@@ -351,6 +359,8 @@ int main(int argc, char** argv) {
             tp_param.set("buffer", !clp->negated);
         else if (clp->option->long_name == String("seed"))
             tp_param.set("seed", clp->val.i);
+        else if (clp->option->long_name == String("pg"))
+            tp_param.set("pg", !clp->negated);
         else if (clp->option->long_name == String("pread"))
             tp_param.set("pread", clp->val.i);
 	else if (clp->option->long_name == String("facebook"))
@@ -421,6 +431,16 @@ int main(int argc, char** argv) {
             pq::HackernewsRunner<pq::HashHackerNewsShim<pq::BuiltinHashClient> > hr(shim, hp);
             hr.populate();
             hr.run();
+        } else if (tp_param["pg"]) {
+#if HAVE_POSTGRES
+            pq::PostgresClient client;
+            pq::SQLHackerNewsShim<pq::PostgresClient> shim(client);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            hr.populate();
+            hr.run();
+#else
+            mandatory_assert(false);
+#endif
         } else {
             pq::PQHackerNewsShim<pq::Server> shim(server);
             pq::HackernewsRunner<pq::PQHackerNewsShim<pq::Server> > hr(shim, hp);

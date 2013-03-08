@@ -41,6 +41,12 @@ AnalyticsRunner::AnalyticsRunner(Server& server, const Json& param)
 
 void AnalyticsRunner::populate() {
 
+    for (uint32_t time = 0; time < popduration_; ++time)
+        record_bps(time);
+
+    if (push_)
+        return;
+
     Join* Bpm = new Join();
     Bpm->assign_parse("Bpm|<hour:4><min:2> "
                       "Bps|<hour><min><sec:2>");
@@ -48,9 +54,6 @@ void AnalyticsRunner::populate() {
     Bpm->ref();
 
     server_.add_join("Bpm|", "Bpm}", Bpm);
-
-    for (uint32_t time = 0; time < popduration_; ++time)
-        record_bps(time);
 
     if (proactive_)
         server_.validate("Bpm|", "Bpm}");
