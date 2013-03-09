@@ -44,7 +44,7 @@ class msgpack_fd {
     tamer::event<> rdkill_;
 
     void check();
-    bool read_once(tamer::event<Json> receiver);
+    bool read_once(Json* receiver);
     void write_once();
     tamed void writer_coroutine();
     tamed void reader_coroutine();
@@ -70,9 +70,14 @@ inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
 template <typename R>
 void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
     while ((rdpos_ != rdlen_ || !rdblocked_)
-           && rdwait_.size() && read_once(rdwait_.front()))
+           && rdwait_.size() && read_once(rdwait_.front().result_pointer())) {
+        rdwait_.front().unblock();
         rdwait_.pop_front();
-    if ((rdpos_ == rdlen_ && rdblocked_) || !read_once(receiver)) {
+    }
+    if ((rdpos_ != rdlen_ || !rdblocked_)
+        && read_once(receiver.result_pointer()))
+        receiver.unblock();
+    else {
         rdwait_.push_back(receiver);
         rdwake_();
     }

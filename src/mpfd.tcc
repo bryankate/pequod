@@ -24,15 +24,20 @@ void msgpack_fd::write(const Json& j) {
 
 void msgpack_fd::read(tamer::event<Json> receiver) {
     while ((rdpos_ != rdlen_ || !rdblocked_)
-           && rdwait_.size() && read_once(rdwait_.front()))
+           && rdwait_.size() && read_once(rdwait_.front().result_pointer())) {
+        rdwait_.front().unblock();
         rdwait_.pop_front();
-    if ((rdpos_ == rdlen_ && rdblocked_) || !read_once(receiver)) {
+    }
+    if ((rdpos_ != rdlen_ || !rdblocked_)
+        && read_once(receiver.result_pointer()))
+        receiver.unblock();
+    else {
         rdwait_.push_back(receiver);
         rdwake_();
     }
 }
 
-bool msgpack_fd::read_once(tamer::event<Json> receiver) {
+bool msgpack_fd::read_once(Json* receiver) {
  readmore:
     // if buffer empty, read more data
     if (rdpos_ == rdlen_) {
@@ -61,8 +66,8 @@ bool msgpack_fd::read_once(tamer::event<Json> receiver) {
 
     // process new data
     if (rdparser_.complete()) {
-        if (receiver.has_result())
-            rdparser_.reset(receiver.result());
+        if (receiver)
+            rdparser_.reset(*receiver);
         else
             rdparser_.reset();
     }
@@ -71,10 +76,12 @@ bool msgpack_fd::read_once(tamer::event<Json> receiver) {
                                 rdbuf_);
 
     if (rdparser_.done()) {
-        receiver(std::move(rdparser_.result()));
+        if (receiver)
+            swap(*receiver, rdparser_.result());
         return true;
     } else if (rdparser_.complete()) {
-        receiver(Json());       // XXX close connection?
+        if (receiver)
+            *receiver = Json();       // XXX close connection?
         return true;
     } else
         goto readmore;
@@ -94,8 +101,10 @@ tamed void msgpack_fd::reader_coroutine() {
         else if (rdblocked_) {
             twait { tamer::at_fd_read(fd_.value(), make_event()); }
             rdblocked_ = false;
-        } else if (read_once(rdwait_.front()))
+        } else if (read_once(rdwait_.front().result_pointer())) {
+            rdwait_.front().unblock();
             rdwait_.pop_front();
+        }
     }
 
     kill();
