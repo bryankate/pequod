@@ -28,6 +28,7 @@ class TwitterPopulator {
     inline uint32_t duration() const;
     inline bool push() const;
     inline bool log() const;
+    inline bool synchronous() const;
 
     void create_subscriptions(generator_type& gen);
     void print_subscription_statistics(std::ostream& stream) const;
@@ -41,6 +42,7 @@ class TwitterPopulator {
     uint32_t nusers_;
     bool push_;
     bool log_;
+    bool synchronous_;
     uint32_t min_followers_;
     uint32_t min_subs_;
     uint32_t max_subs_;
@@ -183,6 +185,10 @@ inline bool TwitterPopulator::log() const {
     return log_;
 }
 
+inline bool TwitterPopulator::synchronous() const {
+    return synchronous_;
+}
+
 inline const std::vector<std::pair<uint32_t, uint32_t> >& TwitterPopulator::subscriptions() const {
     return subs_;
 }
@@ -265,6 +271,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         size_t nread = 0, count_result = 0;
         typename S::scan_result scan_result;
         Json old_stats, stats;
+        tamer::gather_rendezvous gr;
     }
     gen.seed(13918);
 
@@ -280,7 +287,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         if (time < post_end_time || a < 2) {
             if (tp_.log())
                 printf("%d: post p|%05d|%010d\n", time, u, time);
-            twait { post(u, time, "?!?#*", make_event()); }
+            post(u, time, "?!?#*", gr.make_event());
             ++npost;
         } else {
             tx = load_times[u];
@@ -298,12 +305,16 @@ void TwitterRunner<S>::run(tamer::event<> done) {
                      ++it, ++nread)
                     std::cout << "  " << it->key() << ": " << it->value() << "\n";
             } else {
-                twait { server_.timeline_add_count(u, tx, time, make_event(nread)); }
+                server_.timeline_add_count(u, tx, time, gr.make_event(nread));
             }
             load_times[u] = time;
+            if (tp_.synchronous())
+                twait(gr);
         }
         ++time;
     }
+
+    twait(gr);
 
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);

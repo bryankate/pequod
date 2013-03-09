@@ -17,6 +17,7 @@ TwitterPopulator::TwitterPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
       push_(param["push"].as_b(false)),
       log_(param["log"].as_b(false)),
+      synchronous_(param["synchronous"].as_b(false)),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),

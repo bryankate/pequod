@@ -313,7 +313,8 @@ static Clp_Option options[] = {
     { "buffer", 0, 1021, 0, Clp_Negate },
     { "seed", 0, 1022, Clp_ValInt, 0 },
     { "pread", 0, 1023, Clp_ValInt, 0 },
-    { "pg", 0, 1024, 0, Clp_Negate }
+    { "pg", 0, 1024, 0, Clp_Negate },
+    { "synchronous", 0, 1025, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
@@ -378,6 +379,8 @@ int main(int argc, char** argv) {
                 listen_port = clp->val.i;
         } else if (clp->option->long_name == String("client"))
             client_port = clp->have_val ? clp->val.i : 8000;
+        else if (clp->option->long_name == String("synchronous"))
+            tp_param.set("synchronous", !clp->negated);
         else if (clp->option->long_name == String("log"))
             tp_param.set("log", !clp->negated);
         else
