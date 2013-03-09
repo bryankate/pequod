@@ -20,6 +20,8 @@ class RemoteClient {
 
     tamed void count(const String& first, const String& last,
                      event<size_t> e);
+    tamed void add_count(const String& first, const String& last,
+                         event<size_t> e);
 
     class iterator;
     class scanpair {

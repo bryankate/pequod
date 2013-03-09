@@ -78,7 +78,7 @@ class TwitterShim {
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     template <typename R>
-    inline void timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
 
@@ -138,9 +138,9 @@ inline void TwitterShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_ti
 }
 
 template <typename S> template <typename R>
-inline void TwitterShim<S>::timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
+inline void TwitterShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
-    server_.count(Str(buf_, 18), Str(buf_ + 19, 8), done);
+    server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), done);
 }
 
 template <typename S> template <typename R>
@@ -298,8 +298,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
                      ++it, ++nread)
                     std::cout << "  " << it->key() << ": " << it->value() << "\n";
             } else {
-                twait { server_.timeline_count(u, tx, time, make_event(count_result)); }
-                nread += count_result;
+                twait { server_.timeline_add_count(u, tx, time, make_event(nread)); }
             }
             load_times[u] = time;
         }

@@ -118,7 +118,7 @@ class TwitterHashShim {
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     template <typename R>
-    inline void timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
 
@@ -181,7 +181,7 @@ inline void TwitterHashShim<S>::timeline_scan(uint32_t subscriber, uint32_t star
 }
 
 template <typename S> template <typename R>
-inline void TwitterHashShim<S>::timeline_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> done) {
+inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> done) {
     if (last_refresh_.size() <= subscriber)
         last_refresh_.resize(subscriber + 1);
     tlstatus& tls = last_refresh_[subscriber];
@@ -200,7 +200,7 @@ inline void TwitterHashShim<S>::timeline_count(uint32_t subscriber, uint32_t sta
         if (uint32_t(atoi(p + 1)) >= start_time)
             ++n;
     }
-    done(n);
+    done(done.result() + n);
     server_.done_get(v);
 }
 

@@ -22,6 +22,9 @@ class DirectClient {
     template <typename R>
     inline void count(const String& first, const String& last,
                       preevent<R, size_t> e);
+    template <typename R>
+    inline void add_count(const String& first, const String& last,
+                          preevent<R, size_t> e);
 
     class scan_result {
       public:
@@ -77,6 +80,13 @@ inline void DirectClient::count(const String& first, const String& last,
                                 preevent<R, size_t> e) {
     server_.validate(first, last);
     e(server_.count(first, last));
+}
+
+template <typename R>
+inline void DirectClient::add_count(const String& first, const String& last,
+                                    preevent<R, size_t> e) {
+    server_.validate(first, last);
+    e(e.result() + server_.count(first, last));
 }
 
 inline DirectClient::scan_result::scan_result(iterator first, iterator last)
