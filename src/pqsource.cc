@@ -86,9 +86,9 @@ void CountSourceRange::notify(const Datum* src, const String& oldval, int notifi
 
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [=](Datum* dst, bool insert) {
+            dst_table_->modify(s, [=](Datum* dst) {
                     return String(notifier
-                                  + (insert ? 0 : dst->value_.to_i()));
+                                  + (dst ? dst->value_.to_i() : 0));
                 });
         }
     }
@@ -115,8 +115,8 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst, bool insert) -> String {
-                    if (insert || src->value_ < dst->value_)
+            dst_table_->modify(s, [&](Datum* dst) -> String {
+                    if (!dst || src->value_ < dst->value_)
                         return src->value_;
                     else if (old_value == dst->value_
                              && (notifier < 0 || src->value_ != old_value))
@@ -147,8 +147,8 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst, bool insert) -> String {
-                    if (insert || dst->value_ < src->value_)
+            dst_table_->modify(s, [&](Datum* dst) -> String {
+                    if (!dst || dst->value_ < src->value_)
                         return src->value_;
                     else if (old_value == dst->value_
                              && (notifier < 0 || src->value_ != old_value))
@@ -178,8 +178,8 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst, bool insert) {
-                if (insert)
+            dst_table_->modify(s, [&](Datum* dst) {
+                if (!dst)
                     return src->value_;
                 else {
                     long diff = (notifier == notify_update) ?
