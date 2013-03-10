@@ -5,12 +5,13 @@
 #include "pqserver.hh"
 #include "mpfd.hh"
 #include "pqrpc.hh"
+#include "error.hh"
 
 namespace {
 
 tamed void connector(tamer::fd cfd, pq::Server& server) {
     tvars {
-        Json j, rj;
+        Json j, rj = Json::make_array(0, 0, 0);
         msgpack_fd mpfd(cfd);
     }
     while (cfd) {
@@ -18,17 +19,22 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
             break;
 
-        rj = Json::make_array(-j[0].as_i(), j[1], pq_fail);
+        rj[0] = -j[0].as_i();
+        rj[1] = j[1];
+        rj[2] = pq_fail;
 
         switch (j[0].as_i()) {
         case pq_add_join:
             if (j[2].is_s() && j[3].is_s() && j[4].is_s()
                 && pq::table_name(j[2].as_s(), j[3].as_s())) {
                 pq::Join* join = new pq::Join;
-                if (join->assign_parse(j[4].as_s())) {
+                ErrorAccumulator errh;
+                if (join->assign_parse(j[4].as_s(), &errh)) {
                     server.add_join(j[2].as_s(), j[3].as_s(), join);
                     rj[2] = pq_ok;
                 }
+                if (!errh.empty())
+                    rj[3] = errh.join();
             }
             break;
         case pq_insert:

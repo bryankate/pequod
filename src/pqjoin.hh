@@ -8,6 +8,7 @@
 template <typename K, typename V> class HashTable;
 class Json;
 class String;
+class ErrorHandler;
 
 namespace pq {
 class Join;
@@ -66,8 +67,8 @@ class Pattern {
     inline String expand_last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
-    bool assign_parse(Str str, HashTable<Str, int> &slotmap);
-    bool assign_parse(Str str);
+    bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
+    bool assign_parse(Str str, ErrorHandler* errh);
 
     Json unparse_json() const;
     String unparse() const;
@@ -115,7 +116,7 @@ class Join {
                              Str ibegin, Str iend);
     SourceAccumulator* make_accumulator(Server& server);
 
-    bool assign_parse(Str str);
+    bool assign_parse(Str str, ErrorHandler* errh = 0);
 
     Json unparse_json() const;
     String unparse() const;

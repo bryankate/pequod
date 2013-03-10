@@ -90,6 +90,7 @@ COMMON_OBJS = \
 	$(OBJDIR)/str.o \
 	$(OBJDIR)/straccum.o \
 	$(OBJDIR)/string.o \
+	$(OBJDIR)/error.o \
 	$(OBJDIR)/json.o \
 	$(OBJDIR)/msgpack.o \
 	$(OBJDIR)/compiler.o \

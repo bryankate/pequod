@@ -71,8 +71,7 @@ class TwitterShim {
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
     inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
-    template <typename R>
-    inline void initialize(bool push, tamer::preevent<R> e);
+    tamed void initialize(bool push, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -95,16 +94,23 @@ TwitterShim<S>::TwitterShim(S& server)
     : server_(server) {
 }
 
-template <typename S> template <typename R>
-inline void TwitterShim<S>::initialize(bool push, tamer::preevent<R> done) {
+tamed template <typename S>
+void TwitterShim<S>::initialize(bool push, tamer::event<> done) {
+    tvars { Json j; }
     if (push)
         done();
-    else
-        server_.add_join("t|", "t}",
-                         "t|<user_id:5>|<time:10>|<poster_id:5> "
-                         "s|<user_id>|<poster_id> "
-                         "p|<poster_id>|<time>",
-                         done);
+    else {
+        twait {
+            server_.add_join("t|", "t}",
+                             "t|<user_id:5>|<time:10>|<poster_id:5> "
+                             "s|<user_id>|<poster_id> "
+                             "p|<poster_id>|<time>",
+                             make_event(j));
+        }
+        if (j["message"])
+            std::cerr << "installing timeline join: " << j << "\n";
+        done();
+    }
 }
 
 template <typename S> template <typename R>

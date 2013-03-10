@@ -150,7 +150,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|article join");
         server_.add_join(start, end, j);
-        
+
         // Materialize votes
         join_str = "ma|<author:5><seqid:5>|v "
             "v|<author><seqid>|<voter:5> ";

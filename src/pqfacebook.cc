@@ -1,4 +1,5 @@
 #include "pqfacebook.hh"
+#include "error.hh"
 #include "time.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
@@ -169,10 +170,11 @@ void facebook_populate(Server& server, FacebookPopulator& fp) {
     fp.report_counts(std::cout);
 
     if (!fp.push()) {
+        FileErrorHandler errh(stderr);
         pq::Join* j = new pq::Join;
         j->assign_parse("c|<user_id:6>|<page_id:6>|<fuser_id:6> "
                         "l|<fuser_id>|<page_id> "
-                        "f|<user_id>|<fuser_id>");
+                        "f|<user_id>|<fuser_id>", &errh);
         server.add_join("c|", "c}", j);
     }
 }

@@ -1,6 +1,7 @@
 #ifndef PEQUOD_CLIENT_HH
 #define PEQUOD_CLIENT_HH
 #include "pqserver.hh"
+#include "error.hh"
 #include <tamer/tamer.hh>
 namespace pq {
 using tamer::event;
@@ -11,8 +12,8 @@ class DirectClient {
     inline DirectClient(Server& server);
 
     template <typename R>
-    inline void add_join(const String& first, const String& last,
-                         const String& join_text, preevent<R> e);
+    void add_join(const String& first, const String& last,
+                  const String& join_text, preevent<R, Json> e);
 
     template <typename R>
     inline void insert(const String& key, const String& value, preevent<R> e);
@@ -54,12 +55,18 @@ inline DirectClient::DirectClient(Server& server)
 }
 
 template <typename R>
-inline void DirectClient::add_join(const String& first, const String& last,
-                                   const String& join_text, preevent<R> e) {
+void DirectClient::add_join(const String& first, const String& last,
+                            const String& join_text, preevent<R, Json> e) {
+    ErrorAccumulator errh;
+    Json rj;
     Join* j = new Join;
-    j->assign_parse(join_text);
-    server_.add_join(first, last, j);
-    e();
+    if (j->assign_parse(join_text, &errh)) {
+        server_.add_join(first, last, j);
+        rj.set("ok", true);
+    }
+    if (!errh.empty())
+        rj.set("message", errh.join());
+    e(rj);
 }
 
 template <typename R>

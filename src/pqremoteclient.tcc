@@ -4,14 +4,17 @@
 namespace pq {
 
 tamed void RemoteClient::add_join(const String& first, const String& last,
-                                  const String& joinspec, event<> e) {
-    tvars { Json j; unsigned long seq = this->seq_; }
+                                  const String& joinspec, event<Json> e) {
+    tvars { Json j, rj; unsigned long seq = this->seq_; }
     twait {
         fd_.call(Json::make_array(pq_add_join, seq_, first, last, joinspec),
                  make_event(j));
         ++seq_;
     }
-    e();
+    rj = Json().set("ok", j[2].is_i() && j[2].as_i() == pq_ok);
+    if (j[3].is_s())
+        rj.set("message", j[3]);
+    e(rj);
 }
 
 tamed void RemoteClient::insert(const String& key, const String& value,

@@ -2,6 +2,7 @@
 #include "pqserver.hh"
 #include "hashtable.hh"
 #include "json.hh"
+#include "error.hh"
 namespace pq {
 
 Match& Match::operator&=(const Match& m) {
@@ -77,11 +78,15 @@ SourceAccumulator* Join::make_accumulator(Server& server) {
         return 0;
 }
 
-bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
+bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap,
+                           ErrorHandler* errh) {
     plen_ = klen_ = 0;
     for (auto s = str.ubegin(); s != str.uend(); ) {
-	if (plen_ == pcap)
+	if (plen_ == pcap) {
+            errh->error("pattern %<%p{Str}%> too long, max length %d chars",
+                        &str, pcap);
 	    return false;
+        }
 	if (*s != '<') {
 	    append_literal(*s);
 	    ++s;
@@ -92,18 +97,18 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 	    while (s != str.uend() && *s != ':' && *s != '>')
 		++s;
 	    if (s == name0) {
-                printf("assign_parse(): Malformed name\n");
+                errh->error("malformed slot in pattern %<%p{Str}%>", &str);
 		return false;
             }
 	    Str name(name0, s);
             if (*s != ':' && slotmap.get(name) == -1) {
-                std::cout << "assign_parse(): No length description for " << name << std::endl;
+                errh->error("length of slot %<%p{Str}%> unknown", &name);
 		return false;
             }
 	    // parse name description
 	    int len = 0;
 	    if (*s == ':' && (s + 1 == str.uend() || !isdigit(s[1]))) {
-                std::cout << "assign_parse(): Malformed length description\n";
+                errh->error("malformed length for slot %<%p{Str}%>", &name);
 		return false;
             }
 	    else if (*s == ':') {
@@ -112,7 +117,7 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 		    len = 10 * len + *s - '0';
 	    }
 	    if (s == str.uend() || *s != '>') {
-                std::cout << "assign_parse(): Bad end\n";
+                errh->error("malformed slot %<%p{Str}%>", &name);
 		return false;
             }
 	    ++s;
@@ -120,13 +125,15 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
 	    int slot = slotmap.get(name);
 	    if (slot == -1) {
 		if (len == 0 || slotmap.size() == slot_capacity) {
-                    std::cout << "assign_parse(): Reached capacity " << slot_capacity << std::endl;
+                    errh->error("too many slots in pattern %<%p{Str}%>, max %d", &str, slot_capacity);
 		    return false;
                 }
 		slot = len + 256 * slotmap.size();
 		slotmap.set(name, slot);
-	    } else if (len != 0 && len != (slot & 255))
+	    } else if (len != 0 && len != (slot & 255)) {
+                errh->error("length of slot %<%p{Str}%> redeclared (was %d, now %d)", &name, slot & 255, len);
 		return false;
+            }
 	    // add slot
 	    append_slot(slot >> 8, slot & 255);
 	}
@@ -134,12 +141,14 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap) {
     return true;
 }
 
-bool Pattern::assign_parse(Str str) {
+bool Pattern::assign_parse(Str str, ErrorHandler* errh) {
     HashTable<Str, int> slotmap(-1);
-    return assign_parse(str, slotmap);
+    return assign_parse(str, slotmap, errh);
 }
 
-bool Join::assign_parse(Str str) {
+bool Join::assign_parse(Str str, ErrorHandler* errh) {
+    FileErrorHandler base_errh(stderr);
+    errh = errh ? errh : &base_errh;
     HashTable<Str, int> slotmap(-1);
     npat_ = 0;
     auto s = str.ubegin();
@@ -151,11 +160,17 @@ bool Join::assign_parse(Str str) {
 	    ++s;
 	if (pbegin == s)
             return analyze();
-	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap))
+        if (npat_ == pcap) {
+            errh->error("too many patterns in join (max %d)", pcap);
+            return false;
+        }
+	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap, errh))
 	    return false;
         // Every pattern must involve a known table
-        if (!table_name(pat_[npat_].expand_first(Match())))
+        if (!table_name(pat_[npat_].expand_first(Match()))) {
+            errh->error("pattern %<%.*s%> does not match a unique table prefix", (int) (s - pbegin), pbegin);
             return false;
+        }
 	++npat_;
     }
 }

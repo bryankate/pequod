@@ -365,12 +365,12 @@ void test_ma() {
     int nvotes_per_aid = 4;
     String aid;
     char buf[20];
-    
+
     for (int i = 0; i < nuser; ++i) {
         sprintf(buf, "a|%05d%05d", i, i);
         server.insert(String(buf), "article");
         for (int j = 0; j < nvotes_per_aid; ++j) {
-            sprintf(buf, "v|%05d%05d|%05d", i, i, j + 1);            
+            sprintf(buf, "v|%05d%05d|%05d", i, i, j + 1);
             server.insert(String(buf), "1");
         }
     }

@@ -1,5 +1,6 @@
 #include "pqanalytics.hh"
 #include "time.hh"
+#include "error.hh"
 #include <sys/resource.h>
 
 using std::cout;
@@ -47,9 +48,10 @@ void AnalyticsRunner::populate() {
     if (push_)
         return;
 
+    FileErrorHandler errh(stderr);
     Join* Bpm = new Join();
     Bpm->assign_parse("Bpm|<hour:4><min:2> "
-                      "Bps|<hour><min><sec:2>");
+                      "Bps|<hour><min><sec:2>", &errh);
     Bpm->set_jvt(jvt_sum_match);
     Bpm->ref();
 
