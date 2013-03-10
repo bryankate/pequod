@@ -49,6 +49,13 @@ void Pattern::append_slot(int si, int len) {
     klen_ += len;
 }
 
+bool operator==(const Pattern& a, const Pattern& b) {
+    return a.plen_ == b.plen_
+        && a.klen_ == b.klen_
+        && memcmp(a.pat_, b.pat_, Pattern::pcap) == 0
+        && memcmp(a.slotlen_, b.slotlen_, slot_capacity) == 0;
+}
+
 SourceRange* Join::make_source(Server& server, const Match& m,
                                Str ibegin, Str iend) {
     if (jvt() == jvt_copy_last)
@@ -253,6 +260,15 @@ Json Join::unparse_json() const {
 
 String Join::unparse() const {
     return unparse_json().unparse();
+}
+
+bool Join::same_structure(const Join& x) const {
+    if (npat_ != x.npat_ || jvt_ != x.jvt_)
+        return false;
+    for (int i = 0; i != npat_; ++i)
+        if (pat_[i] != x.pat_[i])
+            return false;
+    return true;
 }
 
 std::ostream& operator<<(std::ostream& stream, const Join& join) {

@@ -93,7 +93,7 @@ class Table : public pequod_set_base_hook {
     inline void validate(Str first, Str last);
 
     void add_copy(SourceRange* r);
-    void add_join(Str first, Str last, Join* j);
+    void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
     inline void add_validjoin(Str first, Str last, Join* j);
 
     void insert(const String& key, String value);
@@ -143,7 +143,7 @@ class Server {
 #endif
 
     inline void add_copy(SourceRange* r);
-    inline void add_join(Str first, Str last, Join* j);
+    inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
     inline void add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
@@ -315,10 +315,10 @@ inline void Server::add_copy(SourceRange* r) {
     make_table(tname).add_copy(r);
 }
 
-inline void Server::add_join(Str first, Str last, Join* join) {
+inline void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).add_join(first, last, join);
+    make_table(tname).add_join(first, last, join, errh);
 }
 
 inline void Server::add_validjoin(Str first, Str last, Join* join) {

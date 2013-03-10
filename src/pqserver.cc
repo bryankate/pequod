@@ -215,8 +215,18 @@ void Table::add_copy(SourceRange* r) {
     source_ranges_.insert(r);
 }
 
-void Table::add_join(Str first, Str last, Join* join) {
-    // track full ranges used for join and copy
+void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
+    FileErrorHandler xerrh(stderr);
+    errh = errh ? errh : &xerrh;
+
+    // check for redundant join
+    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
+         it != sink_ranges_.end(); ++it)
+        if (it->join()->same_structure(*join)) {
+            errh->error("join on [%p{Str}, %p{Str}) has same structure as overlapping join\n(new join ignored)", &first, &last);
+            return;
+        }
+
     sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
 					  join));
 }

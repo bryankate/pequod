@@ -75,6 +75,8 @@ class Pattern {
 
     friend std::ostream& operator<<(std::ostream&, const Pattern&);
 
+    friend bool operator==(const Pattern& a, const Pattern& b);
+
   private:
     enum { pcap = 12 };
     uint8_t plen_;
@@ -121,6 +123,8 @@ class Join {
     Json unparse_json() const;
     String unparse() const;
 
+    bool same_structure(const Join& x) const;
+
   private:
     enum { pcap = 5 };
     int npat_;
@@ -164,6 +168,7 @@ inline void Match::restore(const state& state) {
 
 inline Pattern::Pattern()
     : plen_(0), klen_(0) {
+    memset(pat_, 0, sizeof(pat_));
     for (int i = 0; i < slot_capacity; ++i)
         slotlen_[i] = slotpos_[i] = 0;
 }
@@ -392,6 +397,11 @@ inline void Join::expand(uint8_t* s, Str str) const {
 	    memcpy(s + first.slotpos_[*p - 128],
 		   str.udata() + last.slotpos_[*p - 128],
 		   last.slotlen_[*p - 128]);
+}
+
+bool operator==(const Pattern& a, const Pattern& b);
+inline bool operator!=(const Pattern& a, const Pattern& b) {
+    return !(a == b);
 }
 
 std::ostream& operator<<(std::ostream&, const Match&);
