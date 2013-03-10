@@ -6,14 +6,14 @@
 #endif
 #include <stdarg.h>
 #include <vector>
-#if HAVE_ADDRESSABLE_VA_LIST
-# define VA_LIST_REF_T		va_list *
-# define VA_LIST_DEREF(val)	(*(val))
-# define VA_LIST_REF(val)	(&(val))
-#else
+#if HAVE_NON_ADDRESSABLE_VA_LIST
 # define VA_LIST_REF_T		va_list
 # define VA_LIST_DEREF(val)	(val)
 # define VA_LIST_REF(val)	(val)
+#else
+# define VA_LIST_REF_T		va_list*
+# define VA_LIST_DEREF(val)	(*(val))
+# define VA_LIST_REF(val)	(&(val))
 #endif
 #if __GNUC__ <= 3
 # define ERRH_SENTINEL
