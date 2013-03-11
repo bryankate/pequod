@@ -5,6 +5,8 @@ namespace pq {
 
 // XXX check circular expansion
 
+uint64_t SourceRange::allocated_key_bytes = 0;
+
 SourceRange::SourceRange(Server& server, Join* join, const Match& m,
                          Str ibegin, Str iend)
     : join_(join), dst_table_(&server.make_table(join->sink().table_name())) {
@@ -15,14 +17,18 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
     if (ends - s >= ibegin.length()) {
         ibegin_.assign(s, ibegin.length());
         s += ibegin.length();
-    } else
+    } else {
         ibegin_.assign(new char[ibegin.length()], ibegin.length());
+        allocated_key_bytes += ibegin.length();
+    }
     memcpy(ibegin_.mutable_data(), ibegin.data(), ibegin.length());
 
     if (ends - s >= iend.length())
         iend_.assign(s, iend.length());
-    else
+    else {
         iend_.assign(new char[iend.length()], iend.length());
+        allocated_key_bytes += iend.length();
+    }
     memcpy(iend_.mutable_data(), iend.data(), iend.length());
 
     String str = String::make_uninitialized(join_->sink().key_length());

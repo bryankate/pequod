@@ -100,7 +100,8 @@ Json Server::stats() const {
 	.set("source_ranges_size", source_ranges_size)
 	.set("sink_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
-        .set("server_system_time", to_real(ru.ru_stime));
+        .set("server_system_time", to_real(ru.ru_stime))
+        .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
 }
 
 void Server::print(std::ostream& stream) {
