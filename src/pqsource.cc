@@ -56,10 +56,11 @@ void SourceRange::take_results(SourceRange& r) {
 void SourceRange::expand_results(const Datum* src) const {
     using std::swap;
     result* endit = results_.end();
-    for (result* it = results_.begin(); it < endit; ++it)
-        if (!it->sink || it->sink->valid())
+    for (result* it = results_.begin(); it != endit; )
+        if (!it->sink || it->sink->valid()) {
 	    join_->expand(it->key.mutable_udata(), src->key());
-        else {
+            ++it;
+        } else {
             it->sink->deref();
             swap(*it, endit[-1]);
             results_.pop_back();
