@@ -33,7 +33,7 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
 
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
-    resultkeys_.push_back(std::move(str));
+    resultkeys_.push_back(resultkey_type(std::move(str), SinkBound(dst_table_)));
 }
 
 SourceRange::~SourceRange() {
@@ -52,29 +52,45 @@ void SourceRange::add_sinks(const SourceRange& r) {
 std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     stream << "{" << "[" << r.ibegin() << ", " << r.iend() << "): copy ->";
     for (auto s : r.resultkeys_)
-        stream << " " << s;
+        stream << " " << s.first;
     return stream << " ]" << r.subtree_iend() << "}";
 }
 
+SinkBound::SinkBound(Table *t) : first_(t->end()), last_(t->end()) {
+}
 
-void CopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
+void SinkBound::update(StoreIterator it, Table *t, bool insert) {
+    if (insert) {
+        if (first_ == t->end() || inext(it) == first_)
+            first_ = it;
+        if (last_ == t->end() || inext(last_) == it)
+            last_ = it;
+    } else {
+        if (first_ == it)
+            first_ = inext(it);
+        if (last_ == it)
+            last_ = (it == t->begin()) ? t->end() : iprev(it);
+    }
+}
+
+
+void CopySourceRange::notify(const Datum* src, const String& oldval, int notifier) {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         if (!check_bounds(src->value_, oldval, notifier))
             return;
 
 	for (auto& s : resultkeys_) {
-	    join_->expand(s.mutable_udata(), src->key());
-	    if (notifier >= 0)
-                dst_table_->insert(s, src->value());
-            else
-		dst_table_->erase(s);
+	    join_->expand(s.first.mutable_udata(), src->key());
+            dst_table_->modify(s.first, s.second, [&](Datum *) -> String {
+                    return (notifier >= 0) ? src->value_ : erase_marker();
+                });
 	}
     }
 }
 
 
-void CountSourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
+void CountSourceRange::notify(const Datum* src, const String& oldval, int notifier) {
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
@@ -85,8 +101,8 @@ void CountSourceRange::notify(const Datum* src, const String& oldval, int notifi
             return;
 
         for (auto& s : resultkeys_) {
-            join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [=](Datum* dst) {
+            join_->expand(s.first.mutable_udata(), src->key());
+            dst_table_->modify(s.first, s.second, [=](Datum* dst) {
                     return String(notifier
                                   + (dst ? dst->value_.to_i() : 0));
                 });
@@ -110,12 +126,12 @@ void CountSourceAccumulator::commit(Str dst_key) {
 }
 
 
-void MinSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+void MinSourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
-            join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst) -> String {
+            join_->expand(s.first.mutable_udata(), src->key());
+            dst_table_->modify(s.first, s.second, [&](Datum* dst) -> String {
                     if (!dst || src->value_ < dst->value_)
                         return src->value_;
                     else if (old_value == dst->value_
@@ -142,12 +158,12 @@ void MinSourceAccumulator::commit(Str dst_key) {
 }
 
 
-void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
-            join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst) -> String {
+            join_->expand(s.first.mutable_udata(), src->key());
+            dst_table_->modify(s.first, s.second, [&](Datum* dst) -> String {
                     if (!dst || dst->value_ < src->value_)
                         return src->value_;
                     else if (old_value == dst->value_
@@ -174,11 +190,11 @@ void MaxSourceAccumulator::commit(Str dst_key) {
 }
 
 
-void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
-            join_->expand(s.mutable_udata(), src->key());
-            dst_table_->modify(s, [&](Datum* dst) {
+            join_->expand(s.first.mutable_udata(), src->key());
+            dst_table_->modify(s.first, s.second, [&](Datum* dst) {
                 if (!dst)
                     return src->value_;
                 else {

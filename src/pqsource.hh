@@ -7,12 +7,21 @@
 #include "json.hh"
 #include "pqjoin.hh"
 #include "local_vector.hh"
+#include "pqdatum.hh"
 #include <iostream>
 namespace pq {
 class Server;
 class Match;
 class Datum;
 class Table;
+
+struct SinkBound {
+    SinkBound(Table *t);
+    void update(StoreIterator it, Table *t, bool insert);
+    inline StoreIterator hint();
+    StoreIterator first_;
+    StoreIterator last_;
+};
 
 class SourceRange {
   public:
@@ -33,7 +42,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(const Datum* src, const String& old_value, int notifier) = 0;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -46,9 +55,11 @@ class SourceRange {
   public:
     rblinks<SourceRange> rblinks_;
   protected:
+
     Join* join_;
     Table* dst_table_;  // todo: move this to the join?
-    mutable local_vector<String, 4> resultkeys_;
+    typedef std::pair<String, SinkBound> resultkey_type;
+    mutable local_vector<resultkey_type, 4> resultkeys_;
   private:
     char buf_[32];
 };
@@ -80,12 +91,15 @@ class Bounded {
     long upper_;
 };
 
+inline StoreIterator SinkBound::hint() {
+    return last_;
+}
 
 class CopySourceRange : public SourceRange, public Bounded {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 };
 
 
@@ -93,7 +107,7 @@ class CountSourceRange : public SourceRange, public Bounded {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 };
 
 class CountSourceAccumulator : public SourceAccumulator, public Bounded {
@@ -110,7 +124,7 @@ class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 };
 
 class MinSourceAccumulator : public SourceAccumulator {
@@ -128,7 +142,7 @@ class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 };
 
 class MaxSourceAccumulator : public SourceAccumulator {
@@ -146,7 +160,7 @@ class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 };
 
 class SumSourceAccumulator : public SourceAccumulator {

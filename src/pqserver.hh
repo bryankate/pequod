@@ -29,6 +29,7 @@ class Table : public pequod_set_base_hook {
     typedef store_type::const_iterator const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
+    inline StoreIterator end();
 
     inline void validate(Str first, Str last);
 
@@ -38,7 +39,7 @@ class Table : public pequod_set_base_hook {
 
     void insert(const String& key, String value);
     template <typename F>
-    void modify(const String& key, const F& func);
+    void modify(const String& key, SinkBound &sb, const F& func);
     void erase(const String& key);
 
   private:
@@ -128,6 +129,10 @@ inline Table::const_iterator Table::end() const {
     return store_.end();
 }
 
+inline StoreIterator Table::end() {
+    return store_.end();
+}
+
 inline Table& Server::make_table(Str name) {
     bool inserted;
     auto it = tables_.find_insert(name, inserted);
@@ -159,16 +164,30 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(const String& key, const F& func) {
+void Table::modify(const String& key, SinkBound &sb, const F& func) {
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    std::pair<ServerStore::iterator, bool> p;
+    if (sb.hint() != store_.end() && sb.hint()->key() == key) {
+        p.first = sb.hint();
+        p.second = false;
+    } else
+        p = store_.insert_check(sb.hint(), key, DatumCompare(), cd);
     Datum* d = p.second ? NULL : p.first.operator->();
     String value = func(d);
-    if (!is_unchanged_marker(value)) {
+    if (is_erase_marker(value)) {
+        mandatory_assert(d);
+        sb.update(p.first, this, false);
+        store_.erase(p.first);
+        notify(d, String(), SourceRange::notify_erase);
+        delete d;
+    } else if (!is_unchanged_marker(value)) {
         if (p.second) {
             d = new Datum(key, String());
-            store_.insert_commit(*d, cd);
-        }
+            sb.update(store_.insert_commit(*d, cd), this, true);
+        } else
+            // XXX: we could get rid of sb.update once Accumulator goes through
+            // SourceRange
+            sb.update(p.first, this, true);
         d->value_.swap(value);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }

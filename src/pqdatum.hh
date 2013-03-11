@@ -60,6 +60,15 @@ struct DatumDispose {
 };
 
 typedef boost::intrusive::set<Datum> ServerStore;
+typedef ServerStore::iterator StoreIterator;
+
+inline StoreIterator inext(StoreIterator it) {
+    return ++it;
+}
+
+inline StoreIterator iprev(StoreIterator it) {
+    return --it;
+}
 
 
 inline bool operator<(const Datum& a, const Datum& b) {
