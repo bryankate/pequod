@@ -64,11 +64,19 @@ SinkBound::SinkBound(Table *t, bool single_sink)
 
 void SinkBound::update(StoreIterator it, Table *t, bool insert) {
     if (insert) {
+        if (single_sink_) {
+            first_ = last_ = it;
+            return;
+        }
         if (first_ == t->end() || inext(it) == first_)
             first_ = it;
         if (last_ == t->end() || inext(last_) == it)
             last_ = it;
     } else {
+        if (single_sink_) {
+            first_ = last_ = t->end();
+            return;
+        }
         if (first_ == it)
             first_ = inext(it);
         if (last_ == it)

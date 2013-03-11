@@ -184,10 +184,7 @@ void Table::modify(const String& key, SinkBound &sb, const F& func) {
         if (p.second) {
             d = new Datum(key, String());
             sb.update(store_.insert_commit(*d, cd), this, true);
-        } else
-            // XXX: we could get rid of sb.update once Accumulator goes through
-            // SourceRange
-            sb.update(p.first, this, true);
+        }
         d->value_.swap(value);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
