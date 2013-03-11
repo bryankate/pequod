@@ -52,10 +52,10 @@ class HackernewsPopulator {
 };
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(param["log"].as_b(false)), nusers_(param["nusers"].as_i(500)),
-      karma_(param["nusers"].as_i(500)),
+    : param_(param), log_(param["log"].as_b(false)), nusers_(param["nhnusers"].as_i(10)),
+      karma_(param["nhnusers"].as_i(10)),
       articles_(1000000),
-      pre_(param["narticles"].as_i(1000)),
+      pre_(param["narticles"].as_i(10)),
       narticles_(0), ncomments_(0), 
       materialize_inline_(param["materialize"].as_b(false)) {
 }
@@ -128,7 +128,7 @@ inline void HackernewsPopulator::set_log(bool val) {
 }
 
 inline uint32_t HackernewsPopulator::nops() const {
-    return param_["nops"].as_i(10000);
+    return param_["nops"].as_i(10);
 }
 
 inline uint32_t HackernewsPopulator::vote_rate() const {

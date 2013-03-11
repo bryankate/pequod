@@ -292,7 +292,9 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
     sprintf(buf3, "k|%s", user.c_str());
     auto kbit = server_.find(Str(buf3, 9));
     uint32_t karma = 0;
-    if (kbit != NULL) {
+    if (kbit == NULL)  {
+        mandatory_assert(check_karmas[atoi(user.c_str())] == 0);
+    } else if (kbit != NULL) {
         karma = atoi(kbit->value().c_str());
         uint32_t my_karma = check_karmas[atoi(user.c_str())];
         mandatory_assert(karma == my_karma && "Karma mismatch");

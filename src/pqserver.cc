@@ -139,8 +139,8 @@ static Clp_Option options[] = {
     { "log", 0, 1005, 0, Clp_Negate },
     { "tests", 0, 1006, 0, 0 },
     { "hn", 'h', 1007, 0, Clp_Negate },
-    { "narticles", 'a', 1008, Clp_ValInt, 0 },
-    { "nops", 'o', 1009, Clp_ValInt, 0 },
+    { "narticles", 'a', 1008, Clp_ValInt, 10 },
+    { "nops", 'o', 1009, Clp_ValInt, 10 },
     { "materialize", 'm', 1010, 0, Clp_Negate },
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1011, 0, Clp_Negate },
@@ -157,7 +157,8 @@ static Clp_Option options[] = {
     { "seed", 0, 1022, Clp_ValInt, 0 },
     { "pread", 0, 1023, Clp_ValInt, 0 },
     { "pg", 0, 1024, 0, Clp_Negate },
-    { "synchronous", 0, 1025, 0, Clp_Negate }
+    { "synchronous", 0, 1025, 0, Clp_Negate },
+    { "nhnusers", 0, 1026, Clp_ValInt, 10 }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
@@ -176,6 +177,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("push", !clp->negated);
 	else if (clp->option->long_name == String("nusers"))
 	    tp_param.set("nusers", clp->val.i);
+	else if (clp->option->long_name == String("nhnusers"))
+	    tp_param.set("nhnusers", clp->val.i);
 	else if (clp->option->long_name == String("duration"))
 	    tp_param.set("duration", clp->val.i);
 	else if (clp->option->long_name == String("narticles"))
