@@ -101,7 +101,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Si
             }
 
             if (r)
-                r->notify(it.operator->(), String(), SourceRange::notify_insert);
+                r->notify(it.operator->(), String(), SourceRange::notify_insert, true);
             else {
                 pat.match(it->key(), mf);
                 pat.match(it->key(), ml);

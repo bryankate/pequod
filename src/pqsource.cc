@@ -51,9 +51,10 @@ void SourceRange::add_sinks(const SourceRange& r) {
         resultkeys_.push_back(rk);
 }
 
-void SourceRange::notify(const Datum* src, const String& oldval, int notifier) {
+void SourceRange::notify(const Datum* src, const String& oldval, int notifier,
+                         bool known_match) {
     // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key()))
+    if (known_match || join_->back_source().match(src->key()))
         for (auto& r: resultkeys_) {
             join_->expand(r.first.mutable_udata(), src->key());
             notify(r, src, oldval, notifier);

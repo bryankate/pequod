@@ -47,7 +47,8 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+    virtual void notify(const Datum* src, const String& old_value, int notifier,
+                        bool known_match);
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
