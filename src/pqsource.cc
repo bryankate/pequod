@@ -5,24 +5,30 @@ namespace pq {
 
 // XXX check circular expansion
 
+uint64_t SourceRange::allocated_key_bytes = 0;
+
 SourceRange::SourceRange(Server& server, Join* join, const Match& m,
                          Str ibegin, Str iend)
     : join_(join), dst_table_(&server.make_table(join->sink().table_name())) {
     assert(table_name(ibegin, iend));
-    char* s = buf_;
-    char* ends = buf_ + sizeof(buf_);
+    char* buf = buf_;
+    char* endbuf = buf_ + sizeof(buf_);
 
-    if (ends - s >= ibegin.length()) {
-        ibegin_.assign(s, ibegin.length());
-        s += ibegin.length();
-    } else
+    if (endbuf - buf >= ibegin.length()) {
+        ibegin_.assign(buf, ibegin.length());
+        buf += ibegin.length();
+    } else {
         ibegin_.assign(new char[ibegin.length()], ibegin.length());
+        allocated_key_bytes += ibegin.length();
+    }
     memcpy(ibegin_.mutable_data(), ibegin.data(), ibegin.length());
 
-    if (ends - s >= iend.length())
-        iend_.assign(s, iend.length());
-    else
+    if (endbuf - buf >= iend.length())
+        iend_.assign(buf, iend.length());
+    else {
         iend_.assign(new char[iend.length()], iend.length());
+        allocated_key_bytes += iend.length();
+    }
     memcpy(iend_.mutable_data(), iend.data(), iend.length());
 
     String str = String::make_uninitialized(join_->sink().key_length());

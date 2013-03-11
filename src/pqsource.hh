@@ -37,6 +37,8 @@ class SourceRange {
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
+    static uint64_t allocated_key_bytes;
+
   private:
     Str ibegin_;
     Str iend_;

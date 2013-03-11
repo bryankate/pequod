@@ -193,9 +193,9 @@ void test_srs() {
                        pq::ServerRange::joinsink | pq::ServerRange::validjoin);
 
     pq::Join j;
-    pq::ServerRange *r0 = pq::ServerRange::make("a", "a}", pq::ServerRange::joinsink, &j);
-    pq::ServerRange *r1 = pq::ServerRange::make("a003", "a005", pq::ServerRange::validjoin, &j);
-    pq::ServerRange *r2 = pq::ServerRange::make("a007", "a010", pq::ServerRange::validjoin, &j);
+    pq::ServerRange *r0 = new pq::ServerRange("a", "a}", pq::ServerRange::joinsink, &j);
+    pq::ServerRange *r1 = new pq::ServerRange("a003", "a005", pq::ServerRange::validjoin, &j);
+    pq::ServerRange *r2 = new pq::ServerRange("a007", "a010", pq::ServerRange::validjoin, &j);
 
     srs.push_back(r0);
     srs.push_back(r1);
