@@ -28,11 +28,11 @@ QUERY = """SELECT articles.aid,articles.author,articles.link,""" \
 """GROUP BY articles.aid,comments.cid,karma_mv.karma\n"""
 
 class HNPopulator:
-    def __init__(self, db, user):
-        self.narticles = 10
-        self.nusers = 10
-        self.nvotes = 2
-        self.ncomments = 2
+    def __init__(self, db, user, port, narticles, nvotes, ncomments, nusers):
+        self.narticles = narticles
+        self.nusers = nusers
+        self.nvotes = nvotes
+        self.ncomments = ncomments
         self.nid = 0
         self.db = db
         self.user = user
@@ -81,7 +81,7 @@ class HNPopulator:
         self.psql("views.sql")
 
     def psql(self, fn):
-        stdout, stderr = Popen(['psql -d %s < %s' % (self.db, fn)], shell=True, stdout=PIPE, stderr=PIPE).communicate()
+        stdout, stderr = Popen(['psql -p %d -d %s < %s' % (self.port, self.db, fn)], shell=True, stdout=PIPE, stderr=PIPE).communicate()
         if 'ERROR' in stderr:
             print stdout, stderr
             exit(1)
@@ -93,11 +93,11 @@ class HNPopulator:
                 f.write(QUERY % aid)
 
     def bench(self):
-        stdout, stderr = Popen(['/usr/lib/postgresql/9.1/bin/pgbench hn -n -f bench.sql -T 20 -c 5'], shell=True, stdout=PIPE, stderr=PIPE).communicate()
+        stdout, stderr = Popen(['/usr/lib/postgresql/9.1/bin/pgbench %s -p %d -n -f bench.sql -T 20 -c 5' % (self.db, self.port)], shell=True, stdout=PIPE, stderr=PIPE).communicate()
         print stdout, stderr
 
 if __name__ == "__main__":
-    hn = HNPopulator("hn", os.environ['USER'])
+    hn = HNPopulator("hn", os.environ['USER'], 5477)
     if len(sys.argv) == 3:
         hn.load(sys.argv[1])
     elif len(sys.argv) == 1:

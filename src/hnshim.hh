@@ -293,9 +293,9 @@ class SQLHackernewsShim {
     void initialize(bool log, bool ma, preevent<R> e) {
         ma_ = ma;
         log_ = log;
-        CHECK_EQ(system("psql -d hn < db/hn/schema.sql > /dev/null"), 0);
+        CHECK_EQ(system("psql -p 5477 -d hn < db/hn/schema.sql > /dev/null"), 0);
         if (ma_)
-            CHECK_EQ(system("psql -d hn < db/hn/views.sql > /dev/null"), 0);
+            CHECK_EQ(system("psql -p 5477 -d hn < db/hn/views.sql > /dev/null"), 0);
         e();
     }
     template <typename R>

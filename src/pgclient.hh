@@ -10,7 +10,7 @@ class PostgresClient {
   public:
     PostgresClient() {
         // XXX: Parametrize for twitter, facebook, etc.
-        conn_ = PQconnectdb("dbname=hn");
+        conn_ = PQconnectdb("dbname=hn port=5477");
         mandatory_assert(conn_);
         mandatory_assert(PQstatus(conn_) != CONNECTION_BAD);
     }
