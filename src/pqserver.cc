@@ -158,7 +158,8 @@ static Clp_Option options[] = {
     { "pread", 0, 1023, Clp_ValInt, 0 },
     { "pg", 0, 1024, 0, Clp_Negate },
     { "synchronous", 0, 1025, 0, Clp_Negate },
-    { "hnusers", 'x', 1026, Clp_ValInt, 0 }
+    { "hnusers", 'x', 1026, Clp_ValInt, 0 },
+    { "large", 0, 1027, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };

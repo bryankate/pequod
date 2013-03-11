@@ -308,21 +308,11 @@ class SQLHackernewsShim {
     void initialize(bool log, bool ma, preevent<R> e) {
         ma_ = ma;
         log_ = log;
-        CHECK_EQ(system("psql -p 5477 -d hn < db/hn/schema.sql > /dev/null"), 0);
-        char buf[128];
-        sprintf(buf, "BEGIN");
-        pg_.insert(buf);
         e();
     }
 
     template <typename R>
     void post_populate(preevent<R> e) {
-        char buf[128];
-        sprintf(buf, "COMMIT");
-        pg_.insert(buf);
-        CHECK_EQ(system("psql -p 5477 -d hn < db/hn/schema_index.sql > /dev/null"), 0);
-        if (ma_)
-            CHECK_EQ(system("psql -p 5477 -d hn < db/hn/views.sql > /dev/null"), 0);
         e();
     }
 
@@ -398,7 +388,7 @@ class SQLHackernewsShim {
         // XXX: should use more general return type
         PGresult* res = pg_.query(buf);
         if (log_) {
-            printf("aid\tauthor\tlink\t\tcid\tuser\tcomment\t\tkarma\tvotes\n");
+            printf("aid\tauthor\tlink\t\tcid\tuser\tcomment\tkarma\tvotes\n");
             for (int i = 0; i < PQntuples(res); i++) {
                 for (int j = 0; j < PQnfields(res); j++)
                     std::cout << PQgetvalue(res, i, j) << "\t";
@@ -410,8 +400,13 @@ class SQLHackernewsShim {
         for (int i = 0; i < PQntuples(res); i++) {
             uint32_t karma = atoi(PQgetvalue(res, i, 6));
             String user = PQgetvalue(res, i, 4);
+            if (user == "")
+                continue;
             uint32_t my_karma = check_karmas[atoi(user.c_str())];
-            mandatory_assert(karma == my_karma && "Karma mismatch");
+            if (karma != my_karma) {
+                printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
+                mandatory_assert(false && "Karma mismatch");
+            }
         }
         pg_.done(res);
         e();
