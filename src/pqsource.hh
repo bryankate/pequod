@@ -26,6 +26,8 @@ struct SinkBound {
     bool single_sink_;
 };
 
+typedef std::pair<String, SinkBound*> resultkey_type;
+
 class SourceRange {
   public:
     SourceRange(Server& server, Join* join, const Match& m,
@@ -45,7 +47,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, const String& old_value, int notifier) = 0;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -58,10 +60,11 @@ class SourceRange {
   public:
     rblinks<SourceRange> rblinks_;
   protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier) = 0;
 
     Join* join_;
     Table* dst_table_;  // todo: move this to the join?
-    typedef std::pair<String, SinkBound*> resultkey_type;
     mutable local_vector<resultkey_type, 4> resultkeys_;
   private:
     char buf_[32];
@@ -87,7 +90,9 @@ class CopySourceRange : public SourceRange, public Bounded {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend, SinkBound* sb);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+  protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 
@@ -95,28 +100,36 @@ class CountSourceRange : public SourceRange, public Bounded {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend, SinkBound* sb);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+  protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend, SinkBound* sb);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+  protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend, SinkBound* sb);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+  protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend, SinkBound* sb);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+  protected:
+    virtual void notify(resultkey_type& r, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 inline Str SourceRange::ibegin() const {
