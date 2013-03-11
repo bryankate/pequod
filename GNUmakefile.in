@@ -116,7 +116,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
 
-$(OBJDIR)/rbtest: $(OBJDIR)/rb.o
+$(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
