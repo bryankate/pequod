@@ -75,6 +75,18 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
+void InvalidatorRange::notify(const Datum* src, const String&, int) const {
+    // XXX PERFORMANCE the match() is often not necessary
+    if (join_->source(joinpos_).match(src->key())) {
+	for (auto& res : results_) {
+            res.sink->invalidate();
+            res.sink->deref();
+        }
+        results_.clear();
+    }
+}
+
+
 void CopySourceRange::notify(const Datum* src, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {

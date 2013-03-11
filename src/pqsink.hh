@@ -10,6 +10,7 @@ class Join;
 class Server;
 class Match;
 class SourceAccumulator;
+class ValidJoinRange;
 
 class ServerRange {
   public:
@@ -49,15 +50,22 @@ class ServerRange {
     char buf_[32];
 
     void validate(Match& mf, Match& ml, int joinpos, Server& server,
-                  SourceAccumulator* accum);
+                  SourceAccumulator* accum, ValidJoinRange* sink);
 };
 
 class ValidJoinRange : public ServerRange {
   public:
     inline ValidJoinRange(Str first, Str last, Join *join);
 
-    bool valid() const {return true;}
-    void deref() {}
+    inline void ref();
+    inline void deref();
+
+    inline bool valid() const;
+    inline void invalidate();
+
+  private:
+    int refcount_;
+    bool valid_;
 };
 
 class ServerRangeSet {
@@ -113,7 +121,24 @@ inline bool ServerRange::expired_at(uint64_t t) const {
 }
 
 inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
-    : ServerRange(first, last, validjoin, join) {
+    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true) {
+}
+
+inline void ValidJoinRange::ref() {
+    ++refcount_;
+}
+
+inline void ValidJoinRange::deref() {
+    if (--refcount_ == 0)
+        delete this;            // XXX
+}
+
+inline bool ValidJoinRange::valid() const {
+    return valid_;
+}
+
+inline void ValidJoinRange::invalidate() {
+    valid_ = false;
 }
 
 inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
@@ -129,5 +154,5 @@ inline int ServerRangeSet::total_size() const {
     return r_.size();
 }
 
-}
+} // namespace pq
 #endif

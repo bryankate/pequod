@@ -30,15 +30,17 @@ void test_simple() {
 	{"p|00002|0000000001", "Hello,"},
 	{"p|00002|0000000022", "Which is awesome"},
 	{"p|10000|0000000010", "My name is"},
-	{"p|10000|0000000018", "Jennifer Jones"}
+	{"p|10000|0000000018", "Jennifer Jones"},
+        {"p|10001|0000000011", "Not whatever the next thing claims"},
+        {"p|10001|0000000019", ", Idiot,"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
 
     pq::Join j;
-    j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
-		   "f|<user_id>|<poster_id> "
-		   "p|<poster_id>|<time>");
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> "
+		   "f|<subscriber>|<poster> "
+		   "p|<poster>|<time>");
     j.ref();
     server.add_join("t|", "t}", &j);
 
@@ -46,8 +48,12 @@ void test_simple() {
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
-
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+
+    server.insert("f|00001|10001", "1");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
 }
 
 void test_count() {

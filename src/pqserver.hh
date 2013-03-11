@@ -34,7 +34,7 @@ class Table : public pequod_set_base_hook {
 
     void add_copy(SourceRange* r);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
-    inline void add_validjoin(Str first, Str last, Join* j);
+    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
     void insert(const String& key, String value);
     template <typename F>
@@ -84,7 +84,7 @@ class Server {
 
     inline void add_copy(SourceRange* r);
     inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
-    inline void add_validjoin(Str first, Str last, Join* j);
+    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
@@ -173,8 +173,10 @@ void Table::modify(const String& key, const F& func) {
         delete d;
 }
 
-inline void Table::add_validjoin(Str first, Str last, Join* join) {
-    sink_ranges_.insert(new ValidJoinRange(first, last, join));
+inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
+    ValidJoinRange* sink = new ValidJoinRange(first, last, join);
+    sink_ranges_.insert(sink);
+    return sink;
 }
 
 inline void Table::validate(Str first, Str last) {
@@ -215,10 +217,10 @@ inline void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh
     make_table(tname).add_join(first, last, join, errh);
 }
 
-inline void Server::add_validjoin(Str first, Str last, Join* join) {
+inline ValidJoinRange* Server::add_validjoin(Str first, Str last, Join* join) {
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).add_validjoin(first, last, join);
+    return make_table(tname).add_validjoin(first, last, join);
 }
 
 #if 0

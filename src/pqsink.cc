@@ -45,15 +45,16 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        validate(mf, ml, 0, server, 0);
+        ValidJoinRange* sink = 0;
         if (join_->maintained() || join_->staleness())
-            server.add_validjoin(first, last, join_);
+            sink = server.add_validjoin(first, last, join_);
+        validate(mf, ml, 0, server, 0, sink);
     }
 }
 
 
 void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
-                           SourceAccumulator* accum) {
+                           SourceAccumulator* accum, ValidJoinRange* sink) {
     uint8_t kf[128], kl[128], kaccum[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -112,7 +113,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
             else {
                 pat.match(it->key(), mf);
                 pat.match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server, accum);
+                validate(mf, ml, joinpos + 1, server, accum, sink);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
             }
@@ -127,12 +128,16 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
         delete accum;
     }
 
-    if (r) {
-        if (join_->maintained())
+    if (join_->maintained()) {
+        if (r) {
+            r->set_sink(sink);
             server.add_copy(r);
-        else
-            delete r;
-    }
+        } else
+            server.add_copy(new InvalidatorRange(server, join_, joinpos,
+                                                 Str(kf, kflen), Str(kl, kllen),
+                                                 sink));
+    } else if (r)
+        delete r;
 }
 
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
@@ -163,15 +168,16 @@ void ServerRangeSet::validate_join(ServerRange* jr, Server& server) {
         if (r_[i]
             && r_[i]->type() == ServerRange::validjoin
             && r_[i]->join() == jr->join()) {
-            if (r_[i]->expired_at(now)) {
+            ValidJoinRange* sink = static_cast<ValidJoinRange*>(r_[i]);
+            if (sink->expired_at(now) || !sink->valid()) {
                 // TODO: remove the expired validjoin from the server
                 // (and possibly this set if it will be used after this validation)
                 continue;
             }
             // XXX PERFORMANCE can often avoid this check
-            if (last_valid < r_[i]->ibegin())
-                jr->validate(last_valid, r_[i]->ibegin(), server);
-            last_valid = r_[i]->iend();
+            if (last_valid < sink->ibegin())
+                jr->validate(last_valid, sink->ibegin(), server);
+            last_valid = sink->iend();
         }
     if (last_valid < last_)
         jr->validate(last_valid, last_, server);

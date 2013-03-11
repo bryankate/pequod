@@ -6,6 +6,7 @@
 #include "rb.hh"
 #include "json.hh"
 #include "pqjoin.hh"
+#include "pqsink.hh"
 #include "local_vector.hh"
 #include <iostream>
 namespace pq {
@@ -29,6 +30,7 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline Join* join() const;
+    inline void set_sink(ValidJoinRange* sink);
     void take_results(SourceRange& r);
 
     enum notify_type {
@@ -70,6 +72,16 @@ class SourceAccumulator {
   protected:
     Join* join_;
     Table* dst_table_;  // todo: move this to the join?
+};
+
+
+class InvalidatorRange : public SourceRange {
+  public:
+    inline InvalidatorRange(Server& server, Join* join, int joinpos,
+                            Str ibegin, Str iend, ValidJoinRange* sink);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  private:
+    int joinpos_;
 };
 
 
@@ -210,6 +222,12 @@ inline Join* SourceRange::join() const {
     return join_;
 }
 
+inline void SourceRange::set_sink(ValidJoinRange* sink) {
+    assert(results_.size() == 1 && !results_[0].sink);
+    if ((results_[0].sink = sink))
+        sink->ref();
+}
+
 inline interval<Str> SourceRange::interval() const {
     return make_interval(ibegin(), iend());
 }
@@ -225,6 +243,13 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
 
 inline SourceAccumulator::SourceAccumulator(Join *join, Table* dst_table)
     : join_(join), dst_table_(dst_table) {
+}
+
+
+inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, Str ibegin, Str iend, ValidJoinRange* sink)
+    : SourceRange(server, join, Match(), ibegin, iend), joinpos_(joinpos) {
+    assert(sink);
+    set_sink(sink);
 }
 
 
