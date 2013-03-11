@@ -103,6 +103,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqbase.o \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqsource.o \
+	$(OBJDIR)/pqsink.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqanalytics.o \
