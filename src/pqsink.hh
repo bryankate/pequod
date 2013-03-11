@@ -46,7 +46,6 @@ class ServerRange {
     range_type type_;
     Join* join_;
     uint64_t expires_at_;
-    mutable local_vector<String, 4> resultkeys_;
     char buf_[32];
 
     void validate(Match& mf, Match& ml, int joinpos, Server& server,
