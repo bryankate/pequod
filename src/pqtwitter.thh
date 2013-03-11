@@ -295,9 +295,15 @@ void TwitterRunner<S>::run(tamer::event<> done) {
                 printf("%d: post p|%05d|%010d\n", time, u, time);
             post(u, time, "?!?#*", gr.make_event());
             ++npost;
+        } else if (a < 3) {
+            uint32_t follower;
+            do {
+                follower = rng(nusers);
+            } while (follower == u);
+            server_.subscribe(u, follower, gr.make_event());
         } else {
             tx = load_times[u];
-            if (!tx || a < 3) {
+            if (!tx || a < 4) {
                 tx = time - 32000;
                 ++nfull;
             } else
