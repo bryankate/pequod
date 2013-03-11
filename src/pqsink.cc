@@ -85,6 +85,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Si
     mk &= ml;
     Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
     const Pattern& pat = join_->source(joinpos);
+    Table* tab = &server.make_table(join_->sink().table_name());
 
     for (; it != ilast; ++it) {
 	if (it->key().length() != pat.key_length())
@@ -95,7 +96,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Si
         if (pat.match(it->key(), mk)) {
             if (check_accum
                 && !join_->sink().match_same(Str(kaccum, kaccumlen), mk)) {
-                sb = new SinkBound(&server.make_table(join_->sink().table_name()));
+                sb = new SinkBound(tab, join_->jvt() != jvt_copy_last);
                 kaccumlen = join_->sink().expand_first(kaccum, mk);
             }
 

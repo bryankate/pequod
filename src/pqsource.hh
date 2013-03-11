@@ -16,12 +16,14 @@ class Datum;
 class Table;
 
 struct SinkBound {
-    SinkBound(Table* t);
+    SinkBound(Table* t, bool single_sink);
     void update(StoreIterator it, Table* t, bool insert);
     inline StoreIterator hint();
+    inline bool single_sink() const;
   private:
     StoreIterator first_;
     StoreIterator last_;
+    bool single_sink_;
 };
 
 class SourceRange {
@@ -211,6 +213,9 @@ inline StoreIterator SinkBound::hint() {
     return last_;
 }
 
+inline bool SinkBound::single_sink() const {
+    return single_sink_;
+}
 
 }
 #endif

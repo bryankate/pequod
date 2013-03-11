@@ -34,7 +34,7 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
     if (sb == NULL)
-        sb = new SinkBound(dst_table_);
+        sb = new SinkBound(dst_table_, join_->jvt() != jvt_copy_last);
     resultkeys_.push_back(resultkey_type(std::move(str), sb));
 }
 
@@ -58,7 +58,8 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     return stream << " ]" << r.subtree_iend() << "}";
 }
 
-SinkBound::SinkBound(Table *t) : first_(t->end()), last_(t->end()) {
+SinkBound::SinkBound(Table *t, bool single_sink)
+    : first_(t->end()), last_(t->end()), single_sink_(single_sink) {
 }
 
 void SinkBound::update(StoreIterator it, Table *t, bool insert) {

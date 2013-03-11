@@ -167,7 +167,7 @@ template <typename F>
 void Table::modify(const String& key, SinkBound &sb, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
-    if (sb.hint() != store_.end() && sb.hint()->key() == key) {
+    if (sb.hint() != store_.end() && (sb.single_sink() || sb.hint()->key() == key)) {
         p.first = sb.hint();
         p.second = false;
     } else
