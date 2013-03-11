@@ -6,32 +6,20 @@
 #include "rb.hh"
 #include "json.hh"
 #include "pqjoin.hh"
+#include "pqsink.hh"
 #include "local_vector.hh"
-#include "pqdatum.hh"
 #include <iostream>
 namespace pq {
 class Server;
 class Match;
 class Datum;
 class Table;
-
-struct SinkBound {
-    SinkBound(Table* t, bool single_sink);
-    void update(StoreIterator it, Table* t, bool insert);
-    inline StoreIterator hint();
-    inline bool single_sink() const;
-  private:
-    StoreIterator first_;
-    StoreIterator last_;
-    bool single_sink_;
-};
-
-typedef std::pair<String, SinkBound*> resultkey_type;
+class ValidJoinRange;
 
 class SourceRange {
   public:
     SourceRange(Server& server, Join* join, const Match& m,
-                Str ibegin, Str iend, SinkBound* sb);
+                Str ibegin, Str iend);
     virtual ~SourceRange();
 
     typedef Str endpoint_type;
@@ -42,13 +30,13 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline Join* join() const;
-    void add_sinks(const SourceRange& r);
+    inline void set_sink(ValidJoinRange* sink);
+    void take_results(SourceRange& r);
 
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, const String& old_value, int notifier,
-                        bool known_match);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const = 0;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -61,19 +49,124 @@ class SourceRange {
   public:
     rblinks<SourceRange> rblinks_;
   protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier) = 0;
-
     Join* join_;
     Table* dst_table_;  // todo: move this to the join?
-    mutable local_vector<resultkey_type, 4> resultkeys_;
+    struct result {
+        String key;
+        ValidJoinRange* sink;
+    };
+    mutable local_vector<result, 4> results_;
   private:
     char buf_[32];
+
+  protected:
+    void expand_results(const Datum* src) const;
 };
 
-class Bounded {
+class SourceAccumulator {
   public:
-    inline Bounded(const Json& param);
+    inline SourceAccumulator(Join *join, Table* dst_table);
+    virtual ~SourceAccumulator() {}
+    virtual void notify(const Datum* src) = 0;
+    virtual void commit(Str dst_key) = 0;
+  protected:
+    Join* join_;
+    Table* dst_table_;  // todo: move this to the join?
+};
+
+
+class InvalidatorRange : public SourceRange {
+  public:
+    inline InvalidatorRange(Server& server, Join* join, int joinpos,
+                            Str ibegin, Str iend, ValidJoinRange* sink);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  private:
+    int joinpos_;
+};
+
+
+class CopySourceRange : public SourceRange {
+  public:
+    inline CopySourceRange(Server& server, Join* join, const Match& m,
+                           Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+
+class CountSourceRange : public SourceRange {
+  public:
+    inline CountSourceRange(Server& server, Join* join, const Match& m,
+                            Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class CountSourceAccumulator : public SourceAccumulator {
+  public:
+    inline CountSourceAccumulator(Join *join, Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    long n_;
+};
+
+
+class MinSourceRange : public SourceRange {
+  public:
+    inline MinSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class MinSourceAccumulator : public SourceAccumulator {
+  public:
+    inline MinSourceAccumulator(Join *join, Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    String val_;
+    bool any_;
+};
+
+
+class MaxSourceRange : public SourceRange {
+  public:
+    inline MaxSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class MaxSourceAccumulator : public SourceAccumulator {
+  public:
+    inline MaxSourceAccumulator(Join *join, Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    String val_;
+    bool any_;
+};
+
+
+class SumSourceRange : public SourceRange {
+  public:
+    inline SumSourceRange(Server& server, Join* join, const Match& m,
+                          Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+};
+
+class SumSourceAccumulator : public SourceAccumulator {
+  public:
+    inline SumSourceAccumulator(Join *join, Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    long sum_;
+    bool any_;
+};
+
+
+class Bounds {
+  public:
+    inline Bounds(const Json& param);
 
     inline bool has_bounds() const;
     inline bool in_bounds(long val) const;
@@ -87,51 +180,35 @@ class Bounded {
     long upper_;
 };
 
-class CopySourceRange : public SourceRange, public Bounded {
+class BoundedCopySourceRange : public SourceRange {
   public:
-    inline CopySourceRange(Server& server, Join* join, const Match& m,
-                           Str ibegin, Str iend, SinkBound* sb);
-  protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier);
+    inline BoundedCopySourceRange(Server& server, Join* join, const Match& m,
+                                  Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  private:
+    Bounds bounds_;
 };
 
 
-class CountSourceRange : public SourceRange, public Bounded {
+class BoundedCountSourceRange : public SourceRange {
   public:
-    inline CountSourceRange(Server& server, Join* join, const Match& m,
-                            Str ibegin, Str iend, SinkBound* sb);
-  protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier);
+    inline BoundedCountSourceRange(Server& server, Join* join, const Match& m,
+                                   Str ibegin, Str iend);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  private:
+    Bounds bounds_;
 };
 
-class MinSourceRange : public SourceRange {
+class BoundedCountSourceAccumulator : public SourceAccumulator {
   public:
-    inline MinSourceRange(Server& server, Join* join, const Match& m,
-                          Str ibegin, Str iend, SinkBound* sb);
-  protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier);
+    inline BoundedCountSourceAccumulator(Join *join, Table* dst_table);
+    virtual void notify(const Datum* src);
+    virtual void commit(Str dst_key);
+  private:
+    long n_;
+    Bounds bounds_;
 };
 
-class MaxSourceRange : public SourceRange {
-  public:
-    inline MaxSourceRange(Server& server, Join* join, const Match& m,
-                          Str ibegin, Str iend, SinkBound* sb);
-  protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier);
-};
-
-class SumSourceRange : public SourceRange {
-  public:
-    inline SumSourceRange(Server& server, Join* join, const Match& m,
-                          Str ibegin, Str iend, SinkBound* sb);
-  protected:
-    virtual void notify(resultkey_type& r, const Datum* src,
-                        const String& old_value, int notifier);
-};
 
 inline Str SourceRange::ibegin() const {
     return ibegin_;
@@ -143,6 +220,12 @@ inline Str SourceRange::iend() const {
 
 inline Join* SourceRange::join() const {
     return join_;
+}
+
+inline void SourceRange::set_sink(ValidJoinRange* sink) {
+    assert(results_.size() == 1 && !results_[0].sink);
+    if ((results_[0].sink = sink))
+        sink->ref();
 }
 
 inline interval<Str> SourceRange::interval() const {
@@ -157,18 +240,72 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline Bounded::Bounded(const Json& param)
+
+inline SourceAccumulator::SourceAccumulator(Join *join, Table* dst_table)
+    : join_(join), dst_table_(dst_table) {
+}
+
+
+inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, Str ibegin, Str iend, ValidJoinRange* sink)
+    : SourceRange(server, join, Match(), ibegin, iend), joinpos_(joinpos) {
+    assert(sink);
+    set_sink(sink);
+}
+
+
+inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+
+inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline CountSourceAccumulator::CountSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), n_(0) {
+}
+
+
+inline MinSourceRange::MinSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline MinSourceAccumulator::MinSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), any_(false) {
+}
+
+
+inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline MaxSourceAccumulator::MaxSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), any_(false) {
+}
+
+
+inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend) {
+}
+
+inline SumSourceAccumulator::SumSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), sum_(0), any_(false) {
+}
+
+
+inline Bounds::Bounds(const Json& param)
     : has_lower_(!param.get("lbound").is_null()),
       has_upper_(!param.get("ubound").is_null()),
       lower_(param["lbound"].as_i(0)),
       upper_(param["ubound"].as_i(0)) {
 }
 
-inline bool Bounded::has_bounds() const {
+inline bool Bounds::has_bounds() const {
     return has_lower_ || has_upper_;
 }
 
-inline bool Bounded::in_bounds(long val) const {
+inline bool Bounds::in_bounds(long val) const {
     if ((has_lower_ && val < lower_) ||
         (has_upper_ && val > upper_))
         return false;
@@ -176,8 +313,8 @@ inline bool Bounded::in_bounds(long val) const {
     return true;
 }
 
-inline bool Bounded::check_bounds(const String& src, const String&old,
-                                  int& notifier) const {
+inline bool Bounds::check_bounds(const String& src, const String& old,
+                                 int& notifier) const {
     if (!has_bounds())
         return true;
 
@@ -197,39 +334,19 @@ inline bool Bounded::check_bounds(const String& src, const String&old,
     return true;
 }
 
-inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend,
-                                        SinkBound* sb)
-    : SourceRange(server, join, m, ibegin, iend, sb), Bounded(join->jvt_config()) {
+
+inline BoundedCopySourceRange::BoundedCopySourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend), bounds_(join->jvt_config()) {
 }
 
 
-inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend,
-                                          SinkBound* sb)
-    : SourceRange(server, join, m, ibegin, iend, sb), Bounded(join->jvt_config()) {
+inline BoundedCountSourceRange::BoundedCountSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend)
+    : SourceRange(server, join, m, ibegin, iend), bounds_(join->jvt_config()) {
 }
 
-inline MinSourceRange::MinSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend,
-                                      SinkBound* sb)
-    : SourceRange(server, join, m, ibegin, iend, sb) {
+inline BoundedCountSourceAccumulator::BoundedCountSourceAccumulator(Join *join, Table* dst_table)
+    : SourceAccumulator(join, dst_table), n_(0), bounds_(join->jvt_config()) {
 }
 
-inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend,
-                                      SinkBound* sb)
-    : SourceRange(server, join, m, ibegin, iend, sb) {
-}
-
-inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str ibegin, Str iend,
-                                      SinkBound* sb)
-    : SourceRange(server, join, m, ibegin, iend, sb) {
-}
-
-inline StoreIterator SinkBound::hint() {
-    return last_;
-}
-
-inline bool SinkBound::single_sink() const {
-    return single_sink_;
-}
-
-}
+} // namespace pq
 #endif

@@ -39,7 +39,7 @@ void Table::add_copy(SourceRange* r) {
 	if (it->join() == r->join()) {
 	    // XXX may copy too much. This will not actually cause visible
 	    // bugs I think?, but will grow the store
-	    it->add_sinks(*r);
+	    it->take_results(*r);
             delete r;
 	    return;
 	}

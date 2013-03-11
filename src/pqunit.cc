@@ -30,15 +30,17 @@ void test_simple() {
 	{"p|00002|0000000001", "Hello,"},
 	{"p|00002|0000000022", "Which is awesome"},
 	{"p|10000|0000000010", "My name is"},
-	{"p|10000|0000000018", "Jennifer Jones"}
+	{"p|10000|0000000018", "Jennifer Jones"},
+        {"p|10001|0000000011", "Not whatever the next thing claims"},
+        {"p|10001|0000000019", ", Idiot,"}
     };
     for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
         server.insert(it->first, it->second);
 
     pq::Join j;
-    j.assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> "
-		   "f|<user_id>|<poster_id> "
-		   "p|<poster_id>|<time>");
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> "
+		   "f|<subscriber>|<poster> "
+		   "p|<poster>|<time>");
     j.ref();
     server.add_join("t|", "t}", &j);
 
@@ -46,8 +48,12 @@ void test_simple() {
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
-
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+
+    server.insert("f|00001|10001", "1");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
 }
 
 void test_count() {
@@ -576,7 +582,7 @@ void test_op_bounds() {
                                "b|<aid>|<bid:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
+    j1.set_jvt(pq::jvt_bounded_count_match);
     j1.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
     j1.ref();
 
@@ -619,7 +625,7 @@ void test_op_bounds() {
                                "c|<did>|<cid>"));
     CHECK_EQ(j2.nsource(), 2);
 
-    j2.set_jvt(pq::jvt_copy_last);
+    j2.set_jvt(pq::jvt_bounded_copy_last);
     j2.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
     j2.ref();
 
@@ -669,55 +675,6 @@ void test_swap() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
-static int64_t ncompare_ = 0;
-struct CountedDatumCompare {
-    template <typename T1, typename T2>
-    inline bool operator()(const T1& a, const T2& b) const {
-        ++ncompare_;
-        pq::DatumCompare impl;
-        return impl(a, b);
-    }
-};
-
-void walk(pq::ServerStore &store, const String& hk,
-          pq::ServerStore::const_iterator hint,
-          const int64_t n, bool with_hint) {
-    struct rusage ru[2];
-    pq::ServerStore::insert_commit_data cd;
-    CountedDatumCompare cdc;
-    getrusage(RUSAGE_SELF, &ru[0]);
-    for (int64_t i = 0; i < n; ++i)
-        if (with_hint)
-            mandatory_assert(!store.insert_check(hint, hk, cdc, cd).second);
-        else
-            mandatory_assert(!store.insert_check(hk, cdc, cd).second);
-    getrusage(RUSAGE_SELF, &ru[1]);
-
-    Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime))
-                       .set("compare_per_search", ncompare_ / n);
-    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-    ncompare_ = 0;
-}
-
-void test_hint() {
-    pq::ServerStore store;
-    for (int i = 0; i < 100000; ++i) {
-        String k(i);
-        pq::Datum *d = new pq::Datum(k, k);
-        auto p = store.insert(*d);
-        mandatory_assert(p.second);
-    }
-    String hk(5050);
-    const int64_t n = 10000000;
-    walk(store, hk, store.end(), n, false);
-    auto h = store.find(hk, pq::DatumCompare());
-    mandatory_assert(h != store.end());
-    walk(store, hk, h, n, true);
-    walk(store, hk, ++h, n, true);
-    --h;
-    walk(store, hk, --h, n, true);
-}
-
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -739,7 +696,6 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
-    ADD_EXP_TEST(test_hint);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;

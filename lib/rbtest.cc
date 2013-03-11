@@ -8,6 +8,7 @@ unsigned long long rbaccount_rotation, rbaccount_flip, rbaccount_insert, rbaccou
 #include "rb.hh"
 #include "interval.hh"
 #include "interval_tree.hh"
+#include "str.hh"
 #include <sys/time.h>
 #include <sys/resource.h>
 static bool print_actions;
@@ -192,23 +193,28 @@ struct compare_first {
     }
 };
 
-struct int_interval : public interval<int> {
-    int subtree_iend_;
-    int_interval(const interval<int> &x)
-	: interval<int>(x), subtree_iend_(x.iend()) {
+template <typename T>
+struct rbinterval : public interval<T> {
+    T subtree_iend_;
+    rbinterval(const interval<T>& x)
+	: interval<T>(x), subtree_iend_(x.iend()) {
     }
-    int_interval(int first, int last)
-	: interval<int>(first, last), subtree_iend_(iend()) {
+    rbinterval(T first, T last)
+	: interval<T>(first, last), subtree_iend_(this->iend()) {
     }
-    int subtree_iend() const {
+    T subtree_iend() const {
 	return subtree_iend_;
     }
-    void set_subtree_iend(int i) {
-	subtree_iend_ = i;
+    void set_subtree_iend(T x) {
+	subtree_iend_ = x;
     }
 };
 
-std::ostream& operator<<(std::ostream& s, const rbwrapper<int_interval>& x) {
+typedef rbinterval<int> int_interval;
+typedef rbinterval<Str> str_interval;
+
+template <typename T>
+std::ostream& operator<<(std::ostream& s, const rbwrapper<rbinterval<T> >& x) {
     return s << "[" << x.ibegin() << ", " << x.iend() << ") ..." << x.subtree_iend();
 }
 
@@ -410,15 +416,26 @@ int main(int argc, char **argv) {
 	std::cerr << tree << "\n";
     }
 
-    interval_tree<rbwrapper<int_interval> > tree;
-    for (int i = 0; i < 100; ++i) {
-	int a = random() % 1000;
-	tree.insert(new rbwrapper<int_interval>(a, a + random() % 200));
+    {
+        interval_tree<rbwrapper<int_interval> > tree;
+        for (int i = 0; i < 100; ++i) {
+            int a = random() % 1000;
+            tree.insert(new rbwrapper<int_interval>(a, a + random() % 200));
+        }
+        std::cerr << tree << "\n\n";
+        for (auto it = tree.begin_contains(40); it != tree.end(); ++it)
+            std::cerr << "... " << *it << "\n";
+        std::cerr << "\n";
+        for (auto it = tree.begin_overlaps(interval<int>(10, 30)); it != tree.end(); ++it)
+            std::cerr << "... " << *it << "\n";
     }
-    std::cerr << tree << "\n\n";
-    for (auto it = tree.begin_contains(40); it != tree.end(); ++it)
-        std::cerr << "... " << *it << "\n";
-    std::cerr << "\n";
-    for (auto it = tree.begin_overlaps(interval<int>(10, 30)); it != tree.end(); ++it)
-        std::cerr << "... " << *it << "\n";
+
+    {
+        interval_tree<rbwrapper<str_interval> > tree;
+        tree.insert(new rbwrapper<str_interval>("t|", "t}"));
+        tree.insert(new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
+        std::cerr << tree << "\n\n";
+        tree.insert(new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
+        std::cerr << tree << "\n\n";
+    }
 }

@@ -29,17 +29,16 @@ class Table : public pequod_set_base_hook {
     typedef store_type::const_iterator const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
-    inline StoreIterator end();
 
     inline void validate(Str first, Str last);
 
     void add_copy(SourceRange* r);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
-    inline void add_validjoin(Str first, Str last, Join* j);
+    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
     void insert(const String& key, String value);
     template <typename F>
-    void modify(const String& key, SinkBound &sb, const F& func);
+    void modify(const String& key, const F& func);
     void erase(const String& key);
 
   private:
@@ -85,7 +84,7 @@ class Server {
 
     inline void add_copy(SourceRange* r);
     inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
-    inline void add_validjoin(Str first, Str last, Join* j);
+    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
@@ -129,10 +128,6 @@ inline Table::const_iterator Table::end() const {
     return store_.end();
 }
 
-inline StoreIterator Table::end() {
-    return store_.end();
-}
-
 inline Table& Server::make_table(Str name) {
     bool inserted;
     auto it = tables_.find_insert(name, inserted);
@@ -160,38 +155,28 @@ inline size_t Server::count(Str first, Str last) const {
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        it->notify(d, old_value, notifier, false);
+        it->notify(d, old_value, notifier);
 }
 
 template <typename F>
-void Table::modify(const String& key, SinkBound &sb, const F& func) {
+void Table::modify(const String& key, const F& func) {
     store_type::insert_commit_data cd;
-    std::pair<ServerStore::iterator, bool> p;
-    if (sb.hint() != store_.end() && (sb.single_sink() || sb.hint()->key() == key)) {
-        p.first = sb.hint();
-        p.second = false;
-    } else
-        p = store_.insert_check(sb.hint(), key, DatumCompare(), cd);
-    Datum* d = p.second ? NULL : p.first.operator->();
-    String value = func(d);
-    if (is_erase_marker(value)) {
-        mandatory_assert(d);
-        sb.update(p.first, this, false);
-        store_.erase(p.first);
-        notify(d, String(), SourceRange::notify_erase);
-        delete d;
-    } else if (!is_unchanged_marker(value)) {
-        if (p.second) {
-            d = new Datum(key, String());
-            sb.update(store_.insert_commit(*d, cd), this, true);
-        }
+    auto p = store_.insert_check(key, DatumCompare(), cd);
+    Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
+    String value = func(d, p.second);
+    if (!is_unchanged_marker(value)) {
         d->value_.swap(value);
+        if (p.second)
+            store_.insert_commit(*d, cd);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
-    }
+    } else if (p.second)
+        delete d;
 }
 
-inline void Table::add_validjoin(Str first, Str last, Join* join) {
-    sink_ranges_.insert(new ServerRange(first, last, ServerRange::validjoin, join));
+inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
+    ValidJoinRange* sink = new ValidJoinRange(first, last, join);
+    sink_ranges_.insert(sink);
+    return sink;
 }
 
 inline void Table::validate(Str first, Str last) {
@@ -232,10 +217,10 @@ inline void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh
     make_table(tname).add_join(first, last, join, errh);
 }
 
-inline void Server::add_validjoin(Str first, Str last, Join* join) {
+inline ValidJoinRange* Server::add_validjoin(Str first, Str last, Join* join) {
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).add_validjoin(first, last, join);
+    return make_table(tname).add_validjoin(first, last, join);
 }
 
 #if 0
