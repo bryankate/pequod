@@ -57,32 +57,19 @@ bool operator==(const Pattern& a, const Pattern& b) {
 }
 
 SourceRange* Join::make_source(Server& server, const Match& m,
-                               Str ibegin, Str iend) {
+                               Str ibegin, Str iend, SinkBound* sb) {
     if (jvt() == jvt_copy_last)
-        return new CopySourceRange(server, this, m, ibegin, iend);
+        return new CopySourceRange(server, this, m, ibegin, iend, sb);
     else if (jvt() == jvt_count_match)
-        return new CountSourceRange(server, this, m, ibegin, iend);
+        return new CountSourceRange(server, this, m, ibegin, iend, sb);
     else if (jvt() == jvt_min_last)
-        return new MinSourceRange(server, this, m, ibegin, iend);
+        return new MinSourceRange(server, this, m, ibegin, iend, sb);
     else if (jvt() == jvt_max_last)
-        return new MaxSourceRange(server, this, m, ibegin, iend);
+        return new MaxSourceRange(server, this, m, ibegin, iend, sb);
     else if (jvt() == jvt_sum_match)
-        return new SumSourceRange(server, this, m, ibegin, iend);
+        return new SumSourceRange(server, this, m, ibegin, iend, sb);
     else
         assert(0);
-}
-
-SourceAccumulator* Join::make_accumulator(Server& server) {
-    if (jvt() == jvt_count_match)
-        return new CountSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_min_last)
-        return new MinSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_max_last)
-        return new MaxSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_sum_match)
-        return new SumSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else
-        return 0;
 }
 
 bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap,

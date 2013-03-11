@@ -669,6 +669,55 @@ void test_swap() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
+static int64_t ncompare_ = 0;
+struct CountedDatumCompare {
+    template <typename T1, typename T2>
+    inline bool operator()(const T1& a, const T2& b) const {
+        ++ncompare_;
+        pq::DatumCompare impl;
+        return impl(a, b);
+    }
+};
+
+void walk(pq::ServerStore &store, const String& hk,
+          pq::ServerStore::const_iterator hint,
+          const int64_t n, bool with_hint) {
+    struct rusage ru[2];
+    pq::ServerStore::insert_commit_data cd;
+    CountedDatumCompare cdc;
+    getrusage(RUSAGE_SELF, &ru[0]);
+    for (int64_t i = 0; i < n; ++i)
+        if (with_hint)
+            mandatory_assert(!store.insert_check(hint, hk, cdc, cd).second);
+        else
+            mandatory_assert(!store.insert_check(hk, cdc, cd).second);
+    getrusage(RUSAGE_SELF, &ru[1]);
+
+    Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+                       .set("compare_per_search", ncompare_ / n);
+    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    ncompare_ = 0;
+}
+
+void test_hint() {
+    pq::ServerStore store;
+    for (int i = 0; i < 100000; ++i) {
+        String k(i);
+        pq::Datum *d = new pq::Datum(k, k);
+        auto p = store.insert(*d);
+        mandatory_assert(p.second);
+    }
+    String hk(5050);
+    const int64_t n = 10000000;
+    walk(store, hk, store.end(), n, false);
+    auto h = store.find(hk, pq::DatumCompare());
+    mandatory_assert(h != store.end());
+    walk(store, hk, h, n, true);
+    walk(store, hk, ++h, n, true);
+    --h;
+    walk(store, hk, --h, n, true);
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -690,6 +739,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
+    ADD_EXP_TEST(test_hint);
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
