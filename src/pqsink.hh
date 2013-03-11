@@ -16,7 +16,8 @@ class ServerRange {
     enum range_type {
         joinsink = 1, validjoin = 2
     };
-    static ServerRange* make(Str first, Str last, range_type type, Join *join = 0);
+    ServerRange(Str first, Str last, range_type type, Join *join = 0);
+    virtual ~ServerRange();
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
@@ -33,9 +34,11 @@ class ServerRange {
 
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
 
+    static uint64_t allocated_key_bytes;
+
   private:
-    int ibegin_len_;
-    int iend_len_;
+    Str ibegin_;
+    Str iend_;
     Str subtree_iend_;
   public:
     rblinks<ServerRange> rblinks_;
@@ -44,10 +47,8 @@ class ServerRange {
     Join* join_;
     uint64_t expires_at_;
     mutable local_vector<String, 4> resultkeys_;
-    char keys_[0];
+    char buf_[32];
 
-    inline ServerRange(Str first, Str last, range_type type, Join* join);
-    ~ServerRange() = default;
     void validate(Match& mf, Match& ml, int joinpos, Server& server,
                   SourceAccumulator* accum);
 };
@@ -73,11 +74,11 @@ class ServerRangeSet {
 };
 
 inline Str ServerRange::ibegin() const {
-    return Str(keys_, ibegin_len_);
+    return ibegin_;
 }
 
 inline Str ServerRange::iend() const {
-    return Str(keys_ + ibegin_len_, iend_len_);
+    return iend_;
 }
 
 inline interval<Str> ServerRange::interval() const {

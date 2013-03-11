@@ -5,20 +5,39 @@
 
 namespace pq {
 
-inline ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
-    : ibegin_len_(first.length()), iend_len_(last.length()),
-      type_(type), join_(join), expires_at_(0) {
+uint64_t ServerRange::allocated_key_bytes = 0;
 
-    memcpy(keys_, first.data(), first.length());
-    memcpy(keys_ + ibegin_len_, last.data(), last.length());
+ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
+    : type_(type), join_(join), expires_at_(0) {
+    char* buf = buf_;
+    char* endbuf = buf_ + sizeof(buf_);
+
+    if (endbuf - buf >= first.length()) {
+        ibegin_.assign(buf, first.length());
+        buf += first.length();
+    } else {
+        ibegin_.assign(new char[first.length()], first.length());
+        allocated_key_bytes += first.length();
+    }
+    memcpy(ibegin_.mutable_data(), first.data(), first.length());
+
+    if (endbuf - buf >= last.length())
+        iend_.assign(buf, last.length());
+    else {
+        iend_.assign(new char[last.length()], last.length());
+        allocated_key_bytes += last.length();
+    }
+    memcpy(iend_.mutable_data(), last.data(), last.length());
 
     if (join_->staleness())
         expires_at_ = tstamp() + tous(join_->staleness());
 }
 
-ServerRange* ServerRange::make(Str first, Str last, range_type type, Join* join) {
-    char* buf = new char[sizeof(ServerRange) + first.length() + last.length()];
-    return new(buf) ServerRange(first, last, type, join);
+ServerRange::~ServerRange() {
+    if (ibegin_.data() < buf_ || ibegin_.data() >= buf_ + sizeof(buf_))
+        delete[] ibegin_.mutable_data();
+    if (iend_.data() < buf_ || iend_.data() >= buf_ + sizeof(buf_))
+        delete[] iend_.mutable_data();
 }
 
 void ServerRange::validate(Str first, Str last, Server& server) {

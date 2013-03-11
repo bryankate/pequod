@@ -58,8 +58,8 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
             return;
         }
 
-    sink_ranges_.insert(ServerRange::make(first, last, ServerRange::joinsink,
-					  join));
+    sink_ranges_.insert(new ServerRange(first, last, ServerRange::joinsink,
+                                        join));
 }
 
 void Table::insert(const String& key, String value) {
@@ -101,7 +101,8 @@ Json Server::stats() const {
 	.set("sink_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
+        .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes)
+        .set("sink_allocated_key_bytes", ServerRange::allocated_key_bytes);
 }
 
 void Server::print(std::ostream& stream) {
