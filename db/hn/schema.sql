@@ -32,6 +32,10 @@ SET default_with_oids = false;
 -- Name: articles; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
 --
 
+DROP TABLE IF EXISTS matviews CASCADE;
+DROP TABLE IF EXISTS karma_mv CASCADE;
+DROP VIEW IF EXISTS karma_v CASCADE;
+
 DROP TABLE IF EXISTS articles CASCADE;
 
 CREATE TABLE articles (
@@ -56,11 +60,6 @@ CREATE TABLE comments (
     comment text
 );
 
-CREATE INDEX comments_aid ON comments (aid);
-CREATE INDEX comments_commenter ON comments (commenter);
-
-
---ALTER TABLE public.comments OWNER TO neha;
 
 --
 -- Name: votes; Type: TABLE; Schema: public; Owner: neha; Tablespace: 
@@ -73,15 +72,9 @@ CREATE TABLE votes (
     voter integer
 );
 
-CREATE INDEX votes_aid ON votes (aid);
-
---ALTER TABLE public.votes OWNER TO neha;
-
 --
 -- Data for Name: articles; Type: TABLE DATA; Schema: public; Owner: neha
 --
-
-
 
 --
 -- Data for Name: comments; Type: TABLE DATA; Schema: public; Owner: neha
@@ -91,22 +84,9 @@ CREATE INDEX votes_aid ON votes (aid);
 -- Data for Name: votes; Type: TABLE DATA; Schema: public; Owner: neha
 --
 
-
 --
 -- Name: articles_pkey; Type: CONSTRAINT; Schema: public; Owner: neha; Tablespace: 
 --
-
-ALTER TABLE ONLY articles
-    ADD CONSTRAINT articles_pkey PRIMARY KEY (aid);
-
-
---
--- Name: comments_pkey; Type: CONSTRAINT; Schema: public; Owner: neha; Tablespace: 
---
-
-ALTER TABLE ONLY comments
-    ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
-
 
 --
 -- Name: public; Type: ACL; Schema: -; Owner: postgres

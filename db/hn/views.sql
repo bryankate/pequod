@@ -76,16 +76,6 @@ SELECT create_matview('karma_mv', 'karma_v');
 
 CREATE INDEX author_idx ON karma_mv(author);
 
-CREATE OR REPLACE FUNCTION karma_mv_refresh_row(karma_mv.author%TYPE) RETURNS VOID
-SECURITY DEFINER
-LANGUAGE 'plpgsql' AS '
-BEGIN
-  DELETE FROM karma_mv WHERE author = $1;
-  INSERT INTO karma_mv SELECT * FROM karma_v WHERE author = $1;
-  RETURN;
-END
-';
-
 CREATE OR REPLACE FUNCTION update_karma(karma_mv.author%TYPE) RETURNS VOID AS
 $$
 BEGIN

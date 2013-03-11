@@ -82,6 +82,7 @@ class HNPopulator:
             curs.copy_from(open(fn+"."+table, 'r'), table)
         conn.commit()
         conn.close()
+        self.psql("schema_index.sql")
 
     def clear(self):
         self.psql("schema.sql")
