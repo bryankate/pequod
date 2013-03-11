@@ -52,6 +52,11 @@ class ServerRange {
                   SourceAccumulator* accum);
 };
 
+class ValidJoinRange : public ServerRange {
+  public:
+    inline ValidJoinRange(Str first, Str last, Join *join);
+};
+
 class ServerRangeSet {
   public:
     inline ServerRangeSet(Str first, Str last, int types);
@@ -102,6 +107,10 @@ inline Join* ServerRange::join() const {
 
 inline bool ServerRange::expired_at(uint64_t t) const {
     return expires_at_ && (expires_at_ < t);
+}
+
+inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
+    : ServerRange(first, last, validjoin, join) {
 }
 
 inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)

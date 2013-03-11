@@ -174,7 +174,7 @@ void Table::modify(const String& key, const F& func) {
 }
 
 inline void Table::add_validjoin(Str first, Str last, Join* join) {
-    sink_ranges_.insert(new ServerRange(first, last, ServerRange::validjoin, join));
+    sink_ranges_.insert(new ValidJoinRange(first, last, join));
 }
 
 inline void Table::validate(Str first, Str last) {
