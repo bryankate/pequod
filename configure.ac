@@ -330,4 +330,31 @@ fi
 
 AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
 
+dnl
+dnl CLICK_CHECK_ADDRESSABLE_VA_LIST
+dnl Checks whether the va_list type is addressable.
+dnl
+
+AC_DEFUN([CLICK_CHECK_ADDRESSABLE_VA_LIST], [
+    AC_LANG_CPLUSPLUS
+    AC_CACHE_CHECK([for addressable va_list type], [ac_cv_va_list_addr],
+        [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>
+void f(va_list *) {
+}
+void g(va_list val) {
+    f(&val);
+}
+void h(int a, ...) {
+    va_list val;
+    va_start(val, a);
+    g(val);
+    va_end(val);
+}]], [[h(2, 3, 4);]])], ac_cv_va_list_addr=yes, ac_cv_va_list_addr=no)])
+    if test "x$ac_cv_va_list_addr" = xyes; then
+        AC_DEFINE([HAVE_ADDRESSABLE_VA_LIST], [1], [Define if the va_list type is addressable.])
+    fi
+])
+
+CLICK_CHECK_ADDRESSABLE_VA_LIST
+
 AC_OUTPUT
