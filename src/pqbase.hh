@@ -28,7 +28,6 @@ inline T table_name(const String_base<T>& key, const String_base<T>& key2) {
 }
 
 extern const char unchanged_marker_data[];
-extern const char erase_marker_data[];
 
 inline String unchanged_marker() {
     return String::make_stable(unchanged_marker_data, 1);
@@ -36,14 +35,6 @@ inline String unchanged_marker() {
 
 inline bool is_unchanged_marker(const String& str) {
     return str.data() == unchanged_marker_data;
-}
-
-inline String erase_marker() {
-    return String::make_stable(erase_marker_data, 1);
-}
-
-inline bool is_erase_marker(const String& str) {
-    return str.data() == erase_marker_data;
 }
 
 } // namespace

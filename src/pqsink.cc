@@ -45,14 +45,15 @@ void ServerRange::validate(Str first, Str last, Server& server) {
         Match mf, ml;
         join_->sink().match(first, mf);
         join_->sink().match(last, ml);
-        validate(mf, ml, 0, server, NULL);
+        validate(mf, ml, 0, server, 0);
         if (join_->maintained() || join_->staleness())
             server.add_validjoin(first, last, join_);
     }
 }
 
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, SinkBound* sb) {
+void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
+                           SourceAccumulator* accum) {
     uint8_t kf[128], kl[128], kaccum[128];
     int kflen = join_->source(joinpos).expand_first(kf, mf);
     int kllen = join_->source(joinpos).expand_last(kl, ml);
@@ -67,10 +68,11 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Si
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
-        r = join_->make_source(server, mf, Str(kf, kflen), Str(kl, kllen), sb);
+        r = join_->make_source(server, mf, Str(kf, kflen), Str(kl, kllen));
 
     bool check_accum = false;
-    if (joinpos == join_->completion_source() && join_->jvt() != jvt_copy_last) {
+    if (joinpos == join_->completion_source()
+        && (accum = join_->make_accumulator(server))) {
         kaccumlen = join_->sink().expand_first(kaccum, mf);
         check_accum = !join_->sink().match_complete(mf)
             || !join_->sink().match_same(Str(kaccum, kaccumlen), ml);
@@ -85,33 +87,44 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server, Si
     mk &= ml;
     Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
     const Pattern& pat = join_->source(joinpos);
-    Table* tab = &server.make_table(join_->sink().table_name());
 
     for (; it != ilast; ++it) {
 	if (it->key().length() != pat.key_length())
             continue;
+
+        if (r && !accum) {
+            r->notify(it.operator->(), String(), SourceRange::notify_insert);
+            continue;
+        }
 
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
         if (pat.match(it->key(), mk)) {
             if (check_accum
                 && !join_->sink().match_same(Str(kaccum, kaccumlen), mk)) {
-                sb = new SinkBound(tab, join_->jvt() != jvt_copy_last);
+                if (kaccumlen)
+                    accum->commit(Str(kaccum, kaccumlen));
                 kaccumlen = join_->sink().expand_first(kaccum, mk);
             }
 
             if (r)
-                r->notify(it.operator->(), String(), SourceRange::notify_insert, true);
+                accum->notify(it.operator->());
             else {
                 pat.match(it->key(), mf);
                 pat.match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server, sb);
+                validate(mf, ml, joinpos + 1, server, accum);
                 mf.restore(mfstate);
                 ml.restore(mlstate);
             }
         }
 
         mk.restore(mkstate);
+    }
+
+    if (accum && joinpos == join_->completion_source()) {
+        if (kaccumlen)
+            accum->commit(Str(kaccum, kaccumlen));
+        delete accum;
     }
 
     if (r) {

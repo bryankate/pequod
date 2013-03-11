@@ -13,8 +13,8 @@ class ErrorHandler;
 namespace pq {
 class Join;
 class SourceRange;
+class SourceAccumulator;
 class Server;
-class SinkBound;
 
 enum { slot_capacity = 5 };
 
@@ -115,7 +115,8 @@ class Join {
     inline const Json& jvt_config() const;
 
     SourceRange* make_source(Server& server, const Match& m,
-                             Str ibegin, Str iend, SinkBound* sb);
+                             Str ibegin, Str iend);
+    SourceAccumulator* make_accumulator(Server& server);
 
     bool assign_parse(Str str, ErrorHandler* errh = 0);
 
