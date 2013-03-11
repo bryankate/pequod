@@ -110,6 +110,9 @@ void HackernewsRunner<S>::populate() {
     }
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
+    twait {
+        server_.post_populate(make_event());
+    }
 }
 
 tamed template <typename S>

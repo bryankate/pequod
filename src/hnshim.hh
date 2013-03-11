@@ -17,6 +17,8 @@ class HashHackerNewsShim {
         e();
     }
     template <typename R>
+    void post_populate(preevent<R> e) { (void)e; }
+    template <typename R>
     void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
         // add h|aid/author|v
         c_.set(String("h|") + String(aid), String(author) + String("|") + v);
@@ -84,6 +86,8 @@ class PQHackerNewsShim {
     PQHackerNewsShim(S& server) : server_(server) {}
     template <typename R>
     void initialize(bool log, bool ma, preevent<R> e);
+    template <typename R>
+    void post_populate(preevent<R> e) { (void)e; }
     template <typename R>
     void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
         char buf[128];
@@ -294,10 +298,23 @@ class SQLHackernewsShim {
         ma_ = ma;
         log_ = log;
         CHECK_EQ(system("psql -p 5477 -d hn < db/hn/schema.sql > /dev/null"), 0);
+        char buf[128];
+        sprintf(buf, "BEGIN");
+        pg_.insert(buf);
+        e();
+    }
+
+    template <typename R>
+    void post_populate(preevent<R> e) {
+        char buf[128];
+        sprintf(buf, "COMMIT");
+        pg_.insert(buf);
+        CHECK_EQ(system("psql -p 5477 -d hn < db/hn/schema_index.sql > /dev/null"), 0);
         if (ma_)
             CHECK_EQ(system("psql -p 5477 -d hn < db/hn/views.sql > /dev/null"), 0);
         e();
     }
+
     template <typename R>
     void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
         char buf[128];
@@ -329,7 +346,7 @@ class SQLHackernewsShim {
         (void)author;
         char buf[128];
         // Avoid duplicate votes
-        sprintf(buf, "INSERT INTO votes (aid, voter) SELECT %d, %d WHERE NOT EXISTS (SELECT aid FROM votes WHERE aid = %d AND voter = %d", aid, voter, aid, voter);
+        sprintf(buf, "INSERT INTO votes (aid, voter) SELECT %d, %d WHERE NOT EXISTS (SELECT aid FROM votes WHERE aid = %d AND voter = %d)", aid, voter, aid, voter);
         pg_.insert(buf);
         if (log_)
             printf("vote %d %d\n", aid, voter);
@@ -338,35 +355,53 @@ class SQLHackernewsShim {
     template <typename R>
     void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas, preevent<R> e) {
         (void)author;
-        (void)check_karmas;
+        if (log_) 
+            printf("Reading article %d\n", aid);
         char buf[512];
-        if (ma_)
+        if (ma_) {
             // Materialized karma table, query it
             sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                    "comments.cid,comments.comment,karma_mv.karma,count(votes.aid) "
-                    "as vote_count FROM articles,comments,votes,karma_mv "
-                    "WHERE articles.aid = %d AND comments.aid = articles.aid "
-                    "AND votes.aid = articles.aid AND karma_mv.author=comments.commenter "
-                    "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
-        else
+                                 "comments.cid,comments.commenter,comments.comment,"
+                                 "karma_mv.karma,count(votes.aid) as vote_count "
+                         "FROM articles "
+                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
+                         "LEFT OUTER JOIN karma_mv ON comments.commenter=karma_mv.author "
+                         "JOIN votes ON articles.aid=votes.aid "
+                         "WHERE articles.aid = %d "
+                         "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
+        } else {
             // No karma_mv
             sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                    "comments.cid,comments.comment,count(votes.aid) "
-                    "as vote_count, karma.karma FROM articles,comments,votes, "
-                    "(SELECT articles.author, count(*) as karma FROM articles, votes WHERE "
-                    "articles.aid = votes.aid GROUP BY articles.author) AS karma "
-                    "WHERE articles.aid = %d AND comments.aid = articles.aid "
-                    "AND votes.aid = articles.aid AND karma.author=comments.commenter "
-                    "GROUP BY articles.aid,comments.cid,karma.karma", aid);
+                                 "comments.cid,comments.commenter,comments.comment,"
+                                 "karma.karma,count(votes.aid) as vote_count "
+                         "FROM articles "
+                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
+                         "LEFT OUTER JOIN "
+                           "(SELECT articles.author, count(*) as karma FROM articles, votes WHERE "
+                           "articles.aid = votes.aid GROUP BY articles.author) AS karma "
+                           "ON comments.commenter=karma.author "
+                         "JOIN votes ON articles.aid=votes.aid "
+                         "WHERE articles.aid = %d "
+                         "GROUP BY articles.aid,comments.cid,karma.karma", aid);
+        }
         // XXX: should use more general return type
         PGresult* res = pg_.query(buf);
-        // aid author link cid comment karma votes
-        if (log_)
+        if (log_) {
+            printf("aid\tauthor\tlink\t\tcid\tuser\tcomment\t\tkarma\tvotes\n");
             for (int i = 0; i < PQntuples(res); i++) {
                 for (int j = 0; j < PQnfields(res); j++)
-                    std::cout << PQgetvalue(res, i, j) << " ";
+                    std::cout << PQgetvalue(res, i, j) << "\t";
                 std::cout << "\n";
             }
+        }
+
+        // Check karma
+        for (int i = 0; i < PQntuples(res); i++) {
+            uint32_t karma = atoi(PQgetvalue(res, i, 6));
+            String user = PQgetvalue(res, i, 4);
+            uint32_t my_karma = check_karmas[atoi(user.c_str())];
+            mandatory_assert(karma == my_karma && "Karma mismatch");
+        }
         pg_.done(res);
         e();
     }
