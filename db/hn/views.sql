@@ -86,25 +86,37 @@ BEGIN
 END
 ';
 
-
-CREATE OR REPLACE FUNCTION karma_mv_article_it() RETURNS TRIGGER
-SECURITY DEFINER LANGUAGE 'plpgsql' AS '
+CREATE OR REPLACE FUNCTION update_karma(karma_mv.author%TYPE) RETURNS VOID AS
+$$
 BEGIN
-  PERFORM karma_mv_refresh_row(articles.author) FROM articles WHERE articles.author = NEW.author;
-  RETURN NULL;
-END
-';
+    LOOP
+        -- first try to update the key
+        UPDATE karma_mv SET karma = karma+1 WHERE author=$1;
+        IF found THEN
+            RETURN;
+        END IF;
+        -- not there, so try to insert the key
+        -- if someone else inserts the same key concurrently,
+        -- we could get a unique-key failure
+        BEGIN
+            INSERT INTO karma_mv VALUES ($1, 1);
+            RETURN;
+        EXCEPTION WHEN unique_violation THEN
+            -- do nothing, and loop to try the UPDATE again
+        END;
+    END LOOP;
+END;
+$$
+LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS karma_mv_articles_trigger ON articles;
-
-CREATE TRIGGER karma_mv_articles_trigger AFTER INSERT ON articles
-  FOR EACH ROW EXECUTE PROCEDURE karma_mv_article_it(); 
+-- No need for articles table trigger function because when a new
+-- article is posted, a vote from the author automatically happens.
 
 
 CREATE OR REPLACE FUNCTION karma_mv_vote_it() RETURNS TRIGGER
 SECURITY DEFINER LANGUAGE 'plpgsql' AS '
 BEGIN
-  PERFORM karma_mv_refresh_row(articles.author) FROM articles WHERE articles.aid = NEW.aid;
+  PERFORM update_karma(articles.author) FROM articles WHERE articles.aid = NEW.aid;
   RETURN NULL;
 END
 ';

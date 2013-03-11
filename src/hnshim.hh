@@ -328,7 +328,8 @@ class SQLHackernewsShim {
     void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
         (void)author;
         char buf[128];
-        sprintf(buf, "INSERT INTO votes VALUES (%d, %d)", aid, voter);
+        // Avoid duplicate votes
+        sprintf(buf, "INSERT INTO votes (aid, voter) SELECT %d, %d WHERE NOT EXISTS (SELECT aid FROM votes WHERE aid = %d AND voter = %d", aid, voter, aid, voter);
         pg_.insert(buf);
         if (log_)
             printf("vote %d %d\n", aid, voter);

@@ -36,22 +36,29 @@ class HNPopulator:
         self.nid = 0
         self.db = db
         self.user = user
+        self.port = port
 
     def generate(self, fn):
         articles = []
         votes = []
-        comments = []
+        comments = []        
         aid = 0
         for aid in range(0, self.narticles):
+            seen = {}
             d = {}
             d['author'] = randint(1, self.nusers)
             d['aid'] = aid
             d['text'] = "lalalala"
             articles.append(d)
-            votes.append( {'voter':d['author'], 'aid':aid} )
+
+            v =  {'voter':d['author'], 'aid':aid}
+            votes.append(v)
 
             for i in range(0, randint(1, self.nvotes)):
-                votes.append( {'voter':randint(1, self.nusers), 'aid':aid} )
+                voter = randint(1, self.nusers)
+                if not seen.has_key(voter):
+                    votes.append( {'voter':voter, 'aid':aid} )
+                    seen[voter] = 1
 
             for i in range(0, randint(1, self.ncomments)):
                 comments.append( {'commentor':randint(1, self.nusers), 'aid':aid, 'cid':self.nid, 'text':'csljdf'} )
@@ -69,7 +76,7 @@ class HNPopulator:
     def load(self, fn):
         self.psql("schema.sql")
         self.psql("views.sql")
-        conn = psycopg2.connect("user=%s dbname=%s" % (self.user, self.db))
+        conn = psycopg2.connect("user=%s dbname=%s port=%d" % (self.user, self.db, self.port))
         curs = conn.cursor()
         for table in ['articles', 'votes', 'comments']:
             curs.copy_from(open(fn+"."+table, 'r'), table)
@@ -97,7 +104,7 @@ class HNPopulator:
         print stdout, stderr
 
 if __name__ == "__main__":
-    hn = HNPopulator("hn", os.environ['USER'], 5477)
+    hn = HNPopulator("hn", os.environ['USER'], 5477, 10, 10, 10, 10)
     if len(sys.argv) == 3:
         hn.load(sys.argv[1])
     elif len(sys.argv) == 1:
@@ -111,5 +118,6 @@ if __name__ == "__main__":
     else:
         print "Usage: %s <file> <db>" %  sys.argv[0]
         print "   or: %s bench" %  sys.argv[0]
+        print "   or: %s clear" %  sys.argv[0]
 
     
