@@ -19,6 +19,7 @@ struct SinkBound {
     SinkBound(Table* t);
     void update(StoreIterator it, Table* t, bool insert);
     inline StoreIterator hint();
+  private:
     StoreIterator first_;
     StoreIterator last_;
 };
