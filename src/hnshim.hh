@@ -90,6 +90,11 @@ class PQHackerNewsShim {
     void post_populate(preevent<R> e) {
         String start = "k|";
         String end = "k}";
+        
+        if (ma_) {
+            start = "ma|";
+            end = "ma}";
+        }
         server_.validate(start, end);
         if (log_) {
             std::cout << ": print validated [" << start << "," << end << ")\n";
@@ -199,7 +204,6 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
     } else {
         // Materialize karma in a separate table
         j = new pq::Join;
-        printf("CREATING KARMA JOIN\n");
         join_str = "k|<author:7> "
             "a|<author:7><seqid:7> "
             "v|<author><seqid>|<voter:7>";
@@ -209,16 +213,6 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         mandatory_assert(valid && "Invalid karma join");
         j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
-    }
-    server_.validate(start, end);
-    if (log_) {
-        std::cout << ": print validated [" << start << "," << end << ")\n";
-        auto bit = server_.lower_bound(start),
-             eit = server_.lower_bound(end);
-        for (; bit != eit; ++bit)
-            std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
-        std::cout << ": end print validated [" << start << "," << end << ")\n";
-        std::cout << "Finished validate.\n";
     }
     e();
 }
