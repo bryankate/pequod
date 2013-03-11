@@ -576,7 +576,7 @@ void test_op_bounds() {
                                "b|<aid>|<bid:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
+    j1.set_jvt(pq::jvt_bounded_count_match);
     j1.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
     j1.ref();
 
@@ -619,7 +619,7 @@ void test_op_bounds() {
                                "c|<did>|<cid>"));
     CHECK_EQ(j2.nsource(), 2);
 
-    j2.set_jvt(pq::jvt_copy_last);
+    j2.set_jvt(pq::jvt_bounded_copy_last);
     j2.set_jvt_config(Json().set("lbound", 5).set("ubound", 10));
     j2.ref();
 

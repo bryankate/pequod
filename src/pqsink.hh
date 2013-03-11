@@ -55,6 +55,9 @@ class ServerRange {
 class ValidJoinRange : public ServerRange {
   public:
     inline ValidJoinRange(Str first, Str last, Join *join);
+
+    bool valid() const {return true;}
+    void deref() {}
 };
 
 class ServerRangeSet {

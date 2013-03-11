@@ -89,7 +89,11 @@ class Pattern {
 };
 
 // every type >=jvt_min_last is aggregation.
-enum JoinValueType { jvt_copy_last = 0, jvt_min_last, jvt_max_last, jvt_count_match, jvt_sum_match };
+enum JoinValueType {
+    jvt_copy_last = 0, jvt_min_last, jvt_max_last,
+    jvt_count_match, jvt_sum_match,
+    jvt_bounded_copy_last, jvt_bounded_count_match
+};
 
 class Join {
   public:

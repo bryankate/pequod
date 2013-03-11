@@ -68,6 +68,10 @@ SourceRange* Join::make_source(Server& server, const Match& m,
         return new MaxSourceRange(server, this, m, ibegin, iend);
     else if (jvt() == jvt_sum_match)
         return new SumSourceRange(server, this, m, ibegin, iend);
+    else if (jvt() == jvt_bounded_copy_last)
+        return new BoundedCopySourceRange(server, this, m, ibegin, iend);
+    else if (jvt() == jvt_bounded_count_match)
+        return new BoundedCountSourceRange(server, this, m, ibegin, iend);
     else
         assert(0);
 }
@@ -81,6 +85,8 @@ SourceAccumulator* Join::make_accumulator(Server& server) {
         return new MaxSourceAccumulator(this, &server.make_table(sink().table_name()));
     else if (jvt() == jvt_sum_match)
         return new SumSourceAccumulator(this, &server.make_table(sink().table_name()));
+    else if (jvt() == jvt_bounded_count_match)
+        return new BoundedCountSourceAccumulator(this, &server.make_table(sink().table_name()));
     else
         return 0;
 }
