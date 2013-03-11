@@ -87,37 +87,51 @@ class PQHackerNewsShim {
     template <typename R>
     void initialize(bool log, bool ma, preevent<R> e);
     template <typename R>
-    void post_populate(preevent<R> e) { (void)e; }
+    void post_populate(preevent<R> e) {
+        String start = "k|";
+        String end = "k}";
+        server_.validate(start, end);
+        if (log_) {
+            std::cout << ": print validated [" << start << "," << end << ")\n";
+            auto bit = server_.lower_bound(start),
+                eit = server_.lower_bound(end);
+            for (; bit != eit; ++bit)
+                std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+            std::cout << ": end print validated [" << start << "," << end << ")\n";
+            std::cout << "Finished validate.\n";
+        }
+        e();
+    }
     template <typename R>
     void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
         char buf[128];
-        sprintf(buf, "a|%05d%05d", author, aid);
-        server_.insert(Str(buf, 12), v);
+        sprintf(buf, "a|%07d%07d", author, aid);
+        server_.insert(Str(buf, 16), v);
         if (log_)
-            printf("post %.12s\n", buf);
-        sprintf(buf, "v|%05d%05d|%05d", author, aid, author);
-        server_.insert(Str(buf, 18), Str("1", 1));
+            printf("post %.16s\n", buf);
+        sprintf(buf, "v|%07d%07d|%07d", author, aid, author);
+        server_.insert(Str(buf, 24), Str("1", 1));
         if (log_)
-            printf("vote %.18s\n", buf);
+            printf("vote %.24s\n", buf);
         e();
     }
     template <typename R>
     void post_comment(uint32_t commentor, uint32_t author, uint32_t aid, uint32_t cid,
                       const String &v, preevent<R> e) {
         char buf[128];
-        sprintf(buf, "c|%05d%05d|%05d|%05d", author, aid, cid, commentor);
-        server_.insert(Str(buf, 24), v);
+        sprintf(buf, "c|%07d%07d|%07d|%07d", author, aid, cid, commentor);
+        server_.insert(Str(buf, 32), v);
         if (log_)
-            printf("comment  %.24s\n", buf);
+            printf("comment  %.32s\n", buf);
         e();
     }
     template <typename R>
     void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
         char buf[128];
-        sprintf(buf, "v|%05d%05d|%05d", author, aid, voter);
-        server_.insert(Str(buf, 18), Str("", 0));
+        sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
+        server_.insert(Str(buf, 24), Str("", 0));
         if (log_)
-            printf("vote %.18s\n", buf);
+            printf("vote %.24s\n", buf);
         e();
     }
     template <typename R>
@@ -148,7 +162,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         start = "ma|";
         end = "ma}";
         // Materialize articles
-        join_str = "ma|<author:5><seqid:5>|a "
+        join_str = "ma|<author:7><seqid:7>|a "
             "a|<author><seqid> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
@@ -156,8 +170,8 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         server_.add_join(start, end, j);
 
         // Materialize votes
-        join_str = "ma|<author:5><seqid:5>|v "
-            "v|<author><seqid>|<voter:5> ";
+        join_str = "ma|<author:7><seqid:7>|v "
+            "v|<author><seqid>|<voter:7> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|votes join");
@@ -165,7 +179,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         server_.add_join(start, end, j);
 
         // Materialize comments
-        join_str = "ma|<author:5><seqid:5>|c|<cid:5>|<commenter:5> "
+        join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> "
             "c|<author><seqid>|<cid>|<commenter> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
@@ -174,9 +188,9 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
         
         // Materialize karma inline
         std::cout << "Materializing karma inline with articles.\n";
-        join_str = "ma|<aid:10>|k|<cid:5>|<commenter:5> "
+        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> "
             "c|<aid>|<cid>|<commenter> "
-            "v|<commenter><seq:5>|<voter:5>";
+            "v|<commenter><seq:7>|<voter:7>";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|karma join");
@@ -185,9 +199,10 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
     } else {
         // Materialize karma in a separate table
         j = new pq::Join;
-        join_str = "k|<author:5> "
-            "a|<author:5><seqid:5> "
-            "v|<author><seqid>|<voter:5>";
+        printf("CREATING KARMA JOIN\n");
+        join_str = "k|<author:7> "
+            "a|<author:7><seqid:7> "
+            "v|<author><seqid>|<voter:7>";
         start = "k|";
         end = "k}";
         valid = j->assign_parse(join_str);
@@ -221,10 +236,10 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
 template <typename S>
 void PQHackerNewsShim<S>::read_materialized(uint32_t aid, uint32_t author, karmas_type&) {
     char buf1[128], buf2[128];
-    sprintf(buf1, "ma|%05d%05d|", author, aid);
-    sprintf(buf2, "ma|%05d%05d}", author, aid);
-    auto bit = server_.lower_bound(Str(buf1, 14)),
-         eit = server_.lower_bound(Str(buf2, 14));
+    sprintf(buf1, "ma|%07d%07d|", author, aid);
+    sprintf(buf2, "ma|%07d%07d}", author, aid);
+    auto bit = server_.lower_bound(Str(buf1, 18)),
+         eit = server_.lower_bound(Str(buf2, 18));
     for (; bit != eit; ++bit) {
         String field = extract_spkey(2, bit->key());
         if (log_) {
@@ -240,17 +255,17 @@ template <typename S>
 void PQHackerNewsShim<S>::read_tables(uint32_t aid, uint32_t author, karmas_type& check_karmas) {
     char buf1[128], buf2[128];
     // Article
-    sprintf(buf1, "a|%05d%05d", author, aid);
-    auto ait = server_.find(Str(buf1, 12));
+    sprintf(buf1, "a|%07d%07d", author, aid);
+    auto ait = server_.find(Str(buf1, 16));
     mandatory_assert(ait != NULL);
     if (log_)
         std::cout << "read " << ait->key() << ":" << ait->value() << "\n";
 
     // Comments and Karma
-    sprintf(buf1, "c|%05d%05d|", author, aid);
-    sprintf(buf2, "c|%05d%05d}", author, aid);
-    auto bit = server_.lower_bound(Str(buf1, 13)),
-         eit = server_.lower_bound(Str(buf2, 13));
+    sprintf(buf1, "c|%07d%07d|", author, aid);
+    sprintf(buf2, "c|%07d%07d}", author, aid);
+    auto bit = server_.lower_bound(Str(buf1, 17)),
+         eit = server_.lower_bound(Str(buf2, 17));
     for (; bit != eit; ++bit) {
         if (log_) {
             std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
@@ -259,10 +274,10 @@ void PQHackerNewsShim<S>::read_tables(uint32_t aid, uint32_t author, karmas_type
     }
 
     // Votes
-    sprintf(buf1, "v|%05d%05d|", author, aid);
-    sprintf(buf2, "v|%05d%05d}", author, aid);
-    auto cit = server_.lower_bound(Str(buf1, 13)),
-         ceit = server_.lower_bound(Str(buf2, 13));
+    sprintf(buf1, "v|%07d%07d|", author, aid);
+    sprintf(buf2, "v|%07d%07d}", author, aid);
+    auto cit = server_.lower_bound(Str(buf1, 17)),
+         ceit = server_.lower_bound(Str(buf2, 17));
     uint32_t votect = 0;
     for (; cit != ceit; ++cit) {
         votect++;
@@ -275,7 +290,7 @@ template <typename S>
 void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
     char buf3[128];
     sprintf(buf3, "k|%s", user.c_str());
-    auto kbit = server_.find(Str(buf3, 7));
+    auto kbit = server_.find(Str(buf3, 9));
     uint32_t karma = 0;
     if (kbit != NULL) {
         karma = atoi(kbit->value().c_str());
@@ -321,7 +336,7 @@ class SQLHackernewsShim {
         sprintf(buf, "INSERT INTO articles VALUES (%d, %d, '%s')", aid, author, v.data());
         pg_.insert(buf);
         if (log_)
-            printf("post %05d\n", aid);
+            printf("post %07d\n", aid);
         sprintf(buf, "INSERT INTO votes VALUES (%d, %d)", aid, author);
         pg_.insert(buf);
         if (log_)
