@@ -547,7 +547,7 @@ class ErrorHandler { public:
     // error conversions
     class Converter {
       public:
-        virtual ~Converter() = default;
+        virtual ~Converter() {}
         virtual String convert(int flags, VA_LIST_REF_T) = 0;
     };
     enum ConversionFlags {
