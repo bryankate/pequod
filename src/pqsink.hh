@@ -5,11 +5,12 @@
 #include "interval.hh"
 #include "local_vector.hh"
 #include "rb.hh"
+
 namespace pq {
 class Join;
 class Server;
 class Match;
-class SourceAccumulator;
+class SinkBound;
 
 class ServerRange {
   public:
@@ -49,8 +50,7 @@ class ServerRange {
     mutable local_vector<String, 4> resultkeys_;
     char buf_[32];
 
-    void validate(Match& mf, Match& ml, int joinpos, Server& server,
-                  SourceAccumulator* accum);
+    void validate(Match& mf, Match& ml, int joinpos, Server& server, SinkBound* sb);
 };
 
 class ServerRangeSet {

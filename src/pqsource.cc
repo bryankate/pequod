@@ -8,7 +8,7 @@ namespace pq {
 uint64_t SourceRange::allocated_key_bytes = 0;
 
 SourceRange::SourceRange(Server& server, Join* join, const Match& m,
-                         Str ibegin, Str iend)
+                         Str ibegin, Str iend, SinkBound *sb)
     : join_(join), dst_table_(&server.make_table(join->sink().table_name())) {
     assert(table_name(ibegin, iend));
     char* buf = buf_;
@@ -33,7 +33,9 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
 
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
-    resultkeys_.push_back(resultkey_type(std::move(str), SinkBound(dst_table_)));
+    if (sb == NULL)
+        sb = new SinkBound(dst_table_);
+    resultkeys_.push_back(resultkey_type(std::move(str), sb));
 }
 
 SourceRange::~SourceRange() {
@@ -82,7 +84,7 @@ void CopySourceRange::notify(const Datum* src, const String& oldval, int notifie
 
 	for (auto& s : resultkeys_) {
 	    join_->expand(s.first.mutable_udata(), src->key());
-            dst_table_->modify(s.first, s.second, [&](Datum *) -> String {
+            dst_table_->modify(s.first, *s.second, [&](Datum *) -> String {
                     return (notifier >= 0) ? src->value_ : erase_marker();
                 });
 	}
@@ -102,27 +104,12 @@ void CountSourceRange::notify(const Datum* src, const String& oldval, int notifi
 
         for (auto& s : resultkeys_) {
             join_->expand(s.first.mutable_udata(), src->key());
-            dst_table_->modify(s.first, s.second, [=](Datum* dst) {
+            dst_table_->modify(s.first, *s.second, [=](Datum* dst) {
                     return String(notifier
                                   + (dst ? dst->value_.to_i() : 0));
                 });
         }
     }
-}
-
-void CountSourceAccumulator::notify(const Datum* d) {
-    if (has_bounds()) {
-        if (in_bounds(d->value_.to_i()))
-            ++n_;
-    }
-    else
-        ++n_;
-}
-
-void CountSourceAccumulator::commit(Str dst_key) {
-    if (n_)
-        dst_table_->insert(dst_key, String(n_));
-    n_ = 0;
 }
 
 
@@ -131,7 +118,7 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.first.mutable_udata(), src->key());
-            dst_table_->modify(s.first, s.second, [&](Datum* dst) -> String {
+            dst_table_->modify(s.first, *s.second, [&](Datum* dst) -> String {
                     if (!dst || src->value_ < dst->value_)
                         return src->value_;
                     else if (old_value == dst->value_
@@ -144,26 +131,12 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     }
 }
 
-void MinSourceAccumulator::notify(const Datum* src) {
-    if (!any_ || src->value_ < val_)
-        val_ = src->value_;
-    any_ = true;
-}
-
-void MinSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, std::move(val_));
-    any_ = false;
-    val_ = String();
-}
-
-
 void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.first.mutable_udata(), src->key());
-            dst_table_->modify(s.first, s.second, [&](Datum* dst) -> String {
+            dst_table_->modify(s.first, *s.second, [&](Datum* dst) -> String {
                     if (!dst || dst->value_ < src->value_)
                         return src->value_;
                     else if (old_value == dst->value_
@@ -176,25 +149,11 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
     }
 }
 
-void MaxSourceAccumulator::notify(const Datum* src) {
-    if (val_ < src->value_)
-        val_ = src->value_;
-    any_ = true;
-}
-
-void MaxSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, std::move(val_));
-    any_ = false;
-    val_ = String();
-}
-
-
 void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     if (join_->back_source().match(src->key())) {
         for (auto& s : resultkeys_) {
             join_->expand(s.first.mutable_udata(), src->key());
-            dst_table_->modify(s.first, s.second, [&](Datum* dst) {
+            dst_table_->modify(s.first, *s.second, [&](Datum* dst) {
                 if (!dst)
                     return src->value_;
                 else {
@@ -213,18 +172,6 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
             });
         }
     }
-}
-
-void SumSourceAccumulator::notify(const Datum* src) {
-    sum_ += src->value_.to_i();
-    any_ = true;
-}
-
-void SumSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, String(sum_));
-    any_ = false;
-    sum_ = 0;
 }
 
 } // namespace pq
