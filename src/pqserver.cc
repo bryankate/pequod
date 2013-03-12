@@ -72,7 +72,7 @@ void Table::insert(const String& key, String value) {
 	store_.insert_commit(*d, cd);
     } else {
 	d = p.first.operator->();
-        d->value_.swap(value);
+        d->value().swap(value);
     }
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }

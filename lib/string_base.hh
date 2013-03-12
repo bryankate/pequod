@@ -1,5 +1,5 @@
 #ifndef STRING_BASE_HH
-#define STRING_BASE_HH 1
+#define STRING_BASE_HH
 #include "compiler.hh"
 #include "hashcode.hh"
 #include <assert.h>
@@ -45,25 +45,25 @@ template <typename T>
 class String_base {
   public:
     typedef T type;
-    typedef const char *const_iterator;
+    typedef const char* const_iterator;
     typedef const_iterator iterator;
-    typedef const unsigned char *const_unsigned_iterator;
+    typedef const unsigned char* const_unsigned_iterator;
     typedef const_unsigned_iterator unsigned_iterator;
     typedef int (String_base<T>::*unspecified_bool_type)() const;
 
-    const char *data() const {
-	return static_cast<const T *>(this)->data();
+    const char* data() const {
+	return static_cast<const T*>(this)->data();
     }
     int length() const {
-	return static_cast<const T *>(this)->length();
+	return static_cast<const T*>(this)->length();
     }
 
     /** @brief Return a pointer to the string's data as unsigned chars.
 
 	Only the first length() characters are valid, and the string data
 	might not be null-terminated. @sa data() */
-    const unsigned char *udata() const {
-	return reinterpret_cast<const unsigned char *>(data());
+    const unsigned char* udata() const {
+	return reinterpret_cast<const unsigned char*>(data());
     }
     /** @brief Return an iterator for the beginning of the string.
 

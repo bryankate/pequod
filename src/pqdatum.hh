@@ -28,11 +28,14 @@ class Datum : public pequod_set_base_hook {
     const String& value() const {
         return value_;
     }
+    String& value() {
+        return value_;
+    }
 
   private:
     String key_;
-  public:
     String value_;
+  public:
     pequod_set_member_hook member_hook_;
 };
 
