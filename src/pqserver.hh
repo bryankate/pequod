@@ -162,15 +162,16 @@ template <typename F>
 void Table::modify(const String& key, const F& func) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
-    Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
-    String value = func(d, p.second);
+    Datum* d = p.second ? NULL : p.first.operator->();
+    String value = func(d);
     if (!is_unchanged_marker(value)) {
+        if (p.second)
+            d = new Datum(key, String());
         d->value().swap(value);
         if (p.second)
             store_.insert_commit(*d, cd);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
-    } else if (p.second)
-        delete d;
+    }
 }
 
 inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {

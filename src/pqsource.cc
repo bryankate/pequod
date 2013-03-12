@@ -108,9 +108,9 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
     if (notifier && join_->back_source().match(src->key())) {
         expand_results(src);
         for (auto& res : results_)
-            dst_table_->modify(res.key, [=](Datum* dst, bool insert) {
+            dst_table_->modify(res.key, [=](Datum* dst) {
                     return String(notifier
-                                  + (insert ? 0 : dst->value().to_i()));
+                                  + (dst ? dst->value().to_i() : 0));
                 });
     }
 }
@@ -131,8 +131,8 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         expand_results(src);
         for (auto& res : results_)
-            dst_table_->modify(res.key, [&](Datum* dst, bool insert) -> String {
-                    if (insert || src->value() < dst->value())
+            dst_table_->modify(res.key, [&](Datum* dst) -> String {
+                    if (!dst || src->value() < dst->value())
                         return src->value();
                     else if (old_value == dst->value()
                              && (notifier < 0 || src->value() != old_value))
@@ -162,8 +162,8 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         expand_results(src);
         for (auto& res : results_)
-            dst_table_->modify(res.key, [&](Datum* dst, bool insert) -> String {
-                    if (insert || dst->value() < src->value())
+            dst_table_->modify(res.key, [&](Datum* dst) -> String {
+                    if (!dst || dst->value() < src->value())
                         return src->value();
                     else if (old_value == dst->value()
                              && (notifier < 0 || src->value() != old_value))
@@ -192,8 +192,8 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
     if (join_->back_source().match(src->key())) {
         expand_results(src);
         for (auto& res : results_) {
-            dst_table_->modify(res.key, [&](Datum* dst, bool insert) {
-                if (insert)
+            dst_table_->modify(res.key, [&](Datum* dst) {
+                if (!dst)
                     return src->value();
                 else {
                     long diff = (notifier == notify_update) ?
@@ -255,9 +255,9 @@ void BoundedCountSourceRange::notify(const Datum* src, const String& oldval, int
 
         expand_results(src);
         for (auto& res : results_)
-            dst_table_->modify(res.key, [=](Datum* dst, bool insert) {
+            dst_table_->modify(res.key, [=](Datum* dst) {
                     return String(notifier
-                                  + (insert ? 0 : dst->value().to_i()));
+                                  + (dst ? dst->value().to_i() : 0));
                 });
     }
 }
