@@ -79,14 +79,14 @@ const char String::int_data[] = "0\0001\0002\0003\0004\0005\0006\0007\0008\0009"
 # define MEMO_INITIALIZER_TAIL
 #endif
 
-const String::rep_t String::null_string_rep = {
-    String_generic::empty_data, 0, 0
+const String::rep_type String::null_string_rep = {
+    nullptr, String_generic::empty_data, 0
 };
-const String::rep_t String::oom_string_rep = {
-    String_generic::out_of_memory_data, String_generic::out_of_memory_length, 0
+const String::rep_type String::oom_string_rep = {
+    nullptr, String_generic::out_of_memory_data, String_generic::out_of_memory_length
 };
-const String::rep_t String::zero_string_rep = {
-    &int_data[0], 0, 0
+const String::rep_type String::zero_string_rep = {
+    nullptr, &int_data[0], 0
 };
 
 #if HAVE_STRING_PROFILING
@@ -95,7 +95,7 @@ uint64_t String::memo_sizes[55];
 uint64_t String::live_memo_sizes[55];
 uint64_t String::live_memo_bytes[55];
 # if HAVE_STRING_PROFILING > 1
-String::memo_t *String::live_memos[55];
+String::memo_type *String::live_memos[55];
 # endif
 #endif
 
@@ -259,15 +259,15 @@ long String_generic::to_i(const char* s, const char* ends) {
 
 
 /** @cond never */
-String::memo_t *
+String::memo_type *
 String::create_memo(char *space, int dirty, int capacity)
 {
     assert(capacity > 0 && capacity >= dirty);
-    memo_t *memo;
+    memo_type *memo;
     if (space)
-	memo = reinterpret_cast<memo_t *>(space);
+	memo = reinterpret_cast<memo_type *>(space);
     else
-	memo = reinterpret_cast<memo_t *>(new char[MEMO_SPACE + capacity]);
+	memo = reinterpret_cast<memo_type *>(new char[MEMO_SPACE + capacity]);
     if (memo) {
 	memo->capacity = capacity;
 	memo->dirty = dirty;
@@ -290,7 +290,7 @@ String::create_memo(char *space, int dirty, int capacity)
 }
 
 void
-String::delete_memo(memo_t *memo)
+String::delete_memo(memo_type *memo)
 {
     assert(memo->capacity > 0);
     assert(memo->capacity >= memo->dirty);
@@ -328,7 +328,7 @@ String::one_profile_report(StringAccum &sa, int i, int examples)
     sa << '\t' << live_memo_sizes[i] << '\t' << memo_sizes[i] << '\t' << live_memo_bytes[i] << '\n';
     if (examples) {
 # if HAVE_STRING_PROFILING > 1
-	for (memo_t *m = live_memos[i]; m; m = m->next) {
+	for (memo_type *m = live_memos[i]; m; m = m->next) {
 	    sa << "    [" << m->dirty << "] ";
 	    uint32_t dirty = m->dirty;
 	    if (dirty > 0 && m->real_data[dirty - 1] == '\0')
@@ -449,7 +449,7 @@ String
 String::make_claim(char *str, int len, int capacity)
 {
     assert(str && len > 0 && capacity >= len);
-    memo_t *new_memo = create_memo(str - MEMO_SPACE, len, capacity);
+    memo_type *new_memo = create_memo(str - MEMO_SPACE, len, capacity);
     return String(str, len, new_memo);
 }
 
@@ -552,7 +552,7 @@ String::append_uninitialized(int len)
 	for (memo_capacity = 2048; memo_capacity < want_memo_len; )
 	    memo_capacity *= 2;
 
-    memo_t *new_memo = create_memo(0, _r.length + len, memo_capacity - MEMO_SPACE);
+    memo_type *new_memo = create_memo(0, _r.length + len, memo_capacity - MEMO_SPACE);
     if (!new_memo) {
 	assign_out_of_memory();
 	return 0;
@@ -570,7 +570,7 @@ String::append_uninitialized(int len)
 }
 
 void
-String::append(const char *s, int len, memo_t *memo)
+String::append(const char* s, int len, memo_type* memo)
 {
     if (!s) {
 	assert(len <= 0);
