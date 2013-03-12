@@ -201,7 +201,7 @@ void Json::hard_uniqueify_array(bool convert, int ncap_in) {
         assert(_type == j_null || _type == j_array);
 
     int old_type = _type;
-    rep_t old_u = u_;
+    rep_type old_u = u_;
 
     unsigned ncap = std::max(ncap_in, 8);
     if (old_type == j_array && old_u.a.a)
@@ -257,7 +257,7 @@ void Json::hard_uniqueify_object(bool convert) {
             noj->find_insert(String(i), u_.a.a->a[i]);
         u_.a.a->deref(j_array);
     } else {
-        noj = new ObjectJson();
+        noj = new ObjectJson;
         if (_type == j_string)
             u_.str.deref();
     }

@@ -289,11 +289,11 @@ class Json { public:
     struct ObjectJson;
 
     json_type _type;
-    union rep_t {
+    union rep_type {
         int64_t i;
         uint64_t u;
         double d;
-        String::rep_t str;
+        String::rep_type str;
         struct {
             ArrayJson* a;
         } a;
@@ -1371,22 +1371,20 @@ inline Json::Json(bool x)
 }
 inline Json::Json(const String& x)
     : _type(j_string) {
-    u_.str = x._r;
+    u_.str = x.internal_rep();
     u_.str.ref();
 }
 inline Json::Json(Str x)
     : _type(j_string) {
-    using std::swap;
     u_.str.memo = 0;
     String str(x);
-    swap(u_.str, str._r);
+    str.swap(u_.str);
 }
-inline Json::Json(const char *x)
+inline Json::Json(const char* x)
     : _type(j_string) {
-    using std::swap;
     u_.str.memo = 0;
     String str(x);
-    swap(u_.str, str._r);
+    str.swap(u_.str);
 }
 /** @brief Construct an array Json containing the elements of @a x. */
 template <typename T>
@@ -1791,9 +1789,7 @@ inline bool Json::to_s(Str& x) const {
     If !is_string(), @a x remains unchanged. */
 inline bool Json::to_s(String& x) const {
     if (_type == j_string) {
-        u_.str.ref();
-        x._r.deref();
-        x._r = u_.str;
+        x.assign(u_.str);
 	return true;
     } else
 	return false;
