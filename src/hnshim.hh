@@ -362,7 +362,7 @@ class SQLHackernewsShim {
         if (log_)
             printf("vote\n");
         if (push_) {
-            sprintf(buf, "UPDATE karma SET karma = karma+1 WHERE author=%d)", author);
+            sprintf(buf, "UPDATE karma SET karma = karma+1 WHERE author=%d", author);
             pg_.insert(buf);
             if (log_)
                 printf("updated karma\n");
@@ -412,7 +412,7 @@ class SQLHackernewsShim {
                                  "karma.karma,count(votes.aid) as vote_count "
                          "FROM articles "
                          "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
-                         "LEFT OUTER JOIN karma_mv ON comments.commenter=karma.author "
+                         "LEFT OUTER JOIN karma ON comments.commenter=karma.author "
                          "JOIN votes ON articles.aid=votes.aid "
                          "WHERE articles.aid = %d "
                          "GROUP BY articles.aid,comments.cid,karma.karma", aid);
