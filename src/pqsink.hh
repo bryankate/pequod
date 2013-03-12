@@ -5,6 +5,8 @@
 #include "interval.hh"
 #include "local_vector.hh"
 #include "rb.hh"
+#include "pqdatum.hh"
+
 namespace pq {
 class Join;
 class Server;
@@ -54,17 +56,19 @@ class ServerRange {
 
 class ValidJoinRange : public ServerRange {
   public:
-    inline ValidJoinRange(Str first, Str last, Join *join);
+    inline ValidJoinRange(Str first, Str last, Join *join, ServerStore::iterator h);
 
     inline void ref();
     inline void deref();
 
     inline bool valid() const;
     inline void invalidate();
-
+    inline void update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const;
+    inline ServerStore::iterator hint() const;
   private:
     int refcount_;
     bool valid_;
+    mutable ServerStore::iterator hint_;
 };
 
 class ServerRangeSet {
@@ -119,8 +123,8 @@ inline bool ServerRange::expired_at(uint64_t t) const {
     return expires_at_ && (expires_at_ < t);
 }
 
-inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
-    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true) {
+inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join, ServerStore::iterator h)
+    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true), hint_(h) {
 }
 
 inline void ValidJoinRange::ref() {
@@ -138,6 +142,14 @@ inline bool ValidJoinRange::valid() const {
 
 inline void ValidJoinRange::invalidate() {
     valid_ = false;
+}
+
+inline void ValidJoinRange::update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const {
+    hint_ = insert ? it : end;
+}
+
+inline ServerStore::iterator ValidJoinRange::hint() const {
+    return hint_;
 }
 
 inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)

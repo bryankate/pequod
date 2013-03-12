@@ -38,7 +38,7 @@ class Table : public pequod_set_base_hook {
 
     void insert(const String& key, String value);
     template <typename F>
-    void modify(const String& key, const F& func);
+    void modify(const String& key, const ValidJoinRange* sink, const F& func);
     void erase(const String& key);
 
   private:
@@ -159,13 +159,23 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(const String& key, const F& func) {
+void Table::modify(const String& key, const ValidJoinRange* sink, const F& func) {
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    std::pair<ServerStore::iterator, bool> p;
+    ServerStore::iterator hi;
+    if (!sink || (hi = sink->hint()) == store_.end())
+        p = store_.insert_check(key, DatumCompare(), cd);
+    else if (hi->key() == key) {
+        p.first = hi;
+        p.second = false;
+    } else
+        p = store_.insert_check(++hi, key, DatumCompare(), cd);
     Datum* d = p.second ? NULL : p.first.operator->();
     String value = func(d);
     if (is_erase_marker(value)) {
         mandatory_assert(!p.second);
+        if (sink)
+            sink->update_hint(p.first, store_.end(), false);
 	store_.erase(p.first);
         notify(d, String(), SourceRange::notify_erase);
 	delete d;
@@ -173,14 +183,17 @@ void Table::modify(const String& key, const F& func) {
         if (p.second)
             d = new Datum(key, String());
         d->value().swap(value);
-        if (p.second)
-            store_.insert_commit(*d, cd);
+        if (p.second) {
+            auto it = store_.insert_commit(*d, cd);
+            if (sink)
+                sink->update_hint(it, store_.end(), true);
+        }
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
 }
 
 inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
-    ValidJoinRange* sink = new ValidJoinRange(first, last, join);
+    ValidJoinRange* sink = new ValidJoinRange(first, last, join, store_.end());
     sink_ranges_.insert(sink);
     return sink;
 }
