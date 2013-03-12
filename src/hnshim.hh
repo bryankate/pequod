@@ -12,7 +12,7 @@ class HashHackerNewsShim {
     HashHackerNewsShim(C &c) : c_(c) {
     }
     template <typename R>
-    void initialize(bool, bool ma, preevent<R> e) {
+    void initialize(bool, bool ma, bool, preevent<R> e) {
         mandatory_assert(!ma, "unimplemented: materializing all");
         e();
     }
@@ -38,8 +38,9 @@ class HashHackerNewsShim {
         e();
     }
     template <typename R>
-    void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
+    void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, preevent<R> e) {
         // append voter to v|aid?
+        (void) check_karmas;
         c_.append(String("v|") + String(aid), String(voter) + String(","));
         // increment k|author
         c_.increment(String("k|") + String(author));
@@ -85,7 +86,7 @@ class PQHackerNewsShim {
   public:
     PQHackerNewsShim(S& server) : server_(server) {}
     template <typename R>
-    void initialize(bool log, bool ma, preevent<R> e);
+    void initialize(bool log, bool ma, bool push, preevent<R> e);
     template <typename R>
     void post_populate(preevent<R> e) {
         String start = "k|";
@@ -131,10 +132,16 @@ class PQHackerNewsShim {
         e();
     }
     template <typename R>
-    void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
+    void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
         sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
         server_.insert(Str(buf, 24), Str("", 0));
+        if (push_) {
+            sprintf(buf, "k|%07d", author);
+            char buf1[128];
+            sprintf(buf1, "%07d", check_karmas[author]);
+            server_.insert(Str(buf, 9), Str(buf1, 7));
+        }
         if (log_)
             printf("vote %.24s\n", buf);
         e();
@@ -153,13 +160,23 @@ class PQHackerNewsShim {
 
     bool log_;
     bool ma_;
+    bool push_;
     S& server_;
 };
 
 template <typename S> template <typename R>
-void PQHackerNewsShim<S>::initialize(bool log, bool ma, preevent<R> e) {
+void PQHackerNewsShim<S>::initialize(bool log, bool ma, bool push, preevent<R> e) {
     log_ = log;
     ma_ = ma;
+    push_ = push;
+
+    if (push) {
+        e();
+        return;
+        // dont' set up any joins
+        // on each vote, +1 the k range
+    }
+
     String start, end, join_str;
     bool valid;
     pq::Join* j;
@@ -305,9 +322,10 @@ class SQLHackernewsShim {
     SQLHackernewsShim(C& pg) : pg_(pg) {
     }
     template <typename R>
-    void initialize(bool log, bool ma, preevent<R> e) {
+    void initialize(bool log, bool ma, bool push, preevent<R> e) {
         ma_ = ma;
         log_ = log;
+        push_ = push;
         e();
     }
 
@@ -343,14 +361,15 @@ class SQLHackernewsShim {
     }
 
     template <typename R>
-    void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
+    void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
-        (void)author;
-        // Avoid duplicate votes
-        sprintf(buf, "INSERT INTO votes (aid, voter) SELECT %d, %d WHERE NOT EXISTS (SELECT aid FROM votes WHERE aid = %d AND voter = %d)", aid, voter, aid, voter);
-        pg_.insert(buf);
+        (void) check_karmas;
+        sprintf(buf, "INSERT INTO votes values (%d, %d)", aid, voter);
+        PGresult* res = pg_.insert(buf);
+        int affected = atoi(PQcmdTuples(res));
+        mandatory_assert(affected == 1);
         if (log_)
-            printf("vote %d %d\n", aid, voter);
+            printf("vote %d %d authored by %d\n", aid, voter, author);
         e();
     }
     template <typename R>
@@ -420,6 +439,7 @@ class SQLHackernewsShim {
     C& pg_;
     bool log_;
     bool ma_;
+    bool push_;
 };
 #endif
 

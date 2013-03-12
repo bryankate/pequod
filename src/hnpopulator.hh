@@ -30,6 +30,7 @@ class HackernewsPopulator {
     inline uint32_t karma(uint32_t author) const;
     inline void set_log(bool val);
     inline bool log() const;
+    inline bool push() const;
     inline const std::vector<uint32_t>& articles() const;
     inline const std::vector<uint32_t>& karmas() const;
     inline uint32_t pre() const;
@@ -44,6 +45,7 @@ class HackernewsPopulator {
   private:
     Json param_;
     bool log_;
+    bool push_;
     uint32_t nusers_;
     // author -> karma
     std::vector<uint32_t> karma_;
@@ -59,7 +61,8 @@ class HackernewsPopulator {
 };
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(param["log"].as_b(false)), nusers_(param["hnusers"].as_i(10)),
+    : param_(param), log_(param["log"].as_b(false)), push_(param["push"].as_b(false)), 
+      nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
@@ -85,11 +88,12 @@ inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article)
 
 inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
     auto it = votes_.find(article);
+    uint32_t author = articles_[article];
     mandatory_assert(it != votes_.end());    
     if (it->second.find(user) != it->second.end())
         return false;
     it->second.insert(user);
-    ++karma_[articles_[article]];
+    ++karma_[author];
     return true;
 }
 
@@ -129,6 +133,10 @@ inline uint32_t HackernewsPopulator::karma(uint32_t author) const {
 
 inline bool HackernewsPopulator::log() const {
     return log_;
+}
+
+inline bool HackernewsPopulator::push() const {
+    return push_;
 }
 
 inline void HackernewsPopulator::set_log(bool val) {

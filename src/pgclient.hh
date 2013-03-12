@@ -29,14 +29,14 @@ class PostgresClient {
         return res;
     }
 
-    void insert(const char* query) {
+    PGresult * insert(const char* query) {
         PGresult* res = PQexec(conn_, query);        
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
             printf("Problem with insert!\n");
             std::cout << PQresultErrorMessage(res) << "\n";
             exit(0);
         }
-        PQclear(res);
+        return res;
     }
 
     void done(PGresult *res) {

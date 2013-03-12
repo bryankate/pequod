@@ -61,7 +61,7 @@ void HackernewsRunner<S>::post_comment(uint32_t commentor, uint32_t aid) {
 tamed template <typename S>
 void HackernewsRunner<S>::vote(uint32_t voter, uint32_t aid) {
     twait {
-        server_.vote(voter, hp_.articles()[aid], aid, make_event());
+        server_.vote(voter, hp_.articles()[aid], aid, hp_.karmas(), make_event());
     }
 }
 
@@ -81,7 +81,7 @@ void HackernewsRunner<S>::populate() {
         uint32_t nv = 0, nc = 0;
     }
     twait {
-        server_.initialize(hp_.log(), hp_.m(), make_event());
+        server_.initialize(hp_.log(), hp_.m(), hp_.push(), make_event());
     }
     if (!hp_.pg()) {
         gen.seed(13918);
@@ -144,7 +144,7 @@ void HackernewsRunner<S>::run() {
             uint32_t aid = rng(hp_.narticles());
             read_article(aid);
             nread++;
-            if (p < hp_.vote_rate() && hp_.vote(user, aid)) {
+            if (p < hp_.vote_rate() && hp_.vote(aid, user)) {
                 vote(user, aid);
                 ++nvote;
             }

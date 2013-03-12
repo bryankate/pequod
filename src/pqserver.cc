@@ -275,6 +275,10 @@ int main(int argc, char** argv) {
             tr.run(tamer::event<>());
         }
     } else if (mode == mode_hn) {
+        if (tp_param["large"]) {
+            tp_param.set("narticles", 100000);
+            tp_param.set("hnusers", 50000);
+        }
         pq::HackernewsPopulator hp(tp_param);
         if (tp_param["builtinhash"]) {
             pq::BuiltinHashClient client;
