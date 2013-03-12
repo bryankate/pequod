@@ -103,6 +103,19 @@ class PQHackerNewsShim {
                 std::cout << ": end print validated [" << start << "," << end << ")\n";
                 std::cout << "Finished validate.\n";
             }
+        } else if (!push_ && ma_) {
+            String start = "ma|";
+            String end = "ma}";
+            server_.validate(start, end);
+            if (log_) {
+                std::cout << ": print validated [" << start << "," << end << ")\n";
+                auto bit = server_.lower_bound(start),
+                    eit = server_.lower_bound(end);
+                for (; bit != eit; ++bit)
+                    std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+                std::cout << ": end print validated [" << start << "," << end << ")\n";
+                std::cout << "Finished validate.\n";
+            }
         }
         e();
     }
@@ -189,6 +202,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
     pq::Join* j;
     if (mk) {
         // Materialize karma in a separate table
+        printf("Materializing karma table\n");
         j = new pq::Join;
         join_str = "k|<author:7> "
             "a|<author:7><seqid:7> "
@@ -201,6 +215,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
         server_.add_join(start, end, j);
     } else if (ma) {
         // Materialize all articles
+        printf("Materializing all article pages\n");
         start = "ma|";
         end = "ma}";
         // Materialize articles
@@ -229,7 +244,6 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
         server_.add_join(start, end, j);
         
         // Materialize karma inline
-        std::cout << "Materializing karma inline with articles.\n";
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> "
             "c|<aid>|<cid>|<commenter> "
             "v|<commenter><seq:7>|<voter:7>";
