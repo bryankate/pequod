@@ -17,6 +17,7 @@ from optparse import OptionParser
 ARTICLE = "{0[aid]}\t{0[author]}\t{0[text]}\n"
 COMMENT = "{0[cid]}\t{0[aid]}\t{0[commentor]}\t{0[text]}\n"
 VOTE = "{0[aid]}\t{0[voter]}\n"
+KARMA = "{0[author]}\t{0[karma]}\n"
 
 # Benchmark read query
 QUERY = """SELECT articles.aid,articles.author,articles.link,""" \
@@ -34,6 +35,7 @@ parser = OptionParser()
 parser.add_option("-p", "--port", action="store", type="int", dest="port", default=5477)
 parser.add_option("-X", "--large", action="store_true", dest="largedb", default=False)
 parser.add_option("-m", "--materialize", action="store_true", dest="materialize", default=False)
+parser.add_option("-s", "--push", action="store_true", dest="push", default=False)
 (options, args) = parser.parse_args()
 
 
@@ -48,20 +50,36 @@ class HNPopulator:
         self.user = user
         self.port = port
 
+
     def generate(self, fn):
         articles = []
+        articles_author = []
         votes = []
         comments = []        
         aid = 0
+        karma_count = []
+
+        if options.push:
+            for user in range(0, self.nusers):
+                karma_count.append(0)
+
         for aid in range(0, self.narticles):
+            articles_author.append(0)
+
+        for aid in range(0, self.narticles-1):
             d = {}
-            d['author'] = randint(0, self.nusers)
+            author = randint(0, self.nusers-1)
+            d['author'] = author
             d['aid'] = aid
             d['text'] = "lalalala"
             articles.append(d)
+            articles_author[aid] = author
 
-            v =  {'voter':d['author'], 'aid':aid}
+            v =  {'voter':author, 'aid':aid}
             votes.append(v)
+
+            if options.push:
+                karma_count[author] = karma_count[author] + 1
 
         seen = { }
         for x in range(0, self.narticles):
@@ -80,6 +98,11 @@ class HNPopulator:
                 seen[voter][aid] = 1
                 votes.append( {'voter':voter, 'aid':aid} )
 
+                if options.push:
+                    author = articles_author[aid]
+                    karma_count[author] = karma_count[author] + 1
+
+
             for i in range(0, randint(0, self.ncomments)):
                 aid = randint(0, self.narticles-1)
                 comments.append( {'commentor':randint(0, self.nusers-1), 'aid':aid, 'cid':self.nid, 'text':'csljdf'} )
@@ -88,6 +111,14 @@ class HNPopulator:
         self.write_file(fn+".articles", ARTICLE, articles)
         self.write_file(fn+".votes", VOTE, votes)
         self.write_file(fn+".comments", COMMENT, comments)
+        if options.push:
+            karma = []
+            for author in range(len(karma_count)):
+                d = {}
+                d['author'] = author
+                d['karma'] = karma_count[author]
+                karma.append(d)
+            self.write_file(fn+".karma", KARMA, karma)
 
     def write_file(self, fn, format_string, stuff):
         with open(fn, 'w') as f:
@@ -97,15 +128,21 @@ class HNPopulator:
     def load(self, fn):
         self.clear()
         self.psql("schema.sql")
+        if options.push:
+            self.psql("push.sql")
         conn = psycopg2.connect("user=%s dbname=%s port=%d" % (self.user, self.db, self.port))
         curs = conn.cursor()
         for table in ['articles', 'votes', 'comments']:
             curs.copy_from(open(fn+"."+table, 'r'), table)
+        if options.push:
+            curs.copy_from(open(fn+".karma", 'r'), "karma")
         conn.commit()
         conn.close()
         self.psql("schema_index.sql")
         if options.materialize:
             self.psql("views.sql")
+        if options.push:
+            self.psql("push_index.sql")
 
     def clear(self):
         tmpdb = self.db
@@ -134,6 +171,9 @@ class HNPopulator:
 
 
 if __name__ == "__main__":
+    if options.materialize and options.push:
+        print "Can't materialize and push at the same time!"
+        exit(1)
     if options.largedb:
         hn = HNPopulator("hn", os.environ['USER'], options.port, 100000, 50000, 50, 20)
         print "Generating 100000 articles, 50000 users, 50 votes, 20 comments"
@@ -147,4 +187,7 @@ if __name__ == "__main__":
     hn.load(dataset)
     hn.dump("pg.dump"+suffix)
     [ system("""echo "ANALYZE %s;" >> pg.dump%s""" % (t, suffix)) for t in ["comments", "articles", "votes"] ]
-    
+    if options.push:
+        system("""echo "ANALYZE karma;" >> pg.dump%s""" % suffix)
+    if options.materialize:
+        system("""echo "ANALYZE karma_mv;" >> pg.dump%s""" % suffix)
