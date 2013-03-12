@@ -88,13 +88,13 @@ void HackernewsRunner<S>::populate() {
         for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
             const uint32_t author = rng(hp_.nusers());
             post_article(author, aid);
-            const uint32_t ncomment = rng(10);
+            const uint32_t ncomment = rng(20);
             for (uint32_t j = 1; j <= ncomment; ++j) {
                 nc++;
                 const uint32_t commentor = rng(hp_.nusers());
                 post_comment(commentor, aid);
             }
-            const uint32_t nvote = rng(10);
+            const uint32_t nvote = rng(50);
             for (uint32_t j = 0; j < nvote; ++j) {
                 const uint32_t voter = rng(hp_.nusers());
                 if (hp_.vote(aid, voter)) {

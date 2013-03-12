@@ -376,8 +376,8 @@ class SQLHackernewsShim {
                                  "comments.cid,comments.commenter,comments.comment,"
                                  "karma.karma,count(votes.aid) as vote_count "
                          "FROM articles "
-                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
-                         "LEFT OUTER JOIN "
+                         "LEFT JOIN comments ON articles.aid=comments.aid "
+                         "LEFT JOIN "
                            "(SELECT articles.author, count(*) as karma FROM articles, votes WHERE "
                            "articles.aid = votes.aid GROUP BY articles.author) AS karma "
                            "ON comments.commenter=karma.author "
@@ -403,7 +403,7 @@ class SQLHackernewsShim {
             if (user == "")
                 continue;
             uint32_t my_karma = check_karmas[atoi(user.c_str())];
-            if (karma > my_karma + 1 || karma < my_karma -1) {
+            if (karma > my_karma + 2 || my_karma > karma + 2) {
                 printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
                 mandatory_assert(false && "Karma mismatch");
             }
