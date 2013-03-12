@@ -164,7 +164,12 @@ void Table::modify(const String& key, const F& func) {
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d = p.second ? NULL : p.first.operator->();
     String value = func(d);
-    if (!is_unchanged_marker(value)) {
+    if (is_erase_marker(value)) {
+        mandatory_assert(!p.second);
+	store_.erase(p.first);
+        notify(d, String(), SourceRange::notify_erase);
+	delete d;
+    } else if (!is_unchanged_marker(value)) {
         if (p.second)
             d = new Datum(key, String());
         d->value().swap(value);

@@ -92,12 +92,10 @@ void CopySourceRange::notify(const Datum* src, const String&, int notifier) cons
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
         expand_results(src);
-	for (auto& res : results_) {
-	    if (notifier >= 0)
-                dst_table_->insert(res.key, src->value());
-            else
-		dst_table_->erase(res.key);
-	}
+	for (auto& res : results_)
+            dst_table_->modify(res.key, [=](Datum*) {
+                    return notifier >= 0 ? src->value() : erase_marker();
+                });
     }
 }
 
@@ -181,12 +179,10 @@ void BoundedCopySourceRange::notify(const Datum* src, const String& oldval, int 
             return;
 
         expand_results(src);
-	for (auto& res : results_) {
-	    if (notifier >= 0)
-                dst_table_->insert(res.key, src->value());
-            else
-		dst_table_->erase(res.key);
-	}
+	for (auto& res : results_)
+            dst_table_->modify(res.key, [=](Datum*) {
+                    return notifier >= 0 ? src->value() : erase_marker();
+                });
     }
 }
 
