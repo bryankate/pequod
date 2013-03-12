@@ -107,11 +107,12 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
     // XXX PERFORMANCE the match() is often not necessary
     if (notifier && join_->back_source().match(src->key())) {
         expand_results(src);
-        for (auto& res : results_)
+        for (auto& res : results_) {
             dst_table_->modify(res.key, [=](Datum* dst, bool insert) {
                     return String(notifier
                                   + (insert ? 0 : dst->value().to_i()));
                 });
+        }
     }
 }
 

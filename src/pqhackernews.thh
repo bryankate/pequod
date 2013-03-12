@@ -81,7 +81,7 @@ void HackernewsRunner<S>::populate() {
         uint32_t nv = 0, nc = 0;
     }
     twait {
-        server_.initialize(hp_.log(), hp_.m(), hp_.push(), make_event());
+        server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), make_event());
     }
     if (!hp_.pg()) {
         gen.seed(13918);
@@ -130,9 +130,10 @@ void HackernewsRunner<S>::run() {
         const uint32_t nusers = this->hp_.nusers();
         struct rusage ru[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
-        Json stats, server_stats;
+        Json old_stats, stats;
     }
     gen.seed(13918);
+    twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
     for (uint32_t i = 0; i < nops; ++i) {
         uint32_t p = rng(100);
@@ -155,13 +156,16 @@ void HackernewsRunner<S>::run() {
         }
     }
     getrusage(RUSAGE_SELF, &ru[1]);
+    twait {
+        server_.stats(make_event(stats));
+    }
+    if (stats.get("server_user_time")) {
+        stats["server_user_time"] -= old_stats["server_user_time"];
+        stats["server_system_time"] -= old_stats["server_system_time"];
+    }
     stats = Json().set("nread", nread).set("npost", npost)
 	.set("ncomment", ncomment).set("nvote", nvote)
-	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
-    twait {
-        server_.stats(make_event(server_stats));
-    }
-    stats.merge(server_stats);
+	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime)).merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 

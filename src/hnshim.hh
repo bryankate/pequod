@@ -12,8 +12,8 @@ class HashHackerNewsShim {
     HashHackerNewsShim(C &c) : c_(c) {
     }
     template <typename R>
-    void initialize(bool, bool ma, bool, preevent<R> e) {
-        mandatory_assert(!ma, "unimplemented: materializing all");
+    void initialize(bool, bool mk, bool, bool, preevent<R> e) {
+        mandatory_assert(!mk, "unimplemented: materializing all");
         e();
     }
     template <typename R>
@@ -87,10 +87,10 @@ class PQHackerNewsShim {
   public:
     PQHackerNewsShim(S& server) : server_(server) {}
     template <typename R>
-    void initialize(bool log, bool ma, bool push, preevent<R> e);
+    void initialize(bool log, bool mk, bool, bool push, preevent<R> e);
     template <typename R>
     void post_populate(preevent<R> e) {
-        if (!push_ && ma_) {
+        if (!push_ && mk_) {
             String start = "k|";
             String end = "k}";
             server_.validate(start, end);
@@ -165,14 +165,16 @@ class PQHackerNewsShim {
     void get_karma(String user, karmas_type& check_karmas);
 
     bool log_;
+    bool mk_;
     bool ma_;
     bool push_;
     S& server_;
 };
 
 template <typename S> template <typename R>
-void PQHackerNewsShim<S>::initialize(bool log, bool ma, bool push, preevent<R> e) {
+void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, preevent<R> e) {
     log_ = log;
+    mk_ = mk;
     ma_ = ma;
     push_ = push;
 
@@ -185,7 +187,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, bool push, preevent<R> e
     String start, end, join_str;
     bool valid;
     pq::Join* j;
-    if (ma) {
+    if (mk) {
         // Materialize karma in a separate table
         j = new pq::Join;
         join_str = "k|<author:7> "
@@ -197,6 +199,45 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, bool push, preevent<R> e
         mandatory_assert(valid && "Invalid karma join");
         j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
+    } else if (ma) {
+        // Materialize all articles
+        start = "ma|";
+        end = "ma}";
+        // Materialize articles
+        join_str = "ma|<author:7><seqid:7>|a "
+            "a|<author><seqid> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|article join");
+        server_.add_join(start, end, j);
+
+        // Materialize votes
+        join_str = "ma|<author:7><seqid:7>|v "
+            "v|<author><seqid>|<voter:7> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|votes join");
+        j->set_jvt(jvt_count_match);
+        server_.add_join(start, end, j);
+
+        // Materialize comments
+        join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> "
+            "c|<author><seqid>|<cid>|<commenter> ";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|comments join");
+        server_.add_join(start, end, j);
+        
+        // Materialize karma inline
+        std::cout << "Materializing karma inline with articles.\n";
+        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> "
+            "c|<aid>|<cid>|<commenter> "
+            "v|<commenter><seq:7>|<voter:7>";
+        j = new pq::Join;
+        valid = j->assign_parse(join_str);
+        mandatory_assert(valid && "Invalid ma|karma join");
+        j->set_jvt(jvt_count_match);
+        server_.add_join(start, end, j);
     }
     e();
 }
@@ -205,42 +246,58 @@ template <typename S> template <typename R>
 void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author, 
                                        karmas_type& check_karmas, preevent<R> e) {
     char buf1[128], buf2[128];
-    // Article
-    sprintf(buf1, "a|%07d%07d", author, aid);
-    auto ait = server_.find(Str(buf1, 16));
-    mandatory_assert(ait != NULL);
-    if (log_)
-        std::cout << "read " << ait->key() << ":" << ait->value() << "\n";
-
-    // Comments and Karma
-    sprintf(buf1, "c|%07d%07d|", author, aid);
-    sprintf(buf2, "c|%07d%07d}", author, aid);
-    auto bit = server_.lower_bound(Str(buf1, 17)),
-         eit = server_.lower_bound(Str(buf2, 17));
-    for (; bit != eit; ++bit) {
-        if (log_) {
-            std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
+    if (ma_) {
+        sprintf(buf1, "ma|%07d%07d|", author, aid);
+        sprintf(buf2, "ma|%07d%07d}", author, aid);
+        auto bit = server_.lower_bound(Str(buf1, 18)),
+            eit = server_.lower_bound(Str(buf2, 18));
+        for (; bit != eit; ++bit) {
+            String field = extract_spkey(2, bit->key());
+            // TODO: check karma
+            if (log_) {
+                if (field == "a")
+                    std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
+                else
+                    std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
+            }
+        }
+    } else {
+        // Article
+        sprintf(buf1, "a|%07d%07d", author, aid);
+        auto ait = server_.find(Str(buf1, 16));
+        mandatory_assert(ait != NULL);
+        if (log_)
+            std::cout << "read " << ait->key() << ":" << ait->value() << "\n";
+        
+        // Comments and Karma
+        sprintf(buf1, "c|%07d%07d|", author, aid);
+        sprintf(buf2, "c|%07d%07d}", author, aid);
+        auto bit = server_.lower_bound(Str(buf1, 17)),
+            eit = server_.lower_bound(Str(buf2, 17));
+        for (; bit != eit; ++bit) {
+            if (log_)
+                std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
             get_karma(extract_spkey(3, bit->key()), check_karmas);
         }
-    }
-
-    // Votes
-    sprintf(buf1, "v|%07d%07d|", author, aid);
-    sprintf(buf2, "v|%07d%07d}", author, aid);
-    auto cit = server_.lower_bound(Str(buf1, 17)),
-         ceit = server_.lower_bound(Str(buf2, 17));
-    uint32_t votect = 0;
-    for (; cit != ceit; ++cit) {
-        votect++;
-        if (log_)
+        
+        // Votes
+        sprintf(buf1, "v|%07d%07d|", author, aid);
+        sprintf(buf2, "v|%07d%07d}", author, aid);
+        auto cit = server_.lower_bound(Str(buf1, 17)),
+            ceit = server_.lower_bound(Str(buf2, 17));
+        uint32_t votect = 0;
+        for (; cit != ceit; ++cit) {
+            votect++;
+            if (log_)
             std::cout << "  v " << cit->key() << ": " << cit->value() << "\n";
+        }
     }
     e();
 }
 
 template <typename S>
 void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
-    if (ma_ || push_) {
+    if (mk_ || push_) {
         char buf3[128];
         sprintf(buf3, "k|%s", user.c_str());
         auto kbit = server_.find(Str(buf3, 9));
@@ -264,7 +321,7 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
             eit = server_.lower_bound(Str(buf2, 10));
         for (; bit != eit; ++bit) {
             if (log_)
-                std::cout << "  a " << bit->key() << ": " << bit->value() << "\n";
+                std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
             String full_aid = extract_spkey(1, bit->key());
             sprintf(buf1, "v|%s|", full_aid.c_str());
             sprintf(buf2, "v|%s}", full_aid.c_str());
@@ -273,7 +330,7 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
             for (; cit != ceit; ++cit) {
                 karmact++;
                 if (log_)
-                    std::cout << "  v " << cit->key() << ": " << cit->value() << "\n";
+                    std::cout << "      v " << cit->key() << ": " << cit->value() << "\n";
             }
         }
         uint32_t my_karma = check_karmas[user.to_i()];
@@ -291,9 +348,9 @@ class SQLHackernewsShim {
     SQLHackernewsShim(C& pg) : pg_(pg) {
     }
     template <typename R>
-    void initialize(bool log, bool ma, bool push, preevent<R> e) {
-        mandatory_assert((ma || push) && "DB without materialized karma table is too slow. You don't want to run this");
-        ma_ = ma;
+    void initialize(bool log, bool mk, bool, bool push, preevent<R> e) {
+        mandatory_assert((mk || push) && "DB without materialized karma table is too slow. You don't want to run this");
+        mk_ = mk;
         log_ = log;
         push_ = push;
         e();
@@ -371,7 +428,7 @@ class SQLHackernewsShim {
                          "JOIN votes ON articles.aid=votes.aid "
                          "WHERE articles.aid = %d "
                          "GROUP BY articles.aid,comments.cid,karma.karma", aid);
-        } else if (ma_) {
+        } else if (mk_) {
             // Materialized karma table, query it
             sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
                                  "comments.cid,comments.commenter,comments.comment,"
@@ -431,7 +488,7 @@ class SQLHackernewsShim {
   private:
     C& pg_;
     bool log_;
-    bool ma_;
+    bool mk_;
     bool push_;
 };
 #endif

@@ -159,7 +159,8 @@ static Clp_Option options[] = {
     { "pg", 0, 1024, 0, Clp_Negate },
     { "synchronous", 0, 1025, 0, Clp_Negate },
     { "hnusers", 'x', 1026, Clp_ValInt, 0 },
-    { "large", 0, 1027, 0, Clp_Negate }
+    { "large", 0, 1027, 0, Clp_Negate },
+    { "super_materialize", 's', 1028, 0, Clp_Negate },
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
@@ -194,6 +195,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("shape", clp->val.d);
 	else if (clp->option->long_name == String("materialize"))
 	    tp_param.set("materialize", !clp->negated);
+	else if (clp->option->long_name == String("super_materialize"))
+	    tp_param.set("super_materialize", !clp->negated);
 	else if (clp->option->long_name == String("large"))
 	    tp_param.set("large", !clp->negated);
         else if (clp->option->long_name == String("memcached"))

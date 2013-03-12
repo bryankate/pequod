@@ -38,7 +38,8 @@ class HackernewsPopulator {
     inline uint32_t vote_rate() const;
     inline uint32_t comment_rate() const;
     inline uint32_t post_rate() const;
-    inline bool m() const;
+    inline bool mk() const;
+    inline bool ma() const;
     inline bool pg() const;
     inline void populate_from_files(uint32_t* nv, uint32_t* nc);
 
@@ -56,7 +57,8 @@ class HackernewsPopulator {
     uint32_t pre_;
     uint32_t narticles_;
     uint32_t ncomments_;
-    bool materialize_inline_;
+    bool materialize_karma_;
+    bool materialize_articles_;
     bool large_;
 };
 
@@ -67,7 +69,8 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       articles_(1000000),
       pre_(param["narticles"].as_i(10)),
       narticles_(0), ncomments_(0), 
-      materialize_inline_(param["materialize"].as_b(false)),
+      materialize_karma_(param["materialize"].as_b(false)),
+      materialize_articles_(param["super_materialize"].as_b(false)),
       large_(param["large"].as_b(false)) {
 }
 
@@ -159,8 +162,12 @@ inline uint32_t HackernewsPopulator::post_rate() const {
     return param_["post_rate"].as_i(0);
 }
 
-inline bool HackernewsPopulator::m() const {
-    return materialize_inline_;
+inline bool HackernewsPopulator::mk() const {
+    return materialize_karma_;
+}
+
+inline bool HackernewsPopulator::ma() const {
+    return materialize_articles_;
 }
 
 inline bool HackernewsPopulator::pg() const {
@@ -185,7 +192,7 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
         sprintf(sz, "large");
     else
         sprintf(sz, "small");
-    if (m())
+    if (mk())
         sprintf(mat, ".mv");
     else
         sprintf(mat, ".nomv");
