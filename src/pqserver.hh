@@ -155,7 +155,7 @@ inline size_t Server::count(Str first, Str last) const {
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        it->notify(d, old_value, notifier);
+        it->notify(d, old_value, notifier, false);
 }
 
 template <typename F>

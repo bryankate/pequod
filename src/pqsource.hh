@@ -36,7 +36,7 @@ class SourceRange {
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(const Datum* src, const String& old_value, int notifier, bool known_match) const;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -49,12 +49,15 @@ class SourceRange {
   public:
     rblinks<SourceRange> rblinks_;
   protected:
-    Join* join_;
-    Table* dst_table_;  // todo: move this to the join?
     struct result {
         String key;
         ValidJoinRange* sink;
     };
+
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const = 0;
+
+    Join* join_;
+    Table* dst_table_;  // todo: move this to the join?
     mutable local_vector<result, 4> results_;
   private:
     char buf_[32];
@@ -67,7 +70,11 @@ class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(Server& server, Join* join, int joinpos,
                             Str ibegin, Str iend, ValidJoinRange* sink);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier, bool known_match) const;
+  protected:
+    virtual void notify(result&, const Datum*, const String&, int) const {
+        //nop
+    }
   private:
     int joinpos_;
 };
@@ -77,7 +84,8 @@ class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(Server& server, Join* join, const Match& m,
                            Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
 };
 
 
@@ -85,28 +93,32 @@ class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(Server& server, Join* join, const Match& m,
                             Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(Server& server, Join* join, const Match& m,
                           Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class Bounds {
@@ -129,7 +141,8 @@ class BoundedCopySourceRange : public SourceRange {
   public:
     inline BoundedCopySourceRange(Server& server, Join* join, const Match& m,
                                   Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -139,7 +152,8 @@ class BoundedCountSourceRange : public SourceRange {
   public:
     inline BoundedCountSourceRange(Server& server, Join* join, const Match& m,
                                    Str ibegin, Str iend);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };

@@ -85,7 +85,7 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
         // match is simple/necessary
         if (pat.match(it->key(), mk)) {
             if (r)
-                r->notify(it.operator->(), String(), SourceRange::notify_insert);
+                r->notify(it.operator->(), String(), SourceRange::notify_insert, true);
             else {
                 pat.match(it->key(), mf);
                 pat.match(it->key(), ml);

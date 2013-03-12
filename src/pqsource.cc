@@ -53,12 +53,15 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
-void SourceRange::expand_results(const Datum* src) const {
+void SourceRange::notify(const Datum* src, const String& old_value, int notifier, bool known_match) const {
+    if (!known_match && !join_->back_source().match(src->key()))
+        return;
     using std::swap;
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; )
         if (!it->sink || it->sink->valid()) {
 	    join_->expand(it->key.mutable_udata(), src->key());
+            notify(*it, src, old_value, notifier);
             ++it;
         } else {
             it->sink->deref();
@@ -76,7 +79,7 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void InvalidatorRange::notify(const Datum* src, const String&, int) const {
+void InvalidatorRange::notify(const Datum* src, const String&, int, bool known_match) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->source(joinpos_).match(src->key())) {
 	for (auto& res : results_) {
@@ -87,123 +90,78 @@ void InvalidatorRange::notify(const Datum* src, const String&, int) const {
     }
 }
 
-
-void CopySourceRange::notify(const Datum* src, const String&, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        expand_results(src);
-	for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [=](Datum*) {
-                    return notifier >= 0 ? src->value() : erase_marker();
-                });
-    }
+void CopySourceRange::notify(result& res, const Datum* src, const String&, int notifier) const {
+    dst_table_->modify(res.key, res.sink, [=](Datum*) {
+             return notifier >= 0 ? src->value() : erase_marker();
+        });
 }
 
 
-void CountSourceRange::notify(const Datum* src, const String&, int notifier) const {
-    assert(notifier >= -1 && notifier <= 1);
-    // XXX PERFORMANCE the match() is often not necessary
-    if (notifier && join_->back_source().match(src->key())) {
-        expand_results(src);
-        for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [=](Datum* dst) {
-                    return String(notifier
-                                  + (dst ? dst->value().to_i() : 0));
-                });
-    }
+void CountSourceRange::notify(result& res, const Datum* src, const String&, int notifier) const {
+    dst_table_->modify(res.key, res.sink, [=](Datum* dst) {
+            return String(notifier + (dst ? dst->value().to_i() : 0));
+        });
 }
 
-void MinSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        expand_results(src);
-        for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [&](Datum* dst) -> String {
-                    if (!dst || src->value() < dst->value())
-                        return src->value();
-                    else if (old_value == dst->value()
-                             && (notifier < 0 || src->value() != old_value))
-                        assert(0 && "removing old min");
-                    else
-                        return unchanged_marker();
-                });
-    }
+void MinSourceRange::notify(result& res, const Datum* src, const String& old_value, int notifier) const {
+    dst_table_->modify(res.key, res.sink, [&](Datum* dst) -> String {
+            if (!dst || src->value() < dst->value())
+                 return src->value();
+            else if (old_value == dst->value()
+                     && (notifier < 0 || src->value() != old_value))
+                assert(0 && "removing old min");
+            else
+                return unchanged_marker();
+        });
 }
 
-void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        expand_results(src);
-        for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [&](Datum* dst) -> String {
-                    if (!dst || dst->value() < src->value())
-                        return src->value();
-                    else if (old_value == dst->value()
-                             && (notifier < 0 || src->value() != old_value))
-                        assert(0 && "removing old max");
-                    else
-                        return unchanged_marker();
-                });
-    }
+void MaxSourceRange::notify(result& res, const Datum* src, const String& old_value, int notifier) const {
+    dst_table_->modify(res.key, res.sink, [&](Datum* dst) -> String {
+            if (!dst || dst->value() < src->value())
+                return src->value();
+            else if (old_value == dst->value()
+                     && (notifier < 0 || src->value() != old_value))
+               assert(0 && "removing old max");
+            else
+                return unchanged_marker();
+        });
 }
 
-void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
-    if (join_->back_source().match(src->key())) {
-        expand_results(src);
-        for (auto& res : results_) {
-            dst_table_->modify(res.key, res.sink, [&](Datum* dst) {
-                if (!dst)
-                    return src->value();
-                else {
-                    long diff = (notifier == notify_update) ?
-                            src->value().to_i() - old_value.to_i() :
-                            src->value().to_i();
-
-                    if (notifier == notify_erase)
-                        diff *= -1;
-
-                    if (diff)
-                        return String(dst->value().to_i() + diff);
-                    else
-                        return unchanged_marker();
-                }
-            });
-        }
-    }
+void SumSourceRange::notify(result& res, const Datum* src, const String& old_value, int notifier) const {
+    dst_table_->modify(res.key, res.sink, [&](Datum* dst) {
+            if (!dst)
+                return src->value();
+            else {
+                long diff = (notifier == notify_update) ?
+                    src->value().to_i() - old_value.to_i() : 
+                    src->value().to_i();
+                 if (notifier == notify_erase)
+                     diff *= -1;
+                 if (diff)
+                     return String(dst->value().to_i() + diff);
+                 else
+                     return unchanged_marker();
+           }
+        });
 }
 
-void BoundedCopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        if (!bounds_.check_bounds(src->value(), oldval, notifier))
-            return;
-
-        expand_results(src);
-	for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [=](Datum*) {
-                    return notifier >= 0 ? src->value() : erase_marker();
-                });
-    }
+void BoundedCopySourceRange::notify(result& res, const Datum* src, const String& oldval, int notifier) const {
+    if (!bounds_.check_bounds(src->value(), oldval, notifier))
+        return;
+    dst_table_->modify(res.key, res.sink, [=](Datum*) {
+            return notifier >= 0 ? src->value() : erase_marker();
+        });
 }
 
 
-void BoundedCountSourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
-    assert(notifier >= -1 && notifier <= 1);
-    // XXX PERFORMANCE the match() is often not necessary
-    if (join_->back_source().match(src->key())) {
-        if (!bounds_.check_bounds(src->value(), oldval, notifier))
-            return;
-
-        if (!notifier)
-            return;
-
-        expand_results(src);
-        for (auto& res : results_)
-            dst_table_->modify(res.key, res.sink, [=](Datum* dst) {
-                    return String(notifier
-                                  + (dst ? dst->value().to_i() : 0));
-                });
-    }
+void BoundedCountSourceRange::notify(result& res, const Datum* src, const String& oldval, int notifier) const {
+    if (!bounds_.check_bounds(src->value(), oldval, notifier))
+        return;
+    if (!notifier)
+        return;
+    dst_table_->modify(res.key, res.sink, [=](Datum* dst) {
+            return String(notifier + (dst ? dst->value().to_i() : 0));
+        });
 }
 
 } // namespace pq
