@@ -134,8 +134,8 @@ class HNPopulator:
 
 if __name__ == "__main__":
     if options.largedb:
-        hn = HNPopulator("hn", os.environ['USER'], options.port, 100000, 10000, 50, 20)
-        print "Generating 100000 articles, 10000 users, 50 votes, 20 comments"
+        hn = HNPopulator("hn", os.environ['USER'], options.port, 100000, 50000, 50, 20)
+        print "Generating 100000 articles, 50000 users, 50 votes, 20 comments"
     else:
         hn = HNPopulator("hn", os.environ['USER'], options.port, 100, 10, 5, 2)
         print "Generating 100 articles, 10 users, 5 votes, 2 comments"
