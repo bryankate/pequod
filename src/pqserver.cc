@@ -194,6 +194,8 @@ int main(int argc, char** argv) {
 	    tp_param.set("shape", clp->val.d);
 	else if (clp->option->long_name == String("materialize"))
 	    tp_param.set("materialize", !clp->negated);
+	else if (clp->option->long_name == String("large"))
+	    tp_param.set("large", !clp->negated);
         else if (clp->option->long_name == String("memcached"))
             tp_param.set("memcached", !clp->negated);
         else if (clp->option->long_name == String("builtinhash"))

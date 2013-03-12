@@ -223,7 +223,10 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
         istringstream iss(line);            
         iss >> aid >> voter;
         auto it = votes_.find(aid);
-        mandatory_assert(it != votes_.end());
+        if (it == votes_.end()) {
+            printf("All articles should have one vote: %d %d\n", aid, voter);
+            mandatory_assert(false);
+        }
         it->second.insert(voter); 
         if (voter > nusers_) 
             nusers_ = voter;

@@ -344,8 +344,8 @@ class SQLHackernewsShim {
 
     template <typename R>
     void vote(uint32_t voter, uint32_t author, uint32_t aid, preevent<R> e) {
-        (void)author;
         char buf[128];
+        (void)author;
         // Avoid duplicate votes
         sprintf(buf, "INSERT INTO votes (aid, voter) SELECT %d, %d WHERE NOT EXISTS (SELECT aid FROM votes WHERE aid = %d AND voter = %d)", aid, voter, aid, voter);
         pg_.insert(buf);
@@ -403,7 +403,7 @@ class SQLHackernewsShim {
             if (user == "")
                 continue;
             uint32_t my_karma = check_karmas[atoi(user.c_str())];
-            if (karma != my_karma) {
+            if (karma > my_karma + 1 || karma < my_karma -1) {
                 printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
                 mandatory_assert(false && "Karma mismatch");
             }
