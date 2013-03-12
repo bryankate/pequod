@@ -19,8 +19,9 @@ class HashHackerNewsShim {
     template <typename R>
     void post_populate(preevent<R> e) { (void)e; }
     template <typename R>
-    void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
+    void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, preevent<R> e) {
         // add h|aid/author|v
+        (void) check_karmas;
         c_.set(String("h|") + String(aid), String(author) + String("|") + v);
         // XXX: append aid to ah|author?
         e();
@@ -89,27 +90,29 @@ class PQHackerNewsShim {
     void initialize(bool log, bool ma, bool push, preevent<R> e);
     template <typename R>
     void post_populate(preevent<R> e) {
-        String start = "k|";
-        String end = "k}";
+        if (!push_) {
+            String start = "k|";
+            String end = "k}";
         
-        if (ma_) {
-            start = "ma|";
-            end = "ma}";
-        }
-        server_.validate(start, end);
-        if (log_) {
-            std::cout << ": print validated [" << start << "," << end << ")\n";
-            auto bit = server_.lower_bound(start),
-                eit = server_.lower_bound(end);
-            for (; bit != eit; ++bit)
-                std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
-            std::cout << ": end print validated [" << start << "," << end << ")\n";
-            std::cout << "Finished validate.\n";
+            if (ma_) {
+                start = "ma|";
+                end = "ma}";
+            }
+            server_.validate(start, end);
+            if (log_) {
+                std::cout << ": print validated [" << start << "," << end << ")\n";
+                auto bit = server_.lower_bound(start),
+                    eit = server_.lower_bound(end);
+                for (; bit != eit; ++bit)
+                    std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+                std::cout << ": end print validated [" << start << "," << end << ")\n";
+                std::cout << "Finished validate.\n";
+            }
         }
         e();
     }
     template <typename R>
-    void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
+    void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
         sprintf(buf, "a|%07d%07d", author, aid);
         server_.insert(Str(buf, 16), v);
@@ -119,6 +122,14 @@ class PQHackerNewsShim {
         server_.insert(Str(buf, 24), Str("1", 1));
         if (log_)
             printf("vote %.24s\n", buf);
+        if (push_) {
+            sprintf(buf, "k|%07d", author);
+            char buf1[128];
+            sprintf(buf1, "%07d", check_karmas[author]);
+            server_.insert(Str(buf, 9), Str(buf1, 7));
+            if (log_)
+                printf("updated karma %.9s %.7s\n", buf, buf1);
+        }
         e();
     }
     template <typename R>
@@ -136,14 +147,16 @@ class PQHackerNewsShim {
         char buf[128];
         sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
         server_.insert(Str(buf, 24), Str("", 0));
+        if (log_)
+            printf("vote %.24s\n", buf);
         if (push_) {
             sprintf(buf, "k|%07d", author);
             char buf1[128];
             sprintf(buf1, "%07d", check_karmas[author]);
             server_.insert(Str(buf, 9), Str(buf1, 7));
+            if (log_)
+                printf("updated karma %.9s %.7s\n", buf, buf1);
         }
-        if (log_)
-            printf("vote %.24s\n", buf);
         e();
     }
     template <typename R>
@@ -237,9 +250,10 @@ void PQHackerNewsShim<S>::initialize(bool log, bool ma, bool push, preevent<R> e
 template <typename S> template <typename R>
 void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author, 
                                    karmas_type& check_karmas, preevent<R> e) {
-    if (ma_)
+    if (ma_) {
+        mandatory_assert(false && "We are not comparing this yet");
         read_materialized(aid, author, check_karmas);
-    else
+    } else
         read_tables(aid, author, check_karmas);
     e();
 }
@@ -335,8 +349,9 @@ class SQLHackernewsShim {
     }
 
     template <typename R>
-    void post_article(uint32_t author, uint32_t aid, const String &v, preevent<R> e) {
+    void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
+        (void) check_karmas;
         sprintf(buf, "INSERT INTO articles VALUES (%d, %d, '%s')", aid, author, v.data());
         pg_.insert(buf);
         if (log_)
@@ -345,6 +360,12 @@ class SQLHackernewsShim {
         pg_.insert(buf);
         if (log_)
             printf("vote\n");
+        if (push_) {
+            sprintf(buf, "UPDATE karma SET karma = karma+1 WHERE author=%d)", author);
+            pg_.insert(buf);
+            if (log_)
+                printf("updated karma\n");
+        }
         e();
     }
 
@@ -370,6 +391,12 @@ class SQLHackernewsShim {
         mandatory_assert(affected == 1);
         if (log_)
             printf("vote %d %d authored by %d\n", aid, voter, author);
+        if (push_) {
+            sprintf(buf, "UPDATE karma SET karma = karma+1 WHERE author=%d)", author);
+            pg_.insert(buf);
+            if (log_)
+                printf("updated karma\n");
+        }
         e();
     }
     template <typename R>

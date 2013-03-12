@@ -46,7 +46,7 @@ tamed template <typename S>
 void HackernewsRunner<S>::post_article(uint32_t author, uint32_t aid) {
     hp_.post_article(author, aid);
     twait {
-        server_.post_article(author, aid, Str("lalalalaxx", 10), make_event());
+        server_.post_article(author, aid, Str("lalalalaxx", 10), hp_.karmas(), make_event());
     }
 }
 

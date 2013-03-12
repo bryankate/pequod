@@ -168,30 +168,42 @@ inline bool HackernewsPopulator::pg() const {
 }
 
 inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc) {
+    mandatory_assert(pg());
     using std::string;
     using std::ifstream;
     using std::istringstream;
 
     String fn;
-    String prefix;
 
     CHECK_EQ(system("psql -p 5477 hn < db/hn/clear.sql > /dev/null"), 0);
-    if (large_ && m()) {
-        prefix = "db/hn/hn.data.large.mv";
-        CHECK_EQ(system("psql -p 5477 hn < db/hn/pg.dump.large.mv > /dev/null"), 0);
-    } else if (large_ && !m()) {
-        prefix = "db/hn/hn.data.large";
-        CHECK_EQ(system("psql -p 5477 hn < db/hn/pg.dump.large > /dev/null"), 0);
-    } else if (!large_ && m())  {
-        prefix = "db/hn/hn.data.small.mv";
-        CHECK_EQ(system("psql -p 5477 hn < db/hn/pg.dump.small.mv > /dev/null"), 0);
-    } else if (!large_ && !m()) {
-        prefix = "db/hn/hn.data.small";
-        CHECK_EQ(system("psql -p 5477 hn < db/hn/pg.dump.small > /dev/null"), 0);
-    }
-    
 
-    fn = prefix + String(".articles");
+    char sz[128];
+    char mat[128];
+    char p[128];
+
+    if (large_)
+        sprintf(sz, "large");
+    else
+        sprintf(sz, "small");
+    if (m())
+        sprintf(mat, ".mv");
+    else
+        sprintf(mat, ".nomv");
+    if (push_)
+        sprintf(p, ".push");
+    else
+        sprintf(p, ".nopush");
+
+    char prefix[128];
+    sprintf(prefix, "db/hn/pg.dump.%s%s%s", sz, mat, p);
+    char cmd[128];
+    sprintf(cmd, "psql -p 5477 hn < %s > /dev/null", prefix);
+    CHECK_EQ(system(cmd), 0);
+
+
+    char dataprefix[128];
+    sprintf(dataprefix, "db/hn/hn.data.%s%s%s", sz, mat, p);
+    fn = dataprefix + String(".articles");
     ifstream infile(fn.c_str(), ifstream::in);
     string line;
     uint32_t aid;
@@ -219,7 +231,8 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
         ++narticles_;
     }
 
-    fn = prefix + String(".votes");
+    
+    fn = dataprefix + String(".votes");
     ifstream infile2(fn.c_str(), ifstream::in);
     uint32_t voter;
     while(infile2) {
@@ -242,7 +255,7 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
         (*nv)++;
     }
 
-    fn = prefix + String(".comments");
+    fn = dataprefix + String(".comments");
     ifstream infile3(fn.c_str(), ifstream::in); // dumb
     while(infile3) {
         uint32_t commentor;
@@ -260,6 +273,25 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
 
         ncomments_++;
         (*nc)++;
+    }
+
+    if (push_) {
+        fn = dataprefix + String(".karma");
+        ifstream infile4(fn.c_str(), ifstream::in); // dumb
+        while(infile4) {
+            uint32_t author;
+            uint32_t karma;
+            if (!getline(infile4, line))
+                break;
+            boost::trim(line);
+            if ((line.empty()) || (line[0] == '#'))
+                continue;
+            istringstream iss(line);            
+            iss >> author >> karma;
+            if (author > nusers_) 
+                nusers_ = author;
+            mandatory_assert(karma_[author] == karma);
+        }
     }
 
     if (log_) {
