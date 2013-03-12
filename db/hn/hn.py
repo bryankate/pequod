@@ -53,7 +53,6 @@ class HNPopulator:
         comments = []        
         aid = 0
         for aid in range(0, self.narticles):
-            seen = {}
             d = {}
             d['author'] = randint(0, self.nusers)
             d['aid'] = aid
@@ -63,17 +62,26 @@ class HNPopulator:
             v =  {'voter':d['author'], 'aid':aid}
             votes.append(v)
 
+        seen = { }
         for x in range(0, self.narticles):
             for i in range(0, randint(0, self.nvotes)):
-                aid = randint(0, self.narticles)
-                voter = randint(0, self.nusers)
-                if not seen.has_key(voter):
-                    votes.append( {'voter':voter, 'aid':aid} )
-                    seen[voter] = 1
+                aid = randint(0, self.narticles-1)
+                voter = randint(0, self.nusers-1)
+                if seen.has_key(voter):
+                    k = seen[voter]
+                    try:
+                        x = k[aid]
+                        continue 
+                    except:
+                        pass
+                else:
+                    seen[voter] = {}
+                seen[voter][aid] = 1
+                votes.append( {'voter':voter, 'aid':aid} )
 
             for i in range(0, randint(0, self.ncomments)):
-                aid = randint(0, self.narticles)
-                comments.append( {'commentor':randint(0, self.nusers), 'aid':aid, 'cid':self.nid, 'text':'csljdf'} )
+                aid = randint(0, self.narticles-1)
+                comments.append( {'commentor':randint(0, self.nusers-1), 'aid':aid, 'cid':self.nid, 'text':'csljdf'} )
                 self.nid += 1
 
         self.write_file(fn+".articles", ARTICLE, articles)
