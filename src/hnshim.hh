@@ -337,6 +337,7 @@ class SQLHackernewsShim {
     }
     template <typename R>
     void initialize(bool log, bool ma, bool push, preevent<R> e) {
+        mandatory_assert((ma || push) && "DB without materialized karma table is too slow. You don't want to run this");
         ma_ = ma;
         log_ = log;
         push_ = push;
@@ -405,7 +406,17 @@ class SQLHackernewsShim {
         if (log_) 
             printf("Reading article %d\n", aid);
         char buf[512];
-        if (ma_) {
+        if (push_) {
+            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
+                                 "comments.cid,comments.commenter,comments.comment,"
+                                 "karma.karma,count(votes.aid) as vote_count "
+                         "FROM articles "
+                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
+                         "LEFT OUTER JOIN karma_mv ON comments.commenter=karma.author "
+                         "JOIN votes ON articles.aid=votes.aid "
+                         "WHERE articles.aid = %d "
+                         "GROUP BY articles.aid,comments.cid,karma.karma", aid);
+        } else if (ma_) {
             // Materialized karma table, query it
             sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
                                  "comments.cid,comments.commenter,comments.comment,"
