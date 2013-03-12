@@ -66,7 +66,7 @@ class HNPopulator:
         for aid in range(0, self.narticles):
             articles_author.append(0)
 
-        for aid in range(0, self.narticles-1):
+        for aid in range(0, self.narticles):
             d = {}
             author = randint(0, self.nusers-1)
             d['author'] = author
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     else:
         hn = HNPopulator("hn", os.environ['USER'], options.port, 100, 10, 5, 2)
         print "Generating 100 articles, 10 users, 5 votes, 2 comments"
-    suffix = ".%s%s" % ("large" if options.largedb else "small", ".mv" if options.materialize else "")
+    suffix = ".%s%s%s" % ("large" if options.largedb else "small", ".mv" if options.materialize else ".nomv", ".push" if options.push else ".nopush")
     dataset = "hn.data" + suffix
     hn.generate(dataset)
     print "Loading", dataset

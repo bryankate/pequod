@@ -48,6 +48,7 @@ DROP FUNCTION IF EXISTS karma_mv_vote_it();
 DROP FUNCTION IF EXISTS karma_mv_article_it();
 DROP FUNCTION IF EXISTS karma_refresh_row();
 DROP TABLE IF EXISTS karma_mv;
+DROP TABLE IF EXISTS karma;
 --
 -- PostgreSQL database dump complete
 --
