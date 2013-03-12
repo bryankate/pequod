@@ -287,10 +287,10 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas) {
     auto kbit = server_.find(Str(buf3, 9));
     uint32_t karma = 0;
     if (kbit == NULL)  {
-        mandatory_assert(check_karmas[atoi(user.c_str())] == 0);
+        mandatory_assert(check_karmas[user.to_i()] == 0);
     } else if (kbit != NULL) {
-        karma = atoi(kbit->value().c_str());
-        uint32_t my_karma = check_karmas[atoi(user.c_str())];
+        karma = kbit->value().to_i();
+        uint32_t my_karma = check_karmas[user.to_i()];
         mandatory_assert(karma == my_karma && "Karma mismatch");
         if (log_)
             std::cout << "  k " << user << ":" << karma << "\n";
@@ -402,7 +402,7 @@ class SQLHackernewsShim {
             String user = PQgetvalue(res, i, 4);
             if (user == "")
                 continue;
-            uint32_t my_karma = check_karmas[atoi(user.c_str())];
+            uint32_t my_karma = check_karmas[user.to_i()];
             if (karma > my_karma + 2 || my_karma > karma + 2) {
                 printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
                 mandatory_assert(false && "Karma mismatch");

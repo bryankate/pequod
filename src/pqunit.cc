@@ -256,15 +256,15 @@ void test_op_count() {
     CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ(k0->value_, "1");
+    CHECK_EQ(k0->value(), "1");
 
     server.insert("v|00001|00000", "vote 0");
     server.insert("v|00003|00000", "vote 0");
     CHECK_EQ(server.count(begin, end), size_t(2));
     auto k1 = server.find("k|00001");
     mandatory_assert(k1);
-    CHECK_EQ(k0->value_, "2");
-    CHECK_EQ(k1->value_, "1");
+    CHECK_EQ(k0->value(), "2");
+    CHECK_EQ(k1->value(), "1");
 }
 
 // One Server::validate produces multiple grouped keys
@@ -293,10 +293,10 @@ void test_op_count_validate1() {
     CHECK_EQ(server.count(begin, end), size_t(2));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ(k0->value_, "2");
+    CHECK_EQ(k0->value(), "2");
     auto k1 = server.find("k|00001");
     mandatory_assert(k1);
-    CHECK_EQ(k1->value_, "1");
+    CHECK_EQ(k1->value(), "1");
 }
 
 void test_karma() {
@@ -335,7 +335,7 @@ void test_karma() {
         sprintf(buf, "k|%05d", i);
         auto k0 = server.find(String(buf));
         mandatory_assert(k0);
-        CHECK_EQ(k0->value_, String(nvotes_per_aid));
+        CHECK_EQ(k0->value(), String(nvotes_per_aid));
     }
     Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
@@ -388,7 +388,7 @@ void test_ma() {
     CHECK_EQ(server.count(mab, mae), size_t(nuser));
 
     for (auto it = server.begin(); it != server.end(); ++it)
-        std::cerr << "  " << it->key() << ": " << it->value_ << "\n";
+        std::cerr << "  " << it->key() << ": " << it->value() << "\n";
 }
 
 void test_karma_online() {
@@ -423,7 +423,7 @@ void test_karma_online() {
         sprintf(buf, "k|%05d", i);
         auto k0 = server.find(String(buf));
         mandatory_assert(k0);
-        CHECK_EQ(k0->value_, String(1));
+        CHECK_EQ(k0->value(), String(1));
     }
 #if DO_PERF
     // perf profiling
@@ -452,7 +452,7 @@ void test_karma_online() {
         sprintf(buf, "k|%05d", i);
         auto k0 = server.find(String(buf));
         mandatory_assert(k0);
-        CHECK_EQ(k0->value_, String(nvotes_per_aid));
+        CHECK_EQ(k0->value(), String(nvotes_per_aid));
     }
     Json stats = Json().set("time", to_real(ru[1].ru_utime - ru[0].ru_utime));
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
@@ -482,14 +482,14 @@ void test_op_min() {
     CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ(k0->value_, "v8");
+    CHECK_EQ(k0->value(), "v8");
 
     server.insert("v|00000|00005", "v5");
-    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(k0->value(), "v5");
     CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00000|00006", "v6");
-    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(k0->value(), "v5");
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
@@ -517,18 +517,18 @@ void test_op_max() {
     CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
-    CHECK_EQ(k0->value_, "v2");
+    CHECK_EQ(k0->value(), "v2");
 
     server.insert("v|00000|00003", "v5");
-    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(k0->value(), "v5");
     CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00000|00004", "v4");
-    CHECK_EQ(k0->value_, "v5");
+    CHECK_EQ(k0->value(), "v5");
     CHECK_EQ(server.count(begin, end), size_t(1));
 
     server.insert("v|00001|00005", "v6");
-    CHECK_EQ(k0->value_, "v6");
+    CHECK_EQ(k0->value(), "v6");
     CHECK_EQ(server.count(begin, end), size_t(1));
 }
 
@@ -556,7 +556,7 @@ void test_op_sum() {
     CHECK_EQ(server.count(begin, end), size_t(1));
     auto sum0 = server.find("sum|00000");
     CHECK_TRUE(sum0);
-    CHECK_EQ(sum0->value_, "10");
+    CHECK_EQ(sum0->value(), "10");
 
     server.insert("b|00000|00000", "5");                // sum|00000 = 5
     server.insert("b|00001|00000", "3");                // sum|00000 = 8
@@ -568,8 +568,8 @@ void test_op_sum() {
     CHECK_TRUE(sum1);
     auto sum3 = server.find("sum|00003");
     CHECK_TRUE(!sum3);
-    CHECK_EQ(sum0->value_, "80");
-    CHECK_EQ(sum1->value_, "8");
+    CHECK_EQ(sum0->value(), "80");
+    CHECK_EQ(sum1->value(), "8");
 }
 
 void test_op_bounds() {
@@ -600,23 +600,23 @@ void test_op_bounds() {
 
     auto dst = server.find("o|00000");
     mandatory_assert(dst);
-    CHECK_EQ(dst->value_, "2");
+    CHECK_EQ(dst->value(), "2");
 
     server.insert("b|00000|00004", "7");
     server.insert("b|00000|00005", "3");
-    CHECK_EQ(dst->value_, "3");
+    CHECK_EQ(dst->value(), "3");
 
     server.insert("b|00000|00004", "8");
-    CHECK_EQ(dst->value_, "3");
+    CHECK_EQ(dst->value(), "3");
 
     server.insert("b|00000|00004", "0");
-    CHECK_EQ(dst->value_, "2");
+    CHECK_EQ(dst->value(), "2");
 
     server.erase("b|00000|00003");
-    CHECK_EQ(dst->value_, "2");
+    CHECK_EQ(dst->value(), "2");
 
     server.erase("b|00000|00001");
-    CHECK_EQ(dst->value_, "1");
+    CHECK_EQ(dst->value(), "1");
 
     // test copy bounds
     pq::Join j2;

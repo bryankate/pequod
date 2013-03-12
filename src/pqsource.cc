@@ -110,7 +110,7 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
         for (auto& res : results_)
             dst_table_->modify(res.key, [=](Datum* dst, bool insert) {
                     return String(notifier
-                                  + (insert ? 0 : dst->value_.to_i()));
+                                  + (insert ? 0 : dst->value().to_i()));
                 });
     }
 }
@@ -132,10 +132,10 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
         expand_results(src);
         for (auto& res : results_)
             dst_table_->modify(res.key, [&](Datum* dst, bool insert) -> String {
-                    if (insert || src->value_ < dst->value_)
-                        return src->value_;
-                    else if (old_value == dst->value_
-                             && (notifier < 0 || src->value_ != old_value))
+                    if (insert || src->value() < dst->value())
+                        return src->value();
+                    else if (old_value == dst->value()
+                             && (notifier < 0 || src->value() != old_value))
                         assert(0 && "removing old min");
                     else
                         return unchanged_marker();
@@ -144,8 +144,8 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
 }
 
 void MinSourceAccumulator::notify(const Datum* src) {
-    if (!any_ || src->value_ < val_)
-        val_ = src->value_;
+    if (!any_ || src->value() < val_)
+        val_ = src->value();
     any_ = true;
 }
 
@@ -163,10 +163,10 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
         expand_results(src);
         for (auto& res : results_)
             dst_table_->modify(res.key, [&](Datum* dst, bool insert) -> String {
-                    if (insert || dst->value_ < src->value_)
-                        return src->value_;
-                    else if (old_value == dst->value_
-                             && (notifier < 0 || src->value_ != old_value))
+                    if (insert || dst->value() < src->value())
+                        return src->value();
+                    else if (old_value == dst->value()
+                             && (notifier < 0 || src->value() != old_value))
                         assert(0 && "removing old max");
                     else
                         return unchanged_marker();
@@ -175,8 +175,8 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
 }
 
 void MaxSourceAccumulator::notify(const Datum* src) {
-    if (val_ < src->value_)
-        val_ = src->value_;
+    if (val_ < src->value())
+        val_ = src->value();
     any_ = true;
 }
 
@@ -194,17 +194,17 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
         for (auto& res : results_) {
             dst_table_->modify(res.key, [&](Datum* dst, bool insert) {
                 if (insert)
-                    return src->value_;
+                    return src->value();
                 else {
                     long diff = (notifier == notify_update) ?
-                            src->value_.to_i() - old_value.to_i() :
-                            src->value_.to_i();
+                            src->value().to_i() - old_value.to_i() :
+                            src->value().to_i();
 
                     if (notifier == notify_erase)
                         diff *= -1;
 
                     if (diff)
-                        return String(dst->value_.to_i() + diff);
+                        return String(dst->value().to_i() + diff);
                     else
                         return unchanged_marker();
                 }
@@ -214,7 +214,7 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
 }
 
 void SumSourceAccumulator::notify(const Datum* src) {
-    sum_ += src->value_.to_i();
+    sum_ += src->value().to_i();
     any_ = true;
 }
 
@@ -229,7 +229,7 @@ void SumSourceAccumulator::commit(Str dst_key) {
 void BoundedCopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
-        if (!bounds_.check_bounds(src->value_, oldval, notifier))
+        if (!bounds_.check_bounds(src->value(), oldval, notifier))
             return;
 
         expand_results(src);
@@ -247,7 +247,7 @@ void BoundedCountSourceRange::notify(const Datum* src, const String& oldval, int
     assert(notifier >= -1 && notifier <= 1);
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
-        if (!bounds_.check_bounds(src->value_, oldval, notifier))
+        if (!bounds_.check_bounds(src->value(), oldval, notifier))
             return;
 
         if (!notifier)
@@ -257,13 +257,13 @@ void BoundedCountSourceRange::notify(const Datum* src, const String& oldval, int
         for (auto& res : results_)
             dst_table_->modify(res.key, [=](Datum* dst, bool insert) {
                     return String(notifier
-                                  + (insert ? 0 : dst->value_.to_i()));
+                                  + (insert ? 0 : dst->value().to_i()));
                 });
     }
 }
 
 void BoundedCountSourceAccumulator::notify(const Datum* d) {
-    if (bounds_.has_bounds() && !bounds_.in_bounds(d->value_.to_i()))
+    if (bounds_.has_bounds() && !bounds_.in_bounds(d->value().to_i()))
         return;
     ++n_;
 }

@@ -165,7 +165,7 @@ void Table::modify(const String& key, const F& func) {
     Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
     String value = func(d, p.second);
     if (!is_unchanged_marker(value)) {
-        d->value_.swap(value);
+        d->value().swap(value);
         if (p.second)
             store_.insert_commit(*d, cd);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
