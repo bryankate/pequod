@@ -115,17 +115,6 @@ void CountSourceRange::notify(const Datum* src, const String&, int notifier) con
     }
 }
 
-void CountSourceAccumulator::notify(const Datum*) {
-    ++n_;
-}
-
-void CountSourceAccumulator::commit(Str dst_key) {
-    if (n_)
-        dst_table_->insert(dst_key, String(n_));
-    n_ = 0;
-}
-
-
 void MinSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
@@ -143,20 +132,6 @@ void MinSourceRange::notify(const Datum* src, const String& old_value, int notif
     }
 }
 
-void MinSourceAccumulator::notify(const Datum* src) {
-    if (!any_ || src->value() < val_)
-        val_ = src->value();
-    any_ = true;
-}
-
-void MinSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, std::move(val_));
-    any_ = false;
-    val_ = String();
-}
-
-
 void MaxSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
     if (join_->back_source().match(src->key())) {
@@ -173,20 +148,6 @@ void MaxSourceRange::notify(const Datum* src, const String& old_value, int notif
                 });
     }
 }
-
-void MaxSourceAccumulator::notify(const Datum* src) {
-    if (val_ < src->value())
-        val_ = src->value();
-    any_ = true;
-}
-
-void MaxSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, std::move(val_));
-    any_ = false;
-    val_ = String();
-}
-
 
 void SumSourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     if (join_->back_source().match(src->key())) {
@@ -212,19 +173,6 @@ void SumSourceRange::notify(const Datum* src, const String& old_value, int notif
         }
     }
 }
-
-void SumSourceAccumulator::notify(const Datum* src) {
-    sum_ += src->value().to_i();
-    any_ = true;
-}
-
-void SumSourceAccumulator::commit(Str dst_key) {
-    if (any_)
-        dst_table_->insert(dst_key, String(sum_));
-    any_ = false;
-    sum_ = 0;
-}
-
 
 void BoundedCopySourceRange::notify(const Datum* src, const String& oldval, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
@@ -260,18 +208,6 @@ void BoundedCountSourceRange::notify(const Datum* src, const String& oldval, int
                                   + (dst ? dst->value().to_i() : 0));
                 });
     }
-}
-
-void BoundedCountSourceAccumulator::notify(const Datum* d) {
-    if (bounds_.has_bounds() && !bounds_.in_bounds(d->value().to_i()))
-        return;
-    ++n_;
-}
-
-void BoundedCountSourceAccumulator::commit(Str dst_key) {
-    if (n_)
-        dst_table_->insert(dst_key, String(n_));
-    n_ = 0;
 }
 
 } // namespace pq

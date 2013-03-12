@@ -13,7 +13,6 @@ class ErrorHandler;
 namespace pq {
 class Join;
 class SourceRange;
-class SourceAccumulator;
 class Server;
 
 enum { slot_capacity = 5 };
@@ -120,7 +119,6 @@ class Join {
 
     SourceRange* make_source(Server& server, const Match& m,
                              Str ibegin, Str iend);
-    SourceAccumulator* make_accumulator(Server& server);
 
     bool assign_parse(Str str, ErrorHandler* errh = 0);
 

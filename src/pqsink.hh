@@ -9,7 +9,6 @@ namespace pq {
 class Join;
 class Server;
 class Match;
-class SourceAccumulator;
 class ValidJoinRange;
 
 class ServerRange {
@@ -50,7 +49,7 @@ class ServerRange {
     char buf_[32];
 
     void validate(Match& mf, Match& ml, int joinpos, Server& server,
-                  SourceAccumulator* accum, ValidJoinRange* sink);
+                  ValidJoinRange* sink);
 };
 
 class ValidJoinRange : public ServerRange {
