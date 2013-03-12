@@ -6,6 +6,7 @@
 
 import sys
 import os
+from os import system
 from random import randint
 from subprocess import Popen, PIPE
 import psycopg2
@@ -145,4 +146,5 @@ if __name__ == "__main__":
     print "Loading", dataset
     hn.load(dataset)
     hn.dump("pg.dump"+suffix)
+    [ system("""echo "ANALYZE %s;" >> pg.dump%s""" % (t, suffix)) for t in ["comments", "articles", "votes"] ]
     
