@@ -110,6 +110,7 @@ Json Server::stats() const {
 	.set("sink_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
+        .set("server_max_rss_mb", ru.ru_maxrss / 1024)
         .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes)
         .set("sink_allocated_key_bytes", ServerRange::allocated_key_bytes);
 }
