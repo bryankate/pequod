@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = be89f923de503d9dcc58ec1f582967420991a905
+TAMER_COMMIT = 7a4b8f536239796f322d3007668295f4aa675484
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \

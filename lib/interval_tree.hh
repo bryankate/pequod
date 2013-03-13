@@ -71,6 +71,8 @@ class interval_tree {
     inline interval_contains_iterator<T, interval_interval_overlaps_predicate<I> >
       end_overlaps(const I& x);
 
+    inline T* unlink_leftmost_without_rebalance();
+
     inline void check();
 
     template <typename TT> friend std::ostream &operator<<(std::ostream &s, const interval_tree<TT> &x);
@@ -121,6 +123,11 @@ inline void interval_tree<T>::erase_and_dispose(T* node) {
 template <typename T> template <typename Disposer>
 inline void interval_tree<T>::erase_and_dispose(T* node, Disposer d) {
     t_.erase_and_dispose(node, d);
+}
+
+template <typename T>
+inline T* interval_tree<T>::unlink_leftmost_without_rebalance() {
+    return t_.unlink_leftmost_without_rebalance();
 }
 
 template <typename T>

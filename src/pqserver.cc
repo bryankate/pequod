@@ -33,6 +33,15 @@ Table::Table(Str name)
 
 const Table Table::empty_table{Str()};
 
+Table::~Table() {
+    while (Datum* d = store_.unlink_leftmost_without_rebalance())
+        delete d;
+    while (SourceRange* r = source_ranges_.unlink_leftmost_without_rebalance())
+        delete r;
+    while (ServerRange* r = sink_ranges_.unlink_leftmost_without_rebalance())
+        delete r;
+}
+
 void Table::add_copy(SourceRange* r) {
     for (auto it = source_ranges_.begin_contains(r->interval());
 	 it != source_ranges_.end(); ++it)

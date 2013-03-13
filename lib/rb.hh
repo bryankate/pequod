@@ -48,7 +48,7 @@ class rbnodeptr {
     size_t size() const;
     template <typename C>
     void check(T* parent, int this_black_height, int& black_height,
-               T* root, C& compare) const;
+               T* root, T* begin, C& compare) const;
     void output(std::ostream& s, int indent, T* highlight) const;
 
   private:
@@ -83,6 +83,7 @@ struct rbreshape : private Reshape {
 template <typename T>
 struct rbrep0 {
     T* root_;
+    T* begin_;
 };
 
 template <typename T, typename Compare, typename Reshape>
@@ -164,6 +165,8 @@ class rbtree {
     inline void erase_and_dispose(node_type* x);
     template <typename Disposer>
     inline void erase_and_dispose(node_type* x, Disposer d);
+
+    inline node_type* unlink_leftmost_without_rebalance();
 
     int check() const;
     template <typename TT, typename CC, typename RR>
@@ -327,7 +330,7 @@ inline rbreshape<Reshape, T> &rbreshape<Reshape, T>::reshape() {
 template <typename T, typename C, typename R>
 inline rbrep1<T, C, R>::rbrep1(const C &compare, const R &reshape)
     : rbcompare_type(compare), rbreshape_type(reshape) {
-    this->root_ = 0;
+    this->root_ = this->begin_ = 0;
 }
 
 template <typename Compare>
@@ -361,6 +364,10 @@ void rbrep1<T, C, R>::insert_node(T* x) {
     x->rblinks_.p_ = p.node();
     x->rblinks_.c_[0] = x->rblinks_.c_[1] = rbnodeptr<T>(0, false);
     rbnodeptr<T> z(x, true);
+
+    // maybe set begin
+    if (!this->begin_ || (p.node() == this->begin_ && child == false))
+        this->begin_ = x;
 
     // reshape
     if (this->reshape()(x)) {
@@ -437,6 +444,14 @@ void rbtree<T, C, R>::delete_node(T* victim_node) {
     p.set_child(child, x, r_.root_);
     if (x)
         x.parent() = p.node();
+
+    // maybe set begin_
+    if (victim.node() == this->r_.begin_) {
+        rbnodeptr<T> b = (x ? x : p);
+        while (b && b.child(false))
+            b = b.child(false);
+        this->r_.begin_ = b.node();
+    }
 
     // reshaping
     while (x && r_.reshape()(x.node())) {
@@ -540,6 +555,21 @@ inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
     d(node);
 }
 
+template <typename T, typename C, typename R>
+inline T* rbtree<T, C, R>::unlink_leftmost_without_rebalance() {
+    T* node = r_.begin_;
+    if (node) {
+        rbnodeptr<T> n(node, false);
+        if (n.child(true)) {
+            n.child(true).parent() = n.parent();
+            r_.begin_ = rbalgorithms<T>::edge_node(n.child(true).node(), false);
+        } else
+            r_.begin_ = n.parent();
+    } else
+        r_.root_ = 0;
+    return node;
+}
+
 template <typename T>
 void rbnodeptr<T>::output(std::ostream &s, int indent, T* highlight) const {
     if (!*this)
@@ -583,7 +613,7 @@ inline size_t rbtree<T, C, R>::size() const {
 
 template <typename T> template <typename C>
 void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
-                         T* root, C& compare) const {
+                         T* root, T* begin, C& compare) const {
     rbcheck_assert(node()->rblinks_.p_ == parent);
     if (parent) {
         int cmp = compare(*node(), *parent);
@@ -598,10 +628,12 @@ void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
         //rbcheck_assert(child(false).red() || !child(true).red()); /* LLRB */
         ++this_black_height;
     }
+    if (begin && !child(0))
+        assert(begin == node());
     for (int i = 0; i < 2; ++i)
         if (child(i))
             child(i).check(node(), this_black_height, black_height,
-                           root, compare);
+                           root, i ? 0 : begin, compare);
         else if (black_height == -1)
             black_height = this_black_height;
         else
@@ -614,8 +646,10 @@ template <typename T, typename C, typename R>
 int rbtree<T, C, R>::check() const {
     int black_height = -1;
     if (r_.root_)
-        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height,
-                                            r_.root_, r_.get_compare());
+        rbnodeptr<T>(r_.root_, false).check(0, 0, black_height, r_.root_,
+                                            r_.begin_, r_.get_compare());
+    else
+        assert(r_.begin_ == 0);
     return black_height;
 }
 
@@ -701,7 +735,7 @@ inline bool operator!=(rbiterator<T> a, rbiterator<T> b) {
 
 template <typename T, typename R, typename A>
 rbiterator<T> rbtree<T, R, A>::begin() const {
-    return rbiterator<T>(r_.root_ ? rbalgorithms<T>::edge_node(r_.root_, false) : 0);
+    return rbiterator<T>(r_.begin_);
 }
 
 template <typename T, typename R, typename A>
