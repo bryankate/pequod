@@ -38,7 +38,7 @@ class Table : public pequod_set_base_hook {
 
     void insert(const String& key, String value);
     template <typename F>
-    void modify(const String& key, const F& func);
+    void modify(const String& key, const ValidJoinRange* sink, const F& func);
     void erase(const String& key);
 
   private:
@@ -73,8 +73,6 @@ class Server {
     Table& make_table(Str name);
 
     inline void insert(const String& key, const String& value);
-    template <typename F>
-    inline void modify(const String& key, const F& func);
     inline void erase(const String& key);
 
 #if 0
@@ -155,26 +153,45 @@ inline size_t Server::count(Str first, Str last) const {
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     for (auto it = source_ranges_.begin_contains(Str(d->key()));
          it != source_ranges_.end(); ++it)
-        it->notify(d, old_value, notifier);
+        it->notify(d, old_value, notifier, false);
 }
 
 template <typename F>
-void Table::modify(const String& key, const F& func) {
+void Table::modify(const String& key, const ValidJoinRange* sink, const F& func) {
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
-    Datum* d = p.second ? new Datum(key, String()) : p.first.operator->();
-    String value = func(d, p.second);
-    if (!is_unchanged_marker(value)) {
-        d->value().swap(value);
+    std::pair<ServerStore::iterator, bool> p;
+    ServerStore::iterator hi;
+    if (!sink || (hi = sink->hint()) == store_.end())
+        p = store_.insert_check(key, DatumCompare(), cd);
+    else if (hi->key() == key) {
+        p.first = hi;
+        p.second = false;
+    } else
+        p = store_.insert_check(++hi, key, DatumCompare(), cd);
+    Datum* d = p.second ? NULL : p.first.operator->();
+    String value = func(d);
+    if (is_erase_marker(value)) {
+        mandatory_assert(!p.second);
+        if (sink)
+            sink->update_hint(p.first, store_.end(), false);
+	store_.erase(p.first);
+        notify(d, String(), SourceRange::notify_erase);
+	delete d;
+    } else if (!is_unchanged_marker(value)) {
         if (p.second)
-            store_.insert_commit(*d, cd);
+            d = new Datum(key, String());
+        d->value().swap(value);
+        if (p.second) {
+            auto it = store_.insert_commit(*d, cd);
+            if (sink)
+                sink->update_hint(it, store_.end(), true);
+        }
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
-    } else if (p.second)
-        delete d;
+    }
 }
 
 inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
-    ValidJoinRange* sink = new ValidJoinRange(first, last, join);
+    ValidJoinRange* sink = new ValidJoinRange(first, last, join, store_.end());
     sink_ranges_.insert(sink);
     return sink;
 }
@@ -191,12 +208,6 @@ inline void Table::validate(Str first, Str last) {
 inline void Server::insert(const String& key, const String& value) {
     if (Str tname = table_name(key))
         make_table(tname).insert(key, value);
-}
-
-template <typename F>
-inline void Server::modify(const String& key, const F& func) {
-    if (Str tname = table_name(key))
-        make_table(tname).modify(key, func);
 }
 
 inline void Server::erase(const String& key) {

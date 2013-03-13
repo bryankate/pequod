@@ -76,21 +76,6 @@ SourceRange* Join::make_source(Server& server, const Match& m,
         assert(0);
 }
 
-SourceAccumulator* Join::make_accumulator(Server& server) {
-    if (jvt() == jvt_count_match)
-        return new CountSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_min_last)
-        return new MinSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_max_last)
-        return new MaxSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_sum_match)
-        return new SumSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else if (jvt() == jvt_bounded_count_match)
-        return new BoundedCountSourceAccumulator(this, &server.make_table(sink().table_name()));
-    else
-        return 0;
-}
-
 bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap,
                            ErrorHandler* errh) {
     plen_ = klen_ = 0;
