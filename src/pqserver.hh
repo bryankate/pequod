@@ -73,8 +73,6 @@ class Server {
     Table& make_table(Str name);
 
     inline void insert(const String& key, const String& value);
-    template <typename F>
-    inline void modify(const String& key, const F& func);
     inline void erase(const String& key);
 
 #if 0
@@ -210,12 +208,6 @@ inline void Table::validate(Str first, Str last) {
 inline void Server::insert(const String& key, const String& value) {
     if (Str tname = table_name(key))
         make_table(tname).insert(key, value);
-}
-
-template <typename F>
-inline void Server::modify(const String& key, const F& func) {
-    if (Str tname = table_name(key))
-        make_table(tname).modify(key, func);
 }
 
 inline void Server::erase(const String& key) {
