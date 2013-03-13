@@ -263,6 +263,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
     if (ma_) {
         sprintf(buf1, "ma|%07d%07d|", author, aid);
         sprintf(buf2, "ma|%07d%07d}", author, aid);
+        server_.validate(buf1, buf2);
         auto bit = server_.lower_bound(Str(buf1, 18)),
             eit = server_.lower_bound(Str(buf2, 18));
         for (; bit != eit; ++bit) {
