@@ -74,9 +74,9 @@ class TwitterShim {
     template <typename R>
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
-    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    inline void post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> e);
     tamed void initialize(bool push, tamer::event<> e);
-    inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
+    inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
     typedef typename S::scan_result scan_result;
@@ -90,7 +90,7 @@ class TwitterShim {
   private:
     S& server_;
     char buf_[128];
-    Str value_;
+    String value_;
 };
 
 template <typename S>
@@ -124,14 +124,14 @@ inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tame
 }
 
 template <typename S> template <typename R>
-inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> done) {
+inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
     sprintf(buf_, "p|%05u|%010u", poster, time);
     server_.insert(Str(buf_, 18), value, done);
 }
 
 template <typename S>
 inline void TwitterShim<S>::prepare_push_post(uint32_t poster, uint32_t time,
-                                              Str value) {
+                                              const String& value) {
     sprintf(buf_, "t|%05u|%010u|%05u", 0, time, poster);
     value_ = value;
 }
@@ -305,7 +305,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         if (time < post_end_time || a < tp_.ppost()) {
             if (tp_.log())
                 printf("%d: post p|%05d|%010d\n", time, u, time);
-            post(u, time, "?!?#*", gr.make_event());
+            post(u, time, String("?!?#*"), gr.make_event());
             ++npost;
         } else if (a < tp_.psubscribe()) {
             uint32_t follower;
