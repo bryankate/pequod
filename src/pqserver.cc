@@ -156,6 +156,8 @@ static Clp_Option options[] = {
     { "buffer", 0, 1021, 0, Clp_Negate },
     { "seed", 0, 1022, Clp_ValInt, 0 },
     { "pread", 0, 1023, Clp_ValInt, 0 },
+    { "ppost", 0, 1023, Clp_ValInt, 0 },
+    { "psubscribe", 0, 1023, Clp_ValInt, 0 },
     { "pg", 0, 1024, 0, Clp_Negate },
     { "synchronous", 0, 1025, 0, Clp_Negate },
     { "hnusers", 'x', 1026, Clp_ValInt, 0 },
@@ -215,6 +217,10 @@ int main(int argc, char** argv) {
             tp_param.set("pg", !clp->negated);
         else if (clp->option->long_name == String("pread"))
             tp_param.set("pread", clp->val.i);
+        else if (clp->option->long_name == String("ppost"))
+            tp_param.set("ppost", clp->val.i);
+        else if (clp->option->long_name == String("psubscribe"))
+            tp_param.set("psubscribe", clp->val.i);
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))

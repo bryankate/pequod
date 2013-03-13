@@ -22,7 +22,9 @@ TwitterPopulator::TwitterPopulator(const Json& param)
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),
       shape_(param["shape"].as_d(55)),
-      duration_(param["duration"].as_i(1000000)) {
+      duration_(param["duration"].as_i(1000000)),
+      ppost_(param["ppost"].as_i(2)),
+      psubscribe_(param["psubscribe"].as_i(3)) {
 }
 
 uint32_t* TwitterPopulator::subscribe_probabilities(generator_type& gen) {
