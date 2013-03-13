@@ -268,12 +268,19 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
             eit = server_.lower_bound(Str(buf2, 18));
         for (; bit != eit; ++bit) {
             String field = extract_spkey(2, bit->key());
-            // TODO: check karma
             if (log_) {
                 if (field == "a")
                     std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
                 else
                     std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
+            }
+            if (field == "k") {
+                String user = extract_spkey(4, bit->key());
+                uint32_t my_karma = check_karmas[user.to_i()];
+                uint32_t karma = bit->value().to_i();
+                if (karma != my_karma)
+                    printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
+                mandatory_assert(karma == my_karma && "Karma mismatch");
             }
         }
     } else {
