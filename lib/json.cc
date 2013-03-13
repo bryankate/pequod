@@ -506,7 +506,7 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
 	    if (ob->next_ > -2) {
 		sa.append(q, 2);
 		unparse_indent(sa, m, depth + 1);
-		sa << '\"' << ob->v_.first.encode_json() << '\"' << ':';
+		sa << '\"' << ob->v_.first.encode_json() << '\"' << ": ";
 		ob->v_.second.hard_unparse(sa, m, depth + 1);
 		q = ",\n";
 	    }
