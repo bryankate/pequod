@@ -392,8 +392,27 @@ int main(int argc, char **argv) {
         fuzz(tree, 1000000);
         rbaccount_report();
         exit(0);
+    } else if (argc > 1 && strcmp(argv[1], "-d") == 0) {
+        {
+            rbtree_without_print tree;
+            int N = 1000000;
+            int *x = new int[N];
+            for (int i = 0; i < N; ++i)
+                x[i] = i;
+            for (int i = 0; i < N; ++i) {
+                int j = random() % (N - i);
+                int val = x[j];
+                x[j] = x[N - i - 1];
+                tree.insert(val);
+            }
+            tree.tree.check();
+            while (auto item = tree.tree.unlink_leftmost_without_rebalance())
+                delete item;
+            delete[] x;
+        }
+        exit(0);
     } else if (argc > 1) {
-        fprintf(stderr, "Usage: ./a.out [-b|-p|-f]\n");
+        fprintf(stderr, "Usage: ./a.out [-b|-p|-f|-d]\n");
         exit(1);
     } else {
         rbtree_with_print tree;

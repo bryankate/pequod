@@ -18,6 +18,7 @@ class Table : public pequod_set_base_hook {
     typedef ServerStore store_type;
 
     Table(Str name);
+    ~Table();
     static const Table empty_table;
 
     typedef Str key_type;
@@ -66,7 +67,7 @@ class Server {
     class const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
-    inline const Datum *find(Str str) const;
+    inline const Datum* find(Str str) const;
     inline store_type::const_iterator lower_bound(Str str) const;
     inline size_t count(Str first, Str last) const;
 

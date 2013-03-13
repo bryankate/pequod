@@ -166,6 +166,8 @@ class rbtree {
     template <typename Disposer>
     inline void erase_and_dispose(node_type* x, Disposer d);
 
+    inline node_type* unlink_leftmost_without_rebalance();
+
     int check() const;
     template <typename TT, typename CC, typename RR>
     friend std::ostream &operator<<(std::ostream &s, const rbtree<TT, CC, RR> &tree);
@@ -551,6 +553,21 @@ inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
     rbaccount(erase);
     delete_node(node);
     d(node);
+}
+
+template <typename T, typename C, typename R>
+inline T* rbtree<T, C, R>::unlink_leftmost_without_rebalance() {
+    T* node = r_.begin_;
+    if (node) {
+        rbnodeptr<T> n(node, false);
+        if (n.child(true)) {
+            n.child(true).parent() = n.parent();
+            r_.begin_ = rbalgorithms<T>::edge_node(n.child(true).node(), false);
+        } else
+            r_.begin_ = n.parent();
+    } else
+        r_.root_ = 0;
+    return node;
 }
 
 template <typename T>
