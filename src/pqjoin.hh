@@ -139,7 +139,7 @@ class Join {
     JoinValueType jvt_;
     Json jvtparam_;
 
-    bool analyze();
+    bool analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh);
 };
 
 

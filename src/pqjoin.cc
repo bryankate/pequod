@@ -157,7 +157,7 @@ bool Join::assign_parse(Str str, ErrorHandler* errh) {
 	while (s != str.uend() && !isspace(*s))
 	    ++s;
 	if (pbegin == s)
-            return analyze();
+            return analyze(slotmap, errh);
         if (npat_ == pcap) {
             errh->error("too many patterns in join (max %d)", pcap);
             return false;
@@ -173,10 +173,12 @@ bool Join::assign_parse(Str str, ErrorHandler* errh) {
     }
 }
 
-bool Join::analyze() {
+bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
     // fail if too few patterns
-    if (npat_ <= 1)
+    if (npat_ <= 1) {
+        errh->error("too few patterns in join (min 2)");
         return false;
+    }
 
     // account for slots across all patterns
     // completion_source_ is the source number after which sink() is complete
@@ -188,16 +190,19 @@ bool Join::analyze() {
     completion_source_ = -1;
     while (need_slots) {
         ++completion_source_;
-        if (completion_source_ >= nsource())
+        if (completion_source_ >= nsource()) {
+            String slot_name;
+            for (auto it = slotmap.begin(); it != slotmap.end(); ++it)
+                if (need_slots & (1 << it->second))
+                    slot_name = it->first;
+            errh->error("slot %<%s%> in sink not defined by sources", slot_name.c_str());
             return false;
+        }
         for (int s = 0; s < slot_capacity; ++s)
             if (source(completion_source_).has_slot(s)
                 && source(completion_source_).slot_length(s) == sink().slot_length(s))
                 need_slots &= ~(1 << s);
     }
-
-    if (need_slots)
-        return false;
 
     // success
     return true;
