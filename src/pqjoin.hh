@@ -59,9 +59,6 @@ class Pattern {
     inline int slot_length(int si) const;
     inline int slot_position(int si) const;
 
-    inline bool match_complete(const Match& m) const;
-    inline bool match_same(Str str, const Match& m) const;
-
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
 
@@ -257,23 +254,6 @@ inline bool Pattern::match(Str s, Match& m) const {
 	    }
 	    ss += slotlen;
 	}
-    return true;
-}
-
-inline bool Pattern::match_complete(const Match& m) const {
-    for (int i = 0; i != slot_capacity; ++i)
-	if (slotlen_[i] && m.known_length(i) != slotlen_[i])
-	    return false;
-    return true;
-}
-
-inline bool Pattern::match_same(Str s, const Match& m) const {
-    if (s.length() != key_length())
-        return false;
-    for (int i = 0; i != slot_capacity; ++i)
-        if (slotlen_[i] && (m.known_length(i) != slotlen_[i]
-                            || memcmp(s.data() + slotpos_[i], m.data(i), slotlen_[i]) != 0))
-            return false;
     return true;
 }
 
