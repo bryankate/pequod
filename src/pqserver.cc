@@ -42,7 +42,7 @@ Table::~Table() {
         delete r;
 }
 
-void Table::add_copy(SourceRange* r) {
+void Table::add_source(SourceRange* r) {
     for (auto it = source_ranges_.begin_contains(r->interval());
 	 it != source_ranges_.end(); ++it)
 	if (it->join() == r->join() && it->joinpos() == r->joinpos()) {
@@ -53,6 +53,22 @@ void Table::add_copy(SourceRange* r) {
 	    return;
 	}
     source_ranges_.insert(r);
+}
+
+void Table::remove_source(Str first, Str last, ValidJoinRange* sink) {
+    for (auto it = source_ranges_.begin_overlaps(first, last);
+	 it != source_ranges_.end(); )
+	if (it->join() == sink->join()) {
+            SourceRange* sr = it.operator->();
+            ++it;
+
+            sr->remove_sink(sink);
+            if (sr->empty()) {
+                source_ranges_.erase(sr);
+                delete sr;
+            }
+	} else
+            ++it;
 }
 
 void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {

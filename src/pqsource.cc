@@ -35,6 +35,16 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
+void SourceRange::remove_sink(ValidJoinRange* sink) {
+    assert(join() == sink->join());
+    for (int i = 0; i != results_.size(); )
+        if (results_[i].sink == sink) {
+            results_[i] = results_.back();
+            results_.pop_back();
+        } else
+            ++i;
+}
+
 void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     using std::swap;
     result* endit = results_.end();
@@ -59,13 +69,11 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void InvalidatorRange::notify(const Datum*, const String&, int) const {
+void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    for (auto& res : results_) {
-        res.sink->invalidate();
-        res.sink->deref();
-    }
-    results_.clear();
+    if (notifier)
+        for (auto& res : results_)
+            res.sink->add_update(joinpos_, d->key(), notifier);
 }
 
 void CopySourceRange::notify(result& res, const Datum* src, const String&, int notifier) const {

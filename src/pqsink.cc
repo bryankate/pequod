@@ -27,11 +27,12 @@ struct ServerRange::validate_args {
     Match match;
     Server* server;
     ValidJoinRange* sink;
+    int notifier;
 };
 
 void ServerRange::validate(Str first, Str last, Server& server) {
     if (type_ == joinsink) {
-        validate_args va{first, last, Match(), &server, 0};
+        validate_args va{first, last, Match(), &server, 0, SourceRange::notify_insert};
         if (join_->maintained() || join_->staleness())
             va.sink = server.add_validjoin(first, last, join_);
         validate(va, 0);
@@ -72,7 +73,7 @@ void ServerRange::validate(validate_args& va, int joinpos) {
         // match is simple/necessary
         if (pat.match(it->key(), va.match)) {
             if (r)
-                r->notify(it.operator->(), String(), SourceRange::notify_insert);
+                r->notify(it.operator->(), String(), va.notifier);
             else
                 validate(va, joinpos + 1);
         }
@@ -80,14 +81,18 @@ void ServerRange::validate(validate_args& va, int joinpos) {
         va.match.restore(mstate);
     }
 
-    if (join_->maintained()) {
+    if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
+        if (r)
+            va.server->remove_source(r->ibegin(), r->iend(), va.sink);
+        delete r;
+    } else if (join_->maintained()) {
         if (r) {
             r->set_sink(va.sink);
-            va.server->add_copy(r);
+            va.server->add_source(r);
         } else
-            va.server->add_copy(new InvalidatorRange
-                                (*va.server, join_, joinpos,
-                                 Str(kf, kflen), Str(kl, kllen), va.sink));
+            va.server->add_source(new InvalidatorRange
+                                  (*va.server, join_, joinpos,
+                                   Str(kf, kflen), Str(kl, kllen), va.sink));
     } else if (r)
         delete r;
 }
@@ -129,6 +134,8 @@ void ServerRangeSet::validate_join(ServerRange* jr, Server& server) {
             // XXX PERFORMANCE can often avoid this check
             if (last_valid < sink->ibegin())
                 jr->validate(last_valid, sink->ibegin(), server);
+            if (sink->need_update())
+                sink->update(first_, last_, server);
             last_valid = sink->iend();
         }
     if (last_valid < last_)
@@ -150,6 +157,69 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
 	    sep = ", ";
 	}
     return stream << "]";
+}
+
+IntermediateUpdate::IntermediateUpdate(Str first, Str last, Str key,
+                                       int joinpos, int notifier)
+    : ibegin_(first), iend_(last), key_(key), joinpos_(joinpos),
+      notifier_(notifier) {
+}
+
+void ValidJoinRange::add_update(int joinpos, Str key, int notifier) {
+    Match m;
+    join()->source(joinpos).match(key, m);
+    uint8_t kf[key_capacity], kl[key_capacity];
+    int kflen = join()->expand_first(kf, join()->sink(), ibegin(), iend(), m);
+    int kllen = join()->expand_last(kl, join()->sink(), ibegin(), iend(), m);
+
+    IntermediateUpdate* iu = new IntermediateUpdate(Str(kf, kflen),
+                                                    Str(kl, kllen),
+                                                    key, joinpos, notifier);
+    updates_.insert(iu);
+
+    // std::cerr << *iu << "\n";
+}
+
+bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
+                               Server& server) {
+    if (first < iu->ibegin())
+        first = iu->ibegin();
+    if (iu->iend() < last)
+        last = iu->iend();
+    if (first != iu->ibegin() && last != iu->iend())
+        // XXX embiggening range
+        last = iu->iend();
+
+    validate_args va{first, last, Match(), &server, this, iu->notifier_};
+    join_->source(iu->joinpos_).match(iu->key_, va.match);
+    validate(va, iu->joinpos_ + 1);
+
+    if (first == iu->ibegin())
+        iu->ibegin_ = last;
+    if (last == iu->iend())
+        iu->iend_ = first;
+    return iu->ibegin_ < iu->iend_;
+}
+
+void ValidJoinRange::update(Str first, Str last, Server& server) {
+    for (auto it = updates_.begin_overlaps(first, last);
+         it != updates_.end(); ) {
+        IntermediateUpdate* iu = it.operator->();
+        ++it;
+
+        updates_.erase(iu);
+        if (update_iu(first, last, iu, server))
+            updates_.insert(iu);
+        else
+            delete iu;
+    }
+}
+
+std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
+    stream << "UPDATE{" << iu.interval() << " "
+           << (iu.notifier() > 0 ? "+" : "-")
+           << iu.key() << "}";
+    return stream;
 }
 
 } // namespace pq

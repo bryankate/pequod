@@ -33,7 +33,8 @@ class Table : public pequod_set_base_hook {
 
     inline void validate(Str first, Str last);
 
-    void add_copy(SourceRange* r);
+    void add_source(SourceRange* r);
+    void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
     inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
@@ -81,7 +82,8 @@ class Server {
     void replace_range(Str first, Str last, I first_value, I last_value);
 #endif
 
-    inline void add_copy(SourceRange* r);
+    inline void add_source(SourceRange* r);
+    inline void remove_source(Str first, Str last, ValidJoinRange* sink);
     inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
     inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
@@ -219,10 +221,16 @@ inline void Server::erase(const String& key) {
         tit->erase(key);
 }
 
-inline void Server::add_copy(SourceRange* r) {
+inline void Server::add_source(SourceRange* r) {
     Str tname = table_name(r->ibegin());
     assert(tname);
-    make_table(tname).add_copy(r);
+    make_table(tname).add_source(r);
+}
+
+inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
+    Str tname = table_name(first);
+    assert(tname);
+    make_table(tname).remove_source(first, last, sink);
 }
 
 inline void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {

@@ -30,10 +30,13 @@ class SourceRange {
     inline Str subtree_iend() const;
     inline void set_subtree_iend(Str subtree_iend);
 
+    inline bool empty() const;
+
     inline Join* join() const;
     inline int joinpos() const;
     inline void set_sink(ValidJoinRange* sink);
     void take_results(SourceRange& r);
+    void remove_sink(ValidJoinRange* sink);
 
     inline bool check_match(Str key) const;
     enum notify_type {
@@ -170,6 +173,10 @@ inline Join* SourceRange::join() const {
 
 inline int SourceRange::joinpos() const {
     return joinpos_;
+}
+
+inline bool SourceRange::empty() const {
+    return results_.empty();
 }
 
 inline bool SourceRange::check_match(Str key) const {

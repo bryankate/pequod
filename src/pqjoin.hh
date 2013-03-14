@@ -1,9 +1,8 @@
 #ifndef PEQUOD_PQJOIN_HH
 #define PEQUOD_PQJOIN_HH 1
 #include <stdint.h>
-#include <string.h>
+#include "pqbase.hh"
 #include "str.hh"
-#include "string.hh"
 #include "json.hh"
 template <typename K, typename V> class HashTable;
 class Json;

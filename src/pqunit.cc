@@ -54,6 +54,19 @@ void test_simple() {
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
     server.validate("t|00001|0000000001", "t|00001}");
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+
+    server.erase("f|00001|10001");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+    server.insert("p|10001|0000000050", "Should be removed");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(9));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|10001|0000000051", "Should not be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|00002|0000000052", "Should be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
 }
 
 void test_expansion() {

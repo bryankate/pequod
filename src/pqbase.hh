@@ -4,6 +4,8 @@
 #include "string.hh"
 namespace pq {
 
+enum { key_capacity = 128 };
+
 template <typename T>
 inline T table_name(const String_base<T>& key) {
     const char* x = (const char*) memchr(key.data(), '|', key.length());

@@ -288,6 +288,10 @@ bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap,
 	    append_slot(slot >> 8, slot & 255);
 	}
     }
+    if (klen_ > key_capacity) {
+        errh->error("key length implied by pattern too long (have %d, max %d)", klen_, key_capacity);
+        return false;
+    }
     return true;
 }
 
