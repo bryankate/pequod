@@ -19,9 +19,7 @@ PROTOGENDIR = $(OBJDIR)
 TAMER_COMMIT = 2493d1f022935e664c46c3595de56dd62e633ff4
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
-LIBS = -lboost_program_options-mt -lboost_thread-mt \
-	-lboost_system-mt -lboost_serialization-mt \
-	-lev -lprotobuf @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
+LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -183,7 +181,7 @@ $(OBJDIR)/benchproto.o: $(PROTOGENDIR)/micro1.pb.h $(PROTOGENDIR)/micro2.px.hh
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
 tamer-update:
-	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
 	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
 $(OBJDIR)/stamp $(DEPSDIR)/stamp:

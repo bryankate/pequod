@@ -203,9 +203,9 @@ fi
 dnl Memory allocator
 
 AC_CHECK_LIB([flow], [malloc], [have_flow=true], [have_flow=])
-AC_CHECK_LIB([jemalloc], [malloc], [have_jemalloc=true], [have_jemalloc=])
-AC_CHECK_LIB([tcmalloc], [malloc], [have_tcmalloc=true], [have_tcmalloc=])
-AC_CHECK_LIB([tcmalloc_minimal], [malloc], [have_tcmalloc_minimal=true], [have_tcmalloc_minimal=])
+AC_CHECK_LIB([jemalloc], [mallctl], [have_jemalloc=true], [have_jemalloc=])
+AC_CHECK_LIB([tcmalloc], [tc_malloc], [have_tcmalloc=true], [have_tcmalloc=])
+AC_CHECK_LIB([tcmalloc_minimal], [tc_malloc], [have_tcmalloc_minimal=true], [have_tcmalloc_minimal=])
 
 AC_ARG_WITH([malloc],
     [AS_HELP_STRING([--with-malloc=TYPE],
@@ -356,5 +356,12 @@ void h(int a, ...) {
 ])
 
 CLICK_CHECK_ADDRESSABLE_VA_LIST
+
+dnl check for presence of required libraries
+
+AC_CHECK_LIB([ev], [ev_backend], [:], [AC_MSG_ERROR([libev not found])])
+AC_CHECK_HEADER([boost/accumulators/accumulators.hpp], [:], [AC_MSG_ERROR([<boost/accumulators/accumulators.hpp> not found])])
+AC_CHECK_HEADER([boost/random.hpp], [:], [AC_MSG_ERROR([<boost/random.hpp> not found])])
+AC_CHECK_HEADER([boost/intrusive/set.hpp], [:], [AC_MSG_ERROR([<boost/intrusive/set.hpp> not found])])
 
 AC_OUTPUT
