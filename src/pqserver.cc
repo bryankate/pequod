@@ -45,7 +45,7 @@ Table::~Table() {
 void Table::add_copy(SourceRange* r) {
     for (auto it = source_ranges_.begin_contains(r->interval());
 	 it != source_ranges_.end(); ++it)
-	if (it->join() == r->join()) {
+	if (it->join() == r->join() && it->joinpos() == r->joinpos()) {
 	    // XXX may copy too much. This will not actually cause visible
 	    // bugs I think?, but will grow the store
 	    it->take_results(*r);

@@ -30,6 +30,7 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline Join* join() const;
+    inline int joinpos() const;
     inline void set_sink(ValidJoinRange* sink);
     void take_results(SourceRange& r);
 
@@ -168,6 +169,10 @@ inline Str SourceRange::iend() const {
 
 inline Join* SourceRange::join() const {
     return join_;
+}
+
+inline int SourceRange::joinpos() const {
+    return joinpos_;
 }
 
 inline bool SourceRange::check_match(Str key) const {
