@@ -8,6 +8,7 @@
 #include "pqjoin.hh"
 #include "pqsink.hh"
 #include "local_vector.hh"
+#include "local_str.hh"
 #include <iostream>
 namespace pq {
 class Server;
@@ -45,8 +46,8 @@ class SourceRange {
     static uint64_t allocated_key_bytes;
 
   private:
-    Str ibegin_;
-    Str iend_;
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
     Str subtree_iend_;
   public:
     rblinks<SourceRange> rblinks_;
@@ -56,16 +57,12 @@ class SourceRange {
         ValidJoinRange* sink;
     };
 
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const = 0;
-
     Join* join_;
     int joinpos_;
     Table* dst_table_;  // todo: move this to the join?
     mutable local_vector<result, 4> results_;
-  private:
-    char buf_[32];
 
-    void assign_interval(Str first, Str last);
+    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
 

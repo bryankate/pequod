@@ -9,43 +9,20 @@ uint64_t SourceRange::allocated_key_bytes = 0;
 
 SourceRange::SourceRange(Server& server, Join* join, const Match& m,
                          Str first, Str last)
-    : join_(join), joinpos_(join->nsource() - 1),
+    : ibegin_(first), iend_(last), join_(join), joinpos_(join->nsource() - 1),
       dst_table_(&server.make_table(join->sink().table_name())) {
-    assign_interval(first, last);
+    assert(table_name(first, last));
+    if (!ibegin_.is_local())
+        allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        allocated_key_bytes += iend_.length();
 
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
     results_.push_back(result{std::move(str), 0});
 }
 
-void SourceRange::assign_interval(Str first, Str last) {
-    assert(table_name(first, last));
-    char* buf = buf_;
-    char* endbuf = buf_ + sizeof(buf_);
-
-    if (endbuf - buf >= first.length()) {
-        ibegin_.assign(buf, first.length());
-        buf += first.length();
-    } else {
-        ibegin_.assign(new char[first.length()], first.length());
-        allocated_key_bytes += first.length();
-    }
-    memcpy(ibegin_.mutable_data(), first.data(), first.length());
-
-    if (endbuf - buf >= last.length())
-        iend_.assign(buf, last.length());
-    else {
-        iend_.assign(new char[last.length()], last.length());
-        allocated_key_bytes += last.length();
-    }
-    memcpy(iend_.mutable_data(), last.data(), last.length());
-}
-
 SourceRange::~SourceRange() {
-    if (ibegin_.data() < buf_ || ibegin_.data() >= buf_ + sizeof(buf_))
-        delete[] ibegin_.mutable_data();
-    if (iend_.data() < buf_ || iend_.data() >= buf_ + sizeof(buf_))
-        delete[] iend_.mutable_data();
     for (auto& r : results_)
         if (r.sink)
             r.sink->deref();
