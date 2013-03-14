@@ -65,10 +65,6 @@ class Pattern {
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
 
-    inline int expand_first(uint8_t* s, const Match& m) const;
-    inline String expand_first(const Match& m) const;
-    inline int expand_last(uint8_t* s, const Match& m) const;
-    inline String expand_last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
@@ -199,9 +195,10 @@ inline int Pattern::key_length() const {
 
 inline Str Pattern::table_name() const {
     const uint8_t* p = pat_;
-    while (p != pat_ + plen_ && *p < 128 && *p != '|')
-        ++p;
-    return Str(pat_, p);
+    for (; p != pat_ + plen_ && *p < 128; ++p)
+        if (*p == '|')
+            return Str(pat_, p);
+    return Str();
 }
 
 /** @brief Return true iff this pattern has @a slot. */
@@ -278,61 +275,6 @@ inline bool Pattern::match_same(Str s, const Match& m) const {
                             || memcmp(s.data() + slotpos_[i], m.data(i), slotlen_[i]) != 0))
             return false;
     return true;
-}
-
-inline int Pattern::expand_first(uint8_t* s, const Match& m) const {
-    uint8_t* first = s;
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.known_length(*p - 128);
-	    if (slotlen) {
-		memcpy(s, m.data(*p - 128), slotlen);
-		s += slotlen;
-	    }
-	    if (slotlen != slotlen_[*p - 128])
-		break;
-	}
-    return s - first;
-}
-
-inline String Pattern::expand_first(const Match& m) const {
-    String str = String::make_uninitialized(key_length());
-    int len = expand_first(str.mutable_udata(), m);
-    return str.substring(0, len);
-}
-
-inline int Pattern::expand_last(uint8_t* s, const Match& m) const {
-    uint8_t* first = s;
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.known_length(*p - 128);
-	    if (slotlen) {
-		memcpy(s, m.data(*p - 128), slotlen);
-		s += slotlen;
-	    } else {
-		while (s != first) {
-		    ++s[-1];
-		    if (s[-1] != 0)
-			break;
-		    --s;
-		}
-	    }
-	    if (slotlen != slotlen_[*p - 128])
-		break;
-	}
-    return s - first;
-}
-
-inline String Pattern::expand_last(const Match& m) const {
-    String str = String::make_uninitialized(key_length());
-    int len = expand_last(str.mutable_udata(), m);
-    return str.substring(0, len);
 }
 
 inline void Pattern::expand(uint8_t* s, const Match& m) const {

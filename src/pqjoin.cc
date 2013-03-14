@@ -317,7 +317,7 @@ bool Join::assign_parse(Str str, ErrorHandler* errh) {
 	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap, errh))
 	    return false;
         // Every pattern must involve a known table
-        if (!table_name(pat_[npat_].expand_first(Match()))) {
+        if (!pat_[npat_].table_name()) {
             errh->error("pattern %<%.*s%> does not match a unique table prefix", (int) (s - pbegin), pbegin);
             return false;
         }
