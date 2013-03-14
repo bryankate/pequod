@@ -50,8 +50,8 @@ class ServerRange {
     Join* join_;
     uint64_t expires_at_;
 
-    void validate(Match& mf, Match& ml, int joinpos, Server& server,
-                  ValidJoinRange* sink);
+    struct validate_args;
+    void validate(validate_args& va, int joinpos);
 };
 
 class ValidJoinRange : public ServerRange {

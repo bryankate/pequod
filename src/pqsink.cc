@@ -21,41 +21,47 @@ ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
 ServerRange::~ServerRange() {
 }
 
+struct ServerRange::validate_args {
+    Str first;
+    Str last;
+    Match match;
+    Server* server;
+    ValidJoinRange* sink;
+};
+
 void ServerRange::validate(Str first, Str last, Server& server) {
     if (type_ == joinsink) {
-        Match mf, ml;
-        join_->sink().match(first, mf);
-        join_->sink().match(last, ml);
-        ValidJoinRange* sink = 0;
+        validate_args va{first, last, Match(), &server, 0};
         if (join_->maintained() || join_->staleness())
-            sink = server.add_validjoin(first, last, join_);
-        validate(mf, ml, 0, server, sink);
+            va.sink = server.add_validjoin(first, last, join_);
+        validate(va, 0);
     }
 }
 
-void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
-                           ValidJoinRange* sink) {
+void ServerRange::validate(validate_args& va, int joinpos) {
     uint8_t kf[128], kl[128];
-    int kflen = join_->source(joinpos).expand_first(kf, mf);
-    int kllen = join_->source(joinpos).expand_last(kl, ml);
+    int kflen = join_->expand_first(kf, join_->source(joinpos),
+                                    va.first, va.last, va.match);
+    int kllen = join_->expand_last(kl, join_->source(joinpos),
+                                   va.first, va.last, va.match);
+    assert(Str(kf, kflen) <= Str(kl, kllen));
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
     // XXX PERFORMANCE this is not always necessary
     // XXX For now don't do this if the join is recursive
     if (table_name(Str(kf, kflen)) != join_->sink().table_name())
-        server.validate(Str(kf, kflen), Str(kl, kllen));
+        va.server->validate(Str(kf, kflen), Str(kl, kllen));
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
-        r = join_->make_source(server, mf, Str(kf, kflen), Str(kl, kllen));
+        r = join_->make_source(*va.server, va.match,
+                               Str(kf, kflen), Str(kl, kllen));
 
-    auto it = server.lower_bound(Str(kf, kflen));
-    auto ilast = server.lower_bound(Str(kl, kllen));
+    auto it = va.server->lower_bound(Str(kf, kflen));
+    auto ilast = va.server->lower_bound(Str(kl, kllen));
 
-    Match mk(mf);
-    mk &= ml;
-    Match::state mfstate(mf.save()), mlstate(ml.save()), mkstate(mk.save());
+    Match::state mstate(va.match.save());
     const Pattern& pat = join_->source(joinpos);
 
     for (; it != ilast; ++it) {
@@ -64,29 +70,24 @@ void ServerRange::validate(Match& mf, Match& ml, int joinpos, Server& server,
 
         // XXX PERFORMANCE can prob figure out ahead of time whether this
         // match is simple/necessary
-        if (pat.match(it->key(), mk)) {
+        if (pat.match(it->key(), va.match)) {
             if (r)
                 r->notify(it.operator->(), String(), SourceRange::notify_insert);
-            else {
-                pat.match(it->key(), mf);
-                pat.match(it->key(), ml);
-                validate(mf, ml, joinpos + 1, server, sink);
-                mf.restore(mfstate);
-                ml.restore(mlstate);
-            }
+            else
+                validate(va, joinpos + 1);
         }
 
-        mk.restore(mkstate);
+        va.match.restore(mstate);
     }
 
     if (join_->maintained()) {
         if (r) {
-            r->set_sink(sink);
-            server.add_copy(r);
+            r->set_sink(va.sink);
+            va.server->add_copy(r);
         } else
-            server.add_copy(new InvalidatorRange(server, join_, joinpos,
-                                                 Str(kf, kflen), Str(kl, kllen),
-                                                 sink));
+            va.server->add_copy(new InvalidatorRange
+                                (*va.server, join_, joinpos,
+                                 Str(kf, kflen), Str(kl, kllen), va.sink));
     } else if (r)
         delete r;
 }
