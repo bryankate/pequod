@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 7a4b8f536239796f322d3007668295f4aa675484
+TAMER_COMMIT = 2493d1f022935e664c46c3595de56dd62e633ff4
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lboost_program_options-mt -lboost_thread-mt \
@@ -208,8 +208,12 @@ stamp-h: $(top_srcdir)/config.h.in config.status
 clean:
 	rm -rf $(OBJDIR) $(DEPSDIR) $(GENDIR)
 
+allclean: clean
+	cd tamer && $(MAKE) clean
+
 distclean: clean
-	rm -rf config.* configure autom4te.* stamp-h
+	cd tamer && $(MAKE) distclean
+	rm -rf config.* configure autom4te.* stamp-h Makefile
 
 DEPFILES := $(wildcard $(DEPSDIR)/*.d)
 ifneq ($(DEPFILES),)
