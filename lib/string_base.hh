@@ -16,14 +16,19 @@ class String_generic {
     static const char bool_data[11]; // "false\0true\0"
     static const char out_of_memory_data[15];
     enum { out_of_memory_length = 14 };
-    static bool out_of_memory(const char *s) {
+    static bool out_of_memory(const char* s) {
 	return unlikely(s >= out_of_memory_data
 			&& s <= out_of_memory_data + out_of_memory_length);
     }
-    static bool equals(const char *a, int a_len, const char *b, int b_len) {
+    static bool equals(const char* a, int a_len, const char* b, int b_len) {
 	return a_len == b_len && memcmp(a, b, a_len) == 0;
     }
-    static int compare(const char *a, int a_len, const char *b, int b_len);
+    static int compare(const char* a, int a_len, const char* b, int b_len);
+    static inline int compare(const unsigned char* a, int a_len,
+                              const unsigned char* b, int b_len) {
+        return compare(reinterpret_cast<const char*>(a), a_len,
+                       reinterpret_cast<const char*>(b), b_len);
+    }
     static bool starts_with(const char *a, int a_len, const char *b, int b_len) {
 	return a_len >= b_len && memcmp(a, b, b_len) == 0;
     }
