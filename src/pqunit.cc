@@ -797,6 +797,33 @@ void test_swap() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
+void test_iupdate() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<author:5> "
+                               "b|<author>|<book_id:5> "
+                               "c|<book_id>|<chapter_id:5> "
+                               "v|<chapter_id>|<voter:5>"));
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    server.insert("b|u0000|bxxx1", "");
+    server.insert("c|bxxx1|c0001", "");
+    server.insert("v|c0001|u0001", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    auto k0 = server.find("k|u0000");
+    mandatory_assert(k0);
+    CHECK_EQ(k0->value(), "1");
+
+    server.insert("c|bxxx1|c0002", "");
+    server.insert("v|c0002|u0002", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    CHECK_EQ(k0->value(), "2");
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -815,6 +842,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
     ADD_TEST(test_op_bounds);
+    //ADD_TEST(test_iupdate);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
