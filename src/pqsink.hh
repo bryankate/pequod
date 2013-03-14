@@ -4,6 +4,7 @@
 #include "string.hh"
 #include "interval.hh"
 #include "local_vector.hh"
+#include "local_str.hh"
 #include "rb.hh"
 #include "pqdatum.hh"
 
@@ -39,8 +40,8 @@ class ServerRange {
     static uint64_t allocated_key_bytes;
 
   private:
-    Str ibegin_;
-    Str iend_;
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
     Str subtree_iend_;
   public:
     rblinks<ServerRange> rblinks_;
@@ -48,7 +49,6 @@ class ServerRange {
     range_type type_;
     Join* join_;
     uint64_t expires_at_;
-    char buf_[32];
 
     void validate(Match& mf, Match& ml, int joinpos, Server& server,
                   ValidJoinRange* sink);

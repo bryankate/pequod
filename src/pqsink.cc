@@ -8,36 +8,17 @@ namespace pq {
 uint64_t ServerRange::allocated_key_bytes = 0;
 
 ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
-    : type_(type), join_(join), expires_at_(0) {
-    char* buf = buf_;
-    char* endbuf = buf_ + sizeof(buf_);
-
-    if (endbuf - buf >= first.length()) {
-        ibegin_.assign(buf, first.length());
-        buf += first.length();
-    } else {
-        ibegin_.assign(new char[first.length()], first.length());
-        allocated_key_bytes += first.length();
-    }
-    memcpy(ibegin_.mutable_data(), first.data(), first.length());
-
-    if (endbuf - buf >= last.length())
-        iend_.assign(buf, last.length());
-    else {
-        iend_.assign(new char[last.length()], last.length());
-        allocated_key_bytes += last.length();
-    }
-    memcpy(iend_.mutable_data(), last.data(), last.length());
+    : ibegin_(first), iend_(last), type_(type), join_(join), expires_at_(0) {
+    if (!ibegin_.is_local())
+        allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        allocated_key_bytes += iend_.length();
 
     if (join_->staleness())
         expires_at_ = tstamp() + tous(join_->staleness());
 }
 
 ServerRange::~ServerRange() {
-    if (ibegin_.data() < buf_ || ibegin_.data() >= buf_ + sizeof(buf_))
-        delete[] ibegin_.mutable_data();
-    if (iend_.data() < buf_ || iend_.data() >= buf_ + sizeof(buf_))
-        delete[] iend_.mutable_data();
 }
 
 void ServerRange::validate(Str first, Str last, Server& server) {
