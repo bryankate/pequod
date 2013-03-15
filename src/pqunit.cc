@@ -54,6 +54,128 @@ void test_simple() {
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
     server.validate("t|00001|0000000001", "t|00001}");
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+
+    server.erase("f|00001|10001");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+    server.insert("p|10001|0000000050", "Should be removed");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(9));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|10001|0000000051", "Should not be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|00002|0000000052", "Should be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+}
+
+void test_expansion() {
+    pq::Join j;
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> "
+		   "f|<subscriber>|<poster> "
+		   "p|<poster>|<time>");
+    j.ref();
+
+    pq::Match m;
+    j.source(0).match("f|11111|22222", m);
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|11111|9999999999",
+                            "t|11111}",
+                            m), "t|11111|9999999999|22222");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|00000|9999999999",
+                            "t|99999}",
+                            m), "t|11111|");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|11111|9999999999",
+                           "t|11111}",
+                           m), "t|11111}");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|00000|9999999999",
+                           "t|99999}",
+                           m), "t|11111}");
+
+    j.clear();
+    j.assign_parse("t|<subscriber:5><time:10><poster:5> "
+		   "s|<subscriber>|<poster> "
+		   "p|<poster>|<time>");
+
+    j.source(0).match("f|1111122222", m);
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|111119999999999",
+                            "t|11112",
+                            m), "t|11111999999999922222");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|000009999999999",
+                            "t|99999",
+                            m), "t|11111");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|111119999999999",
+                           "t|11112",
+                           m), "t|11112");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|000009999999999",
+                           "t|99999",
+                           m), "t|11112");
+
+    m.clear();
+    m.set_slot(0, "11111", 5);
+    m.set_slot(1, "2222222222", 10);
+    m.set_slot(2, "fffff", 5);
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|111119999999999",
+                            "t|11112",
+                            m), "t|111119999999999fffff");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|000009999999999",
+                            "t|99999",
+                            m), "t|111112222222222fffff");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|111119999999999",
+                           "t|11112",
+                           m), "t|111112222222222ffffg");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|000009999999999",
+                           "t|99999",
+                           m), "t|111112222222222ffffg");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|000009999999999",
+                            "t|11111",
+                            m), "t|111112222222222fffff");
+
+    m.clear();
+    m.set_slot(1, "2222222222", 10);
+    m.set_slot(2, "fffff", 5);
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|111119999999999",
+                            "t|11112",
+                            m), "t|111119999999999fffff");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|000009999999999",
+                            "t|99999",
+                            m), "t|000009999999999fffff");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|111119999999999",
+                           "t|11112",
+                           m), "t|111112222222222ffffg");
+    CHECK_EQ(j.expand_last(j.sink(),
+                           "t|000009999999999",
+                           "t|99999",
+                           m), "t|999992222222222ffffg");
+    CHECK_EQ(j.expand_first(j.sink(),
+                            "t|000009999999999",
+                            "t|11111",
+                            m), "t|000009999999999fffff");
+
+    m.clear();
+    CHECK_EQ(j.expand_first(j.source(0),
+                            "t|11111",
+                            "t|11112",
+                            m), "s|11111|");
+    CHECK_EQ(j.expand_last(j.source(0),
+                           "t|11111",
+                           "t|11112",
+                           m), "s|11111}");
 }
 
 void test_count() {
@@ -675,12 +797,40 @@ void test_swap() {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 }
 
+void test_iupdate() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("k|<author:5> "
+                               "b|<author>|<book_id:5> "
+                               "c|<book_id>|<chapter_id:5> "
+                               "v|<chapter_id>|<voter:5>"));
+    j1.set_jvt(pq::jvt_count_match);
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    server.insert("b|u0000|bxxx1", "");
+    server.insert("c|bxxx1|c0001", "");
+    server.insert("v|c0001|u0001", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    auto k0 = server.find("k|u0000");
+    mandatory_assert(k0);
+    CHECK_EQ(k0->value(), "1");
+
+    server.insert("c|bxxx1|c0002", "");
+    server.insert("v|c0002|u0002", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    CHECK_EQ(k0->value(), "2");
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
 #define ADD_EXP_TEST(test) exptests_.push_back(std::pair<String, test_func>(#test, test))
     ADD_TEST(test_simple);
+    ADD_TEST(test_expansion);
     ADD_TEST(test_recursive);
     ADD_TEST(test_count);
     ADD_TEST(test_annotation);
@@ -692,6 +842,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
     ADD_TEST(test_op_bounds);
+    ADD_TEST(test_iupdate);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

@@ -89,7 +89,7 @@ class TwitterShim {
 
   private:
     S& server_;
-    char buf_[128];
+    char buf_[key_capacity];
     String value_;
 };
 

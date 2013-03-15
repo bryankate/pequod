@@ -40,8 +40,10 @@ class StringAccum { public:
     inline StringAccum &operator=(StringAccum &&x);
 #endif
 
-    inline const char *data() const;
-    inline char *data();
+    inline const char* data() const;
+    inline char* data();
+    inline const unsigned char* udata() const;
+    inline unsigned char* udata();
     inline int length() const;
     inline int capacity() const;
 
@@ -215,17 +217,27 @@ inline StringAccum::~StringAccum() {
 }
 
 /** @brief Return the contents of the StringAccum.
-    @return The StringAccum's contents.
 
-    The returned data() value points to length() bytes of writable memory
-    (unless the StringAccum itself is const). */
-inline const char *StringAccum::data() const {
-    return reinterpret_cast<const char *>(r_.s);
+    The returned data() value points to length() bytes of writable memory. */
+inline const char* StringAccum::data() const {
+    return reinterpret_cast<const char*>(r_.s);
 }
 
 /** @overload */
-inline char *StringAccum::data() {
-    return reinterpret_cast<char *>(r_.s);
+inline char* StringAccum::data() {
+    return reinterpret_cast<char*>(r_.s);
+}
+
+/** @brief Return the contents of the StringAccum.
+
+    The returned data() value points to length() bytes of writable memory. */
+inline const unsigned char* StringAccum::udata() const {
+    return r_.s;
+}
+
+/** @overload */
+inline unsigned char* StringAccum::udata() {
+    return r_.s;
 }
 
 /** @brief Return the length of the StringAccum. */

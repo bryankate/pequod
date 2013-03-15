@@ -1,9 +1,8 @@
 #ifndef PEQUOD_PQJOIN_HH
 #define PEQUOD_PQJOIN_HH 1
 #include <stdint.h>
-#include <string.h>
+#include "pqbase.hh"
 #include "str.hh"
-#include "string.hh"
 #include "json.hh"
 template <typename K, typename V> class HashTable;
 class Json;
@@ -27,10 +26,12 @@ class Match {
 
     inline Match();
 
-    inline int slotlen(int i) const;
-    inline const uint8_t* slot(int i) const;
-    inline void set_slot(int i, const uint8_t* data, int len);
-    Match& operator&=(const Match& m);
+    inline int known_length(int slot) const;
+    inline const uint8_t* data(int slot) const;
+
+    inline void set_slot(int slot, const char* data, int len);
+    inline void set_slot(int slot, const uint8_t* data, int len);
+    inline void clear();
 
     inline const state& save() const;
     inline void restore(const state& state);
@@ -44,26 +45,21 @@ class Match {
 
 class Pattern {
   public:
-    inline Pattern();
+    Pattern();
 
     void append_literal(uint8_t ch);
     void append_slot(int si, int len);
+    void clear();
 
     inline int key_length() const;
     inline Str table_name() const;
     inline bool has_slot(int si) const;
     inline int slot_length(int si) const;
-
-    inline bool match_complete(const Match& m) const;
-    inline bool match_same(Str str, const Match& m) const;
+    inline int slot_position(int si) const;
 
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
 
-    inline int expand_first(uint8_t* s, const Match& m) const;
-    inline String expand_first(const Match& m) const;
-    inline int expand_last(uint8_t* s, const Match& m) const;
-    inline String expand_last(const Match& m) const;
     inline void expand(uint8_t* s, const Match& m) const;
 
     bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
@@ -100,6 +96,7 @@ class Join {
 
     inline void ref();
     inline void deref();
+    void clear();
 
     inline int nsource() const;
     inline int completion_source() const;
@@ -107,6 +104,16 @@ class Join {
     inline const Pattern& source(int i) const;
     inline const Pattern& back_source() const;
     inline void expand(uint8_t* out, Str str) const;
+
+    int expand_first(uint8_t* buf, const Pattern& pat,
+                     Str sink_first, Str sink_last, const Match& match) const;
+    String expand_first(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
+    int expand_last(uint8_t* buf, const Pattern& pat,
+                    Str sink_first, Str sink_last, const Match& match) const;
+    String expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
+
+    inline String unparse_match_context(int joinpos, const Match& match) const;
+    inline void parse_match_context(Str context, int joinpos, Match& match) const;
 
     inline bool maintained() const;
     inline void set_maintained(bool m);
@@ -132,6 +139,9 @@ class Join {
     int npat_;
     int completion_source_;
     bool maintained_;   // if the output is kept up to date with changes to the input
+    uint8_t slotlen_[slot_capacity];
+    uint8_t slotflags_[pcap];
+    uint8_t match_context_flags_[pcap - 1];
     double staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
@@ -139,25 +149,35 @@ class Join {
     JoinValueType jvt_;
     Json jvtparam_;
 
-    bool analyze();
+    bool analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh);
+    String hard_unparse_match_context(int joinpos, const Match& match) const;
+    void hard_parse_match_context(Str context, int joinpos, Match& match) const;
 };
 
 
 inline Match::Match() {
+    clear();
+}
+
+inline void Match::clear() {
     memset(ms_.slotlen_, 0, sizeof(ms_.slotlen_));
 }
 
-inline int Match::slotlen(int i) const {
+inline int Match::known_length(int i) const {
     return ms_.slotlen_[i];
 }
 
-inline const uint8_t* Match::slot(int i) const {
+inline const uint8_t* Match::data(int i) const {
     return slot_[i];
 }
 
 inline void Match::set_slot(int i, const uint8_t* data, int len) {
     slot_[i] = data;
     ms_.slotlen_[i] = len;
+}
+
+inline void Match::set_slot(int i, const char* data, int len) {
+    set_slot(i, reinterpret_cast<const uint8_t*>(data), len);
 }
 
 inline const Match::state& Match::save() const {
@@ -168,30 +188,35 @@ inline void Match::restore(const state& state) {
     ms_ = state;
 }
 
-inline Pattern::Pattern()
-    : plen_(0), klen_(0) {
-    memset(pat_, 0, sizeof(pat_));
-    for (int i = 0; i < slot_capacity; ++i)
-        slotlen_[i] = slotpos_[i] = 0;
-}
-
 inline int Pattern::key_length() const {
     return klen_;
 }
 
 inline Str Pattern::table_name() const {
     const uint8_t* p = pat_;
-    while (p != pat_ + plen_ && *p < 128 && *p != '|')
-        ++p;
-    return Str(pat_, p);
+    for (; p != pat_ + plen_ && *p < 128; ++p)
+        if (*p == '|')
+            return Str(pat_, p);
+    return Str();
 }
 
-inline bool Pattern::has_slot(int si) const {
-    return slotlen_[si] != 0;
+/** @brief Return true iff this pattern has @a slot. */
+inline bool Pattern::has_slot(int slot) const {
+    return slotlen_[slot] != 0;
 }
 
-inline int Pattern::slot_length(int si) const {
-    return slotlen_[si];
+/** @brief Return the byte length of @a slot.
+
+    Returns 0 if this pattern does not have @a slot. */
+inline int Pattern::slot_length(int slot) const {
+    return slotlen_[slot];
+}
+
+/** @brief Returns the first character position of @a slot in this pattern.
+
+    Returns 0 if this pattern does not have @a slot. */
+inline int Pattern::slot_position(int slot) const {
+    return slotpos_[slot];
 }
 
 inline bool Pattern::match(Str str) const {
@@ -216,11 +241,11 @@ inline bool Pattern::match(Str s, Match& m) const {
 		return false;
 	    ++ss;
 	} else {
-	    int slotlen = m.slotlen(*p - 128);
+	    int slotlen = m.known_length(*p - 128);
 	    if (slotlen) {
 		if (slotlen > ess - ss)
 		    slotlen = ess - ss;
-		if (memcmp(ss, m.slot(*p - 128), slotlen) != 0)
+		if (memcmp(ss, m.data(*p - 128), slotlen) != 0)
 		    return false;
 	    }
 	    if (slotlen < slotlen_[*p - 128] && slotlen < ess - ss) {
@@ -234,87 +259,15 @@ inline bool Pattern::match(Str s, Match& m) const {
     return true;
 }
 
-inline bool Pattern::match_complete(const Match& m) const {
-    for (int i = 0; i != slot_capacity; ++i)
-	if (slotlen_[i] && m.slotlen(i) != slotlen_[i])
-	    return false;
-    return true;
-}
-
-inline bool Pattern::match_same(Str s, const Match& m) const {
-    if (s.length() != key_length())
-        return false;
-    for (int i = 0; i != slot_capacity; ++i)
-        if (slotlen_[i] && (m.slotlen(i) != slotlen_[i]
-                            || memcmp(s.data() + slotpos_[i], m.slot(i), slotlen_[i]) != 0))
-            return false;
-    return true;
-}
-
-inline int Pattern::expand_first(uint8_t* s, const Match& m) const {
-    uint8_t* first = s;
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.slotlen(*p - 128);
-	    if (slotlen) {
-		memcpy(s, m.slot(*p - 128), slotlen);
-		s += slotlen;
-	    }
-	    if (slotlen != slotlen_[*p - 128])
-		break;
-	}
-    return s - first;
-}
-
-inline String Pattern::expand_first(const Match& m) const {
-    String str = String::make_uninitialized(key_length());
-    int len = expand_first(str.mutable_udata(), m);
-    return str.substring(0, len);
-}
-
-inline int Pattern::expand_last(uint8_t* s, const Match& m) const {
-    uint8_t* first = s;
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.slotlen(*p - 128);
-	    if (slotlen) {
-		memcpy(s, m.slot(*p - 128), slotlen);
-		s += slotlen;
-	    } else {
-		while (s != first) {
-		    ++s[-1];
-		    if (s[-1] != 0)
-			break;
-		    --s;
-		}
-	    }
-	    if (slotlen != slotlen_[*p - 128])
-		break;
-	}
-    return s - first;
-}
-
-inline String Pattern::expand_last(const Match& m) const {
-    String str = String::make_uninitialized(key_length());
-    int len = expand_last(str.mutable_udata(), m);
-    return str.substring(0, len);
-}
-
 inline void Pattern::expand(uint8_t* s, const Match& m) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
 	if (*p < 128) {
 	    *s = *p;
 	    ++s;
 	} else {
-	    int slotlen = m.slotlen(*p - 128);
+	    int slotlen = m.known_length(*p - 128);
 	    if (slotlen)
-		memcpy(s, m.slot(*p - 128), slotlen);
+		memcpy(s, m.data(*p - 128), slotlen);
 	    s += slotlen_[*p - 128];
 	}
 }
@@ -399,6 +352,18 @@ inline void Join::expand(uint8_t* s, Str str) const {
 	    memcpy(s + first.slotpos_[*p - 128],
 		   str.udata() + last.slotpos_[*p - 128],
 		   last.slotlen_[*p - 128]);
+}
+
+inline String Join::unparse_match_context(int joinpos, const Match& match) const {
+    if (!match_context_flags_[joinpos + 1])
+        return String();
+    else
+        return hard_unparse_match_context(joinpos, match);
+}
+
+inline void Join::parse_match_context(Str context, int joinpos, Match& match) const {
+    if (match_context_flags_[joinpos + 1])
+        hard_parse_match_context(context, joinpos, match);
 }
 
 bool operator==(const Pattern& a, const Pattern& b);

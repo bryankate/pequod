@@ -8,28 +8,14 @@ namespace pq {
 uint64_t SourceRange::allocated_key_bytes = 0;
 
 SourceRange::SourceRange(Server& server, Join* join, const Match& m,
-                         Str ibegin, Str iend)
-    : join_(join), dst_table_(&server.make_table(join->sink().table_name())) {
-    assert(table_name(ibegin, iend));
-    char* buf = buf_;
-    char* endbuf = buf_ + sizeof(buf_);
-
-    if (endbuf - buf >= ibegin.length()) {
-        ibegin_.assign(buf, ibegin.length());
-        buf += ibegin.length();
-    } else {
-        ibegin_.assign(new char[ibegin.length()], ibegin.length());
-        allocated_key_bytes += ibegin.length();
-    }
-    memcpy(ibegin_.mutable_data(), ibegin.data(), ibegin.length());
-
-    if (endbuf - buf >= iend.length())
-        iend_.assign(buf, iend.length());
-    else {
-        iend_.assign(new char[iend.length()], iend.length());
-        allocated_key_bytes += iend.length();
-    }
-    memcpy(iend_.mutable_data(), iend.data(), iend.length());
+                         Str first, Str last)
+    : ibegin_(first), iend_(last), join_(join), joinpos_(join->nsource() - 1),
+      dst_table_(&server.make_table(join->sink().table_name())) {
+    assert(table_name(first, last));
+    if (!ibegin_.is_local())
+        allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        allocated_key_bytes += iend_.length();
 
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), m);
@@ -37,10 +23,6 @@ SourceRange::SourceRange(Server& server, Join* join, const Match& m,
 }
 
 SourceRange::~SourceRange() {
-    if (ibegin_.data() < buf_ || ibegin_.data() >= buf_ + sizeof(buf_))
-        delete[] ibegin_.mutable_data();
-    if (iend_.data() < buf_ || iend_.data() >= buf_ + sizeof(buf_))
-        delete[] iend_.mutable_data();
     for (auto& r : results_)
         if (r.sink)
             r.sink->deref();
@@ -53,9 +35,17 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
-void SourceRange::notify(const Datum* src, const String& old_value, int notifier, bool known_match) const {
-    if (!known_match && !join_->back_source().match(src->key()))
-        return;
+void SourceRange::remove_sink(ValidJoinRange* sink) {
+    assert(join() == sink->join());
+    for (int i = 0; i != results_.size(); )
+        if (results_[i].sink == sink) {
+            results_[i] = results_.back();
+            results_.pop_back();
+        } else
+            ++i;
+}
+
+void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     using std::swap;
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; )
@@ -79,15 +69,11 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 }
 
 
-void InvalidatorRange::notify(const Datum* src, const String&, int, bool known_match) const {
+void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const {
     // XXX PERFORMANCE the match() is often not necessary
-    if (known_match || join_->source(joinpos_).match(src->key())) {
-	for (auto& res : results_) {
-            res.sink->invalidate();
-            res.sink->deref();
-        }
-        results_.clear();
-    }
+    if (notifier)
+        for (auto& res : results_)
+            res.sink->add_update(joinpos_, res.key, d->key(), notifier);
 }
 
 void CopySourceRange::notify(result& res, const Datum* src, const String&, int notifier) const {
@@ -128,20 +114,18 @@ void MaxSourceRange::notify(result& res, const Datum* src, const String& old_val
 }
 
 void SumSourceRange::notify(result& res, const Datum* src, const String& old_value, int notifier) const {
+    long diff = (notifier == notify_update) ?
+        src->value().to_i() - old_value.to_i() :
+        src->value().to_i();
+    if (notifier == notify_erase)
+        diff *= -1;
     dst_table_->modify(res.key, res.sink, [&](Datum* dst) {
             if (!dst)
                 return src->value();
-            else {
-                long diff = (notifier == notify_update) ?
-                    src->value().to_i() - old_value.to_i() : 
-                    src->value().to_i();
-                 if (notifier == notify_erase)
-                     diff *= -1;
-                 if (diff)
-                     return String(dst->value().to_i() + diff);
-                 else
-                     return unchanged_marker();
-           }
+            else if (diff)
+                return String(dst->value().to_i() + diff);
+            else
+                return unchanged_marker();
         });
 }
 

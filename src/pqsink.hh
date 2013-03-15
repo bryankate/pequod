@@ -4,7 +4,8 @@
 #include "string.hh"
 #include "interval.hh"
 #include "local_vector.hh"
-#include "rb.hh"
+#include "local_str.hh"
+#include "interval_tree.hh"
 #include "pqdatum.hh"
 
 namespace pq {
@@ -39,8 +40,8 @@ class ServerRange {
     static uint64_t allocated_key_bytes;
 
   private:
-    Str ibegin_;
-    Str iend_;
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
     Str subtree_iend_;
   public:
     rblinks<ServerRange> rblinks_;
@@ -48,10 +49,42 @@ class ServerRange {
     range_type type_;
     Join* join_;
     uint64_t expires_at_;
-    char buf_[32];
 
-    void validate(Match& mf, Match& ml, int joinpos, Server& server,
-                  ValidJoinRange* sink);
+    struct validate_args;
+    void validate(validate_args& va, int joinpos);
+
+    friend class ValidJoinRange;
+};
+
+class IntermediateUpdate {
+  public:
+    IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
+
+    typedef Str endpoint_type;
+    inline Str ibegin() const;
+    inline Str iend() const;
+    inline ::interval<Str> interval() const;
+    inline Str subtree_iend() const;
+    inline void set_subtree_iend(Str subtree_iend);
+
+    inline Str key() const;
+    inline int notifier() const;
+
+    friend std::ostream& operator<<(std::ostream&, const IntermediateUpdate&);
+
+  private:
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
+    Str subtree_iend_;
+  public:
+    rblinks<IntermediateUpdate> rblinks_;
+  private:
+    LocalStr<12> context_;
+    LocalStr<24> key_;
+    int joinpos_;
+    int notifier_;
+
+    friend class ValidJoinRange;
 };
 
 class ValidJoinRange : public ServerRange {
@@ -63,12 +96,20 @@ class ValidJoinRange : public ServerRange {
 
     inline bool valid() const;
     inline void invalidate();
+    void add_update(int joinpos, const String& context, Str key, int notifier);
+    inline bool need_update() const;
+    void update(Str first, Str last, Server& server);
+
     inline void update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const;
     inline ServerStore::iterator hint() const;
+
   private:
     int refcount_;
     bool valid_;
     mutable ServerStore::iterator hint_;
+    interval_tree<IntermediateUpdate> updates_;
+
+    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server);
 };
 
 class ServerRangeSet {
@@ -141,7 +182,11 @@ inline bool ValidJoinRange::valid() const {
 }
 
 inline void ValidJoinRange::invalidate() {
-    valid_ = false;
+    //valid_ = false;
+}
+
+inline bool ValidJoinRange::need_update() const {
+    return !updates_.empty();
 }
 
 inline void ValidJoinRange::update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const {
@@ -163,6 +208,34 @@ inline void ServerRangeSet::push_back(ServerRange* r) {
 
 inline int ServerRangeSet::total_size() const {
     return r_.size();
+}
+
+inline Str IntermediateUpdate::ibegin() const {
+    return ibegin_;
+}
+
+inline Str IntermediateUpdate::iend() const {
+    return iend_;
+}
+
+inline interval<Str> IntermediateUpdate::interval() const {
+    return make_interval(ibegin(), iend());
+}
+
+inline Str IntermediateUpdate::subtree_iend() const {
+    return subtree_iend_;
+}
+
+inline void IntermediateUpdate::set_subtree_iend(Str subtree_iend) {
+    subtree_iend_ = subtree_iend;
+}
+
+inline Str IntermediateUpdate::key() const {
+    return key_;
+}
+
+inline int IntermediateUpdate::notifier() const {
+    return notifier_;
 }
 
 } // namespace pq
