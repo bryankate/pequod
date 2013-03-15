@@ -842,7 +842,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
     ADD_TEST(test_op_bounds);
-    //ADD_TEST(test_iupdate);
+    ADD_TEST(test_iupdate);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

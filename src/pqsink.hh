@@ -58,7 +58,7 @@ class ServerRange {
 
 class IntermediateUpdate {
   public:
-    IntermediateUpdate(Str first, Str last, Str key, int joinpos, int notifier);
+    IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
@@ -79,6 +79,7 @@ class IntermediateUpdate {
   public:
     rblinks<IntermediateUpdate> rblinks_;
   private:
+    LocalStr<12> context_;
     LocalStr<24> key_;
     int joinpos_;
     int notifier_;
@@ -95,7 +96,7 @@ class ValidJoinRange : public ServerRange {
 
     inline bool valid() const;
     inline void invalidate();
-    void add_update(int joinpos, Str key, int notifier);
+    void add_update(int joinpos, const String& context, Str key, int notifier);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server);
 

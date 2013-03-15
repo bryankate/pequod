@@ -73,7 +73,7 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
     // XXX PERFORMANCE the match() is often not necessary
     if (notifier)
         for (auto& res : results_)
-            res.sink->add_update(joinpos_, d->key(), notifier);
+            res.sink->add_update(joinpos_, res.key, d->key(), notifier);
 }
 
 void CopySourceRange::notify(result& res, const Datum* src, const String&, int notifier) const {

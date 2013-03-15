@@ -18,6 +18,13 @@ std::ostream& operator<<(std::ostream& stream, const Match& m) {
     return stream << "}";
 }
 
+Pattern::Pattern() {
+    static_assert((sizeof(klen_) << 8) >= key_capacity
+                  && (sizeof(slotpos_[0]) << 8) >= key_capacity,
+                  "key_capacity too big for Pattern use");
+    clear();
+}
+
 void Pattern::append_literal(uint8_t ch) {
     assert(ch < 128);
     assert(plen_ < pcap);
@@ -325,6 +332,24 @@ bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
         return false;
     }
 
+    // create slotflags_
+    static_assert(slot_capacity <= 8 * sizeof(slotflags_[0]),
+                  "slot_capacity too big for slotflags_ entries");
+    memset(slotlen_, 0, sizeof(slotlen_));
+    for (int p = 0; p != npat_; ++p) {
+        slotflags_[p] = 0;
+        for (int s = 0; s != slot_capacity; ++s)
+            if (pat_[p].has_slot(s)) {
+                slotflags_[p] |= 1 << s;
+                slotlen_[s] = pat_[p].slot_length(s);
+            }
+    }
+    for (int p = 0; p != npat_ - 1; ++p)
+        match_context_flags_[p] = (p > 1 ? match_context_flags_[p - 1] : 0)
+            | slotflags_[p];
+    for (int p = 0; p != npat_ - 1; ++p)
+        match_context_flags_[p] &= ~slotflags_[p];
+
     // account for slots across all patterns
     // completion_source_ is the source number after which sink() is complete
     int need_slots = 0;
@@ -351,6 +376,30 @@ bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
 
     // success
     return true;
+}
+
+String Join::hard_unparse_match_context(int joinpos, const Match& match) const {
+    assert(joinpos >= 0 && joinpos < nsource());
+    int slot_flags = match_context_flags_[joinpos + 1];
+    StringAccum sa;
+    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
+        if (slot_flags & 1) {
+            assert(match.known_length(s) == slotlen_[s]);
+            sa.append(match.data(s), slotlen_[s]);
+        }
+    return sa.take_string();
+}
+
+void Join::hard_parse_match_context(Str context, int joinpos, Match& match) const {
+    assert(joinpos >= 0 && joinpos < nsource());
+    int slot_flags = match_context_flags_[joinpos + 1];
+    int pos = 0;
+    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
+        if (slot_flags & 1) {
+            assert(pos + slotlen_[s] <= context.length());
+            match.set_slot(s, context.data() + pos, slotlen_[s]);
+            pos += slotlen_[s];
+        }
 }
 
 Json Pattern::unparse_json() const {

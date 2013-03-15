@@ -83,6 +83,7 @@ void ServerRange::validate(validate_args& va, int joinpos) {
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
         if (r)
+            // XXX want to remove just the right one
             va.server->remove_source(r->ibegin(), r->iend(), va.sink);
         delete r;
     } else if (join_->maintained()) {
@@ -91,7 +92,7 @@ void ServerRange::validate(validate_args& va, int joinpos) {
             va.server->add_source(r);
         } else
             va.server->add_source(new InvalidatorRange
-                                  (*va.server, join_, joinpos,
+                                  (*va.server, join_, joinpos, va.match,
                                    Str(kf, kflen), Str(kl, kllen), va.sink));
     } else if (r)
         delete r;
@@ -159,21 +160,25 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
     return stream << "]";
 }
 
-IntermediateUpdate::IntermediateUpdate(Str first, Str last, Str key,
+IntermediateUpdate::IntermediateUpdate(Str first, Str last,
+                                       Str context, Str key,
                                        int joinpos, int notifier)
-    : ibegin_(first), iend_(last), key_(key), joinpos_(joinpos),
-      notifier_(notifier) {
+    : ibegin_(first), iend_(last), context_(context), key_(key),
+      joinpos_(joinpos), notifier_(notifier) {
 }
 
-void ValidJoinRange::add_update(int joinpos, Str key, int notifier) {
+void ValidJoinRange::add_update(int joinpos, const String& context,
+                                Str key, int notifier) {
     Match m;
     join()->source(joinpos).match(key, m);
+    join()->parse_match_context(context, joinpos, m);
     uint8_t kf[key_capacity], kl[key_capacity];
     int kflen = join()->expand_first(kf, join()->sink(), ibegin(), iend(), m);
     int kllen = join()->expand_last(kl, join()->sink(), ibegin(), iend(), m);
 
     IntermediateUpdate* iu = new IntermediateUpdate(Str(kf, kflen),
                                                     Str(kl, kllen),
+                                                    context,
                                                     key, joinpos, notifier);
     updates_.insert(iu);
 
@@ -192,6 +197,7 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
 
     validate_args va{first, last, Match(), &server, this, iu->notifier_};
     join_->source(iu->joinpos_).match(iu->key_, va.match);
+    join_->parse_match_context(iu->context_, iu->joinpos_, va.match);
     validate(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
@@ -218,7 +224,7 @@ void ValidJoinRange::update(Str first, Str last, Server& server) {
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")
-           << iu.key() << "}";
+           << iu.key() << " " << iu.context_ << "}";
     return stream;
 }
 

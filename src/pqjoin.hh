@@ -45,7 +45,7 @@ class Match {
 
 class Pattern {
   public:
-    inline Pattern();
+    Pattern();
 
     void append_literal(uint8_t ch);
     void append_slot(int si, int len);
@@ -112,6 +112,9 @@ class Join {
                     Str sink_first, Str sink_last, const Match& match) const;
     String expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
 
+    inline String unparse_match_context(int joinpos, const Match& match) const;
+    inline void parse_match_context(Str context, int joinpos, Match& match) const;
+
     inline bool maintained() const;
     inline void set_maintained(bool m);
     inline double staleness() const;
@@ -136,6 +139,9 @@ class Join {
     int npat_;
     int completion_source_;
     bool maintained_;   // if the output is kept up to date with changes to the input
+    uint8_t slotlen_[slot_capacity];
+    uint8_t slotflags_[pcap];
+    uint8_t match_context_flags_[pcap - 1];
     double staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     Pattern pat_[pcap];
@@ -144,6 +150,8 @@ class Join {
     Json jvtparam_;
 
     bool analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh);
+    String hard_unparse_match_context(int joinpos, const Match& match) const;
+    void hard_parse_match_context(Str context, int joinpos, Match& match) const;
 };
 
 
@@ -178,10 +186,6 @@ inline const Match::state& Match::save() const {
 
 inline void Match::restore(const state& state) {
     ms_ = state;
-}
-
-inline Pattern::Pattern() {
-    clear();
 }
 
 inline int Pattern::key_length() const {
@@ -348,6 +352,18 @@ inline void Join::expand(uint8_t* s, Str str) const {
 	    memcpy(s + first.slotpos_[*p - 128],
 		   str.udata() + last.slotpos_[*p - 128],
 		   last.slotlen_[*p - 128]);
+}
+
+inline String Join::unparse_match_context(int joinpos, const Match& match) const {
+    if (!match_context_flags_[joinpos + 1])
+        return String();
+    else
+        return hard_unparse_match_context(joinpos, match);
+}
+
+inline void Join::parse_match_context(Str context, int joinpos, Match& match) const {
+    if (match_context_flags_[joinpos + 1])
+        hard_parse_match_context(context, joinpos, match);
 }
 
 bool operator==(const Pattern& a, const Pattern& b);

@@ -72,12 +72,11 @@ class SourceRange {
 class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(Server& server, Join* join, int joinpos,
+                            const Match& match,
                             Str first, Str last, ValidJoinRange* sink);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
-    virtual void notify(result&, const Datum*, const String&, int) const {
-        //nop
-    }
+    virtual void notify(result&, const Datum*, const String&, int) const {}
 };
 
 
@@ -201,9 +200,10 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, Str first, Str last, ValidJoinRange* sink)
+inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, ValidJoinRange* sink)
     : SourceRange(server, join, Match(), first, last) {
     joinpos_ = joinpos;
+    results_[0].key = join->unparse_match_context(joinpos, match);
     assert(sink);
     set_sink(sink);
 }
