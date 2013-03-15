@@ -31,7 +31,6 @@ class Match {
 
     inline void set_slot(int slot, const char* data, int len);
     inline void set_slot(int slot, const uint8_t* data, int len);
-    Match& operator&=(const Match& m);
     inline void clear();
 
     inline const state& save() const;

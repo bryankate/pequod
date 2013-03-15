@@ -5,17 +5,6 @@
 #include "error.hh"
 namespace pq {
 
-Match& Match::operator&=(const Match& m) {
-    for (int i = 0; i != slot_capacity; ++i) {
-        int l = 0;
-        while (l != ms_.slotlen_[i] && l != m.ms_.slotlen_[i]
-               && slot_[i][l] == m.slot_[i][l])
-            ++l;
-        ms_.slotlen_[i] = l;
-    }
-    return *this;
-}
-
 std::ostream& operator<<(std::ostream& stream, const Match& m) {
     stream << "{";
     const char* sep = "";
