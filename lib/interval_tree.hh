@@ -149,7 +149,7 @@ inline void interval_tree<T>::check() {
 
 template <typename I>
 struct interval_interval_contains_predicate {
-    const I& x_;
+    const I x_;
     interval_interval_contains_predicate(const I& x)
         : x_(x) {
     }
@@ -170,7 +170,7 @@ struct interval_interval_contains_predicate {
 
 template <typename I>
 struct interval_interval_overlaps_predicate {
-    const I& x_;
+    const I x_;
     interval_interval_overlaps_predicate(const I& x)
         : x_(x) {
     }
@@ -191,7 +191,7 @@ struct interval_interval_overlaps_predicate {
 
 template <typename X>
 struct interval_endpoint_contains_predicate {
-    const X& x_;
+    const X x_;
     interval_endpoint_contains_predicate(const X& x)
         : x_(x) {
     }
