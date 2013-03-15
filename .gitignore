@@ -1,5 +1,6 @@
 gmon.out
 perf.data
+perf.data.old
 
 /.deps
 /GNUmakefile
