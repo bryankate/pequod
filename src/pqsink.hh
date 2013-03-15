@@ -14,13 +14,9 @@ class Server;
 class Match;
 class ValidJoinRange;
 
-class ServerRange {
+class ServerRangeBase {
   public:
-    enum range_type {
-        joinsink = 1, validjoin = 2
-    };
-    ServerRange(Str first, Str last, range_type type, Join *join = 0);
-    virtual ~ServerRange();
+    inline ServerRangeBase(Str first, Str last);
 
     typedef Str endpoint_type;
     inline Str ibegin() const;
@@ -28,6 +24,19 @@ class ServerRange {
     inline ::interval<Str> interval() const;
     inline Str subtree_iend() const;
     inline void set_subtree_iend(Str subtree_iend);
+  protected:
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
+    Str subtree_iend_;
+};
+
+class ServerRange : public ServerRangeBase {
+  public:
+    enum range_type {
+        joinsink = 1, validjoin = 2
+    };
+    ServerRange(Str first, Str last, range_type type, Join *join = 0);
+    virtual ~ServerRange();
 
     inline range_type type() const;
     inline Join* join() const;
@@ -38,11 +47,6 @@ class ServerRange {
     friend std::ostream& operator<<(std::ostream&, const ServerRange&);
 
     static uint64_t allocated_key_bytes;
-
-  private:
-    LocalStr<24> ibegin_;
-    LocalStr<24> iend_;
-    Str subtree_iend_;
   public:
     rblinks<ServerRange> rblinks_;
   private:
@@ -56,26 +60,16 @@ class ServerRange {
     friend class ValidJoinRange;
 };
 
-class IntermediateUpdate {
+class IntermediateUpdate : public ServerRangeBase {
   public:
     IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
 
     typedef Str endpoint_type;
-    inline Str ibegin() const;
-    inline Str iend() const;
-    inline ::interval<Str> interval() const;
-    inline Str subtree_iend() const;
-    inline void set_subtree_iend(Str subtree_iend);
-
     inline Str key() const;
     inline int notifier() const;
 
     friend std::ostream& operator<<(std::ostream&, const IntermediateUpdate&);
 
-  private:
-    LocalStr<24> ibegin_;
-    LocalStr<24> iend_;
-    Str subtree_iend_;
   public:
     rblinks<IntermediateUpdate> rblinks_;
   private:
@@ -132,23 +126,26 @@ class ServerRangeSet {
     void validate_join(ServerRange* jr, Server& server);
 };
 
-inline Str ServerRange::ibegin() const {
+inline ServerRangeBase::ServerRangeBase(Str first, Str last) : ibegin_(first), iend_(last) {
+}
+
+inline Str ServerRangeBase::ibegin() const {
     return ibegin_;
 }
 
-inline Str ServerRange::iend() const {
+inline Str ServerRangeBase::iend() const {
     return iend_;
 }
 
-inline interval<Str> ServerRange::interval() const {
+inline interval<Str> ServerRangeBase::interval() const {
     return make_interval(ibegin(), iend());
 }
 
-inline Str ServerRange::subtree_iend() const {
+inline Str ServerRangeBase::subtree_iend() const {
     return subtree_iend_;
 }
 
-inline void ServerRange::set_subtree_iend(Str subtree_iend) {
+inline void ServerRangeBase::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
@@ -208,26 +205,6 @@ inline void ServerRangeSet::push_back(ServerRange* r) {
 
 inline int ServerRangeSet::total_size() const {
     return r_.size();
-}
-
-inline Str IntermediateUpdate::ibegin() const {
-    return ibegin_;
-}
-
-inline Str IntermediateUpdate::iend() const {
-    return iend_;
-}
-
-inline interval<Str> IntermediateUpdate::interval() const {
-    return make_interval(ibegin(), iend());
-}
-
-inline Str IntermediateUpdate::subtree_iend() const {
-    return subtree_iend_;
-}
-
-inline void IntermediateUpdate::set_subtree_iend(Str subtree_iend) {
-    subtree_iend_ = subtree_iend;
 }
 
 inline Str IntermediateUpdate::key() const {

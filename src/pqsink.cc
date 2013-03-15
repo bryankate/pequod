@@ -8,7 +8,7 @@ namespace pq {
 uint64_t ServerRange::allocated_key_bytes = 0;
 
 ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
-    : ibegin_(first), iend_(last), type_(type), join_(join), expires_at_(0) {
+    : ServerRangeBase(first, last), type_(type), join_(join), expires_at_(0) {
     if (!ibegin_.is_local())
         allocated_key_bytes += ibegin_.length();
     if (!iend_.is_local())
@@ -163,7 +163,7 @@ std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        Str context, Str key,
                                        int joinpos, int notifier)
-    : ibegin_(first), iend_(last), context_(context), key_(key),
+    : ServerRangeBase(first, last), context_(context), key_(key),
       joinpos_(joinpos), notifier_(notifier) {
 }
 
