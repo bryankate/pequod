@@ -76,7 +76,7 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     errh = errh ? errh : &xerrh;
 
     // check for redundant join
-    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
+    for (auto it = sink_ranges_.begin_overlaps(first, last);
          it != sink_ranges_.end(); ++it)
         if (it->join()->same_structure(*join)) {
             errh->error("join on [%p{Str}, %p{Str}) has same structure as overlapping join\n(new join ignored)", &first, &last);

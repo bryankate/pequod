@@ -153,6 +153,9 @@ struct interval_interval_contains_predicate {
     interval_interval_contains_predicate(const I& x)
         : x_(x) {
     }
+    interval_interval_contains_predicate(I&& x)
+        : x_(std::move(x)) {
+    }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
         // XXX should allow selection
@@ -174,6 +177,9 @@ struct interval_interval_overlaps_predicate {
     interval_interval_overlaps_predicate(const I& x)
         : x_(x) {
     }
+    interval_interval_overlaps_predicate(I&& x)
+        : x_(std::move(x)) {
+    }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_overlaps[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");
         // XXX should allow selection
@@ -194,6 +200,9 @@ struct interval_endpoint_contains_predicate {
     const X x_;
     interval_endpoint_contains_predicate(const X& x)
         : x_(x) {
+    }
+    interval_endpoint_contains_predicate(X&& x)
+        : x_(std::move(x)) {
     }
     template <typename T> bool check(T* node) {
 	IDEBUG("check_contains[" << x_ << "] [" << node->ibegin() << ", " << node->iend() << ")\n");

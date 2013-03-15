@@ -12,10 +12,13 @@ class interval {
     typedef bool (interval<T>::*unspecified_bool_type)() const;
 
     inline interval();
-    inline interval(const T &ibegin, const T &iend);
+    inline interval(const T& ibegin, const T& iend);
+    inline interval(T&& ibegin, T&& iend);
+    inline interval(const interval<T>& x);
+    inline interval(interval<T>&& x);
 
-    inline const T &ibegin() const;
-    inline const T &iend() const;
+    inline const T& ibegin() const;
+    inline const T& iend() const;
 
     inline operator unspecified_bool_type() const;
     inline bool operator!() const;
@@ -54,12 +57,28 @@ inline interval<T>::interval()
 }
 
 template <typename T>
-inline interval<T>::interval(const T &ibegin, const T &iend)
+inline interval<T>::interval(const T& ibegin, const T& iend)
     : ibegin_(ibegin), iend_(iend < ibegin ? ibegin : iend) {
 }
 
 template <typename T>
-inline interval<T> make_interval(const T &ibegin, const T &iend) {
+inline interval<T>::interval(T&& ibegin, T&& iend)
+    : ibegin_(std::move(ibegin)),
+      iend_(std::move(iend < ibegin ? ibegin : iend)) {
+}
+
+template <typename T>
+inline interval<T>::interval(const interval<T>& x)
+    : ibegin_(x.ibegin()), iend_(x.iend()) {
+}
+
+template <typename T>
+inline interval<T>::interval(interval<T>&& x)
+    : ibegin_(std::move(x.ibegin_)), iend_(std::move(x.iend_)) {
+}
+
+template <typename T>
+inline interval<T> make_interval(const T& ibegin, const T& iend) {
     return interval<T>(ibegin, iend);
 }
 

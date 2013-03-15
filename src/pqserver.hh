@@ -204,7 +204,7 @@ inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
 inline void Table::validate(Str first, Str last) {
     ServerRangeSet srs(first, last,
                        ServerRange::joinsink | ServerRange::validjoin);
-    for (auto it = sink_ranges_.begin_overlaps(interval<Str>(first, last));
+    for (auto it = sink_ranges_.begin_overlaps(first, last);
 	 it != sink_ranges_.end(); ++it)
 	srs.push_back(it.operator->());
     srs.validate(*server_);
@@ -255,7 +255,7 @@ void Server::replace_range(Str first, Str last, I first_value, I last_value) {
 			     store_.lower_bound(last, DatumCompare()));
 #endif
     ServerRangeSet srs(this, first, last, ServerRange::copy);
-    for (auto it = source_ranges_.begin_overlaps(interval<Str>(first, last));
+    for (auto it = source_ranges_.begin_overlaps(first, last);
 	 it != source_ranges_.end(); ++it)
 	srs.push_back(it.operator->());
 
