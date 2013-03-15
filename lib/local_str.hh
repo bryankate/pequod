@@ -26,10 +26,16 @@ class LocalStr : public String_base<LocalStr<C> > {
     inline LocalStr<C>& operator=(const String_base<T>& x);
 
   private:
-    int length_;
     union {
-        char* rem;
-        char loc[local_capacity];
+        int length;
+        struct {
+            int length;
+            char* data;
+        } rem;
+        struct {
+            int length;
+            char data[local_capacity];
+        } loc;
     } u_;
 
     inline void initialize(const char* data, int length);
@@ -38,23 +44,23 @@ class LocalStr : public String_base<LocalStr<C> > {
 
 template <int C>
 inline void LocalStr<C>::initialize(const char* data, int length) {
-    length_ = length;
+    u_.length = length;
     if (length > local_capacity) {
-        u_.rem = new char[length];
-        memcpy(u_.rem, data, length);
+        u_.rem.data = new char[length];
+        memcpy(u_.rem.data, data, length);
     } else
-        memcpy(u_.loc, data, length);
+        memcpy(u_.loc.data, data, length);
 }
 
 template <int C>
 inline void LocalStr<C>::uninitialize() {
-    if (length_ > local_capacity)
-        delete[] u_.rem;
+    if (u_.length > local_capacity)
+        delete[] u_.rem.data;
 }
 
 template <int C>
-inline LocalStr<C>::LocalStr()
-    : length_(0) {
+inline LocalStr<C>::LocalStr() {
+    u_.length = 0;
 }
 
 template <int C>
@@ -63,13 +69,13 @@ inline LocalStr<C>::LocalStr(const LocalStr<C>& x) {
 }
 
 template <int C>
-inline LocalStr<C>::LocalStr(LocalStr<C>&& x)
-    : length_(x.length_) {
-    if (length_ > local_capacity) {
-        u_.rem = x.u_.rem;
-        x.length_ = 0;
+inline LocalStr<C>::LocalStr(LocalStr<C>&& x) {
+    u_.length = x.length_;
+    if (u_.length > local_capacity) {
+        u_.rem.data = x.u_.rem.data;
+        x.u_.length = 0;
     } else
-        memcpy(u_.loc, x.u_.loc, length_);
+        memcpy(u_.loc.data, x.u_.loc.data, u_.length_);
 }
 
 template <int C> template <typename T>
@@ -89,12 +95,12 @@ inline LocalStr<C>::~LocalStr() {
 
 template <int C>
 inline const char* LocalStr<C>::data() const {
-    return length_ > local_capacity ? u_.rem : u_.loc;
+    return u_.length > local_capacity ? u_.rem.data : u_.loc.data;
 }
 
 template <int C>
 inline int LocalStr<C>::length() const {
-    return length_;
+    return u_.length;
 }
 
 template <int C>
@@ -114,24 +120,24 @@ inline LocalStr<C>& LocalStr<C>::operator=(const LocalStr<C>& x) {
 template <int C>
 inline LocalStr<C>& LocalStr<C>::operator=(LocalStr<C>&& x) {
     using std::swap;
-    swap(length_, x.length_);
-    char* old_rem = u_.rem;
-    if (length_ > local_capacity)
-        u_.rem = x.u_.rem;
+    swap(u_.length, x.u_.length);
+    char* old_rem = u_.rem.data;
+    if (u_.length > local_capacity)
+        u_.rem.data = x.u_.rem.data;
     else
-        memcpy(u_.loc, x.u_.loc, length_);
-    if (x.length_ > local_capacity)
-        x.u_.rem = old_rem;
+        memcpy(u_.loc.data, x.u_.loc.data, u_.length);
+    if (x.u_.length > local_capacity)
+        x.u_.rem.data = old_rem;
     return *this;
 }
 
 template <int C> template <typename T>
 inline LocalStr<C>& LocalStr<C>::operator=(const String_base<T>& x) {
-    char* old_rem = length_ > local_capacity ? u_.rem : 0;
-    length_ = x.length();
-    if (length_ > local_capacity)
-        u_.rem = new char[length_];
-    memmove(const_cast<char*>(data()), x.data(), length_);
+    char* old_rem = u_.length > local_capacity ? u_.rem.data : 0;
+    u_.length = x.length();
+    if (u_.length > local_capacity)
+        u_.rem.data = new char[u_.length];
+    memmove(const_cast<char*>(data()), x.data(), u_.length);
     delete[] old_rem;
     return *this;
 }
