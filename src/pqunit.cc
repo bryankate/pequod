@@ -282,7 +282,7 @@ void test_annotation() {
     j2.ref();
     // will not re-validate join within T seconds of last validation
     // for the requested range. the store will hold stale results
-    j2.set_staleness(0.5);
+    j2.set_staleness(0.1);
     server.add_join("f|", "f}", &j2);
 
     // should NOT have a validrange for c|00001 or a copy for b|00002
@@ -292,6 +292,10 @@ void test_annotation() {
     // should NOT trigger the insertion of a new c|00001 key
     server.insert("b|00002|0000000005", "b3");
     CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
+
+    // every re-validate should flush old dead ranges
+    server.validate("c|00002|0000000001", "c|00002}");
+    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(0));
 
     // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
     server.validate("f|00003|0000000001", "f|00003|0000000005");
@@ -306,7 +310,7 @@ void test_annotation() {
     server.validate("f|00003|0000000001", "f|00003|0000000015");
     CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000015"), size_t(3));
 
-    sleep(1);
+    usleep(200000);
 
     // SHOULD re-validate the whole range
     // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004

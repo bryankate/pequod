@@ -28,8 +28,12 @@ class Table : public pequod_set_base_hook {
     inline Str key() const;
 
     typedef store_type::const_iterator const_iterator;
+    typedef store_type::iterator iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
+    inline const_iterator lower_bound(Str key) const;
+    inline iterator lower_bound(Str key);
+    inline size_t size() const;
 
     inline void validate(Str first, Str last);
 
@@ -41,7 +45,8 @@ class Table : public pequod_set_base_hook {
     template <typename F>
     void modify(Str key, const ValidJoinRange* sink, const F& func);
     void erase(Str key);
-    inline size_t size() const;
+    inline iterator erase(iterator it);
+
     void clear();
 
   private:
@@ -49,7 +54,7 @@ class Table : public pequod_set_base_hook {
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
     int namelen_;
-    char name_[32];
+    char name_[28];
   public:
     pequod_set_member_hook member_hook_;
   private:
@@ -116,12 +121,24 @@ inline Str Table::key() const {
     return Str(name_, namelen_);
 }
 
-inline Table::const_iterator Table::begin() const {
+inline auto Table::begin() const -> const_iterator {
     return store_.begin();
 }
 
-inline Table::const_iterator Table::end() const {
+inline auto Table::end() const -> const_iterator {
     return store_.end();
+}
+
+inline auto Table::lower_bound(Str str) const -> const_iterator {
+    return store_.lower_bound(str, DatumCompare());
+}
+
+inline auto Table::lower_bound(Str str) -> iterator {
+    return store_.lower_bound(str, DatumCompare());
+}
+
+inline size_t Table::size() const {
+    return store_.size();
 }
 
 inline Table& Server::make_table(Str name) {
@@ -140,8 +157,8 @@ inline const Datum *Server::find(Str str) const {
     return it == store.end() ? NULL : it.operator->();
 }
 
-inline ServerStore::const_iterator Server::lower_bound(Str str) const {
-    return tables_.get(table_name(str), Table::empty_table).store_.lower_bound(str, DatumCompare());
+inline auto Server::lower_bound(Str str) const -> Table::const_iterator {
+    return tables_.get(table_name(str), Table::empty_table).lower_bound(str);
 }
 
 inline size_t Server::count(Str first, Str last) const {
@@ -183,19 +200,22 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
         d->invalidate();
     } else if (!is_unchanged_marker(value)) {
         if (p.second)
-            d = new Datum(key, String());
+            d = new Datum(key, sink);
         d->value().swap(value);
-        if (p.second) {
+        if (p.second)
             p.first = store_.insert_commit(*d, cd);
-            if (sink)
-                sink->update_hint(store_, p.first);
-        }
+        if (sink && d != hint)
+            sink->update_hint(store_, p.first);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
 }
 
-inline size_t Table::size() const {
-    return store_.size();
+inline auto Table::erase(iterator it) -> iterator {
+    Datum* d = it.operator->();
+    it = store_.erase(it);
+    notify(d, String(), SourceRange::notify_erase);
+    d->invalidate();
+    return it;
 }
 
 inline void Table::validate(Str first, Str last) {
