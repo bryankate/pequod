@@ -208,6 +208,16 @@ void ValidJoinRange::update(Str first, Str last, Server& server) {
     }
 }
 
+void ValidJoinRange::flush() {
+    Table* t = table();
+    auto endit = t->lower_bound(iend());
+    for (auto it = t->lower_bound(ibegin()); it != endit; )
+        if (it->owner() == this)
+            it = t->erase(it);
+        else
+            ++it;
+}
+
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")

@@ -62,17 +62,19 @@ class ValidJoinRange : public ServerRangeBase {
     inline void deref();
 
     inline Join* join() const;
+    inline Table* table() const;
 
     inline bool valid() const;
     inline bool has_expired(uint64_t now) const;
 
-    inline void invalidate();
     void add_update(int joinpos, const String& context, Str key, int notifier);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
+
+    void flush();
 
   public:
     rblinks<ValidJoinRange> rblinks_;
@@ -169,16 +171,16 @@ inline Join* ValidJoinRange::join() const {
     return jr_->join();
 }
 
+inline Table* ValidJoinRange::table() const {
+    return jr_->join()->sink_table();
+}
+
 inline bool ValidJoinRange::valid() const {
     return valid_;
 }
 
 inline bool ValidJoinRange::has_expired(uint64_t now) const {
     return expires_at_ && expires_at_ < now;
-}
-
-inline void ValidJoinRange::invalidate() {
-    //valid_ = false;
 }
 
 inline bool ValidJoinRange::need_update() const {

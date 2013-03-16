@@ -6,6 +6,7 @@
 #include "local_str.hh"
 
 namespace pq {
+class ValidJoinRange;
 
 typedef boost::intrusive::set_base_hook<
     boost::intrusive::link_mode<boost::intrusive::normal_link>,
@@ -17,10 +18,13 @@ typedef boost::intrusive::set_member_hook<
 class Datum : public pequod_set_base_hook {
   public:
     explicit Datum(Str key)
-        : key_(key), refcount_(0) {
+        : key_(key), refcount_(0), owner_{nullptr} {
+    }
+    Datum(Str key, const ValidJoinRange* owner)
+        : key_{key}, refcount_{0}, owner_{owner} {
     }
     Datum(Str key, const String& value)
-	: key_(key), value_(value), refcount_(0) {
+	: key_(key), value_(value), refcount_(0), owner_{nullptr} {
     }
 
     bool valid() const {
@@ -30,6 +34,10 @@ class Datum : public pequod_set_base_hook {
         key_ = Str();
         if (refcount_ == 0)
             delete this;
+    }
+
+    const ValidJoinRange* owner() const {
+        return owner_;
     }
 
     void ref() {
@@ -54,6 +62,7 @@ class Datum : public pequod_set_base_hook {
     LocalStr<24> key_;
     String value_;
     int refcount_;
+    const ValidJoinRange* owner_;
   public:
     pequod_set_member_hook member_hook_;
 };
