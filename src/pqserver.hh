@@ -44,6 +44,10 @@ class Table : public pequod_set_base_hook {
     inline size_t size() const;
     void clear();
 
+    uint64_t ninsert_;
+    uint64_t nmodify_;
+    uint64_t nerase_;
+
   private:
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
@@ -192,6 +196,7 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
         }
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
+    ++nmodify_;
 }
 
 inline size_t Table::size() const {

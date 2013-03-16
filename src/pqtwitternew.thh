@@ -1,0 +1,432 @@
+// -*- mode: c++ -*-
+#ifndef PQTWITTER_NEW_HH
+#define PQTWITTER_NEW_HH 1
+#include <boost/random.hpp>
+#include <utility>
+#include <vector>
+#include <iostream>
+#include <stdint.h>
+#include <tamer/tamer.hh>
+#include <sys/resource.h>
+#include "time.hh"
+#include "json.hh"
+#include "pqjoin.hh"
+#include "pqserver.hh"
+
+namespace pq {
+using tamer::event;
+using tamer::preevent;
+
+class TwitterNewPopulator {
+  public:
+    typedef boost::mt19937 generator_type;
+    typedef boost::random_number_generator<boost::mt19937> rng_type;
+    typedef boost::random::piecewise_linear_distribution<> graph_dist_type;
+
+    TwitterNewPopulator(const Json& param);
+
+    inline uint32_t nusers() const;
+    inline void set_nusers(uint32_t n);
+    inline uint32_t duration() const;
+    inline uint32_t ppost() const;
+    inline uint32_t psubscribe() const;
+    inline bool push() const;
+    inline bool pull() const;
+    inline bool log() const;
+    inline bool synchronous() const;
+
+    void make_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
+                            generator_type& gen);
+    void print_subscription_statistics(std::ostream& stream) const;
+    inline const uint32_t* begin_followers(uint32_t user) const;
+    inline const uint32_t* end_followers(uint32_t user) const;
+
+    inline std::pair<uint32_t, Str> random_post(generator_type& gen) const;
+    inline uint32_t rand_user(generator_type& gen);
+
+  private:
+    uint32_t nusers_;
+    bool push_;
+    bool pull_;
+    bool log_;
+    bool synchronous_;
+    String graph_file_;
+    uint32_t min_followers_;
+    uint32_t min_subs_;
+    uint32_t max_subs_;
+    uint32_t max_followers_;
+    double shape_;
+    uint32_t duration_;
+    uint32_t ppost_;
+    uint32_t psubscribe_;
+
+    std::vector<uint32_t> followers_;
+    std::vector<uint32_t> follower_ptrs_;
+    std::vector<std::pair<uint32_t, uint32_t>> nfollowers_;
+    graph_dist_type graph_dist_;
+
+    static const char tweet_data[];
+
+    TwitterNewPopulator(const TwitterNewPopulator&) = delete;
+    TwitterNewPopulator& operator=(const TwitterNewPopulator&) = delete;
+
+    uint32_t* subscribe_probabilities(generator_type& gen);
+    void import_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs);
+    void synthetic_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
+                                 generator_type& gen);
+    void make_followers(std::vector<std::pair<uint32_t, uint32_t>>& subs,
+                        std::vector<std::pair<uint32_t, uint32_t>>& followers);
+};
+
+template <typename S>
+class TwitterNewShim {
+  public:
+    TwitterNewShim(S& server);
+
+    template <typename R>
+    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+    template <typename R>
+    inline void post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> e);
+    tamed void initialize(bool pull, bool push, tamer::event<> e);
+    inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
+    template <typename R>
+    inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
+    typedef typename S::scan_result scan_result;
+    template <typename R>
+    inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
+    template <typename R>
+    inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    template <typename R>
+    inline void stats(tamer::preevent<R, Json> e);
+
+  private:
+    S& server_;
+    char buf_[key_capacity];
+    String value_;
+};
+
+template <typename S>
+TwitterNewShim<S>::TwitterNewShim(S& server)
+    : server_(server) {
+}
+
+tamed template <typename S>
+void TwitterNewShim<S>::initialize(bool pull, bool push, tamer::event<> done) {
+    tvars { Json j; String joinspec; }
+    if (push)
+        done();
+    else {
+        joinspec = "t|<user_id>|<time>|<poster_id> = "
+                   "copy p|<poster_id>|<time> ";
+        if (pull)
+            joinspec += "pull ";
+
+        joinspec += "using s|<user_id>|<poster_id> "
+                    "with user_id:4n, time:4n, poster_id:4n";
+        twait {
+            server_.add_join("t|", "t}", joinspec, make_event(j));
+        }
+        if (j["message"])
+            std::cerr << "installing timeline join: " << j << "\n";
+        done();
+    }
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+    memcpy(buf_, "s|XXXX|XXXX", 11);
+    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
+    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(poster);
+    server_.insert(Str(buf_, 11), Str("1", 1), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
+    memcpy(buf_, "p|XXXX|XXXX", 11);
+    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(poster);
+    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(time);
+    server_.insert(Str(buf_, 11), value, done);
+}
+
+template <typename S>
+inline void TwitterNewShim<S>::prepare_push_post(uint32_t poster, uint32_t time,
+                                              const String& value) {
+    memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
+    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(time);
+    *reinterpret_cast<uint32_t *>(buf_ + 12) = htonl(poster);
+    value_ = value;
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
+    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
+    server_.insert(Str(buf_, 16), value_, done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
+    memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
+    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
+    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(start_time);
+    *reinterpret_cast<uint32_t *>(buf_ + 14) = htonl(subscriber);
+    server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
+    memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
+    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
+    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(start_time);
+    *reinterpret_cast<uint32_t *>(buf_ + 14) = htonl(subscriber);
+    server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::stats(tamer::preevent<R, Json> done) {
+    server_.stats(done);
+}
+
+template <typename S>
+class TwitterNewRunner {
+  public:
+    TwitterNewRunner(S& server, TwitterNewPopulator& tp);
+
+    tamed void populate();
+    tamed void run(tamer::event<> done);
+
+  private:
+    S& server_;
+    TwitterNewPopulator& tp_;
+
+    tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
+};
+
+inline uint32_t TwitterNewPopulator::nusers() const {
+    return nusers_;
+}
+
+inline void TwitterNewPopulator::set_nusers(uint32_t n) {
+    nusers_ = n;
+}
+
+inline uint32_t TwitterNewPopulator::duration() const {
+    return duration_;
+}
+
+inline uint32_t TwitterNewPopulator::ppost() const {
+    return ppost_;
+}
+
+inline uint32_t TwitterNewPopulator::psubscribe() const {
+    return psubscribe_;
+}
+
+inline bool TwitterNewPopulator::push() const {
+    return push_;
+}
+
+inline bool TwitterNewPopulator::pull() const {
+    return pull_;
+}
+
+inline bool TwitterNewPopulator::log() const {
+    return log_;
+}
+
+inline bool TwitterNewPopulator::synchronous() const {
+    return synchronous_;
+}
+
+inline const uint32_t* TwitterNewPopulator::begin_followers(uint32_t user) const {
+    return followers_.data() + follower_ptrs_[user];
+}
+
+inline const uint32_t* TwitterNewPopulator::end_followers(uint32_t user) const {
+    return followers_.data() + follower_ptrs_[user + 1];
+}
+
+inline std::pair<uint32_t, Str> TwitterNewPopulator::random_post(generator_type& gen) const {
+    return std::make_pair(1000000000U - gen() % 65536, Str(tweet_data, 140 - gen() % 140));
+}
+
+inline uint32_t TwitterNewPopulator::rand_user(generator_type& gen) {
+    return nfollowers_[graph_dist_(gen)].second;
+}
+
+template <typename S>
+inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
+    : server_(server), tp_(tp) {
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) {
+    tvars { char buf[128]; }
+    twait {
+        server_.post(u, time, value, make_event());
+        if (tp_.push()) {
+            server_.prepare_push_post(u, time, value);
+            for (auto it = tp_.begin_followers(u);
+                 it != tp_.end_followers(u); ++it)
+                server_.push_post(*it, make_event());
+        }
+    }
+    e();
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::populate() {
+    tvars { boost::mt19937 gen;
+            std::vector<std::pair<uint32_t, uint32_t> > subs;
+    }
+    gen.seed(0);
+
+    std::cout << "Creating social graph." << std::endl;
+    tp_.make_subscriptions(subs, gen);
+
+    std::cout << "Building subscription table." << std::endl;
+    twait {
+        for (auto& x : subs) {
+            server_.subscribe(x.first, x.second, make_event());
+            if (tp_.log())
+                printf("subscribe s|%08d|%08d\n", x.first, x.second);
+        }
+    }
+
+#if 0
+    for (uint32_t u = 0; u != tp_.nusers(); ++u)
+        for (int p = 0; p != 10; ++p) {
+            auto post = tp_.random_post(gen);
+            post(u, post.first, post.second);
+            if (p == 9 && u % 1000 == 0)
+                fprintf(stderr, "%u/%u ", u, tp_.nusers());
+        }
+#endif
+
+    tp_.print_subscription_statistics(std::cout);
+
+    twait { server_.initialize(tp_.pull(), tp_.push(), make_event()); }
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::run(tamer::event<> done) {
+    tvars {
+          boost::mt19937 gen;
+          boost::random_number_generator<boost::mt19937> rng(gen);
+          struct rusage ru[2];
+          struct timeval tv[2];
+          uint32_t time = 1000000000;
+          uint32_t nusers = this->tp_.nusers();
+          uint32_t post_end_time = time + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
+          uint32_t end_time = post_end_time + this->tp_.duration();
+          uint32_t* load_times = new uint32_t[nusers];
+          uint32_t nbackpost = 0, npost = 0, nsubscribe = 0, nfull = 0, nupdate = 0;
+          uint32_t a, u, tx;
+          size_t nread = 0, count_result = 0;
+          typename S::scan_result scan_result;
+          Json old_stats, stats;
+          tamer::gather_rendezvous gr;
+      }
+      gen.seed(13918);
+
+      for (uint32_t i = 0; i != nusers; ++i)
+          load_times[i] = 0;
+
+      std::cout << "Populating twittersphere." << std::endl;
+      while(time < post_end_time) {
+          u = tp_.rand_user(gen);
+          if (tp_.log())
+              printf("%d: post p|%08d|%010d\n", time, u, time);
+          post(u, time, String("?!?#*"), gr.make_event());
+          ++nbackpost;
+          ++time;
+      }
+      twait(gr);
+      twait { server_.stats(make_event(old_stats)); }
+
+      std::cout << "Starting workload." << std::endl;
+      getrusage(RUSAGE_SELF, &ru[0]);
+      gettimeofday(&tv[0], 0);
+
+      while (time != end_time) {
+          u = tp_.rand_user(gen);
+          a = rng(100);
+
+          if (a < tp_.ppost()) {
+              if (tp_.log())
+                  printf("%d: post p|%08d|%010d\n", time, u, time);
+              post(u, time, String("?!?#*"), gr.make_event());
+              ++npost;
+          } else if (a < tp_.psubscribe()) {
+              uint32_t follower;
+              do {
+                  follower = tp_.rand_user(gen);
+              } while (follower == u);
+              server_.subscribe(u, follower, gr.make_event());
+              ++nsubscribe;
+          } else {
+              tx = load_times[u];
+              if (!tx || a < 4) {
+                  tx = time - 32000;
+                  ++nfull;
+              } else
+                  ++nupdate;
+              if (tp_.log()) {
+                  printf("%d: scan [t|%08u|%010u, t|%08u})\n", time, u, tx, u);
+                  twait {
+                      server_.timeline_scan(u, tx, time, make_event(scan_result));
+                  }
+                  for (auto it = scan_result.begin(); it != scan_result.end();
+                       ++it, ++nread) {
+                      assert(it->key().length() == 16);
+                      assert(it->key()[0] == 't');
+                      std::cout << "  t|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 2))
+                                << "|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 7))
+                                << "|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 12))
+                                << ": " << it->value() << "\n";
+                  }
+              } else {
+                  server_.timeline_add_count(u, tx, time, gr.make_event(nread));
+              }
+              load_times[u] = time;
+              if (tp_.synchronous())
+                  twait(gr);
+          }
+          ++time;
+
+          uint32_t diff = time - post_end_time;
+          if (time > post_end_time && diff % (tp_.duration() / 10) == 0)
+              std::cout << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+      }
+
+      twait(gr);
+
+      getrusage(RUSAGE_SELF, &ru[1]);
+      gettimeofday(&tv[1], 0);
+      twait { server_.stats(make_event(stats)); }
+
+      uint32_t nloggedin = 0;
+      for (uint32_t i = 0; i < nusers; ++i)
+          if (load_times[i])
+              ++nloggedin;
+
+      if (stats.get("server_user_time")) {
+          stats["server_user_time"] -= old_stats["server_user_time"];
+          stats["server_system_time"] -= old_stats["server_system_time"];
+      }
+      stats = Json().set("nbackpost", nbackpost).set("nposts", npost)
+          .set("nsubscribe", nsubscribe).set("nfull", nfull)
+          .set("nupdate", nupdate).set("nposts_read", nread)
+          .set("nloggedin", nloggedin)
+          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
+          .set("real_time", to_real(tv[1] - tv[0]))
+          .merge(stats);
+      std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+
+      delete[] load_times;
+}
+
+tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port);
+
+} // namespace pq
+#endif
