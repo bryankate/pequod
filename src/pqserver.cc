@@ -13,6 +13,7 @@
 #include "time.hh"
 #include "hashclient.hh"
 #include "hnshim.hh"
+#include "pqrwmicro.hh"
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
@@ -189,9 +190,11 @@ static Clp_Option options[] = {
     { "hnusers", 'x', 1026, Clp_ValInt, 0 },
     { "large", 0, 1027, 0, Clp_Negate },
     { "super_materialize", 's', 1028, 0, Clp_Negate },
+    { "rwmicro", 0, 1029, 0, Clp_Negate },
 };
 
-enum { mode_unknown, mode_twitter, mode_hn, mode_facebook, mode_analytics, mode_listen, mode_tests };
+enum { mode_unknown, mode_twitter, mode_hn, mode_facebook,
+       mode_analytics, mode_listen, mode_tests, mode_rwmicro };
 static char envstr[] = "TAMER_NOLIBEVENT=1";
 
 int main(int argc, char** argv) {
@@ -247,6 +250,8 @@ int main(int argc, char** argv) {
             tp_param.set("ppost", clp->val.i);
         else if (clp->option->long_name == String("psubscribe"))
             tp_param.set("psubscribe", clp->val.i);
+        else if (clp->option->long_name == String("rwmicro"))
+            mode = mode_rwmicro;
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
@@ -357,6 +362,10 @@ int main(int argc, char** argv) {
         pq::AnalyticsRunner ar(server, tp_param);
         ar.populate();
         ar.run();
+    } else if (mode == mode_rwmicro) {
+        pq::RwMicro rw(tp_param, server);
+        rw.populate();
+        rw.run();
     }
 
     tamer::loop();

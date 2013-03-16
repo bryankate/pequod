@@ -106,6 +106,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
+	$(OBJDIR)/pqrwmicro.o \
 	$(OBJDIR)/pqserverloop.o \
 	$(OBJDIR)/pqunit.o \
 	$(OBJDIR)/mpfd.o \
