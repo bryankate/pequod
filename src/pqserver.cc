@@ -198,6 +198,7 @@ static Clp_Option options[] = {
     { "large", 0, 1027, 0, Clp_Negate },
     { "super_materialize", 's', 1028, 0, Clp_Negate },
     { "rwmicro", 0, 1029, 0, Clp_Negate },
+    { "prefresh", 0, 1030, Clp_ValInt, 0 },
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook,
@@ -253,6 +254,8 @@ int main(int argc, char** argv) {
             tp_param.set("pg", !clp->negated);
         else if (clp->option->long_name == String("pread"))
             tp_param.set("pread", clp->val.i);
+        else if (clp->option->long_name == String("prefresh"))
+            tp_param.set("prefresh", clp->val.i);
         else if (clp->option->long_name == String("ppost"))
             tp_param.set("ppost", clp->val.i);
         else if (clp->option->long_name == String("psubscribe"))
