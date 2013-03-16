@@ -41,6 +41,8 @@ class Table : public pequod_set_base_hook {
     template <typename F>
     void modify(Str key, const ValidJoinRange* sink, const F& func);
     void erase(Str key);
+    inline size_t size() const;
+    void clear();
 
   private:
     store_type store_;
@@ -190,6 +192,10 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
         }
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
+}
+
+inline size_t Table::size() const {
+    return store_.size();
 }
 
 inline void Table::validate(Str first, Str last) {
