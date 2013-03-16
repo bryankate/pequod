@@ -49,7 +49,7 @@ void SourceRange::notify(const Datum* src, const String& old_value, int notifier
     using std::swap;
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; )
-        if (!it->sink || it->sink->valid()) {
+        if (!it->sink || true /* XXX it->sink->valid() */) {
 	    join_->expand(it->key.mutable_udata(), src->key());
             notify(*it, src, old_value, notifier);
             ++it;

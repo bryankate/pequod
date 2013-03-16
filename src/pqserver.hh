@@ -54,7 +54,7 @@ class Table : public pequod_set_base_hook {
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
     int namelen_;
-    char name_[32];
+    char name_[28];
   public:
     pequod_set_member_hook member_hook_;
   private:

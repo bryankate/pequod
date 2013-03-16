@@ -12,6 +12,8 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 JoinRange::~JoinRange() {
+    for (auto it : flushables_)
+        delete it;
     while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
         delete sink;
 }
@@ -29,21 +31,32 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va{first, last, Match(), &server, 0,
             SourceRange::notify_insert};
-    if (join_->maintained() || join_->staleness()) {
-        va.sink = new ValidJoinRange(first, last, this, now);
+    va.sink = new ValidJoinRange(first, last, this, now);
+    if (join_->maintained() || join_->staleness())
         valid_ranges_.insert(va.sink);
-    }
+    else
+        flushables_.push_back(va.sink);
     validate_step(va, 0);
 }
 
 void JoinRange::validate(Str first, Str last, Server& server) {
     uint64_t now = tstamp();
     Str last_valid = first;
+
+    for (auto it : flushables_) {
+        it->flush();
+        it->deref();
+    }
+    flushables_.clear();
+
     for (auto it = valid_ranges_.begin_overlaps(first, last);
-         it != valid_ranges_.end(); ++it) {
-        if (it->has_expired(now) || !it->valid()) {
-            // TODO: remove the expired validjoin from the server
-            // (and possibly this set if it will be used after this validation)
+         it != valid_ranges_.end(); ) {
+        if (it->has_expired(now)) {
+            ValidJoinRange* vjr = it.operator->();
+            ++it;
+            valid_ranges_.erase(vjr);
+            vjr->flush();
+            vjr->deref();
             continue;
         }
         if (last_valid < it->ibegin())
@@ -51,6 +64,7 @@ void JoinRange::validate(Str first, Str last, Server& server) {
         if (it->need_update())
             it->update(first, last, server);
         last_valid = it->iend();
+        ++it;
     }
     if (last_valid < last)
         validate_one(last_valid, last, server, now);
@@ -72,9 +86,11 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         va.server->validate(Str(kf, kflen), Str(kl, kllen));
 
     SourceRange* r = 0;
-    if (joinpos + 1 == join_->nsource())
+    if (joinpos + 1 == join_->nsource()) {
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen));
+        r->set_sink(va.sink);
+    }
 
     auto it = va.server->lower_bound(Str(kf, kflen));
     auto ilast = va.server->lower_bound(Str(kl, kllen));
@@ -104,10 +120,9 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
             va.server->remove_source(r->ibegin(), r->iend(), va.sink);
         delete r;
     } else if (join_->maintained()) {
-        if (r) {
-            r->set_sink(va.sink);
+        if (r)
             va.server->add_source(r);
-        } else
+        else
             va.server->add_source(new InvalidatorRange
                                   (*va.server, join_, joinpos, va.match,
                                    Str(kf, kflen), Str(kl, kllen), va.sink));

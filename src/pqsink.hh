@@ -64,7 +64,6 @@ class ValidJoinRange : public ServerRangeBase {
     inline Join* join() const;
     inline Table* table() const;
 
-    inline bool valid() const;
     inline bool has_expired(uint64_t now) const;
 
     void add_update(int joinpos, const String& context, Str key, int notifier);
@@ -81,7 +80,6 @@ class ValidJoinRange : public ServerRangeBase {
   private:
     JoinRange* jr_;
     int refcount_;
-    bool valid_;
     mutable Datum* hint_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
@@ -104,6 +102,7 @@ class JoinRange : public ServerRangeBase {
   private:
     Join* join_;
     interval_tree<ValidJoinRange> valid_ranges_;
+    std::vector<ValidJoinRange*> flushables_;
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
@@ -150,8 +149,7 @@ inline size_t JoinRange::valid_ranges_size() const {
 
 inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
                                       uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(1),
-      valid_(true), hint_(0) {
+    : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
     if (jr_->join()->staleness())
         expires_at_ = now + jr_->join()->staleness();
     else
@@ -173,10 +171,6 @@ inline Join* ValidJoinRange::join() const {
 
 inline Table* ValidJoinRange::table() const {
     return jr_->join()->sink_table();
-}
-
-inline bool ValidJoinRange::valid() const {
-    return valid_;
 }
 
 inline bool ValidJoinRange::has_expired(uint64_t now) const {
