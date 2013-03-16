@@ -35,12 +35,15 @@ Table::Table(Str name)
 const Table Table::empty_table{Str()};
 
 Table::~Table() {
-    while (Datum* d = store_.unlink_leftmost_without_rebalance())
-        delete d;
-    while (SourceRange* r = source_ranges_.unlink_leftmost_without_rebalance())
+    while (SourceRange* r = source_ranges_.unlink_leftmost_without_rebalance()) {
+        r->clear_without_deref();
         delete r;
+    }
     while (ServerRange* r = sink_ranges_.unlink_leftmost_without_rebalance())
         delete r;
+    // delete store last since sink_ranges_ have refs to Datums
+    while (Datum* d = store_.unlink_leftmost_without_rebalance())
+        delete d;
 }
 
 void Table::add_source(SourceRange* r) {

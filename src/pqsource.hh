@@ -31,6 +31,7 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline bool empty() const;
+    inline void clear_without_deref();
 
     inline Join* join() const;
     inline int joinpos() const;
@@ -186,6 +187,10 @@ inline void SourceRange::set_sink(ValidJoinRange* sink) {
     assert(results_.size() == 1 && !results_[0].sink);
     if ((results_[0].sink = sink))
         sink->ref();
+}
+
+inline void SourceRange::clear_without_deref() {
+    results_.clear();
 }
 
 inline interval<Str> SourceRange::interval() const {

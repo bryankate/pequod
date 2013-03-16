@@ -83,7 +83,8 @@ class IntermediateUpdate : public ServerRangeBase {
 
 class ValidJoinRange : public ServerRange {
   public:
-    inline ValidJoinRange(Str first, Str last, Join *join, ServerStore::iterator h);
+    inline ValidJoinRange(Str first, Str last, Join *join);
+    inline ~ValidJoinRange();
 
     inline void ref();
     inline void deref();
@@ -94,13 +95,13 @@ class ValidJoinRange : public ServerRange {
     inline bool need_update() const;
     void update(Str first, Str last, Server& server);
 
-    inline void update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const;
-    inline ServerStore::iterator hint() const;
+    inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
+    inline Datum* hint() const;
 
   private:
     int refcount_;
     bool valid_;
-    mutable ServerStore::iterator hint_;
+    mutable Datum* hint_;
     interval_tree<IntermediateUpdate> updates_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server);
@@ -161,8 +162,13 @@ inline bool ServerRange::expired_at(uint64_t t) const {
     return expires_at_ && (expires_at_ < t);
 }
 
-inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join, ServerStore::iterator h)
-    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true), hint_(h) {
+inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
+    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true), hint_(0) {
+}
+
+inline ValidJoinRange::~ValidJoinRange() {
+    if (hint_)
+        hint_->deref();
 }
 
 inline void ValidJoinRange::ref() {
@@ -186,12 +192,17 @@ inline bool ValidJoinRange::need_update() const {
     return !updates_.empty();
 }
 
-inline void ValidJoinRange::update_hint(ServerStore::iterator it, ServerStore::iterator end, bool insert) const {
-    hint_ = insert ? it : end;
+inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
+    Datum* hd = hint == store.end() ? 0 : hint.operator->();
+    if (hd)
+        hd->ref();
+    if (hint_)
+        hint_->deref();
+    hint_ = hd;
 }
 
-inline ServerStore::iterator ValidJoinRange::hint() const {
-    return hint_;
+inline Datum* ValidJoinRange::hint() const {
+    return hint_ && hint_->valid() ? hint_ : 0;
 }
 
 inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
