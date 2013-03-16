@@ -194,7 +194,7 @@ static Clp_Option options[] = {
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
-    { "pull", 'p', 3001, 0, Clp_Negate },
+    { "pull", 3001, 0, Clp_Negate },
     { "duration", 'd', 3002, Clp_ValInt, 0 },
     { "nusers", 'n', 3003, Clp_ValInt, 0 },
     { "synchronous", 0, 3004, 0, Clp_Negate },
