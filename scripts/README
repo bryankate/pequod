@@ -1,0 +1,21 @@
+HOW TO RUN EXPERIMENTS ON A CLUSTER
+
+Follow the following steps to setup a new cluster for gstore.
+ - Followed the comment in lib/config.py to setup ssh forwarding.
+ - Make sure you have password-less sudo on each client and server.
+ - Make sure the host names are known by ssh (which should ok now since you
+   have already sshed into each client and server to setup password-less sudo).
+ - Add your own cluster definition (say 'harvard') into exp/config.py
+ - Add machine initializaion function into your controlling machine's
+   lib/data/gstore_commands.sh, say 'reinstall_gstore_harvard'.
+ - Install gstore on both servers and clients with:
+    $./exp/run_cluster.py --cluster=harvard \
+      --clientConfig=reinstall_gstore_harvard \
+      --serverConfig=reinstall_gstore_harvard
+    
+To run all workloads of an experiment (say on pdos), use:
+ $./lib/run_cluster.py --cluster=pdos -e twitter
+    
+To run specific workloads of an experiments, use '-l':
+ $./lib/run_cluster.py --cluster=pdos -e twitter -l auto_w50_r1000
+
