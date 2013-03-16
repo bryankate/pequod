@@ -51,6 +51,18 @@ class StrConverter : public ErrorHandler::Converter {
 };
 static StrConverter str_converter;
 
+class StringConverter : public ErrorHandler::Converter {
+  public:
+    String convert(int, VA_LIST_REF_T val) {
+        const String* strp = va_arg(VA_LIST_DEREF(val), const String*);
+        if (strp)
+            return *strp;
+        else
+            return String::make_stable("(null)", 6);
+    }
+};
+static StringConverter string_converter;
+
 struct ErrorConversion {
     String name;
     ErrorHandler::Converter* hook;
@@ -58,7 +70,8 @@ struct ErrorConversion {
 };
 
 static ErrorConversion default_conversions[] = {
-    { String::make_stable("Str", 3), &str_converter, 0 }
+    { String::make_stable("Str", 3), &str_converter, &default_conversions[1] },
+    { String::make_stable("String", 6), &string_converter, 0 }
 };
 
 static ErrorConversion* conversions = &default_conversions[0];
