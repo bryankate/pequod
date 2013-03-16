@@ -36,7 +36,6 @@ class Table : public pequod_set_base_hook {
     void add_source(SourceRange* r);
     void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
-    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
 
     void insert(const String& key, String value);
     template <typename F>
@@ -46,7 +45,7 @@ class Table : public pequod_set_base_hook {
   private:
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
-    interval_tree<ServerRange> sink_ranges_;
+    interval_tree<JoinRange> join_ranges_;
     int namelen_;
     char name_[32];
   public:
@@ -79,8 +78,7 @@ class Server {
 
     inline void add_source(SourceRange* r);
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
-    inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
-    inline ValidJoinRange* add_validjoin(Str first, Str last, Join* j);
+    void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
@@ -194,19 +192,10 @@ void Table::modify(const String& key, const ValidJoinRange* sink, const F& func)
     }
 }
 
-inline ValidJoinRange* Table::add_validjoin(Str first, Str last, Join* join) {
-    ValidJoinRange* sink = new ValidJoinRange(first, last, join);
-    sink_ranges_.insert(sink);
-    return sink;
-}
-
 inline void Table::validate(Str first, Str last) {
-    ServerRangeSet srs(first, last,
-                       ServerRange::joinsink | ServerRange::validjoin);
-    for (auto it = sink_ranges_.begin_overlaps(first, last);
-	 it != sink_ranges_.end(); ++it)
-	srs.push_back(it.operator->());
-    srs.validate(*server_);
+    for (auto it = join_ranges_.begin_overlaps(first, last);
+	 it != join_ranges_.end(); ++it)
+        it->validate(first, last, *server_);
 }
 
 inline void Server::insert(const String& key, const String& value) {
@@ -230,18 +219,6 @@ inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
     Str tname = table_name(first);
     assert(tname);
     make_table(tname).remove_source(first, last, sink);
-}
-
-inline void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
-    Str tname = table_name(first, last);
-    assert(tname);
-    make_table(tname).add_join(first, last, join, errh);
-}
-
-inline ValidJoinRange* Server::add_validjoin(Str first, Str last, Join* join) {
-    Str tname = table_name(first, last);
-    assert(tname);
-    return make_table(tname).add_validjoin(first, last, join);
 }
 
 inline void Server::validate(Str first, Str last) {

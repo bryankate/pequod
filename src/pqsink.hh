@@ -1,7 +1,6 @@
 #ifndef PEQUOD_SINK_HH
 #define PEQUOD_SINK_HH
-#include "str.hh"
-#include "string.hh"
+#include "pqjoin.hh"
 #include "interval.hh"
 #include "local_vector.hh"
 #include "local_str.hh"
@@ -9,9 +8,9 @@
 #include "pqdatum.hh"
 
 namespace pq {
-class Join;
 class Server;
 class Match;
+class JoinRange;
 class ValidJoinRange;
 
 class ServerRangeBase {
@@ -24,40 +23,13 @@ class ServerRangeBase {
     inline ::interval<Str> interval() const;
     inline Str subtree_iend() const;
     inline void set_subtree_iend(Str subtree_iend);
+
+    static uint64_t allocated_key_bytes;
+
   protected:
     LocalStr<24> ibegin_;
     LocalStr<24> iend_;
     Str subtree_iend_;
-};
-
-class ServerRange : public ServerRangeBase {
-  public:
-    enum range_type {
-        joinsink = 1, validjoin = 2
-    };
-    ServerRange(Str first, Str last, range_type type, Join *join = 0);
-    virtual ~ServerRange();
-
-    inline range_type type() const;
-    inline Join* join() const;
-    inline bool expired_at(uint64_t t) const;
-
-    void validate(Str first, Str last, Server& server);
-
-    friend std::ostream& operator<<(std::ostream&, const ServerRange&);
-
-    static uint64_t allocated_key_bytes;
-  public:
-    rblinks<ServerRange> rblinks_;
-  private:
-    range_type type_;
-    Join* join_;
-    uint64_t expires_at_;
-
-    struct validate_args;
-    void validate(validate_args& va, int joinpos);
-
-    friend class ValidJoinRange;
 };
 
 class IntermediateUpdate : public ServerRangeBase {
@@ -81,15 +53,19 @@ class IntermediateUpdate : public ServerRangeBase {
     friend class ValidJoinRange;
 };
 
-class ValidJoinRange : public ServerRange {
+class ValidJoinRange : public ServerRangeBase {
   public:
-    inline ValidJoinRange(Str first, Str last, Join *join);
+    inline ValidJoinRange(Str first, Str last, JoinRange* jr, uint64_t now);
     ~ValidJoinRange();
 
     inline void ref();
     inline void deref();
 
+    inline Join* join() const;
+
     inline bool valid() const;
+    inline bool has_expired(uint64_t now) const;
+
     inline void invalidate();
     void add_update(int joinpos, const String& context, Str key, int notifier);
     inline bool need_update() const;
@@ -98,36 +74,46 @@ class ValidJoinRange : public ServerRange {
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
 
+  public:
+    rblinks<ValidJoinRange> rblinks_;
   private:
+    JoinRange* jr_;
     int refcount_;
     bool valid_;
     mutable Datum* hint_;
+    uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server);
 };
 
-class ServerRangeSet {
+class JoinRange : public ServerRangeBase {
   public:
-    inline ServerRangeSet(Str first, Str last, int types);
+    JoinRange(Str first, Str last, Join* join);
+    ~JoinRange();
 
-    inline void push_back(ServerRange* r);
+    inline Join* join() const;
+    void validate(Str first, Str last, Server& server);
 
-    void validate(Server& server);
-
-    friend std::ostream& operator<<(std::ostream&, const ServerRangeSet&);
-    inline int total_size() const;
-
+  public:
+    rblinks<JoinRange> rblinks_;
   private:
-    local_vector<ServerRange*, 5> r_;
-    Str first_;
-    Str last_;
-    int types_;
+    Join* join_;
+    interval_tree<ValidJoinRange> valid_ranges_;
 
-    void validate_join(ServerRange* jr, Server& server);
+    inline void validate_one(Str first, Str last, Server& server, uint64_t now);
+    struct validate_args;
+    void validate_step(validate_args& va, int joinpos);
+
+    friend class ValidJoinRange;
 };
 
-inline ServerRangeBase::ServerRangeBase(Str first, Str last) : ibegin_(first), iend_(last) {
+inline ServerRangeBase::ServerRangeBase(Str first, Str last)
+    : ibegin_(first), iend_(last) {
+    if (!ibegin_.is_local())
+        allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        allocated_key_bytes += iend_.length();
 }
 
 inline Str ServerRangeBase::ibegin() const {
@@ -150,20 +136,18 @@ inline void ServerRangeBase::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline ServerRange::range_type ServerRange::type() const {
-    return type_;
-}
-
-inline Join* ServerRange::join() const {
+inline Join* JoinRange::join() const {
     return join_;
 }
 
-inline bool ServerRange::expired_at(uint64_t t) const {
-    return expires_at_ && (expires_at_ < t);
-}
-
-inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
-    : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true), hint_(0) {
+inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
+                                      uint64_t now)
+    : ServerRangeBase(first, last), jr_(jr), refcount_(1),
+      valid_(true), hint_(0) {
+    if (jr_->join()->staleness())
+        expires_at_ = now + jr_->join()->staleness();
+    else
+        expires_at_ = 0;
 }
 
 inline void ValidJoinRange::ref() {
@@ -175,8 +159,16 @@ inline void ValidJoinRange::deref() {
         delete this;            // XXX
 }
 
+inline Join* ValidJoinRange::join() const {
+    return jr_->join();
+}
+
 inline bool ValidJoinRange::valid() const {
     return valid_;
+}
+
+inline bool ValidJoinRange::has_expired(uint64_t now) const {
+    return expires_at_ && expires_at_ < now;
 }
 
 inline void ValidJoinRange::invalidate() {
@@ -198,19 +190,6 @@ inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::i
 
 inline Datum* ValidJoinRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
-}
-
-inline ServerRangeSet::ServerRangeSet(Str first, Str last, int types)
-    : first_(first), last_(last), types_(types) {
-}
-
-inline void ServerRangeSet::push_back(ServerRange* r) {
-    if (r->type() & types_)
-        r_.push_back(r);
-}
-
-inline int ServerRangeSet::total_size() const {
-    return r_.size();
 }
 
 inline Str IntermediateUpdate::key() const {

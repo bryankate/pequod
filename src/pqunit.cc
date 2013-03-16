@@ -315,27 +315,6 @@ void test_annotation() {
     CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000015"), size_t(4));
 }
 
-void test_srs() {
-    pq::Server server;
-    pq::ServerRangeSet srs("a001", "a}",
-                       pq::ServerRange::joinsink | pq::ServerRange::validjoin);
-
-    pq::Join j;
-    pq::ServerRange *r0 = new pq::ServerRange("a", "a}", pq::ServerRange::joinsink, &j);
-    pq::ServerRange *r1 = new pq::ServerRange("a003", "a005", pq::ServerRange::validjoin, &j);
-    pq::ServerRange *r2 = new pq::ServerRange("a007", "a010", pq::ServerRange::validjoin, &j);
-
-    srs.push_back(r0);
-    srs.push_back(r1);
-    srs.push_back(r2);
-
-    CHECK_EQ(srs.total_size(), 3);
-
-    delete r0;
-    delete r1;
-    delete r2;
-}
-
 void test_join1() {
     pq::Server server;
     pq::Join j1;
@@ -831,7 +810,6 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_recursive);
     ADD_TEST(test_count);
     ADD_TEST(test_annotation);
-    ADD_TEST(test_srs);
     ADD_TEST(test_join1);
     ADD_TEST(test_op_count);
     ADD_TEST(test_op_count_validate1);

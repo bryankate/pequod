@@ -2,6 +2,7 @@
 #include "pqserver.hh"
 #include "hashtable.hh"
 #include "json.hh"
+#include "time.hh"
 #include "error.hh"
 namespace pq {
 
@@ -51,7 +52,7 @@ void Pattern::append_slot(int si, int len) {
 void Pattern::clear() {
     klen_ = plen_ = 0;
     memset(pat_, 0, sizeof(pat_));
-    for (int i = 0; i < slot_capacity; ++i)
+    for (int i = 0; i != slot_capacity; ++i)
         slotlen_[i] = slotpos_[i] = 0;
 }
 
@@ -64,14 +65,28 @@ bool operator==(const Pattern& a, const Pattern& b) {
 
 void Join::clear() {
     npat_ = 0;
-    for (int i = 0; i != pcap; ++i)
+    for (int i = 0; i != pcap; ++i) {
         pat_[i].clear();
+        table_[i] = 0;
+    }
     for (int i = 0; i != slot_capacity; ++i) {
         slotlen_[i] = slottype_[i] = 0;
         slotname_[i] = String();
     }
     jvt_ = 0;
     maintained_ = true;
+}
+
+void Join::attach(Server& server) {
+    for (int i = 0; i != npat_; ++i)
+        table_[i] = &server.make_table(pat_[i].table_name());
+}
+
+void Join::set_staleness(double s) {
+    if (s <= 0)
+        mandatory_assert(false && "Cannot unset staleness.");
+    staleness_ = tous(s);
+    maintained_ = false;
 }
 
 /** Expand @a pat into the first matching string that matches @a match and

@@ -5,23 +5,18 @@
 
 namespace pq {
 
-uint64_t ServerRange::allocated_key_bytes = 0;
+uint64_t ServerRangeBase::allocated_key_bytes = 0;
 
-ServerRange::ServerRange(Str first, Str last, range_type type, Join* join)
-    : ServerRangeBase(first, last), type_(type), join_(join), expires_at_(0) {
-    if (!ibegin_.is_local())
-        allocated_key_bytes += ibegin_.length();
-    if (!iend_.is_local())
-        allocated_key_bytes += iend_.length();
-
-    if (join_->staleness())
-        expires_at_ = tstamp() + tous(join_->staleness());
+JoinRange::JoinRange(Str first, Str last, Join* join)
+    : ServerRangeBase(first, last), join_(join) {
 }
 
-ServerRange::~ServerRange() {
+JoinRange::~JoinRange() {
+    while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+        delete sink;
 }
 
-struct ServerRange::validate_args {
+struct JoinRange::validate_args {
     Str first;
     Str last;
     Match match;
@@ -30,16 +25,38 @@ struct ServerRange::validate_args {
     int notifier;
 };
 
-void ServerRange::validate(Str first, Str last, Server& server) {
-    if (type_ == joinsink) {
-        validate_args va{first, last, Match(), &server, 0, SourceRange::notify_insert};
-        if (join_->maintained() || join_->staleness())
-            va.sink = server.add_validjoin(first, last, join_);
-        validate(va, 0);
+inline void JoinRange::validate_one(Str first, Str last, Server& server,
+                                    uint64_t now) {
+    validate_args va{first, last, Match(), &server, 0,
+            SourceRange::notify_insert};
+    if (join_->maintained() || join_->staleness()) {
+        va.sink = new ValidJoinRange(first, last, this, now);
+        valid_ranges_.insert(va.sink);
     }
+    validate_step(va, 0);
 }
 
-void ServerRange::validate(validate_args& va, int joinpos) {
+void JoinRange::validate(Str first, Str last, Server& server) {
+    uint64_t now = tstamp();
+    Str last_valid = first;
+    for (auto it = valid_ranges_.begin_overlaps(first, last);
+         it != valid_ranges_.end(); ++it) {
+        if (it->has_expired(now) || !it->valid()) {
+            // TODO: remove the expired validjoin from the server
+            // (and possibly this set if it will be used after this validation)
+            continue;
+        }
+        if (last_valid < it->ibegin())
+            validate_one(last_valid, it->ibegin(), server, now);
+        if (it->need_update())
+            it->update(first, last, server);
+        last_valid = it->iend();
+    }
+    if (last_valid < last)
+        validate_one(last_valid, last, server, now);
+}
+
+void JoinRange::validate_step(validate_args& va, int joinpos) {
     uint8_t kf[128], kl[128];
     int kflen = join_->expand_first(kf, join_->source(joinpos),
                                     va.first, va.last, va.match);
@@ -75,7 +92,7 @@ void ServerRange::validate(validate_args& va, int joinpos) {
             if (r)
                 r->notify(it.operator->(), String(), va.notifier);
             else
-                validate(va, joinpos + 1);
+                validate_step(va, joinpos + 1);
         }
 
         va.match.restore(mstate);
@@ -98,6 +115,7 @@ void ServerRange::validate(validate_args& va, int joinpos) {
         delete r;
 }
 
+#if 0
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     stream << "{" << "[" << r.ibegin() << ", " << r.iend() << ")";
     if (r.type_ == ServerRange::joinsink)
@@ -118,47 +136,7 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
 	stream << ": ??";
     return stream << "}";
 }
-
-void ServerRangeSet::validate_join(ServerRange* jr, Server& server) {
-    uint64_t now = tstamp();
-    Str last_valid = first_;
-    for (int i = 0; i != r_.size(); ++i)
-        if (r_[i]
-            && r_[i]->type() == ServerRange::validjoin
-            && r_[i]->join() == jr->join()) {
-            ValidJoinRange* sink = static_cast<ValidJoinRange*>(r_[i]);
-            if (sink->expired_at(now) || !sink->valid()) {
-                // TODO: remove the expired validjoin from the server
-                // (and possibly this set if it will be used after this validation)
-                continue;
-            }
-            // XXX PERFORMANCE can often avoid this check
-            if (last_valid < sink->ibegin())
-                jr->validate(last_valid, sink->ibegin(), server);
-            if (sink->need_update())
-                sink->update(first_, last_, server);
-            last_valid = sink->iend();
-        }
-    if (last_valid < last_)
-        jr->validate(last_valid, last_, server);
-}
-
-void ServerRangeSet::validate(Server& server) {
-    for (int i = 0; i != r_.size(); ++i)
-        if (r_[i]->type() == ServerRange::joinsink)
-            validate_join(r_[i], server);
-}
-
-std::ostream& operator<<(std::ostream& stream, const ServerRangeSet& srs) {
-    stream << "[";
-    const char* sep = "";
-    for (int i = 0; i != srs.r_.size(); ++i)
-	if (srs.r_[i]) {
-	    stream << sep << *srs.r_[i];
-	    sep = ", ";
-	}
-    return stream << "]";
-}
+#endif
 
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        Str context, Str key,
@@ -202,10 +180,12 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
         // XXX embiggening range
         last = iu->iend();
 
-    validate_args va{first, last, Match(), &server, this, iu->notifier_};
-    join_->source(iu->joinpos_).match(iu->key_, va.match);
-    join_->parse_match_context(iu->context_, iu->joinpos_, va.match);
-    validate(va, iu->joinpos_ + 1);
+    Join* join = jr_->join();
+    JoinRange::validate_args va{first, last, Match(), &server, this,
+            iu->notifier_};
+    join->source(iu->joinpos_).match(iu->key_, va.match);
+    join->parse_match_context(iu->context_, iu->joinpos_, va.match);
+    jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
         iu->ibegin_ = last;

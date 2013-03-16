@@ -13,6 +13,7 @@ namespace pq {
 class Join;
 class SourceRange;
 class Server;
+class Table;
 
 enum { slot_capacity = 5 };
 
@@ -99,12 +100,17 @@ class Join {
     inline void ref();
     inline void deref();
     void clear();
+    void attach(Server& server);
 
     inline int nsource() const;
     inline int completion_source() const;
     inline const Pattern& sink() const;
     inline const Pattern& source(int i) const;
     inline const Pattern& back_source() const;
+
+    inline Table* sink_table() const;
+    inline Table* source_table(int i) const;
+
     inline int slot(Str name) const;
 
     inline void expand(uint8_t* out, Str str) const;
@@ -120,8 +126,8 @@ class Join {
     inline void parse_match_context(Str context, int joinpos, Match& match) const;
 
     inline bool maintained() const;
-    inline double staleness() const;
-    inline void set_staleness(double s);
+    inline uint64_t staleness() const;
+    void set_staleness(double sec);
     inline JoinValueType jvt() const;
     inline const Json& jvt_config() const;
 
@@ -143,12 +149,13 @@ class Join {
     uint8_t slotlen_[slot_capacity];
     uint8_t slotflags_[pcap];
     uint8_t match_context_flags_[pcap - 1];
+    Table* table_[pcap];
     Pattern pat_[pcap];
 
     enum { stype_unknown = 0, stype_text, stype_decimal, stype_binary_number };
     String slotname_[slot_capacity];
     uint8_t slottype_[slot_capacity];
-    double staleness_;  // validated ranges can be used in this time window.
+    uint64_t staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     int refcount_;
     int jvt_;
@@ -307,7 +314,7 @@ inline bool Join::maintained() const {
     return maintained_;
 }
 
-inline double Join::staleness() const {
+inline uint64_t Join::staleness() const {
     return staleness_;
 }
 
@@ -317,13 +324,6 @@ inline JoinValueType Join::jvt() const {
 
 inline const Json& Join::jvt_config() const {
     return jvtparam_;
-}
-
-inline void Join::set_staleness(double s) {
-    if (!s)
-        mandatory_assert(false && "Cannot unset staleness.");
-    staleness_ = s;
-    maintained_ = false;
 }
 
 inline const Pattern& Join::sink() const {
@@ -336,6 +336,14 @@ inline const Pattern& Join::source(int i) const {
 
 inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
+}
+
+inline Table* Join::sink_table() const {
+    return table_[0];
+}
+
+inline Table* Join::source_table(int i) const {
+    return table_[i + 1];
 }
 
 inline int Join::slot(Str name) const {

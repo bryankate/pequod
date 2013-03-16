@@ -39,9 +39,9 @@ Table::~Table() {
         r->clear_without_deref();
         delete r;
     }
-    while (ServerRange* r = sink_ranges_.unlink_leftmost_without_rebalance())
+    while (JoinRange* r = join_ranges_.unlink_leftmost_without_rebalance())
         delete r;
-    // delete store last since sink_ranges_ have refs to Datums
+    // delete store last since join_ranges_ have refs to Datums
     while (Datum* d = store_.unlink_leftmost_without_rebalance())
         delete d;
 }
@@ -80,15 +80,21 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     errh = errh ? errh : &xerrh;
 
     // check for redundant join
-    for (auto it = sink_ranges_.begin_overlaps(first, last);
-         it != sink_ranges_.end(); ++it)
+    for (auto it = join_ranges_.begin_overlaps(first, last);
+         it != join_ranges_.end(); ++it)
         if (it->join()->same_structure(*join)) {
             errh->error("join on [%p{Str}, %p{Str}) has same structure as overlapping join\n(new join ignored)", &first, &last);
             return;
         }
 
-    sink_ranges_.insert(new ServerRange(first, last, ServerRange::joinsink,
-                                        join));
+    join_ranges_.insert(new JoinRange(first, last, join));
+}
+
+void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
+    join->attach(*this);
+    Str tname = table_name(first, last);
+    assert(tname);
+    make_table(tname).add_join(first, last, join, errh);
 }
 
 void Table::insert(const String& key, String value) {
@@ -117,22 +123,20 @@ void Table::erase(const String& key) {
 }
 
 Json Server::stats() const {
-    size_t store_size = 0, source_ranges_size = 0, sink_ranges_size = 0;
+    size_t store_size = 0, source_ranges_size = 0;
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
     for (auto& t : tables_) {
         store_size += t.store_.size();
         source_ranges_size += t.source_ranges_.size();
-        sink_ranges_size += t.sink_ranges_.size();
     }
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
-	.set("sink_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
         .set("server_max_rss_mb", ru.ru_maxrss / 1024)
         .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes)
-        .set("sink_allocated_key_bytes", ServerRange::allocated_key_bytes);
+        .set("sink_allocated_key_bytes", ServerRangeBase::allocated_key_bytes);
 }
 
 void Server::print(std::ostream& stream) {
@@ -141,16 +145,6 @@ void Server::print(std::ostream& stream) {
     for (auto& t : tables_by_name_)
         if (!t.source_ranges_.empty()) {
             stream << t.source_ranges_;
-            any = true;
-        }
-    if (!any)
-        stream << "<empty>\n";
-
-    stream << "sinks:" << std::endl;
-    any = false;
-    for (auto& t : tables_by_name_)
-        if (!t.sink_ranges_.empty()) {
-            stream << t.sink_ranges_;
             any = true;
         }
     if (!any)
