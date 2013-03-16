@@ -37,10 +37,10 @@ class Table : public pequod_set_base_hook {
     void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
-    void insert(const String& key, String value);
+    void insert(Str key, String value);
     template <typename F>
-    void modify(const String& key, const ValidJoinRange* sink, const F& func);
-    void erase(const String& key);
+    void modify(Str key, const ValidJoinRange* sink, const F& func);
+    void erase(Str key);
 
   private:
     store_type store_;
@@ -73,8 +73,8 @@ class Server {
 
     Table& make_table(Str name);
 
-    inline void insert(const String& key, const String& value);
-    inline void erase(const String& key);
+    inline void insert(Str key, const String& value);
+    inline void erase(Str key);
 
     inline void add_source(SourceRange* r);
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
@@ -155,7 +155,7 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(const String& key, const ValidJoinRange* sink, const F& func) {
+void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
@@ -198,13 +198,13 @@ inline void Table::validate(Str first, Str last) {
         it->validate(first, last, *server_);
 }
 
-inline void Server::insert(const String& key, const String& value) {
+inline void Server::insert(Str key, const String& value) {
     if (Str tname = table_name(key))
         make_table(tname).insert(key, value);
 }
 
-inline void Server::erase(const String& key) {
-    auto tit = tables_.find(table_name(Str(key)));
+inline void Server::erase(Str key) {
+    auto tit = tables_.find(table_name(key));
     if (tit)
         tit->erase(key);
 }

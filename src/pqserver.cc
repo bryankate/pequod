@@ -97,7 +97,7 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     make_table(tname).add_join(first, last, join, errh);
 }
 
-void Table::insert(const String& key, String value) {
+void Table::insert(Str key, String value) {
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -112,7 +112,7 @@ void Table::insert(const String& key, String value) {
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
 }
 
-void Table::erase(const String& key) {
+void Table::erase(Str key) {
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end()) {
 	Datum* d = it.operator->();
