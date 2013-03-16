@@ -8,11 +8,21 @@ int main(int argv, char** argc) {
     (void)argc;
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
     pq::PostgresClient pg;
-    double start = tstamp();
     uint32_t n = 200000;
-    pg.bench(n);
+    double start = tstamp();
+    pg.bench_prepared(n);
     double tm = (tstamp() - start) / 1000000;
-    cout << "Time: " << tm << " Queries: " << n << " QPS: " << n/tm << endl;
+    cout << "Prepared statement: " << tm << " Queries: " << n << " QPS: " << n/tm << endl;
+    return 0;
+    start = tstamp();
+    pg.bench_params(n);
+    tm = (tstamp() - start) / 1000000;
+    cout << "Parametrized statement: " << tm << " Queries: " << n << " QPS: " << n/tm << endl;
+
+    start = tstamp();
+    pg.bench_text(n);
+    tm = (tstamp() - start) / 1000000;
+    cout << "Text: " << tm << " Queries: " << n << " QPS: " << n/tm << endl;
 #endif
     return 0;
 }
