@@ -176,7 +176,7 @@ void Table::modify(const String& key, const ValidJoinRange* sink, const F& func)
             sink->update_hint(p.first, store_.end(), false);
 	store_.erase(p.first);
         notify(d, String(), SourceRange::notify_erase);
-	delete d;
+        d->invalidate();
     } else if (!is_unchanged_marker(value)) {
         if (p.second)
             d = new Datum(key, String());

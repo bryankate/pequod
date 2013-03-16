@@ -3,6 +3,7 @@
 #include <boost/intrusive/set.hpp>
 #include "string.hh"
 #include "str.hh"
+#include "local_str.hh"
 
 namespace pq {
 
@@ -15,14 +16,31 @@ typedef boost::intrusive::set_member_hook<
 
 class Datum : public pequod_set_base_hook {
   public:
-    explicit Datum(const String& key)
-	: key_(key) {
+    explicit Datum(Str key)
+        : key_(key), refcount_(0) {
     }
-    Datum(const String& key, const String& value)
-	: key_(key), value_(value) {
+    Datum(Str key, const String& value)
+	: key_(key), value_(value), refcount_(0) {
     }
 
-    const String& key() const {
+    bool valid() const {
+        return !key_.empty();
+    }
+    void invalidate() {
+        key_ = Str();
+        if (refcount_ == 0)
+            delete this;
+    }
+
+    void ref() {
+        ++refcount_;
+    }
+    void deref() {
+        if (--refcount_ == 0 && !valid())
+            delete this;
+    }
+
+    Str key() const {
 	return key_;
     }
     const String& value() const {
@@ -33,8 +51,9 @@ class Datum : public pequod_set_base_hook {
     }
 
   private:
-    String key_;
+    LocalStr<24> key_;
     String value_;
+    int refcount_;
   public:
     pequod_set_member_hook member_hook_;
 };

@@ -109,7 +109,7 @@ void Table::erase(const String& key) {
 	Datum* d = it.operator->();
 	store_.erase(it);
         notify(d, String(), SourceRange::notify_erase);
-	delete d;
+	d->invalidate();
     }
 }
 
