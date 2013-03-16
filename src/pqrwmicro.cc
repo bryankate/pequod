@@ -52,8 +52,8 @@ void RwMicro::run() {
         for (int j = 0; j < nrefresh; ++j) {
             sprintf(buf1, "t|%05u|%010u", j, loadtime[j] + 1);
             sprintf(buf2, "t|%05u}", j);
-            server_.validate(Str(buf1), Str(buf2));
-            nread += server_.count(Str(buf1), Str(buf2));
+            server_.validate(Str(buf1, 18), Str(buf2, 8));
+            nread += server_.count(Str(buf1, 18), Str(buf2, 8));
             loadtime[j] = time;
         }
     }
