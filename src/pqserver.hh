@@ -77,11 +77,6 @@ class Server {
     inline void insert(const String& key, const String& value);
     inline void erase(const String& key);
 
-#if 0
-    template <typename I>
-    void replace_range(Str first, Str last, I first_value, I last_value);
-#endif
-
     inline void add_source(SourceRange* r);
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
     inline void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
@@ -244,55 +239,6 @@ inline ValidJoinRange* Server::add_validjoin(Str first, Str last, Join* join) {
     assert(tname);
     return make_table(tname).add_validjoin(first, last, join);
 }
-
-#if 0
-template <typename I>
-void Server::replace_range(Str first, Str last, I first_value, I last_value) {
-#if 0
-    auto it = store_.bounded_range(first, last, DatumCompare(), true, false);
-#else
-    auto it = std::make_pair(store_.lower_bound(first, DatumCompare()),
-			     store_.lower_bound(last, DatumCompare()));
-#endif
-    ServerRangeSet srs(this, first, last, ServerRange::copy);
-    for (auto it = source_ranges_.begin_overlaps(first, last);
-	 it != source_ranges_.end(); ++it)
-	srs.push_back(it.operator->());
-
-    while (first_value != last_value && it.first != it.second) {
-	int cmp = it.first->key().compare(first_value->first);
-	Datum* d;
-	if (cmp > 0) {
-	    d = new Datum(first_value->first, first_value->second);
-	    (void) store_.insert(it.first, *d);
-	} else if (cmp == 0) {
-	    d = it.first.operator->();
-	    d->value_ = first_value->second;
-	    ++it.first;
-	} else {
-	    d = it.first.operator->();
-	    it.first = store_.erase(it.first);
-	}
-	srs.notify(d, cmp);
-	if (cmp >= 0)
-	    ++first_value;
-	if (cmp < 0)
-	    delete d;
-    }
-    while (first_value != last_value) {
-	Datum* d = new Datum(first_value->first, first_value->second);
-	(void) store_.insert(it.first, *d);
-	srs.notify(d, 1);
-	++first_value;
-    }
-    while (it.first != it.second) {
-	Datum* d = it.first.operator->();
-	it.first = store_.erase(it.first);
-	srs.notify(d, -1);
-	delete d;
-    }
-}
-#endif
 
 inline void Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
