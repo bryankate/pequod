@@ -131,10 +131,12 @@ void HackernewsRunner<S>::run() {
         struct rusage ru[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
         Json old_stats, stats;
+        double start;
     }
     gen.seed(13918);
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
+    twait { start = tstamp(); }
     for (uint32_t i = 0; i < nops; ++i) {
         uint32_t p = rng(100);
         uint32_t user = rng(nusers);
@@ -167,6 +169,8 @@ void HackernewsRunner<S>::run() {
 	.set("ncomment", ncomment).set("nvote", nvote)
 	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime)).merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    double tm = (tstamp() - start) / 1000000;
+    std::cout << nops << " done, " << tm << " seconds, " << nops/tm << " qps\n";
 }
 
 };

@@ -40,6 +40,49 @@ class PostgresClient {
         return res;
     }
 
+    void prepare(const char* stmt, const char* query, int nparams) {
+        PGresult* res = PQprepare(conn_, stmt,
+                                  query,
+                                  nparams,
+                                  NULL);
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            std::cout << "Problem preparing: " << PQresultErrorMessage(res) << "\n";
+            exit(1);
+        }
+    }
+
+    PGresult *executePrepared(const char* stmt, int nparams, 
+                              const uint32_t *params) {
+        const char *paramValues[nparams];
+        int paramLengths[nparams];
+        int paramFormats[nparams];
+        for (int i = 0; i < nparams; i++) {
+            uint32_t p = htonl(params[i]);
+            paramValues[i] = (char *)&p;
+            paramLengths[i] = sizeof(p);
+            paramFormats[i] = 1;
+        }
+        PGresult* res = PQexecPrepared(conn_, stmt,
+                                       nparams,
+                                       paramValues,
+                                       paramLengths, 
+                                       paramFormats, 
+                                       1);  // binary or not
+        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+            std::cout << "Problem: " << PQresultErrorMessage(res) << "\n";
+            exit(1);
+        }
+        return res;
+    }
+    
+    void test() {
+        prepare("test", "SELECT * FROM comments WHERE cid = $1::int4 OR commenter=$2::int4", 2);
+        uint32_t paramValues[2];
+        paramValues[0] = (uint32_t)3;
+        paramValues[1] = (uint32_t)11443;
+        executePrepared("test", 2, paramValues);
+    }
+
     void bench_text(uint32_t n) {
         boost::mt19937 gen;
         boost::random_number_generator<boost::mt19937> rng(gen);
