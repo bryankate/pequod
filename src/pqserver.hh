@@ -185,11 +185,10 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
         if (p.second)
             d = new Datum(key, String());
         d->value().swap(value);
-        if (p.second) {
+        if (p.second)
             p.first = store_.insert_commit(*d, cd);
-            if (sink)
-                sink->update_hint(store_, p.first);
-        }
+        if (sink && d != hint)
+            sink->update_hint(store_, p.first);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
 }
