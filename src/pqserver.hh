@@ -49,6 +49,10 @@ class Table : public pequod_set_base_hook {
 
     void clear();
 
+    uint64_t ninsert_;
+    uint64_t nmodify_;
+    uint64_t nerase_;
+
   private:
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
@@ -208,6 +212,7 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
             sink->update_hint(store_, p.first);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
+    ++nmodify_;
 }
 
 inline auto Table::erase(iterator it) -> iterator {
