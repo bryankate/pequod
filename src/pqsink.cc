@@ -167,6 +167,13 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
       joinpos_(joinpos), notifier_(notifier) {
 }
 
+ValidJoinRange::~ValidJoinRange() {
+    while (IntermediateUpdate* iu = updates_.unlink_leftmost_without_rebalance())
+        delete iu;
+    if (hint_)
+        hint_->deref();
+}
+
 void ValidJoinRange::add_update(int joinpos, const String& context,
                                 Str key, int notifier) {
     Match m;

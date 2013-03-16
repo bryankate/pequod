@@ -330,6 +330,10 @@ void test_srs() {
     srs.push_back(r2);
 
     CHECK_EQ(srs.total_size(), 3);
+
+    delete r0;
+    delete r1;
+    delete r2;
 }
 
 void test_join1() {

@@ -84,7 +84,7 @@ class IntermediateUpdate : public ServerRangeBase {
 class ValidJoinRange : public ServerRange {
   public:
     inline ValidJoinRange(Str first, Str last, Join *join);
-    inline ~ValidJoinRange();
+    ~ValidJoinRange();
 
     inline void ref();
     inline void deref();
@@ -164,11 +164,6 @@ inline bool ServerRange::expired_at(uint64_t t) const {
 
 inline ValidJoinRange::ValidJoinRange(Str first, Str last, Join* join)
     : ServerRange(first, last, validjoin, join), refcount_(1), valid_(true), hint_(0) {
-}
-
-inline ValidJoinRange::~ValidJoinRange() {
-    if (hint_)
-        hint_->deref();
 }
 
 inline void ValidJoinRange::ref() {
