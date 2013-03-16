@@ -35,7 +35,7 @@ class Json { public:
     class const_iterator;
 
     typedef bool (Json::*unspecified_bool_type)() const;
-    struct unparse_manipulator;
+    class unparse_manipulator;
 
     // Constructors
     inline Json();
@@ -223,12 +223,12 @@ class Json { public:
     // Unparsing
     static inline unparse_manipulator indent_depth(int x);
     static inline unparse_manipulator tab_width(int x);
+    static inline unparse_manipulator newline_terminator(bool x);
+    static inline unparse_manipulator space_separator(bool x);
 
     inline String unparse() const;
-    inline String unparse(bool add_newline) const;
-    inline String unparse(const unparse_manipulator& m,
-			  bool add_newline = false) const;
-    void unparse(StringAccum& sa) const;
+    inline String unparse(const unparse_manipulator& m) const;
+    inline void unparse(StringAccum& sa) const;
     inline void unparse(StringAccum& sa, const unparse_manipulator& m) const;
 
     // Parsing
@@ -322,6 +322,7 @@ class Json { public:
     inline void uniqueify_array(bool convert, int ncap);
     void hard_uniqueify_array(bool convert, int ncap);
 
+    static unparse_manipulator default_manipulator;
     bool unparse_is_complex() const;
     static void unparse_indent(StringAccum &sa, const unparse_manipulator &m, int depth);
     void hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth) const;
@@ -335,7 +336,6 @@ class Json { public:
     friend class const_object_iterator;
     friend class array_iterator;
     friend class const_array_iterator;
-
 };
 
 
@@ -1043,13 +1043,10 @@ class Json_proxy_base {
 	return cvalue().unparse(sa, m);
     }
     String unparse() const {
-	return cvalue().unparse(false);
+	return cvalue().unparse();
     }
-    String unparse(bool add_newline) const {
-	return cvalue().unparse(add_newline);
-    }
-    String unparse(const Json::unparse_manipulator& m, bool add_newline = false) const {
-	return cvalue().unparse(m, add_newline);
+    String unparse(const Json::unparse_manipulator& m) const {
+	return cvalue().unparse(m);
     }
     bool assign_parse(const String& str) {
 	return value().assign_parse(str);
@@ -2373,29 +2370,52 @@ inline Json::const_iterator Json::end() const {
 
 
 // Unparsing
-struct Json::unparse_manipulator {
+class Json::unparse_manipulator {
+  public:
     unparse_manipulator()
-	: _indent_depth(0), _tab_width(8) {
+	: indent_depth_(0), tab_width_(0), newline_terminator_(false),
+          space_separator_(false) {
     }
     int indent_depth() const {
-	return _indent_depth;
+	return indent_depth_;
     }
     unparse_manipulator indent_depth(int x) const {
 	unparse_manipulator m(*this);
-	m._indent_depth = x;
+	m.indent_depth_ = x;
 	return m;
     }
     int tab_width() const {
-	return _tab_width;
+	return tab_width_;
     }
     unparse_manipulator tab_width(int x) const {
 	unparse_manipulator m(*this);
-	m._tab_width = x;
+	m.tab_width_ = x;
 	return m;
     }
+    bool newline_terminator() const {
+        return newline_terminator_;
+    }
+    unparse_manipulator newline_terminator(bool x) const {
+        unparse_manipulator m(*this);
+        m.newline_terminator_ = x;
+        return m;
+    }
+    bool space_separator() const {
+        return space_separator_;
+    }
+    unparse_manipulator space_separator(bool x) const {
+        unparse_manipulator m(*this);
+        m.space_separator_ = x;
+        return m;
+    }
+    bool empty() const {
+        return !indent_depth_ && !newline_terminator_ && !space_separator_;
+    }
   private:
-    int _indent_depth;
-    int _tab_width;
+    int indent_depth_;
+    int tab_width_;
+    bool newline_terminator_;
+    bool space_separator_;
 };
 
 inline Json::unparse_manipulator Json::indent_depth(int x) {
@@ -2404,36 +2424,36 @@ inline Json::unparse_manipulator Json::indent_depth(int x) {
 inline Json::unparse_manipulator Json::tab_width(int x) {
     return unparse_manipulator().tab_width(x);
 }
+inline Json::unparse_manipulator Json::newline_terminator(bool x) {
+    return unparse_manipulator().newline_terminator(x);
+}
+inline Json::unparse_manipulator Json::space_separator(bool x) {
+    return unparse_manipulator().space_separator(x);
+}
 
 /** @brief Return the string representation of this Json. */
 inline String Json::unparse() const {
-    return unparse(false);
+    StringAccum sa;
+    hard_unparse(sa, default_manipulator, 0);
+    return sa.take_string();
 }
 
 /** @brief Return the string representation of this Json.
     @param add_newline If true, add a final newline. */
-inline String Json::unparse(bool add_newline) const {
+inline String Json::unparse(const unparse_manipulator &m) const {
     StringAccum sa;
-    unparse(sa);
-    if (add_newline)
-	sa << '\n';
+    hard_unparse(sa, m, 0);
     return sa.take_string();
+}
+
+/** @brief Unparse the string representation of this Json into @a sa. */
+inline void Json::unparse(StringAccum &sa) const {
+    hard_unparse(sa, default_manipulator, 0);
 }
 
 /** @brief Unparse the string representation of this Json into @a sa. */
 inline void Json::unparse(StringAccum &sa, const unparse_manipulator &m) const {
     hard_unparse(sa, m, 0);
-}
-
-/** @brief Return the string representation of this Json.
-    @param add_newline If true, add a final newline. */
-inline String Json::unparse(const unparse_manipulator &m,
-			    bool add_newline) const {
-    StringAccum sa;
-    hard_unparse(sa, m, 0);
-    if (add_newline)
-	sa << '\n';
-    return sa.take_string();
 }
 
 

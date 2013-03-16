@@ -459,6 +459,8 @@ bool operator==(const Json& a, const Json& b) {
 
 // Unparsing
 
+Json::unparse_manipulator Json::default_manipulator;
+
 bool Json::unparse_is_complex() const
 {
     if (_type == j_object) {
@@ -484,78 +486,59 @@ bool Json::unparse_is_complex() const
 
 void Json::unparse_indent(StringAccum &sa, const unparse_manipulator &m, int depth)
 {
-    depth *= m.tab_width();
+    sa << '\n';
+    depth *= (m.tab_width() ? m.tab_width() : 8);
     sa.append_fill('\t', depth / 8);
     sa.append_fill(' ', depth % 8);
 }
 
+namespace {
+const char* const upx_normal[] = {":", ","};
+const char* const upx_expanded[] = {": ", ","};
+const char* const upx_separated[] = {": ", ", "};
+}
+
 void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth) const
 {
-    if (depth >= m.indent_depth() || m.tab_width() == 0
-	|| !unparse_is_complex()) {
-	unparse(sa);
-	return;
+    bool expanded;
+    const char* const* upx;
+    if (_type == j_object || _type == j_array) {
+        expanded = depth < m.indent_depth() && unparse_is_complex();
+        upx = expanded ? upx_expanded : (m.space_separator() ? upx_separated : upx_normal);
     }
 
-    assert(_type == j_object || _type == j_array);
     if (_type == j_object) {
-	const char *q = "{\n";
+        sa << '{';
+	bool rest = false;
 	ObjectJson *oj = ojson();
 	ObjectItem *ob = oj->os_, *oe = ob + oj->n_;
 	for (; ob != oe; ++ob)
 	    if (ob->next_ > -2) {
-		sa.append(q, 2);
-		unparse_indent(sa, m, depth + 1);
-		sa << '\"' << ob->v_.first.encode_json() << '\"' << ": ";
+		if (rest)
+                    sa << upx[1];
+		if (expanded)
+                    unparse_indent(sa, m, depth + 1);
+		sa << '\"' << ob->v_.first.encode_json() << '\"' << upx[0];
 		ob->v_.second.hard_unparse(sa, m, depth + 1);
-		q = ",\n";
+		rest = true;
 	    }
-	sa << '\n';
-	unparse_indent(sa, m, depth);
+        if (expanded)
+            unparse_indent(sa, m, depth);
 	sa << '}';
     } else if (_type == j_array) {
-	const char* q = "[\n";
+        sa << '[';
+        bool rest = false;
 	ArrayJson* aj = ajson();
 	for (Json* it = aj->a; it != aj->a + aj->size; ++it) {
-	    sa.append(q, 2);
-	    unparse_indent(sa, m, depth + 1);
+            if (rest)
+                sa << upx[1];
+            if (expanded)
+                unparse_indent(sa, m, depth + 1);
 	    it->hard_unparse(sa, m, depth + 1);
-	    q = ",\n";
+            rest = true;
 	}
-	sa << '\n';
-	unparse_indent(sa, m, depth);
-	sa << ']';
-    }
-}
-
-/** @brief Unparse the string representation of this Json into @a sa. */
-void Json::unparse(StringAccum &sa) const
-{
-    if (_type == j_object) {
-	char q = '{';
-	if (ObjectJson *oj = ojson()) {
-	    // Produces human-friendlier results if we output properties in
-	    // order of insert.
-	    ObjectItem *ob = oj->os_, *oe = ob + oj->n_;
-	    for (; ob != oe; ++ob)
-		if (ob->next_ > -2) {
-		    sa << q << '\"' << ob->v_.first.encode_json() << '\"'
-		       << ':' << ob->v_.second;
-		    q = ',';
-		}
-	}
-	if (q == '{')
-	    sa << q;
-	sa << '}';
-    } else if (_type == j_array) {
-	char q = '[';
-	if (ArrayJson* aj = ajson())
-	    for (Json* it = aj->a; it != aj->a + aj->size; ++it) {
-		sa << q << *it;
-		q = ',';
-	    }
-	if (q == '[')
-	    sa << q;
+	if (expanded)
+            unparse_indent(sa, m, depth);
 	sa << ']';
     } else if (_type == j_string)
 	sa << '\"' << reinterpret_cast<const String&>(u_.str).encode_json() << '\"';
@@ -568,6 +551,9 @@ void Json::unparse(StringAccum &sa) const
         sa << u_.i;
     else if (_type == j_double)
         sa << u_.d;
+
+    if (depth == 0 && m.newline_terminator())
+        sa << '\n';
 }
 
 
