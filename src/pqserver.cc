@@ -123,15 +123,21 @@ void Table::erase(const String& key) {
 }
 
 Json Server::stats() const {
-    size_t store_size = 0, source_ranges_size = 0;
+    size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
+        valid_ranges_size = 0;
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
     for (auto& t : tables_) {
         store_size += t.store_.size();
         source_ranges_size += t.source_ranges_.size();
+        join_ranges_size += t.join_ranges_.size();
+        for (auto it = t.join_ranges_.begin(); it != t.join_ranges_.end(); ++it)
+            valid_ranges_size += it->valid_ranges_size();
     }
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
+	.set("join_ranges_size", join_ranges_size)
+	.set("valid_ranges_size", valid_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
         .set("server_max_rss_mb", ru.ru_maxrss / 1024)

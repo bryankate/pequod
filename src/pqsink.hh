@@ -93,6 +93,8 @@ class JoinRange : public ServerRangeBase {
     ~JoinRange();
 
     inline Join* join() const;
+    inline size_t valid_ranges_size() const;
+
     void validate(Str first, Str last, Server& server);
 
   public:
@@ -138,6 +140,10 @@ inline void ServerRangeBase::set_subtree_iend(Str subtree_iend) {
 
 inline Join* JoinRange::join() const {
     return join_;
+}
+
+inline size_t JoinRange::valid_ranges_size() const {
+    return valid_ranges_.size();
 }
 
 inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
