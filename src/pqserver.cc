@@ -120,12 +120,8 @@ void Table::insert(Str key, String value) {
 
 void Table::erase(Str key) {
     auto it = store_.find(key, DatumCompare());
-    if (it != store_.end()) {
-	Datum* d = it.operator->();
-	store_.erase(it);
-        notify(d, String(), SourceRange::notify_erase);
-	d->invalidate();
-    }
+    if (it != store_.end())
+        erase(it);
     ++nerase_;
 }
 

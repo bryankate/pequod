@@ -126,6 +126,9 @@ $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
 $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
+$(OBJDIR)/pgbench: $(COMMON_OBJS) $(OBJDIR)/pgbench.o
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
 tamer-update:
