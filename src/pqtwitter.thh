@@ -106,9 +106,9 @@ void TwitterShim<S>::initialize(bool push, tamer::event<> done) {
     else {
         twait {
             server_.add_join("t|", "t}",
-                             "t|<user_id:5>|<time:10>|<poster_id:5> "
-                             "s|<user_id>|<poster_id> "
-                             "p|<poster_id>|<time>",
+                             "t|<user_id:5>|<time:10>|<poster_id:5> = "
+                             "using s|<user_id>|<poster_id> "
+                             "copy p|<poster_id>|<time>",
                              make_event(j));
         }
         if (j["message"])

@@ -5,6 +5,9 @@
 #include "error.hh"
 namespace pq {
 
+// k|<user> = count v|<follower>
+//      using s|<follower>|<time> using x|<user>|<poster>
+
 std::ostream& operator<<(std::ostream& stream, const Match& m) {
     stream << "{";
     const char* sep = "";
@@ -63,6 +66,12 @@ void Join::clear() {
     npat_ = 0;
     for (int i = 0; i != pcap; ++i)
         pat_[i].clear();
+    for (int i = 0; i != slot_capacity; ++i) {
+        slotlen_[i] = slottype_[i] = 0;
+        slotname_[i] = String();
+    }
+    jvt_ = 0;
+    maintained_ = true;
 }
 
 /** Expand @a pat into the first matching string that matches @a match and
@@ -224,126 +233,220 @@ SourceRange* Join::make_source(Server& server, const Match& m,
         assert(0);
 }
 
-bool Pattern::assign_parse(Str str, HashTable<Str, int> &slotmap,
-                           ErrorHandler* errh) {
-    plen_ = klen_ = 0;
-    for (auto s = str.ubegin(); s != str.uend(); ) {
-	if (plen_ == pcap) {
-            errh->error("pattern %<%p{Str}%> too long, max length %d chars",
-                        &str, pcap);
-	    return false;
-        }
-	if (*s != '<') {
-	    append_literal(*s);
-	    ++s;
-	} else {
-	    ++s;
-	    // parse name up to length description
-	    auto name0 = s;
-	    while (s != str.uend() && *s != ':' && *s != '>')
-		++s;
-	    if (s == name0) {
-                errh->error("malformed slot in pattern %<%p{Str}%>", &str);
-		return false;
-            }
-	    Str name(name0, s);
-            if (*s != ':' && slotmap.get(name) == -1) {
-                errh->error("length of slot %<%p{Str}%> unknown", &name);
-		return false;
-            }
-	    // parse name description
-	    int len = 0;
-	    if (*s == ':' && (s + 1 == str.uend() || !isdigit(s[1]))) {
-                errh->error("malformed length for slot %<%p{Str}%>", &name);
-		return false;
-            }
-	    else if (*s == ':') {
-		len = s[1] - '0';
-		for (s += 2; s != str.uend() && isdigit(*s); ++s)
-		    len = 10 * len + *s - '0';
-	    }
-	    if (s == str.uend() || *s != '>') {
-                errh->error("malformed slot %<%p{Str}%>", &name);
-		return false;
-            }
-	    ++s;
-	    // look up slot, maybe store it in map
-	    int slot = slotmap.get(name);
-	    if (slot == -1) {
-		if (len == 0 || slotmap.size() == slot_capacity) {
-                    errh->error("too many slots in pattern %<%p{Str}%>, max %d", &str, slot_capacity);
-		    return false;
-                }
-		slot = len + 256 * slotmap.size();
-		slotmap.set(name, slot);
-	    } else if (len != 0 && len != (slot & 255)) {
-                errh->error("length of slot %<%p{Str}%> redeclared (was %d, now %d)", &name, slot & 255, len);
-		return false;
-            }
-	    // add slot
-	    append_slot(slot >> 8, slot & 255);
-	}
+int Join::parse_slot_name(Str word, ErrorHandler* errh) {
+    const char* name = word.begin();
+    const char* s = name;
+    while (name != word.end() && (isalpha((unsigned char) *s) || *s == '_'))
+        ++s;
+    const char* nameend = s;
+    int nc = -1;
+    int type = 0;
+    if (s != word.end() && (*s == ':' || isdigit((unsigned char) *s))) {
+        if (*s == ':')
+            ++s;
+        if (s == word.end() || !isdigit((unsigned char) *s))
+            return errh->error("syntax error in slot in %<%p{Str}%>", &word);
+        for (nc = 0; s != word.end() && isdigit((unsigned char) *s); ++s)
+            nc = 10 * nc + *s - '0'; // XXX overflow
+        if (s != word.end() && *s == 's')
+            type = stype_text, ++s;
+        else if (s != word.end() && *s == 'd')
+            type = stype_decimal, ++s;
+        else if (s != word.end() && *s == 'n')
+            type = stype_binary_number, ++s;
     }
-    if (klen_ > key_capacity) {
-        errh->error("key length implied by pattern too long (have %d, max %d)", klen_, key_capacity);
-        return false;
-    }
-    return true;
+    if (name == nameend && nc == -1)
+        return errh->error("syntax error in slot in %<%p{Str}%>", &word);
+    else if (s != word.end())
+        return errh->error("name of slot should contain only letters and underscores in %<%p{Str}%>", &word);
+
+    int slot;
+    for (slot = 0; slot != slot_capacity && slotname_[slot]; ++slot)
+        if (name != nameend
+            && slotname_[slot].equals(name, nameend - name))
+            break;
+    if (slot == slot_capacity)
+        return errh->error("too many slots in join pattern, max %d", slot_capacity);
+    if (!slotname_[slot])
+        slotlen_[slot] = slottype_[slot] = 0;
+    if (slotlen_[slot] != 0 && nc != -1 && slotlen_[slot] != nc)
+        return errh->error("slot %<%p{String}%> has inconsistent lengths (%d vs. %d)", &slotname_[slot], nc, slotlen_[slot]);
+    if (name != nameend)
+        slotname_[slot] = String(name, nameend);
+    else
+        slotname_[slot] = String(".anon") + String(slot + 1);
+    if (nc != -1)
+        slotlen_[slot] = nc;
+    if (type != 0)
+        slottype_[slot] = type;
+    return slot;
 }
 
-bool Pattern::assign_parse(Str str, ErrorHandler* errh) {
-    HashTable<Str, int> slotmap(-1);
-    return assign_parse(str, slotmap, errh);
+int Join::parse_slot_names(Str word, String& out, ErrorHandler* errh) {
+    StringAccum sa;
+    const char* s = word.begin();
+    const char* last = s;
+    while (s != word.end() && *s != '<' && *s != '|')
+        ++s;
+    if (s == word.end())
+        return errh->error("key %<%p{Str}%> lacks table name", &word);
+    while (1) {
+        while (s != word.end() && *s != '<')
+            ++s;
+        if (s == word.end())
+            break;
+
+        sa.append(last, s);
+        ++s;
+        const char* sbegin = s;
+        while (s != word.end() && *s != '>')
+            ++s;
+        if (s == word.end())
+            return errh->error("unterminated slot in %<%p{Str}%>", &word);
+
+        int slot = parse_slot_name(Str(sbegin, s), errh);
+        if (slot < 0)
+            return -1;
+
+        sa << (char) (128 + slot);
+        ++s;
+        last = s;
+    }
+    sa.append(last, s);
+    out = sa.take_string();
+    return 0;
 }
 
-bool Join::assign_parse(Str str, ErrorHandler* errh) {
+int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
     FileErrorHandler base_errh(stderr);
     errh = errh ? errh : &base_errh;
-    HashTable<Str, int> slotmap(-1);
-    npat_ = 0;
-    auto s = str.ubegin();
-    while (1) {
-	while (s != str.uend() && isspace(*s))
-	    ++s;
-	auto pbegin = s;
-	while (s != str.uend() && !isspace(*s))
-	    ++s;
-	if (pbegin == s)
-            return analyze(slotmap, errh);
-        if (npat_ == pcap) {
-            errh->error("too many patterns in join (max %d)", pcap);
-            return false;
-        }
-	if (!pat_[npat_].assign_parse(Str(pbegin, s), slotmap, errh))
-	    return false;
-        // Every pattern must involve a known table
-        if (!pat_[npat_].table_name()) {
-            errh->error("pattern %<%.*s%> does not match a unique table prefix", (int) (s - pbegin), pbegin);
-            return false;
-        }
-	++npat_;
+    clear();
+
+    // separate input string into words
+    std::vector<Str> words;
+    for (auto s = str.begin(); s != str.end(); ) {
+        while (s != str.end() && (isspace((unsigned char) *s) || *s == ','))
+            ++s;
+        const char* wstart = s;
+        while (s != str.end() && !isspace((unsigned char) *s) && *s != ',')
+            ++s;
+        if (s != wstart)
+            words.push_back(Str(wstart, s - wstart));
     }
+
+    // basic checks
+    if (words.size() < 3 || words[1] != "=")
+        return errh->error("syntax error: expected %<SINK = SOURCES%>");
+
+    // parse words into table references
+    std::vector<Str> sourcestr;
+    std::vector<Str> withstr;
+    sourcestr.push_back(words[0]);
+    Str lastsourcestr;
+    jvt_ = -1;
+    maintained_ = true;
+
+    int op = -1, any_op = -1;
+    for (unsigned i = 2; i != words.size(); ++i) {
+        int new_op = -1;
+        if (words[i] == "copy")
+            new_op = jvt_copy_last;
+        else if (words[i] == "min")
+            new_op = jvt_min_last;
+        else if (words[i] == "max")
+            new_op = jvt_max_last;
+        else if (words[i] == "count")
+            new_op = jvt_count_match;
+        else if (words[i] == "sum")
+            new_op = jvt_sum_match;
+        else if (words[i] == "using")
+            new_op = jvt_using;
+        else if (words[i] == "with")
+            new_op = jvt_slotdef;
+        else if (words[i] == "pull")
+            maintained_ = false;
+        else if (op == jvt_slotdef || op == jvt_slotdef1) {
+            withstr.push_back(words[i]);
+            op = jvt_slotdef1;
+        } else {
+            if (op == jvt_using || op == -1)
+                sourcestr.push_back(words[i]);
+            else if (lastsourcestr)
+                return errh->error("syntax error near %<%p{Str}%>: transformation already defined", &words[i]);
+            else {
+                lastsourcestr = words[i];
+                jvt_ = op;
+            }
+            op = -1;
+        }
+        if (new_op != -1 && op != -1)
+            return errh->error("syntax error near %<%p{Str}%>", &words[i]);
+        if (new_op != -1)
+            op = new_op;
+        if (new_op != -1 && new_op != jvt_slotdef)
+            any_op = 1;
+    }
+    if (op != -1 && op != jvt_slotdef1)
+        return errh->error("syntax error near %<%p{Str}%>", &words.back());
+    if (lastsourcestr)
+        sourcestr.push_back(lastsourcestr);
+    else if (any_op != -1)
+        return errh->error("join pattern %<%p{Str}%> lacks source key", &str);
+    else
+        jvt_ = jvt_copy_last;
+    if (sourcestr.size() > (unsigned) pcap)
+        return errh->error("too many elements in join pattern, max %d", pcap);
+    if (sourcestr.empty())
+        return errh->error("no elements in join pattern, min 2");
+
+    // parse placeholders
+    std::vector<String> patstr(sourcestr.size(), String());
+    for (unsigned i = 1; i != sourcestr.size(); ++i)
+        if (parse_slot_names(sourcestr[i], patstr[i], errh) < 0)
+            return -1;
+    if (parse_slot_names(sourcestr[0], patstr[0], errh) < 0)
+        return -1;
+
+    // check that all slots have lengths
+    for (unsigned i = 0; i != withstr.size(); ++i)
+        if (parse_slot_name(withstr[i], errh) < 0)
+            return -1;
+    for (int i = 0; i != slot_capacity; ++i)
+        if (slotname_[i] && slotlen_[i] == 0)
+            return errh->error("slot %<%p{String}%> was not given a length", &slotname_[i]);
+
+    // assign patterns
+    for (unsigned p = 0; p != sourcestr.size(); ++p) {
+        if (patstr[p].length() > Pattern::pcap)
+            return errh->error("pattern %<%p{Str}%> too long, max %d chars", &sourcestr[p], Pattern::pcap);
+        Pattern& pat = pat_[p];
+        pat.clear();
+        slotflags_[p] = 0;
+        for (int j = 0; j != patstr[p].length(); ++j) {
+            unsigned char x = patstr[p][j];
+            pat.pat_[pat.plen_] = x;
+            ++pat.plen_;
+            if (x < 128)
+                ++pat.klen_;
+            else {
+                pat.slotlen_[x - 128] = slotlen_[x - 128];
+                pat.slotpos_[x - 128] = pat.klen_;
+                pat.klen_ += slotlen_[x - 128];
+                slotflags_[p] |= 1 << (x - 128);
+            }
+        }
+        if (pat.klen_ > key_capacity)
+            return errh->error("key in pattern %<%p{Str}%> too long, max %d chars", &sourcestr[p], key_capacity);
+    }
+    npat_ = sourcestr.size();
+
+    return analyze(errh);
 }
 
-bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
-    // fail if too few patterns
-    if (npat_ <= 1) {
-        errh->error("too few patterns in join (min 2)");
-        return false;
-    }
-
+int Join::analyze(ErrorHandler* errh) {
     // create slotflags_
     static_assert(slot_capacity <= 8 * sizeof(slotflags_[0]),
                   "slot_capacity too big for slotflags_ entries");
-    memset(slotlen_, 0, sizeof(slotlen_));
-    for (int p = 0; p != npat_; ++p) {
-        slotflags_[p] = 0;
-        for (int s = 0; s != slot_capacity; ++s)
-            if (pat_[p].has_slot(s)) {
-                slotflags_[p] |= 1 << s;
-                slotlen_[s] = pat_[p].slot_length(s);
-            }
-    }
     for (int p = 0; p != npat_ - 1; ++p)
         match_context_flags_[p] = (p > 1 ? match_context_flags_[p - 1] : 0)
             | slotflags_[p];
@@ -361,12 +464,9 @@ bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
     while (need_slots) {
         ++completion_source_;
         if (completion_source_ >= nsource()) {
-            String slot_name;
-            for (auto it = slotmap.begin(); it != slotmap.end(); ++it)
-                if (need_slots & (1 << it->second))
-                    slot_name = it->first;
-            errh->error("slot %<%s%> in sink not defined by sources", slot_name.c_str());
-            return false;
+            for (int s = 0; s < slot_capacity; ++s)
+                if (need_slots & (1 << s))
+                    return errh->error("slot %<%s%> in sink not defined by sources", slotname_[s].c_str());
         }
         for (int s = 0; s < slot_capacity; ++s)
             if (source(completion_source_).has_slot(s)
@@ -375,7 +475,11 @@ bool Join::analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh) {
     }
 
     // success
-    return true;
+    return 0;
+}
+
+bool Join::assign_parse(Str str, ErrorHandler* errh) {
+    return hard_assign_parse(str, errh) >= 0;
 }
 
 String Join::hard_unparse_match_context(int joinpos, const Match& match) const {
@@ -407,7 +511,8 @@ Json Pattern::unparse_json() const {
     const uint8_t* p = pat_;
     while (p != pat_ + plen_) {
 	if (*p >= 128) {
-	    j.push_back(Json::make_array(*p - 127, slotlen_[*p - 128]));
+	    j.push_back(Json::make_array(*p - 127, slotlen_[*p - 128],
+                                         slotpos_[*p - 128]));
 	    ++p;
 	} else {
 	    const uint8_t* pfirst = p;

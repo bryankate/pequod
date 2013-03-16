@@ -50,9 +50,8 @@ void AnalyticsRunner::populate() {
 
     FileErrorHandler errh(stderr);
     Join* Bpm = new Join();
-    Bpm->assign_parse("Bpm|<hour:4><min:2> "
+    Bpm->assign_parse("Bpm|<hour:4><min:2> = sum "
                       "Bps|<hour><min><sec:2>", &errh);
-    Bpm->set_jvt(jvt_sum_match);
     Bpm->ref();
 
     server_.add_join("Bpm|", "Bpm}", Bpm);

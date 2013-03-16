@@ -38,9 +38,9 @@ void test_simple() {
         server.insert(it->first, it->second);
 
     pq::Join j;
-    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> "
-		   "f|<subscriber>|<poster> "
-		   "p|<poster>|<time>");
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
+		   "using f|<subscriber>|<poster> "
+		   "copy p|<poster>|<time>");
     j.ref();
     server.add_join("t|", "t}", &j);
 
@@ -71,9 +71,9 @@ void test_simple() {
 
 void test_expansion() {
     pq::Join j;
-    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> "
-		   "f|<subscriber>|<poster> "
-		   "p|<poster>|<time>");
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
+		   "using f|<subscriber>|<poster> "
+		   "copy p|<poster>|<time>");
     j.ref();
 
     pq::Match m;
@@ -96,9 +96,9 @@ void test_expansion() {
                            m), "t|11111}");
 
     j.clear();
-    j.assign_parse("t|<subscriber:5><time:10><poster:5> "
-		   "s|<subscriber>|<poster> "
-		   "p|<poster>|<time>");
+    j.assign_parse("t|<subscriber:5><time:10><poster:5> = "
+		   "using s|<subscriber>|<poster> "
+		   "copy p|<poster>|<time>");
 
     j.source(0).match("f|1111122222", m);
     CHECK_EQ(j.expand_first(j.sink(),
@@ -119,9 +119,9 @@ void test_expansion() {
                            m), "t|11112");
 
     m.clear();
-    m.set_slot(0, "11111", 5);
-    m.set_slot(1, "2222222222", 10);
-    m.set_slot(2, "fffff", 5);
+    m.set_slot(j.slot("subscriber"), "11111", 5);
+    m.set_slot(j.slot("time"), "2222222222", 10);
+    m.set_slot(j.slot("poster"), "fffff", 5);
     CHECK_EQ(j.expand_first(j.sink(),
                             "t|111119999999999",
                             "t|11112",
@@ -144,8 +144,8 @@ void test_expansion() {
                             m), "t|111112222222222fffff");
 
     m.clear();
-    m.set_slot(1, "2222222222", 10);
-    m.set_slot(2, "fffff", 5);
+    m.set_slot(j.slot("time"), "2222222222", 10);
+    m.set_slot(j.slot("poster"), "fffff", 5);
     CHECK_EQ(j.expand_first(j.sink(),
                             "t|111119999999999",
                             "t|11112",
@@ -194,16 +194,16 @@ void test_count() {
         server.insert(it->first, it->second);
 
     pq::Join j1;
-    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
-                    "a|<a_id>|<b_id> "
-                    "b|<b_id>|<time>");
+    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> = "
+                    "using a|<a_id>|<b_id> "
+                    "copy b|<b_id>|<time>");
     j1.ref();
     server.add_join("c|", "c}", &j1);
 
     pq::Join j2;
-    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
-                    "d|<d_id>|<a_id:5> "
-                    "c|<a_id>|<time>|<b_id>");
+    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> = "
+                    "using d|<d_id>|<a_id:5> "
+                    "copy c|<a_id>|<time>|<b_id>");
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
@@ -228,16 +228,16 @@ void test_recursive() {
         server.insert(it->first, it->second);
 
     pq::Join j1;
-    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
-                    "a|<a_id>|<b_id> "
-                    "b|<b_id>|<time>");
+    j1.assign_parse("c|<a_id:5>|<time>|<b_id> = "
+                    "copy b|<b_id:5>|<time:10d> "
+                    "using a|<a_id:5>|<b_id> ");
     j1.ref();
     server.add_join("c|", "c}", &j1);
 
     pq::Join j2;
-    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> "
-                    "d|<d_id>|<a_id:5> "
-                    "c|<a_id>|<time>|<b_id>");
+    j2.assign_parse("e|<d_id:5>|<time:10>|<b_id:5> = "
+                    "using d|<d_id>|<a_id:5> "
+                    "copy c|<a_id>|<time>|<b_id>");
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
@@ -267,18 +267,18 @@ void test_annotation() {
         server.insert(it->first, it->second);
 
     pq::Join j1;
-    j1.assign_parse("c|<a_id:5>|<time:10>|<b_id:5> "
-                    "a|<a_id>|<b_id> "
-                    "b|<b_id>|<time>");
+    j1.assign_parse("c|<a_id>|<time>|<b_id> = "
+                    "using a|<a_id>|<b_id> "
+                    "copy b|<b_id>|<time> pull "
+                    "with a_id:5d, time:10d, b_id:5d");
     j1.ref();
     // will validate join each time and not install autopush triggers
-    j1.set_maintained(false);
     server.add_join("c|", "c}", &j1);
 
     pq::Join j2;
-    j2.assign_parse("f|<d_id:5>|<time:10>|<e_id:5> "
-                    "d|<d_id>|<e_id> "
-                    "e|<e_id>|<time>");
+    j2.assign_parse("f|<d_id:5>|<time:10>|<e_id:5> = "
+                    "using d|<d_id>|<e_id> "
+                    "copy e|<e_id>|<time>");
     j2.ref();
     // will not re-validate join within T seconds of last validation
     // for the requested range. the store will hold stale results
@@ -335,9 +335,9 @@ void test_srs() {
 void test_join1() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("c|<a_id:5>|<b_id:5>|<index:5> "
-                               "a|<a_id>|<b_id> "
-                               "b|<index>|<b_id>"));
+    CHECK_TRUE(j1.assign_parse("c|<a_id:5>|<b_id:5>|<index:5> = "
+                               "using a|<a_id>|<b_id> "
+                               "copy b|<index>|<b_id>"));
     CHECK_EQ(j1.nsource(), 2);
     CHECK_EQ(j1.completion_source(), 1);
 
@@ -357,12 +357,11 @@ void test_join1() {
 void test_op_count() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("\
+k|<uid> = count v|<aid>|<voter> using a|<uid>|<aid> \
+  with aid:5d, uid:5d, voter:5d"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -393,12 +392,11 @@ void test_op_count() {
 void test_op_count_validate1() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> = "
+                               "using a|<uid>|<aid:5> "
+                               "count v|<aid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -424,12 +422,11 @@ void test_op_count_validate1() {
 void test_karma() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> = "
+                               "using a|<uid>|<aid:5> "
+                               "count v|<aid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -466,12 +463,11 @@ void test_karma() {
 void test_ma() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<author:5> "
-                               "a|<author:5><seqid:5> "
-                               "v|<author><seqid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<author:5> = "
+                               "using a|<author:5><seqid:5> "
+                               "count v|<author><seqid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -481,9 +477,9 @@ void test_ma() {
     String mae("ma}");
 
     pq::Join j2;
-    CHECK_TRUE(j2.assign_parse("ma|<author:5><seqid:5>|k "
-                               "a|<author><seqid> "
-                               "k|<author>"));
+    CHECK_TRUE(j2.assign_parse("ma|<author:5><seqid:5>|k = "
+                               "using a|<author><seqid> "
+                               "copy k|<author>"));
     CHECK_EQ(j2.nsource(), 2);
 
     j2.ref();
@@ -516,12 +512,11 @@ void test_ma() {
 void test_karma_online() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> = "
+                               "using a|<uid>|<aid:5> "
+                               "count v|<aid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_count_match);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -583,12 +578,11 @@ void test_karma_online() {
 void test_op_min() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> = "
+                               "using a|<uid>|<aid:5> "
+                               "min v|<aid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_min_last);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -618,12 +612,11 @@ void test_op_min() {
 void test_op_max() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<uid:5> "
-                               "a|<uid>|<aid:5> "
-                               "v|<aid>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("k|<uid:5> = "
+                               "using a|<uid>|<aid:5> "
+                               "max v|<aid>|<voter:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_max_last);
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -657,12 +650,11 @@ void test_op_max() {
 void test_op_sum() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("sum|<sid:5> "
-                               "a|<sid>|<aid:5> "
-                               "b|<aid>|<bid:5>"));
+    CHECK_TRUE(j1.assign_parse("sum|<sid:5> = "
+                               "using a|<sid>|<aid:5> "
+                               "sum b|<aid>|<bid:5>"));
     CHECK_EQ(j1.nsource(), 2);
 
-    j1.set_jvt(pq::jvt_sum_match);
     j1.ref();
     server.add_join("sum|", "sum}", &j1);
 
@@ -694,6 +686,7 @@ void test_op_sum() {
     CHECK_EQ(sum1->value(), "8");
 }
 
+#if 0
 void test_op_bounds() {
     pq::Server server;
 
@@ -776,6 +769,7 @@ void test_op_bounds() {
     server.erase("c|00000|00003");
     CHECK_EQ(server.count(begin, end), size_t(2));
 }
+#endif
 
 void test_swap() {
     String s1("abcde");
@@ -800,11 +794,10 @@ void test_swap() {
 void test_iupdate() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<author:5> "
-                               "b|<author>|<book_id:5> "
+    CHECK_TRUE(j1.assign_parse("k|<author:5> = "
+                               "using b|<author>|<book_id:5> "
                                "c|<book_id>|<chapter_id:5> "
-                               "v|<chapter_id>|<voter:5>"));
-    j1.set_jvt(pq::jvt_count_match);
+                               "count v|<chapter_id>|<voter:5>"));
     j1.ref();
     server.add_join("k|", "k}", &j1);
 
@@ -841,7 +834,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_min);
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
-    ADD_TEST(test_op_bounds);
+    //ADD_TEST(test_op_bounds);
     ADD_TEST(test_iupdate);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);

@@ -204,14 +204,13 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
         // Materialize karma in a separate table
         printf("Materializing karma table\n");
         j = new pq::Join;
-        join_str = "k|<author:7> "
-            "a|<author:7><seqid:7> "
-            "v|<author><seqid>|<voter:7>";
+        join_str = "k|<author:7> = "
+            "using a|<author:7><seqid:7> "
+            "count v|<author><seqid>|<voter:7>";
         start = "k|";
         end = "k}";
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid karma join");
-        j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
     } else if (ma) {
         // Materialize all articles
@@ -219,7 +218,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
         start = "ma|";
         end = "ma}";
         // Materialize articles
-        join_str = "ma|<author:7><seqid:7>|a "
+        join_str = "ma|<author:7><seqid:7>|a = "
             "a|<author><seqid> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
@@ -227,37 +226,35 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
         server_.add_join(start, end, j);
 
         // Materialize votes
-        join_str = "ma|<author:7><seqid:7>|v "
-            "v|<author><seqid>|<voter:7> ";
+        join_str = "ma|<author:7><seqid:7>|v = "
+            "count v|<author><seqid>|<voter:7> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|votes join");
-        j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
 
         // Materialize comments
-        join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> "
+        join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> = "
             "c|<author><seqid>|<cid>|<commenter> ";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|comments join");
         server_.add_join(start, end, j);
-        
+
         // Materialize karma inline
-        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> "
-            "c|<aid>|<cid>|<commenter> "
-            "v|<commenter><seq:7>|<voter:7>";
+        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
+            "using c|<aid>|<cid>|<commenter> "
+            "count v|<commenter><seq:7>|<voter:7>";
         j = new pq::Join;
         valid = j->assign_parse(join_str);
         mandatory_assert(valid && "Invalid ma|karma join");
-        j->set_jvt(jvt_count_match);
         server_.add_join(start, end, j);
     }
     e();
 }
 
 template <typename S> template <typename R>
-void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author, 
+void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, preevent<R> e) {
     char buf1[128], buf2[128];
     if (ma_) {

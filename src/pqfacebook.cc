@@ -172,9 +172,9 @@ void facebook_populate(Server& server, FacebookPopulator& fp) {
     if (!fp.push()) {
         FileErrorHandler errh(stderr);
         pq::Join* j = new pq::Join;
-        j->assign_parse("c|<user_id:6>|<page_id:6>|<fuser_id:6> "
-                        "l|<fuser_id>|<page_id> "
-                        "f|<user_id>|<fuser_id>", &errh);
+        j->assign_parse("c|<user_id:6>|<page_id:6>|<fuser_id:6> = "
+                        "using l|<fuser_id>|<page_id> "
+                        "copy f|<user_id>|<fuser_id>", &errh);
         server.add_join("c|", "c}", j);
     }
 }

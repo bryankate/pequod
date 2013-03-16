@@ -87,7 +87,9 @@ class Pattern {
 enum JoinValueType {
     jvt_copy_last = 0, jvt_min_last, jvt_max_last,
     jvt_count_match, jvt_sum_match,
-    jvt_bounded_copy_last, jvt_bounded_count_match
+    jvt_bounded_copy_last, jvt_bounded_count_match,
+    /* next ones are internal */
+    jvt_using, jvt_slotdef, jvt_slotdef1
 };
 
 class Join {
@@ -103,6 +105,8 @@ class Join {
     inline const Pattern& sink() const;
     inline const Pattern& source(int i) const;
     inline const Pattern& back_source() const;
+    inline int slot(Str name) const;
+
     inline void expand(uint8_t* out, Str str) const;
 
     int expand_first(uint8_t* buf, const Pattern& pat,
@@ -116,12 +120,9 @@ class Join {
     inline void parse_match_context(Str context, int joinpos, Match& match) const;
 
     inline bool maintained() const;
-    inline void set_maintained(bool m);
     inline double staleness() const;
     inline void set_staleness(double s);
-    inline void set_jvt(JoinValueType jvt);
     inline JoinValueType jvt() const;
-    inline void set_jvt_config(const Json& param);
     inline const Json& jvt_config() const;
 
     SourceRange* make_source(Server& server, const Match& m,
@@ -142,14 +143,21 @@ class Join {
     uint8_t slotlen_[slot_capacity];
     uint8_t slotflags_[pcap];
     uint8_t match_context_flags_[pcap - 1];
+    Pattern pat_[pcap];
+
+    enum { stype_unknown = 0, stype_text, stype_decimal, stype_binary_number };
+    String slotname_[slot_capacity];
+    uint8_t slottype_[slot_capacity];
     double staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
-    Pattern pat_[pcap];
     int refcount_;
-    JoinValueType jvt_;
+    int jvt_;
     Json jvtparam_;
 
-    bool analyze(HashTable<Str, int>& slotmap, ErrorHandler* errh);
+    int parse_slot_name(Str word, ErrorHandler* errh);
+    int parse_slot_names(Str word, String& out, ErrorHandler* errh);
+    int hard_assign_parse(Str str, ErrorHandler* errh);
+    int analyze(ErrorHandler* errh);
     String hard_unparse_match_context(int joinpos, const Match& match) const;
     void hard_parse_match_context(Str context, int joinpos, Match& match) const;
 };
@@ -299,26 +307,12 @@ inline bool Join::maintained() const {
     return maintained_;
 }
 
-inline void Join::set_maintained(bool m) {
-    if (m && staleness_)
-        mandatory_assert(false && "We do not support temporary maintenance.");
-    maintained_ = m;
-}
-
 inline double Join::staleness() const {
     return staleness_;
 }
 
-inline void Join::set_jvt(JoinValueType _jvt) {
-    jvt_ = _jvt;
-}
-
 inline JoinValueType Join::jvt() const {
-    return jvt_;
-}
-
-inline void Join::set_jvt_config(const Json& param) {
-    jvtparam_.merge(param);
+    return (JoinValueType) jvt_;
 }
 
 inline const Json& Join::jvt_config() const {
@@ -342,6 +336,13 @@ inline const Pattern& Join::source(int i) const {
 
 inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
+}
+
+inline int Join::slot(Str name) const {
+    for (int s = 0; s != slot_capacity; ++s)
+        if (slotname_[s] == name)
+            return s;
+    return -1;
 }
 
 inline void Join::expand(uint8_t* s, Str str) const {
