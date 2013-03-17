@@ -519,13 +519,6 @@ int Join::analyze(ErrorHandler* errh) {
         context_mask_[p] &= ~pat_mask_[p];
     }
 
-    // create match_context_flags_
-    for (int p = 0; p != npat_ - 1; ++p)
-        match_context_flags_[p] = (p > 1 ? match_context_flags_[p - 1] : 0)
-            | pat_mask_[p];
-    for (int p = 0; p != npat_ - 1; ++p)
-        match_context_flags_[p] &= ~pat_mask_[p];
-
     // create sink_key_
     sink_key_.assign_uninitialized(sink().key_length());
     uint8_t* sk = sink_key_.mutable_udata();
@@ -562,30 +555,6 @@ Json Join::unparse_match(const Match& m) const {
         if (m.has_slot(s))
             j.set(slotname_[s], m.slot(s));
     return j;
-}
-
-String Join::hard_unparse_match_context(int joinpos, const Match& match) const {
-    assert(joinpos >= 0 && joinpos < nsource());
-    int slot_flags = match_context_flags_[joinpos + 1];
-    StringAccum sa;
-    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
-        if (slot_flags & 1) {
-            assert(match.known_length(s) == slotlen_[s]);
-            sa.append(match.data(s), slotlen_[s]);
-        }
-    return sa.take_string();
-}
-
-void Join::hard_parse_match_context(Str context, int joinpos, Match& match) const {
-    assert(joinpos >= 0 && joinpos < nsource());
-    int slot_flags = match_context_flags_[joinpos + 1];
-    int pos = 0;
-    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
-        if (slot_flags & 1) {
-            assert(pos + slotlen_[s] <= context.length());
-            match.set_slot(s, context.data() + pos, slotlen_[s]);
-            pos += slotlen_[s];
-        }
 }
 
 Json Pattern::unparse_json() const {

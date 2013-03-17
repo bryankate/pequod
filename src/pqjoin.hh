@@ -64,8 +64,6 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
 
-    inline void expand(uint8_t* s, const Match& m) const;
-
     bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
     bool assign_parse(Str str, ErrorHandler* errh);
 
@@ -131,17 +129,12 @@ class Join {
     inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
     inline Str sink_key() const;
 
-    inline void expand(uint8_t* out, Str str) const;
-
     int expand_first(uint8_t* buf, const Pattern& pat,
                      Str sink_first, Str sink_last, const Match& match) const;
     String expand_first(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
     int expand_last(uint8_t* buf, const Pattern& pat,
                     Str sink_first, Str sink_last, const Match& match) const;
     String expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
-
-    inline String unparse_match_context(int joinpos, const Match& match) const;
-    inline void parse_match_context(Str context, int joinpos, Match& match) const;
 
     inline bool maintained() const;
     inline uint64_t staleness() const;
@@ -168,7 +161,6 @@ class Join {
     bool maintained_;   // if the output is kept up to date with changes to the input
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
-    uint8_t match_context_flags_[pcap - 1];
     Table* table_[pcap];
     Pattern pat_[pcap];
     uint8_t context_mask_[pcap];
@@ -186,8 +178,6 @@ class Join {
     int parse_slot_names(Str word, String& out, ErrorHandler* errh);
     int hard_assign_parse(Str str, ErrorHandler* errh);
     int analyze(ErrorHandler* errh);
-    String hard_unparse_match_context(int joinpos, const Match& match) const;
-    void hard_parse_match_context(Str context, int joinpos, Match& match) const;
 };
 
 
@@ -301,19 +291,6 @@ inline bool Pattern::match(Str s, Match& m) const {
 	    ss += slotlen;
 	}
     return true;
-}
-
-inline void Pattern::expand(uint8_t* s, const Match& m) const {
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.known_length(*p - 128);
-	    if (slotlen)
-		memcpy(s, m.data(*p - 128), slotlen);
-	    s += slotlen_[*p - 128];
-	}
 }
 
 inline Join::Join()
@@ -447,28 +424,6 @@ inline void Join::expand_sink_key_source(Str source_key, unsigned mask) const {
 
 inline Str Join::sink_key() const {
     return sink_key_;
-}
-
-inline void Join::expand(uint8_t* s, Str str) const {
-    const Pattern& last = back_source();
-    const Pattern& first = sink();
-    for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
-	if (*p >= 128 && first.has_slot(*p - 128))
-	    memcpy(s + first.slotpos_[*p - 128],
-		   str.udata() + last.slotpos_[*p - 128],
-		   last.slotlen_[*p - 128]);
-}
-
-inline String Join::unparse_match_context(int joinpos, const Match& match) const {
-    if (!match_context_flags_[joinpos + 1])
-        return String();
-    else
-        return hard_unparse_match_context(joinpos, match);
-}
-
-inline void Join::parse_match_context(Str context, int joinpos, Match& match) const {
-    if (match_context_flags_[joinpos + 1])
-        hard_parse_match_context(context, joinpos, match);
 }
 
 bool operator==(const Pattern& a, const Pattern& b);
