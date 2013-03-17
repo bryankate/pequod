@@ -800,6 +800,53 @@ k|<author> = count v|<chapter>|<voter>\
     CHECK_EQ(k0->value(), "2");
 }
 
+void test_iupdate2() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("\
+k|<author> = count v|<chapter>|<voter>\
+  using b|<author>|<book>, c|<book>|<chapter>\
+  where author:1, chapter:2, book:1, voter:1"));
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    const char* const keys[] = {
+        "b|a|i", "b|b|i", "b|a|j",
+        "c|i|i1", "c|i|i2", "c|i|i3", "c|j|j1", "c|j|j2",
+        "v|i1|x", "v|i1|y", "v|j2|x"
+    };
+    for (auto it : keys)
+        server.insert(it, "");
+
+    server.validate("k|a");
+    CHECK_EQ(server["k|a"].value(), "3");
+
+    server.erase("v|i1|y");
+    CHECK_EQ(server["k|a"].value(), "2");
+    server.insert("v|i1|y", "");
+    CHECK_EQ(server["k|a"].value(), "3");
+    server.insert("v|i1|y", "");
+    CHECK_EQ(server["k|a"].value(), "3");
+
+    server.validate("k|b");
+    CHECK_EQ(server["k|b"].value(), "2");
+
+    server.erase("b|a|i");
+    server.validate("k|a");
+    CHECK_EQ(server["k|a"].value(), "1");
+
+    server.insert("b|a|i", "");
+    server.validate("k|a");
+    CHECK_EQ(server["k|a"].value(), "3");
+
+    server.erase("b|a|i");
+    server.insert("v|j2|m", "");
+    server.validate("k|a");
+    CHECK_EQ(server["k|a"].value(), "2");
+    server.insert("v|j2|n", "");
+    CHECK_EQ(server["k|a"].value(), "3");
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -818,6 +865,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_sum);
     //ADD_TEST(test_op_bounds);
     ADD_TEST(test_iupdate);
+    ADD_TEST(test_iupdate2);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
