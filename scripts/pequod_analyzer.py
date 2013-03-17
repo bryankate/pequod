@@ -3,26 +3,31 @@ from lib.gnuplot import GNUPlot
 from sets import Set
 
 class ResultAnalyzer:
-    def __init__(self, xlabel):
+    def __init__(self, xlabel, ename):
         self.exp = {}
         self.xlabel = xlabel
+        self.ename = ename
     
     def add(self, plotgroup, resultDir, plotkey):
         ntrail = 0
         r = 0
-        aj = None
+        aj = {}
         for f in os.listdir(resultDir):
             if not f.endswith(".json"):
                 continue
             fpath = os.path.join(resultDir, f)
             j = json.load(open(fpath))
             if not aj:
-                aj = j
+                for k,v in j.items():
+                    if isinstance(v, (int, long, float)):
+                        aj[k] = v
             else:
-                for k,v in j:
-                   aj[k] += v
+                for k in aj.keys():
+                    aj[k] += j[k]
             ntrail += 1
         # average
+        for k,v in aj.items():
+            aj[k] = v / ntrail
         if not self.exp.has_key(plotgroup):
             self.exp[plotgroup] = []
         self.exp[plotgroup].append([('#_X_axis', plotkey)] + aj.items())
@@ -34,14 +39,13 @@ class ResultAnalyzer:
             f = open(fname, "w")
 
         graphs = []
-        graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", "real_time"))
+        if self.ename == "rwmicro":
+            graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
+                                  "real_time", xcolumnName = "actual_prefresh"))
         
         print >> f, "#", srcName if srcName else src
         plotgroups = sorted(self.exp.keys())
         for groupNumber, plotgroup in enumerate(plotgroups):
-            print >> f, "#", plotgroup, "note that the bandwidth is not real? Traffic",
-            print >> f, "between servers are double counted?"
-
             points = self.exp[plotgroup]
             names = [x[0] for x in points[0]]
             names = [("%30s" % x) for x in names]
@@ -89,7 +93,7 @@ class ResultAnalyzer:
 
 if __name__ == "__main__":
     def test():
-        a = ResultAnalyzer('refresh ratio(%)')
+        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro')
         expdir = "./last/rwmicro"
         for f in os.listdir(expdir):
             fpath = os.path.join(expdir, f)
@@ -103,7 +107,7 @@ if __name__ == "__main__":
         a.getCSVHorizon("./results/notebook.csv", expdir)
 
     def reanalyze(expdir):
-        a = ResultAnalyzer()
+        a = ResultAnalyzer('xlabel', 'ename')
         for f in os.listdir(expdir):
             fpath = os.path.join(expdir, f)
             if not os.path.isdir(fpath):

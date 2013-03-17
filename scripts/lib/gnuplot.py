@@ -1,7 +1,7 @@
 import os, re
 
 class GNUPlot:
-    def __init__(self, datafile, prefix, xlabel, ylabel, ycolumnName1, ycolumnName2 = None):
+    def __init__(self, datafile, prefix, xlabel, ylabel, ycolumnName1, ycolumnName2 = None, xcolumnName = None):
         if datafile == None:
             self.f = None
             return
@@ -30,6 +30,7 @@ set pointsize 1
         self.iy = None
         self.ycolumnName1 = ycolumnName1
         self.ycolumnName2 = ycolumnName2
+        self.xcolumnName = xcolumnName
 
     @staticmethod
     def columnIndex(names, n):
@@ -41,13 +42,15 @@ set pointsize 1
 
     def setColumnNames(self, names):
         if self.f == None: return
-        if self.iy: return
-        iy1 = GNUPlot.columnIndex(names, self.ycolumnName1)
-        if not self.ycolumnName2:
-            self.iy = str(iy1)
-            return
-        iy2 = GNUPlot.columnIndex(names, self.ycolumnName2)
-        self.iy = "($%d+$%d)" % (iy1, iy2)
+        if self.ycolumnName1:
+            iy1 = GNUPlot.columnIndex(names, self.ycolumnName1)
+            if self.ycolumnName2:
+                iy2 = GNUPlot.columnIndex(names, self.ycolumnName2)
+                self.iy = "($%d+$%d)" % (iy1, iy2)
+            else:
+                self.iy = str(iy1)
+        if self.xcolumnName:
+            self.ix = GNUPlot.columnIndex(names, self.xcolumnName)
 
     def addLine(self, groupNumber, title):
         if self.f == None:
