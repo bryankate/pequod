@@ -176,7 +176,7 @@ void TwitterNewShim<S>::initialize(bool pull, bool push, tamer::event<> done) {
             joinspec += "pull ";
 
         joinspec += "using s|<user_id>|<poster_id> "
-                    "with user_id:4n, time:4n, poster_id:4n";
+                    "where user_id:4n, time:4n, poster_id:4n";
         twait {
             server_.add_join("t|", "t}", joinspec, make_event(j));
         }

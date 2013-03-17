@@ -18,12 +18,17 @@ class LocalStr : public String_base<LocalStr<C> > {
     inline const char* data() const;
     inline int length() const;
 
+    inline char* mutable_data();
+    inline uint8_t* mutable_udata();
+
     inline bool is_local() const;
 
     inline LocalStr<C>& operator=(const LocalStr<C>& x);
     inline LocalStr<C>& operator=(LocalStr<C>&& x);
     template <typename T>
     inline LocalStr<C>& operator=(const String_base<T>& x);
+
+    inline void assign_uninitialized(int length);
 
   private:
     union {
@@ -70,12 +75,12 @@ inline LocalStr<C>::LocalStr(const LocalStr<C>& x) {
 
 template <int C>
 inline LocalStr<C>::LocalStr(LocalStr<C>&& x) {
-    u_.length = x.length_;
+    u_.length = x.u_.length;
     if (u_.length > local_capacity) {
         u_.rem.data = x.u_.rem.data;
         x.u_.length = 0;
     } else
-        memcpy(u_.loc.data, x.u_.loc.data, u_.length_);
+        memcpy(u_.loc.data, x.u_.loc.data, u_.length);
 }
 
 template <int C> template <typename T>
@@ -99,6 +104,16 @@ inline const char* LocalStr<C>::data() const {
 }
 
 template <int C>
+inline char* LocalStr<C>::mutable_data() {
+    return u_.length > local_capacity ? u_.rem.data : u_.loc.data;
+}
+
+template <int C>
+inline uint8_t* LocalStr<C>::mutable_udata() {
+    return reinterpret_cast<uint8_t*>(mutable_data());
+}
+
+template <int C>
 inline int LocalStr<C>::length() const {
     return u_.length;
 }
@@ -114,7 +129,7 @@ inline LocalStr<C>& LocalStr<C>::operator=(const LocalStr<C>& x) {
         uninitialize();
         initialize(x.data(), x.length());
     }
-    delete this;
+    return *this;
 }
 
 template <int C>
@@ -140,6 +155,17 @@ inline LocalStr<C>& LocalStr<C>::operator=(const String_base<T>& x) {
     memmove(const_cast<char*>(data()), x.data(), u_.length);
     delete[] old_rem;
     return *this;
+}
+
+template <int C>
+inline void LocalStr<C>::assign_uninitialized(int length) {
+    if (length <= local_capacity
+        ? u_.length > local_capacity
+        : length > u_.length)
+        delete[] u_.rem.data;
+    if (length > local_capacity && length > u_.length)
+        u_.rem.data = new char[length];
+    u_.length = length;
 }
 
 #endif

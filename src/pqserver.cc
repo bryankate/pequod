@@ -24,8 +24,7 @@
 
 namespace pq {
 
-// XXX check circular expansion
-
+const Datum Datum::empty_datum{Str()};
 
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), namelen_(name.length()) {
@@ -64,7 +63,7 @@ void Table::add_source(SourceRange* r) {
     source_ranges_.insert(r);
 }
 
-void Table::remove_source(Str first, Str last, ValidJoinRange* sink) {
+void Table::remove_source(Str first, Str last, SinkRange* sink) {
     for (auto it = source_ranges_.begin_overlaps(first, last);
 	 it != source_ranges_.end(); )
 	if (it->join() == sink->join()) {

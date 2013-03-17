@@ -12,6 +12,7 @@ class ErrorHandler;
 namespace pq {
 class Join;
 class SourceRange;
+class SinkRange;
 class Server;
 class Table;
 
@@ -29,6 +30,7 @@ class Match {
 
     inline int known_length(int slot) const;
     inline const uint8_t* data(int slot) const;
+    inline Str slot(int slot) const;
 
     inline void set_slot(int slot, const char* data, int len);
     inline void set_slot(int slot, const uint8_t* data, int len);
@@ -48,8 +50,6 @@ class Pattern {
   public:
     Pattern();
 
-    void append_literal(uint8_t ch);
-    void append_slot(int si, int len);
     void clear();
 
     inline int key_length() const;
@@ -58,8 +58,11 @@ class Pattern {
     inline int slot_length(int si) const;
     inline int slot_position(int si) const;
 
+    inline unsigned known_mask(const Match& m) const;
+
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
+    void match_range(Str first, Str last, Match& m) const;
 
     inline void expand(uint8_t* s, const Match& m) const;
 
@@ -132,7 +135,7 @@ class Join {
     inline const Json& jvt_config() const;
 
     SourceRange* make_source(Server& server, const Match& m,
-                             Str ibegin, Str iend);
+                             Str ibegin, Str iend, SinkRange* sink);
 
     bool assign_parse(Str str, ErrorHandler* errh = 0);
 
@@ -145,18 +148,19 @@ class Join {
     enum { pcap = 5 };
     int npat_;
     int completion_source_;
+    uint64_t staleness_;  // validated ranges can be used in this time window.
+                        // staleness_ > 0 implies maintained_ == false
     bool maintained_;   // if the output is kept up to date with changes to the input
     uint8_t slotlen_[slot_capacity];
-    uint8_t slotflags_[pcap];
+    uint8_t pat_mask_[pcap];
     uint8_t match_context_flags_[pcap - 1];
     Table* table_[pcap];
     Pattern pat_[pcap];
+    uint8_t context_length_[1 << slot_capacity];
 
     enum { stype_unknown = 0, stype_text, stype_decimal, stype_binary_number };
     String slotname_[slot_capacity];
     uint8_t slottype_[slot_capacity];
-    uint64_t staleness_;  // validated ranges can be used in this time window.
-                        // staleness_ > 0 implies maintained_ == false
     int refcount_;
     int jvt_;
     Json jvtparam_;
@@ -184,6 +188,10 @@ inline int Match::known_length(int i) const {
 
 inline const uint8_t* Match::data(int i) const {
     return slot_[i];
+}
+
+inline Str Match::slot(int i) const {
+    return Str(slot_[i], ms_.slotlen_[i]);
 }
 
 inline void Match::set_slot(int i, const uint8_t* data, int len) {
@@ -232,6 +240,14 @@ inline int Pattern::slot_length(int slot) const {
     Returns 0 if this pattern does not have @a slot. */
 inline int Pattern::slot_position(int slot) const {
     return slotpos_[slot];
+}
+
+inline unsigned Pattern::known_mask(const Match& m) const {
+    unsigned mask = 0;
+    for (int s = 0; s != slot_capacity; ++s)
+        if (m.known_length(s) == slotlen_[s])
+            mask |= 1 << s;
+    return mask;
 }
 
 inline bool Pattern::match(Str str) const {
@@ -288,8 +304,7 @@ inline void Pattern::expand(uint8_t* s, const Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), maintained_(true),
-      staleness_(0), refcount_(0),
+    : npat_(0), staleness_(0), maintained_(true), refcount_(0),
       jvt_(jvt_copy_last), jvtparam_() {
 }
 

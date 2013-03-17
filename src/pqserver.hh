@@ -35,12 +35,12 @@ class Table : public pequod_set_base_hook {
     inline void validate(Str first, Str last, uint64_t now);
 
     void add_source(SourceRange* r);
-    void remove_source(Str first, Str last, ValidJoinRange* sink);
+    void remove_source(Str first, Str last, SinkRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     void insert(Str key, String value);
     template <typename F>
-    void modify(Str key, const ValidJoinRange* sink, const F& func);
+    void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
 
@@ -76,6 +76,7 @@ class Server {
     inline const_iterator end() const;
     inline const Datum* find(Str str) const;
     inline store_type::const_iterator lower_bound(Str str) const;
+    inline const Datum& operator[](Str str) const;
     inline size_t count(Str first, Str last) const;
 
     Table& make_table(Str name);
@@ -84,9 +85,10 @@ class Server {
     inline void erase(Str key);
 
     inline void add_source(SourceRange* r);
-    inline void remove_source(Str first, Str last, ValidJoinRange* sink);
+    inline void remove_source(Str first, Str last, SinkRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
+    inline void validate(Str key);
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
 
@@ -156,10 +158,16 @@ inline Table& Server::make_table(Str name) {
     return *it;
 }
 
-inline const Datum *Server::find(Str str) const {
+inline const Datum* Server::find(Str str) const {
     auto& store = tables_.get(table_name(str), Table::empty_table).store_;
     auto it = store.find(str, DatumCompare());
     return it == store.end() ? NULL : it.operator->();
+}
+
+inline const Datum& Server::operator[](Str str) const {
+    auto& store = tables_.get(table_name(str), Table::empty_table).store_;
+    auto it = store.find(str, DatumCompare());
+    return it == store.end() ? Datum::empty_datum : *it;
 }
 
 inline auto Server::lower_bound(Str str) const -> Table::const_iterator {
@@ -179,7 +187,7 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
+void Table::modify(Str key, const SinkRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
@@ -247,7 +255,7 @@ inline void Server::add_source(SourceRange* r) {
     make_table(tname).add_source(r);
 }
 
-inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
+inline void Server::remove_source(Str first, Str last, SinkRange* sink) {
     Str tname = table_name(first);
     assert(tname);
     make_table(tname).remove_source(first, last, sink);
@@ -260,6 +268,14 @@ inline void Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).validate(first, last, now);
+}
+
+inline void Server::validate(Str key) {
+    LocalStr<24> next_key;
+    next_key.assign_uninitialized(key.length() + 1);
+    memcpy(next_key.mutable_data(), key.data(), key.length());
+    next_key.mutable_data()[key.length()] = 0;
+    validate(key, next_key);
 }
 
 inline size_t Server::validate_count(Str first, Str last) {

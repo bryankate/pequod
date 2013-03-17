@@ -11,7 +11,6 @@ namespace pq {
 class Server;
 class Match;
 class JoinRange;
-class ValidJoinRange;
 
 class ServerRangeBase {
   public:
@@ -50,13 +49,13 @@ class IntermediateUpdate : public ServerRangeBase {
     int joinpos_;
     int notifier_;
 
-    friend class ValidJoinRange;
+    friend class SinkRange;
 };
 
-class ValidJoinRange : public ServerRangeBase {
+class SinkRange : public ServerRangeBase {
   public:
-    inline ValidJoinRange(Str first, Str last, JoinRange* jr, uint64_t now);
-    ~ValidJoinRange();
+    inline SinkRange(Str first, Str last, JoinRange* jr, uint64_t now);
+    ~SinkRange();
 
     inline void ref();
     inline void deref();
@@ -76,7 +75,7 @@ class ValidJoinRange : public ServerRangeBase {
     void flush();
 
   public:
-    rblinks<ValidJoinRange> rblinks_;
+    rblinks<SinkRange> rblinks_;
   private:
     JoinRange* jr_;
     int refcount_;
@@ -102,13 +101,13 @@ class JoinRange : public ServerRangeBase {
     rblinks<JoinRange> rblinks_;
   private:
     Join* join_;
-    interval_tree<ValidJoinRange> valid_ranges_;
+    interval_tree<SinkRange> valid_ranges_;
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
     void validate_step(validate_args& va, int joinpos);
 
-    friend class ValidJoinRange;
+    friend class SinkRange;
 };
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
@@ -147,8 +146,7 @@ inline size_t JoinRange::valid_ranges_size() const {
     return valid_ranges_.size();
 }
 
-inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
-                                      uint64_t now)
+inline SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
     : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
     if (jr_->join()->maintained())
         expires_at_ = 0;
@@ -156,32 +154,32 @@ inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
         expires_at_ = now + jr_->join()->staleness();
 }
 
-inline void ValidJoinRange::ref() {
+inline void SinkRange::ref() {
     ++refcount_;
 }
 
-inline void ValidJoinRange::deref() {
+inline void SinkRange::deref() {
     if (--refcount_ == 0)
         delete this;            // XXX
 }
 
-inline Join* ValidJoinRange::join() const {
+inline Join* SinkRange::join() const {
     return jr_->join();
 }
 
-inline Table* ValidJoinRange::table() const {
+inline Table* SinkRange::table() const {
     return jr_->join()->sink_table();
 }
 
-inline bool ValidJoinRange::has_expired(uint64_t now) const {
+inline bool SinkRange::has_expired(uint64_t now) const {
     return expires_at_ && expires_at_ < now;
 }
 
-inline bool ValidJoinRange::need_update() const {
+inline bool SinkRange::need_update() const {
     return !updates_.empty();
 }
 
-inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
+inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
     Datum* hd = hint == store.end() ? 0 : hint.operator->();
     if (hd)
         hd->ref();
@@ -190,7 +188,7 @@ inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::i
     hint_ = hd;
 }
 
-inline Datum* ValidJoinRange::hint() const {
+inline Datum* SinkRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
 }
 

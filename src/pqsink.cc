@@ -12,7 +12,7 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 JoinRange::~JoinRange() {
-    while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+    while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
         delete sink;
 }
 
@@ -21,7 +21,7 @@ struct JoinRange::validate_args {
     Str last;
     Match match;
     Server* server;
-    ValidJoinRange* sink;
+    SinkRange* sink;
     uint64_t now;
     int notifier;
 };
@@ -30,7 +30,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
-    va.sink = new ValidJoinRange(first, last, this, now);
+    va.sink = new SinkRange(first, last, this, now);
     valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
@@ -40,7 +40,7 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
         if (it->has_expired(now)) {
-            ValidJoinRange* vjr = it.operator->();
+            SinkRange* vjr = it.operator->();
             ++it;
             valid_ranges_.erase(vjr);
             vjr->flush();
@@ -75,11 +75,9 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
                                                va.now);
 
     SourceRange* r = 0;
-    if (joinpos + 1 == join_->nsource()) {
+    if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
-                               Str(kf, kflen), Str(kl, kllen));
-        r->set_sink(va.sink);
-    }
+                               Str(kf, kflen), Str(kl, kllen), va.sink);
 
     auto it = va.server->lower_bound(Str(kf, kflen));
     auto ilast = va.server->lower_bound(Str(kl, kllen));
@@ -149,14 +147,14 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
       joinpos_(joinpos), notifier_(notifier) {
 }
 
-ValidJoinRange::~ValidJoinRange() {
+SinkRange::~SinkRange() {
     while (IntermediateUpdate* iu = updates_.unlink_leftmost_without_rebalance())
         delete iu;
     if (hint_)
         hint_->deref();
 }
 
-void ValidJoinRange::add_update(int joinpos, const String& context,
+void SinkRange::add_update(int joinpos, const String& context,
                                 Str key, int notifier) {
     Match m;
     join()->source(joinpos).match(key, m);
@@ -174,7 +172,7 @@ void ValidJoinRange::add_update(int joinpos, const String& context,
     // std::cerr << *iu << "\n";
 }
 
-bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
+bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
                                Server& server, uint64_t now) {
     if (first < iu->ibegin())
         first = iu->ibegin();
@@ -198,7 +196,7 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
     return iu->ibegin_ < iu->iend_;
 }
 
-void ValidJoinRange::update(Str first, Str last, Server& server, uint64_t now) {
+void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
     for (auto it = updates_.begin_overlaps(first, last);
          it != updates_.end(); ) {
         IntermediateUpdate* iu = it.operator->();
@@ -212,7 +210,7 @@ void ValidJoinRange::update(Str first, Str last, Server& server, uint64_t now) {
     }
 }
 
-void ValidJoinRange::flush() {
+void SinkRange::flush() {
     Table* t = table();
     auto endit = t->lower_bound(iend());
     for (auto it = t->lower_bound(ibegin()); it != endit; )
