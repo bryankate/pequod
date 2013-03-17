@@ -280,8 +280,8 @@ tamed template <typename S>
 void TwitterNewRunner<S>::populate() {
     tvars { boost::mt19937 gen;
             std::vector<std::pair<uint32_t, uint32_t> > subs;
-            uint32_t nusers = this->tp_.nusers();
-            uint32_t post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
+            uint32_t nusers;
+            uint32_t post_end_time;
             uint32_t u;
     }
     gen.seed(112181);
@@ -289,6 +289,9 @@ void TwitterNewRunner<S>::populate() {
     std::cout << "Creating social graph." << std::endl;
     tp_.make_subscriptions(subs, gen);
     tp_.print_subscription_statistics(std::cout);
+
+    nusers = tp_.nusers();
+    post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
 
     twait {
         std::cout << "Building subscription table." << std::endl;

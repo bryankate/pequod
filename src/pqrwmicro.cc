@@ -29,7 +29,7 @@ static void pull(validate_args& va, int joinpos, Join* j) {
     SourceRange* r = 0;
     if (joinpos + 1 == j->nsource())
         r = j->make_source(*va.server, va.match,
-                           Str(kf, kflen), Str(kl, kllen));
+                           Str(kf, kflen), Str(kl, kllen), nullptr);
 
     auto it = va.server->lower_bound(Str(kf, kflen));
     auto ilast = va.server->lower_bound(Str(kl, kllen));

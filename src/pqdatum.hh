@@ -6,7 +6,7 @@
 #include "local_str.hh"
 
 namespace pq {
-class ValidJoinRange;
+class SinkRange;
 
 typedef boost::intrusive::set_base_hook<
     boost::intrusive::link_mode<boost::intrusive::normal_link>,
@@ -18,13 +18,13 @@ typedef boost::intrusive::set_member_hook<
 class Datum : public pequod_set_base_hook {
   public:
     explicit inline Datum(Str key);
-    inline Datum(Str key, const ValidJoinRange* owner);
+    inline Datum(Str key, const SinkRange* owner);
     inline Datum(Str key, const String& value);
 
     inline bool valid() const;
     inline void invalidate();
 
-    inline const ValidJoinRange* owner() const;
+    inline const SinkRange* owner() const;
 
     inline void ref();
     inline void deref();
@@ -39,7 +39,7 @@ class Datum : public pequod_set_base_hook {
     LocalStr<24> key_;
     String value_;
     int refcount_;
-    const ValidJoinRange* owner_;
+    const SinkRange* owner_;
   public:
     pequod_set_member_hook member_hook_;
 };
@@ -84,7 +84,7 @@ inline Datum::Datum(Str key)
     : key_(key), refcount_(0), owner_{nullptr} {
 }
 
-inline Datum::Datum(Str key, const ValidJoinRange* owner)
+inline Datum::Datum(Str key, const SinkRange* owner)
     : key_{key}, refcount_{0}, owner_{owner} {
 }
 
@@ -102,7 +102,7 @@ inline void Datum::invalidate() {
         delete this;
 }
 
-inline const ValidJoinRange* Datum::owner() const {
+inline const SinkRange* Datum::owner() const {
     return owner_;
 }
 

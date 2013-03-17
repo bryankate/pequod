@@ -15,12 +15,20 @@ class Server;
 class Match;
 class Datum;
 class Table;
-class ValidJoinRange;
 
 class SourceRange {
   public:
-    SourceRange(Server& server, Join* join, const Match& m,
-                Str first, Str last);
+    struct parameters {
+        Server& server;
+        Join* join;
+        int joinpos;
+        const Match& match;
+        Str first;
+        Str last;
+        SinkRange* sink;
+    };
+
+    SourceRange(const parameters& p);
     virtual ~SourceRange();
 
     typedef Str endpoint_type;
@@ -35,9 +43,8 @@ class SourceRange {
 
     inline Join* join() const;
     inline int joinpos() const;
-    inline void set_sink(ValidJoinRange* sink);
     void take_results(SourceRange& r);
-    void remove_sink(ValidJoinRange* sink);
+    void remove_sink(SinkRange* sink, Str context);
 
     inline bool check_match(Str key) const;
     enum notify_type {
@@ -57,8 +64,8 @@ class SourceRange {
     rblinks<SourceRange> rblinks_;
   protected:
     struct result {
-        String key;
-        ValidJoinRange* sink;
+        LocalStr<12> context;
+        SinkRange* sink;
     };
 
     Join* join_;
@@ -66,60 +73,53 @@ class SourceRange {
     Table* dst_table_;  // todo: move this to the join?
     mutable local_vector<result, 4> results_;
 
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
 
 class InvalidatorRange : public SourceRange {
   public:
-    inline InvalidatorRange(Server& server, Join* join, int joinpos,
-                            const Match& match,
-                            Str first, Str last, ValidJoinRange* sink);
+    inline InvalidatorRange(const parameters& p);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
-    virtual void notify(result&, const Datum*, const String&, int) const {}
+    virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
 };
 
 
 class CopySourceRange : public SourceRange {
   public:
-    inline CopySourceRange(Server& server, Join* join, const Match& m,
-                           Str first, Str last);
+    inline CopySourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 
 class CountSourceRange : public SourceRange {
   public:
-    inline CountSourceRange(Server& server, Join* join, const Match& m,
-                            Str first, Str last);
+    inline CountSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MinSourceRange : public SourceRange {
   public:
-    inline MinSourceRange(Server& server, Join* join, const Match& m,
-                          Str first, Str last);
+    inline MinSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MaxSourceRange : public SourceRange {
   public:
-    inline MaxSourceRange(Server& server, Join* join, const Match& m,
-                          Str first, Str last);
+    inline MaxSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class SumSourceRange : public SourceRange {
   public:
-    inline SumSourceRange(Server& server, Join* join, const Match& m,
-                          Str first, Str last);
+    inline SumSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class Bounds {
@@ -140,10 +140,9 @@ class Bounds {
 
 class BoundedCopySourceRange : public SourceRange {
   public:
-    inline BoundedCopySourceRange(Server& server, Join* join, const Match& m,
-                                  Str first, Str last);
+    inline BoundedCopySourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -151,10 +150,9 @@ class BoundedCopySourceRange : public SourceRange {
 
 class BoundedCountSourceRange : public SourceRange {
   public:
-    inline BoundedCountSourceRange(Server& server, Join* join, const Match& m,
-                                   Str first, Str last);
+    inline BoundedCountSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -183,12 +181,6 @@ inline bool SourceRange::check_match(Str key) const {
     return join_->source(joinpos_).match(key);
 }
 
-inline void SourceRange::set_sink(ValidJoinRange* sink) {
-    assert(results_.size() == 1 && !results_[0].sink);
-    if ((results_[0].sink = sink))
-        sink->ref();
-}
-
 inline void SourceRange::clear_without_deref() {
     results_.clear();
 }
@@ -205,33 +197,28 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, ValidJoinRange* sink)
-    : SourceRange(server, join, Match(), first, last) {
-    joinpos_ = joinpos;
-    results_[0].key = join->unparse_match_context(joinpos, match);
-    assert(sink);
-    set_sink(sink);
+inline InvalidatorRange::InvalidatorRange(const parameters& p)
+    : SourceRange(p) {
 }
 
-inline CopySourceRange::CopySourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last) {
+inline CopySourceRange::CopySourceRange(const parameters& p)
+    : SourceRange(p) {
 }
 
-
-inline CountSourceRange::CountSourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last) {
+inline CountSourceRange::CountSourceRange(const parameters& p)
+    : SourceRange(p) {
 }
 
-inline MinSourceRange::MinSourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last) {
+inline MinSourceRange::MinSourceRange(const parameters& p)
+    : SourceRange(p) {
 }
 
-inline MaxSourceRange::MaxSourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last) {
+inline MaxSourceRange::MaxSourceRange(const parameters& p)
+    : SourceRange(p) {
 }
 
-inline SumSourceRange::SumSourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last) {
+inline SumSourceRange::SumSourceRange(const parameters& p)
+    : SourceRange(p) {
 }
 
 inline Bounds::Bounds(const Json& param)
@@ -275,13 +262,13 @@ inline bool Bounds::check_bounds(const String& src, const String& old,
 }
 
 
-inline BoundedCopySourceRange::BoundedCopySourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last), bounds_(join->jvt_config()) {
+inline BoundedCopySourceRange::BoundedCopySourceRange(const parameters& p)
+    : SourceRange(p), bounds_(p.join->jvt_config()) {
 }
 
 
-inline BoundedCountSourceRange::BoundedCountSourceRange(Server& server, Join* join, const Match& m, Str first, Str last)
-    : SourceRange(server, join, m, first, last), bounds_(join->jvt_config()) {
+inline BoundedCountSourceRange::BoundedCountSourceRange(const parameters& p)
+    : SourceRange(p), bounds_(p.join->jvt_config()) {
 }
 
 } // namespace pq
