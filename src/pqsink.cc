@@ -75,11 +75,9 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
                                                va.now);
 
     SourceRange* r = 0;
-    if (joinpos + 1 == join_->nsource()) {
+    if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
-                               Str(kf, kflen), Str(kl, kllen));
-        r->set_sink(va.sink);
-    }
+                               Str(kf, kflen), Str(kl, kllen), va.sink);
 
     auto it = va.server->lower_bound(Str(kf, kflen));
     auto ilast = va.server->lower_bound(Str(kl, kllen));

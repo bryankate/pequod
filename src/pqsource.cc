@@ -19,7 +19,9 @@ SourceRange::SourceRange(const parameters& p)
 
     String str = String::make_uninitialized(join_->sink().key_length());
     join_->sink().expand(str.mutable_udata(), p.match);
-    results_.push_back(result{std::move(str), 0});
+    results_.push_back(result{std::move(str), p.sink});
+    if (p.sink)
+        p.sink->ref();
 }
 
 SourceRange::~SourceRange() {

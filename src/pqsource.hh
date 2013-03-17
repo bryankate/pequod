@@ -24,6 +24,7 @@ class SourceRange {
         const Match& match;
         Str first;
         Str last;
+        SinkRange* sink;
     };
 
     SourceRange(const parameters& p);
@@ -41,7 +42,6 @@ class SourceRange {
 
     inline Join* join() const;
     inline int joinpos() const;
-    inline void set_sink(SinkRange* sink);
     void take_results(SourceRange& r);
     void remove_sink(SinkRange* sink);
 
@@ -182,12 +182,6 @@ inline bool SourceRange::check_match(Str key) const {
     return join_->source(joinpos_).match(key);
 }
 
-inline void SourceRange::set_sink(SinkRange* sink) {
-    assert(results_.size() == 1 && !results_[0].sink);
-    if ((results_[0].sink = sink))
-        sink->ref();
-}
-
 inline void SourceRange::clear_without_deref() {
     results_.clear();
 }
@@ -205,17 +199,14 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
 }
 
 inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, SinkRange* sink)
-    : SourceRange(parameters{server, join, Match(), first, last}) {
+    : SourceRange(parameters{server, join, Match(), first, last, sink}) {
     joinpos_ = joinpos;
     results_[0].key = join->unparse_match_context(joinpos, match);
-    assert(sink);
-    set_sink(sink);
 }
 
 inline CopySourceRange::CopySourceRange(const parameters& p)
     : SourceRange(p) {
 }
-
 
 inline CountSourceRange::CountSourceRange(const parameters& p)
     : SourceRange(p) {

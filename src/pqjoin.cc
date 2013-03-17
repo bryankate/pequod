@@ -243,8 +243,8 @@ String Join::expand_last(const Pattern& pat, Str sink_first, Str sink_last, cons
 }
 
 SourceRange* Join::make_source(Server& server, const Match& m,
-                               Str ibegin, Str iend) {
-    SourceRange::parameters p{server, this, m, ibegin, iend};
+                               Str ibegin, Str iend, SinkRange* sink) {
+    SourceRange::parameters p{server, this, m, ibegin, iend, sink};
     if (jvt() == jvt_copy_last)
         return new CopySourceRange(p);
     else if (jvt() == jvt_count_match)
