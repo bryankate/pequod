@@ -24,8 +24,7 @@
 
 namespace pq {
 
-// XXX check circular expansion
-
+const Datum Datum::empty_datum{Str()};
 
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), namelen_(name.length()) {

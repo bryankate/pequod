@@ -76,6 +76,7 @@ class Server {
     inline const_iterator end() const;
     inline const Datum* find(Str str) const;
     inline store_type::const_iterator lower_bound(Str str) const;
+    inline const Datum& operator[](Str str) const;
     inline size_t count(Str first, Str last) const;
 
     Table& make_table(Str name);
@@ -161,6 +162,12 @@ inline const Datum* Server::find(Str str) const {
     auto& store = tables_.get(table_name(str), Table::empty_table).store_;
     auto it = store.find(str, DatumCompare());
     return it == store.end() ? NULL : it.operator->();
+}
+
+inline const Datum& Server::operator[](Str str) const {
+    auto& store = tables_.get(table_name(str), Table::empty_table).store_;
+    auto it = store.find(str, DatumCompare());
+    return it == store.end() ? Datum::empty_datum : *it;
 }
 
 inline auto Server::lower_bound(Str str) const -> Table::const_iterator {

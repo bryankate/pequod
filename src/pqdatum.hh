@@ -17,46 +17,23 @@ typedef boost::intrusive::set_member_hook<
 
 class Datum : public pequod_set_base_hook {
   public:
-    explicit Datum(Str key)
-        : key_(key), refcount_(0), owner_{nullptr} {
-    }
-    Datum(Str key, const ValidJoinRange* owner)
-        : key_{key}, refcount_{0}, owner_{owner} {
-    }
-    Datum(Str key, const String& value)
-	: key_(key), value_(value), refcount_(0), owner_{nullptr} {
-    }
+    explicit inline Datum(Str key);
+    inline Datum(Str key, const ValidJoinRange* owner);
+    inline Datum(Str key, const String& value);
 
-    bool valid() const {
-        return !key_.empty();
-    }
-    void invalidate() {
-        key_ = Str();
-        if (refcount_ == 0)
-            delete this;
-    }
+    inline bool valid() const;
+    inline void invalidate();
 
-    const ValidJoinRange* owner() const {
-        return owner_;
-    }
+    inline const ValidJoinRange* owner() const;
 
-    void ref() {
-        ++refcount_;
-    }
-    void deref() {
-        if (--refcount_ == 0 && !valid())
-            delete this;
-    }
+    inline void ref();
+    inline void deref();
 
-    Str key() const {
-	return key_;
-    }
-    const String& value() const {
-        return value_;
-    }
-    String& value() {
-        return value_;
-    }
+    inline Str key() const;
+    inline const String& value() const;
+    inline String& value();
+
+    static const Datum empty_datum;
 
   private:
     LocalStr<24> key_;
@@ -101,6 +78,53 @@ inline bool operator==(const Datum& a, const Datum& b) {
 }
 inline bool operator>(const Datum& a, const Datum& b) {
     return a.key() > b.key();
+}
+
+inline Datum::Datum(Str key)
+    : key_(key), refcount_(0), owner_{nullptr} {
+}
+
+inline Datum::Datum(Str key, const ValidJoinRange* owner)
+    : key_{key}, refcount_{0}, owner_{owner} {
+}
+
+inline Datum::Datum(Str key, const String& value)
+    : key_(key), value_(value), refcount_(0), owner_{nullptr} {
+}
+
+inline bool Datum::valid() const {
+    return !key_.empty();
+}
+
+inline void Datum::invalidate() {
+    key_ = Str();
+    if (refcount_ == 0)
+        delete this;
+}
+
+inline const ValidJoinRange* Datum::owner() const {
+    return owner_;
+}
+
+inline void Datum::ref() {
+    ++refcount_;
+}
+
+inline void Datum::deref() {
+    if (--refcount_ == 0 && !valid())
+        delete this;
+}
+
+inline Str Datum::key() const {
+    return key_;
+}
+
+inline const String& Datum::value() const {
+    return value_;
+}
+
+inline String& Datum::value() {
+    return value_;
 }
 
 } // namespace
