@@ -1,13 +1,10 @@
 #ifndef PEQUOD_SERVER_HH
 #define PEQUOD_SERVER_HH
-#include "pqdatum.hh"
-#include "interval_tree.hh"
 #include "local_vector.hh"
 #include "hashtable.hh"
-#include "pqbase.hh"
-#include "pqjoin.hh"
 #include "pqsource.hh"
 #include "pqsink.hh"
+#include "time.hh"
 class Json;
 
 namespace pq {
@@ -35,7 +32,7 @@ class Table : public pequod_set_base_hook {
     inline iterator lower_bound(Str key);
     inline size_t size() const;
 
-    inline void validate(Str first, Str last);
+    inline void validate(Str first, Str last, uint64_t now);
 
     void add_source(SourceRange* r);
     void remove_source(Str first, Str last, ValidJoinRange* sink);
@@ -91,8 +88,8 @@ class Server {
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
-    inline void validate(Str first, Str last);
-    inline size_t validate_count(Str first, Str last);
+    inline void validate(Str first, Str last, uint64_t now = tstamp());
+    inline size_t validate_count(Str first, Str last, uint64_t now = tstamp());
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -223,10 +220,10 @@ inline auto Table::erase(iterator it) -> iterator {
     return it;
 }
 
-inline void Table::validate(Str first, Str last) {
+inline void Table::validate(Str first, Str last, uint64_t now) {
     for (auto it = join_ranges_.begin_overlaps(first, last);
 	 it != join_ranges_.end(); ++it)
-        it->validate(first, last, *server_);
+        it->validate(first, last, *server_, now);
 }
 
 inline void Server::insert(Str key, const String& value) {
@@ -252,14 +249,14 @@ inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
     make_table(tname).remove_source(first, last, sink);
 }
 
-inline void Server::validate(Str first, Str last) {
+inline void Server::validate(Str first, Str last, uint64_t now) {
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).validate(first, last);
+    make_table(tname).validate(first, last, now);
 }
 
-inline size_t Server::validate_count(Str first, Str last) {
-    validate(first, last);
+inline size_t Server::validate_count(Str first, Str last, uint64_t now) {
+    validate(first, last, now);
     return count(first, last);
 }
 

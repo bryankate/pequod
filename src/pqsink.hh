@@ -68,7 +68,7 @@ class ValidJoinRange : public ServerRangeBase {
 
     void add_update(int joinpos, const String& context, Str key, int notifier);
     inline bool need_update() const;
-    void update(Str first, Str last, Server& server);
+    void update(Str first, Str last, Server& server, uint64_t now);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
@@ -84,7 +84,8 @@ class ValidJoinRange : public ServerRangeBase {
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
 
-    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server);
+    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server,
+                   uint64_t now);
 };
 
 class JoinRange : public ServerRangeBase {
@@ -95,7 +96,7 @@ class JoinRange : public ServerRangeBase {
     inline Join* join() const;
     inline size_t valid_ranges_size() const;
 
-    void validate(Str first, Str last, Server& server);
+    void validate(Str first, Str last, Server& server, uint64_t now);
 
   public:
     rblinks<JoinRange> rblinks_;
