@@ -7,30 +7,90 @@
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
-#include <math.h>
-#include <sys/resource.h>
+#include <cmath>
 #include <fstream>
-#include "time.hh"
+#include <sys/resource.h>
+
+using std::endl;
+using std::vector;
+using std::pair;
+using std::ostream;
+using std::ofstream;
+
 namespace pq {
-const char TwitterNewPopulator::tweet_data[] = "................................................................................................................................................................";
+
+TwitterUser::TwitterUser()
+    : nbackpost_(0), npost_(0), nsubscribe_(0), nlogout_(0),
+      nlogin_(0), ncheck_(0), nread_(0), load_time_(0),
+      uid_((uint32_t)-1), nfollowers_(0) {
+}
+
+TwitterUser::Compare::Compare(CompareField field) : field_(field) {
+}
+
+bool TwitterUser::Compare::operator() (const TwitterUser&a, const TwitterUser& b) const {
+    switch(field_) {
+        case comp_uid:
+            return a.uid_ < b.uid_;
+        case comp_nfollowers:
+            return a.nfollowers_ < b.nfollowers_;
+        case comp_check:
+            return a.ncheck_ < b.ncheck_;
+        default:
+            mandatory_assert(false && "Unknown user comparison field.");
+    }
+
+    return false; // never
+}
+
+bool TwitterUser::Compare::operator() (const uint32_t& a, const TwitterUser& b) const {
+    switch(field_) {
+        case comp_uid:
+            return a < b.uid_;
+        case comp_nfollowers:
+            return a < b.nfollowers_;
+        case comp_check:
+            return a < b.ncheck_;
+        default:
+            mandatory_assert(false && "Unknown user comparison field.");
+    }
+
+    return false; // never
+}
+
 
 TwitterNewPopulator::TwitterNewPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
+      duration_(param["duration"].as_i(1000000)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
+      visualize_(param["visualize"].as_b(false)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),
-      shape_(param["shape"].as_d(55)),
-      duration_(param["duration"].as_i(1000000)),
-      ppost_(param["ppost"].as_i(2)),
-      psubscribe_(param["psubscribe"].as_i(3)) {
+      shape_(param["shape"].as_d(55)) {
+
+    vector<double> op_weight(n_op);
+    op_weight[op_post] = param["ppost"].as_i(2);
+    op_weight[op_subscribe] = param["psubscribe"].as_i(3);
+    op_weight[op_login] = param["plogin"].as_i(1);
+    op_weight[op_logout] = param["plogout"].as_i(1);
+
+    double ptotal = 0;
+    for (uint32_t o = 0; o < op_check; ++o)
+        ptotal += op_weight[o];
+
+    assert(ptotal < 100);
+    op_weight[op_check] = 100 - ptotal;
+
+    op_dist_ = op_dist_type(op_weight.begin(), op_weight.end());
 }
 
 uint32_t* TwitterNewPopulator::subscribe_probabilities(generator_type& gen) {
+
     uint32_t expected_subs = (min_subs_ + max_subs_) / 2;
     double* follow_shape = new double[nusers_];
     while (1) {
@@ -65,20 +125,20 @@ uint32_t* TwitterNewPopulator::subscribe_probabilities(generator_type& gen) {
     return sub_prob;
 }
 
-void TwitterNewPopulator::make_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
+void TwitterNewPopulator::make_subscriptions(vector<pair<uint32_t, uint32_t> >& subs,
                                              generator_type& gen) {
     if (graph_file_)
-        import_subscriptions(subs);
+        import_subscriptions(subs, gen);
     else
         synthetic_subscriptions(subs, gen);
 }
 
-void TwitterNewPopulator::synthetic_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
-                                               generator_type& gen) {
+void TwitterNewPopulator::synthetic_subscriptions(vector<pair<uint32_t, uint32_t> >& subs,
+                                                  generator_type& gen) {
     uint32_t* sub_prob = subscribe_probabilities(gen);
     uint32_t* subvec = new uint32_t[(nusers_ + 31) / 32];
     rng_type rng(gen);
-    std::vector<std::pair<uint32_t, uint32_t> > followers;
+    vector<pair<uint32_t, uint32_t> > followers;
 
     for (uint32_t i = 0; i != nusers_; ++i) {
 	memset(subvec, 0, sizeof(uint32_t) * ((nusers_ + 31) / 32));
@@ -98,11 +158,11 @@ void TwitterNewPopulator::synthetic_subscriptions(std::vector<std::pair<uint32_t
     delete[] sub_prob;
     delete[] subvec;
 
-    make_followers(subs, followers);
+    make_followers(subs, followers, gen);
 }
 
-
-void TwitterNewPopulator::import_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs) {
+void TwitterNewPopulator::import_subscriptions(vector<pair<uint32_t, uint32_t> >& subs,
+                                               generator_type& gen) {
     std::ifstream graph;
     graph.open(graph_file_.c_str());
     assert(graph.is_open() && "Could not open twitter social graph.");
@@ -111,7 +171,7 @@ void TwitterNewPopulator::import_subscriptions(std::vector<std::pair<uint32_t, u
 
     uint32_t user;
     uint32_t follower;
-    std::vector<std::pair<uint32_t, uint32_t> > followers;
+    vector<pair<uint32_t, uint32_t>> followers;
 
     while(graph.good()) {
         graph >> user >> follower;
@@ -119,41 +179,35 @@ void TwitterNewPopulator::import_subscriptions(std::vector<std::pair<uint32_t, u
         followers.push_back(std::make_pair(user, follower));
     }
 
-    make_followers(subs, followers);
+    make_followers(subs, followers, gen);
 }
 
-struct FollowersLess {
-    bool operator() (const std::pair<uint32_t, uint32_t>& u, const uint32_t f) const {
-        return u.first < f;
-    }
+void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
+                                         vector<pair<uint32_t, uint32_t>>& followers,
+                                         generator_type& gen) {
 
-    bool operator() (const uint32_t f, const std::pair<uint32_t, uint32_t>& u) const {
-        return f < u.first;
-    }
-};
-
-
-void TwitterNewPopulator::make_followers(std::vector<std::pair<uint32_t, uint32_t>>& subs,
-                                         std::vector<std::pair<uint32_t, uint32_t>>& followers) {
-
-    // sort users by the number of followers they have
-    for (uint32_t u = 0; u < nusers_; ++u)
-        nfollowers_.push_back(std::make_pair(0, u));
-
+    users_ = vector<TwitterUser>(nusers_);
     for (auto& sub : subs)
-        ++nfollowers_[sub.second].first;
-    std::sort(nfollowers_.begin(), nfollowers_.end());
+        ++users_[sub.second].nfollowers_;
 
-    std::vector<uint32_t> segs{1, 10, 100, 1000, 5000, 10000, 100000, 1000000};
-    std::vector<double> npost{0.0001, 0.0001, 0.1, 0.15, 0.2, 0.25, 0.2, 0.15};
-    std::vector<uint32_t> indices;
+    // individual user posting weights are correlated with the number of
+    // followers. the correlation is close up until 1000 followers, after
+    // which some variance is introduced
+    vector<double> wpost(nusers_, 0);
+    for (uint32_t u = 0; u < nusers_; ++u) {
+        users_[u].uid_ = u;
 
-    for (uint32_t g = 0; g < segs.size(); ++g)
-        indices.push_back(lower_bound(nfollowers_.begin(), nfollowers_.end(),
-                                      segs[g], FollowersLess()) - nfollowers_.begin());
+        if (!users_[u].nfollowers_)
+            continue;
 
-    // a top-level discrete distribution that chooses between segments
-    graph_dist_ = graph_dist_type(indices.begin(), indices.end(), npost.begin());
+        if (users_[u].nfollowers_ < 1000)
+            wpost[u] = (uint32_t)std::log2(users_[u].nfollowers_);
+        else
+            wpost[u] = gen() % ((uint32_t)std::log2(users_[u].nfollowers_) * 2) + 1;
+    }
+
+    post_dist_ = post_dist_type(wpost.begin(), wpost.end());
+    check_dist_ = check_dist_type(0, nusers_ - 1);
 
     followers_.clear();
     followers_.reserve(followers.size());
@@ -171,28 +225,56 @@ void TwitterNewPopulator::make_followers(std::vector<std::pair<uint32_t, uint32_
 }
 
 
-void TwitterNewPopulator::print_subscription_statistics(std::ostream& stream) const {
+void TwitterNewPopulator::print_subscription_statistics(ostream& stream) {
     using namespace boost::accumulators;
 
     accumulator_set<uint32_t, stats<tag::variance> > acc;
     for (uint32_t i = 0; i != nusers_; ++i)
-        acc(nfollowers_[i].first);
+        acc(users_[i].nfollowers_);
+
+    TwitterUser::Compare cmp(TwitterUser::comp_nfollowers);
+    std::sort(users_.begin(), users_.end(), cmp);
 
     stream << nusers_ << " USERS HAVE SUBSCRIBERS:\n"
-           << "  zero: " << (std::upper_bound(nfollowers_.begin(),
-                                              nfollowers_.end(),
-                                              0, FollowersLess()) - nfollowers_.begin())
+           << "  zero: " << (std::upper_bound(users_.begin(), users_.end(), 0, cmp) - users_.begin())
            << "  mean: " << mean(acc)
            << "  sdev: " << sqrt(variance(acc)) << "\n"
-           << "  min " << nfollowers_[0].first
-           << ", 1% " << nfollowers_[(int) (0.01 * nusers_)].first
-           << ", 10% " << nfollowers_[(int) (0.10 * nusers_)].first
-           << ", 25% " << nfollowers_[(int) (0.25 * nusers_)].first
-           << ", 50% " << nfollowers_[(int) (0.50 * nusers_)].first
-           << ", 75% " << nfollowers_[(int) (0.75 * nusers_)].first
-           << ", 90% " << nfollowers_[(int) (0.90 * nusers_)].first
-           << ", 99% " << nfollowers_[(int) (0.99 * nusers_)].first
-           << ", max " << nfollowers_[nusers_ - 1].first << "\n";
+           << "  min " << users_[0].nfollowers_
+           << ", 1% " << users_[(int) (0.01 * nusers_)].nfollowers_
+           << ", 10% " << users_[(int) (0.10 * nusers_)].nfollowers_
+           << ", 25% " << users_[(int) (0.25 * nusers_)].nfollowers_
+           << ", 50% " << users_[(int) (0.50 * nusers_)].nfollowers_
+           << ", 75% " << users_[(int) (0.75 * nusers_)].nfollowers_
+           << ", 90% " << users_[(int) (0.90 * nusers_)].nfollowers_
+           << ", 99% " << users_[(int) (0.99 * nusers_)].nfollowers_
+           << ", max " << users_[nusers_ - 1].nfollowers_ << "\n";
+
+    std::sort(users_.begin(), users_.end(), TwitterUser::Compare(TwitterUser::comp_uid));
+}
+
+void TwitterNewPopulator::print_visualization() {
+    if (!visualize_)
+        return;
+
+    ofstream ppu("ppu.txt");
+    ofstream cpu("cpu.txt");
+    assert(ppu.good());
+    assert(cpu.good());
+
+    std::sort(users_.begin(), users_.end(), TwitterUser::Compare(TwitterUser::comp_nfollowers));
+    for (uint32_t i = 0; i < nusers_; ++i)
+        ppu << users_[i].nfollowers_ << " " << (users_[i].nbackpost_ +  users_[i].npost_) << endl;
+
+    std::sort(users_.begin(), users_.end(), TwitterUser::Compare(TwitterUser::comp_check));
+    for (uint32_t i = 0; i <= 99; ++i)
+        cpu << i << " " << users_[(uint32_t)((double)i / 100 * nusers_)].ncheck_ << endl;
+    cpu << 100 << " " << users_[nusers_ - 1].ncheck_ << endl;
+
+    ppu.close();
+    cpu.close();
+
+    // todo: should sort back by uid? yes if this is not called at the end
+    // of the application execution.
 }
 
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port) {
