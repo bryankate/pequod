@@ -79,6 +79,12 @@ void RwMicro::populate() {
             server_.insert(Str(buf, 13), String(""));
         }
     }
+    int time = 1;
+    for (int u = 0; u < nuser_; ++u)
+        for (int i = 0; i < 10; ++i) {
+            sprintf(buf, "p|%05u|%010u", u, ++time);
+            server_.insert(buf, String("She likes movie moby"));
+        }
     delete[] b;
     j_ = new Join;
     bool ok = j_->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> = "
@@ -91,7 +97,7 @@ void RwMicro::populate() {
 
 void RwMicro::run() {
     char buf1[128], buf2[128];
-    int time = 100, nread = 0, npost = 0, nrefresh = 0;
+    int time = 100000000, nread = 0, npost = 0, nrefresh = 0;
     int* loadtime = new int[nuser_];
     double trefresh = 0;
     struct rusage ru[2];
