@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#if DO_PERF
+#include <sys/prctl.h>
+#include <sys/wait.h>
+#endif
 
 namespace pq {
 
@@ -93,14 +97,28 @@ void RwMicro::run() {
     struct timeval tv[2];
     srandom(18181);
     bzero(loadtime, sizeof(*loadtime) * nuser_);
+#if DO_PERF
+    // perf profiling
+    {
+        String me(getpid());
+        pid_t pid = fork();
+        if (!pid) {
+            prctl(PR_SET_PDEATHSIG, SIGINT);
+            execlp("perf", "perf", "record", "-g", "-p", me.c_str(), NULL);
+            exit(0);
+        }
+    }
+#endif
     gettimeofday(&tv[0], NULL);
     getrusage(RUSAGE_SELF, &ru[0]);
-    int u = 0;
+    const int nu_active = nuser_ * pactive_ / 100;
     for (int i = 0; i < nops_; ++i) {
-        int a = random() % 100;
-        if (a < prefresh_) {
-            ++u;
-            u %= (nuser_ * pactive_ / 100);
+        if (i >= (nops_ - nu_active) || (random() % 100 < prefresh_)) {
+            int u;
+            if (i >= nops_ - nu_active)
+                u = i - (nops_ - nu_active);
+            else
+                u = random() % nu_active;
             ++nrefresh;
             sprintf(buf1, "t|%05u|%010u", u, loadtime[u] + 1);
             sprintf(buf2, "t|%05u}", u);
