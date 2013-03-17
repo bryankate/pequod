@@ -182,7 +182,7 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
-    if (!hint)
+    if (!hint || !hint->valid())
         p = store_.insert_check(key, DatumCompare(), cd);
     else {
         p.first = store_.iterator_to(*hint);
