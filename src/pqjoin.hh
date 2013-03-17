@@ -64,9 +64,6 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
 
-    bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
-    bool assign_parse(Str str, ErrorHandler* errh);
-
     Json unparse_json() const;
     String unparse() const;
 
