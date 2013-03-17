@@ -12,8 +12,6 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 JoinRange::~JoinRange() {
-    for (auto it : flushables_)
-        delete it;
     while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
         delete sink;
 }
@@ -24,31 +22,21 @@ struct JoinRange::validate_args {
     Match match;
     Server* server;
     ValidJoinRange* sink;
+    uint64_t now;
     int notifier;
 };
 
 inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
-    validate_args va{first, last, Match(), &server, 0,
+    validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
     va.sink = new ValidJoinRange(first, last, this, now);
-    if (join_->maintained() || join_->staleness())
-        valid_ranges_.insert(va.sink);
-    else
-        flushables_.push_back(va.sink);
+    valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
 
-void JoinRange::validate(Str first, Str last, Server& server) {
-    uint64_t now = tstamp();
+void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     Str last_valid = first;
-
-    for (auto it : flushables_) {
-        it->flush();
-        it->deref();
-    }
-    flushables_.clear();
-
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
         if (it->has_expired(now)) {
@@ -62,7 +50,7 @@ void JoinRange::validate(Str first, Str last, Server& server) {
         if (last_valid < it->ibegin())
             validate_one(last_valid, it->ibegin(), server, now);
         if (it->need_update())
-            it->update(first, last, server);
+            it->update(first, last, server, now);
         last_valid = it->iend();
         ++it;
     }
@@ -83,7 +71,8 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     // XXX PERFORMANCE this is not always necessary
     // XXX For now don't do this if the join is recursive
     if (table_name(Str(kf, kflen)) != join_->sink().table_name())
-        va.server->validate(Str(kf, kflen), Str(kl, kllen));
+        join_->source_table(joinpos)->validate(Str(kf, kflen), Str(kl, kllen),
+                                               va.now);
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource()) {
@@ -186,7 +175,7 @@ void ValidJoinRange::add_update(int joinpos, const String& context,
 }
 
 bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
-                               Server& server) {
+                               Server& server, uint64_t now) {
     if (first < iu->ibegin())
         first = iu->ibegin();
     if (iu->iend() < last)
@@ -196,7 +185,7 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
         last = iu->iend();
 
     Join* join = jr_->join();
-    JoinRange::validate_args va{first, last, Match(), &server, this,
+    JoinRange::validate_args va{first, last, Match(), &server, this, now,
             iu->notifier_};
     join->source(iu->joinpos_).match(iu->key_, va.match);
     join->parse_match_context(iu->context_, iu->joinpos_, va.match);
@@ -209,14 +198,14 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
     return iu->ibegin_ < iu->iend_;
 }
 
-void ValidJoinRange::update(Str first, Str last, Server& server) {
+void ValidJoinRange::update(Str first, Str last, Server& server, uint64_t now) {
     for (auto it = updates_.begin_overlaps(first, last);
          it != updates_.end(); ) {
         IntermediateUpdate* iu = it.operator->();
         ++it;
 
         updates_.erase(iu);
-        if (update_iu(first, last, iu, server))
+        if (update_iu(first, last, iu, server, now))
             updates_.insert(iu);
         else
             delete iu;

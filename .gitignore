@@ -13,3 +13,6 @@ perf.data.old
 /obj
 /stamp-h
 *~
+*.pyc
+results
+last

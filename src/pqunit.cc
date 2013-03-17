@@ -293,10 +293,6 @@ void test_annotation() {
     server.insert("b|00002|0000000005", "b3");
     CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
 
-    // every re-validate should flush old dead ranges
-    server.validate("c|00002|0000000001", "c|00002}");
-    CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(0));
-
     // SHOULD have a validrange for f|00003 (that expires) but NO copy of e|00004
     server.validate("f|00003|0000000001", "f|00003|0000000005");
     CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000005"), size_t(2));

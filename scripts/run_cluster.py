@@ -71,7 +71,7 @@ try:
             remoteRun(options.clientConfig if options.clientConfig
                                            else "git_pull_and_make",
                       [s['addr'] for s in cluster['servers']])
-        analyzer = ResultAnalyzer(expr['xlabel'])
+        analyzer = ResultAnalyzer(expr['xlabel'], expr['name'])
         exprDir = os.path.join(resultDir, expr['name'])
         loads = [] if not options.loads else options.loads.split(',')
         validLoads = [getLoadName(load) for load in expr['defs']]
