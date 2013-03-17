@@ -176,6 +176,10 @@ void test_expansion() {
                            "t|11111",
                            "t|11112",
                            m), "s|11111}");
+
+    m.clear();
+    j.source(0).match_range("s|11111", "s|11112", m);
+    CHECK_EQ(m.slot(j.slot("subscriber")), "11111");
 }
 
 void test_count() {
