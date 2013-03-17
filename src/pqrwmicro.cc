@@ -93,6 +93,7 @@ void RwMicro::run() {
     char buf1[128], buf2[128];
     int time = 100, nread = 0, npost = 0, nrefresh = 0;
     int* loadtime = new int[nuser_];
+    double trefresh = 0;
     struct rusage ru[2];
     struct timeval tv[2];
     srandom(18181);
@@ -114,6 +115,8 @@ void RwMicro::run() {
     const int nu_active = nuser_ * pactive_ / 100;
     for (int i = 0; i < nops_; ++i) {
         if (i >= (nops_ - nu_active) || (random() % 100 < prefresh_)) {
+            struct timeval optv[2];
+            gettimeofday(&optv[0], NULL);
             int u;
             if (i >= nops_ - nu_active)
                 u = i - (nops_ - nu_active);
@@ -128,6 +131,8 @@ void RwMicro::run() {
             } else
                 nread += pull(Str(buf1, 18), Str(buf2, 8), server_, j_);
             loadtime[u] = time;
+            gettimeofday(&optv[1], NULL);
+            trefresh += to_real(optv[1] - optv[0]);
         } else {
             int poster = random() % nuser_;
             sprintf(buf1, "p|%05u|%010u", poster, ++time);
@@ -149,6 +154,7 @@ void RwMicro::run() {
 	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
         .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
         .set("real_time", to_real(tv[1] - tv[0]))
+        .set("refresh_time", trefresh)
         .merge(server_.stats());
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] loadtime;
