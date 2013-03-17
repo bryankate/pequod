@@ -76,8 +76,8 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
     vector<double> op_weight(n_op);
     op_weight[op_post] = param["ppost"].as_i(2);
     op_weight[op_subscribe] = param["psubscribe"].as_i(3);
-    op_weight[op_login] = param["plogin"].as_i(1);
-    op_weight[op_logout] = param["plogout"].as_i(1);
+    op_weight[op_login] = param["plogin"].as_i(5);
+    op_weight[op_logout] = param["plogout"].as_i(5);
 
     double ptotal = 0;
     for (uint32_t o = 0; o < op_check; ++o)
@@ -207,7 +207,8 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
     }
 
     post_dist_ = post_dist_type(wpost.begin(), wpost.end());
-    check_dist_ = check_dist_type(0, nusers_ - 1);
+    login_dist_ = login_dist_type(0, nusers_ - 1);
+    uni_dist_ = uni_dist_type(0, nusers_ - 1);
 
     followers_.clear();
     followers_.reserve(followers.size());
