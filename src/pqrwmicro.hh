@@ -15,7 +15,8 @@ class RwMicro {
           pactive_(param["pactive"].as_i(100)), // percentage of tweets being read
           nops_(param["nops"].as_i(100000)),
           nuser_(param["nusers"].as_i(1000)),
-          nfollower_(100), server_(server),
+          nfollower_(param["nfollower"].as_i(100)), 
+          server_(server),
           push_(param["push"].as_b(true)), j_(NULL) {
     }
     void populate();
