@@ -87,6 +87,7 @@ class Server {
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
+    inline void validate(Str key);
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
 
@@ -156,7 +157,7 @@ inline Table& Server::make_table(Str name) {
     return *it;
 }
 
-inline const Datum *Server::find(Str str) const {
+inline const Datum* Server::find(Str str) const {
     auto& store = tables_.get(table_name(str), Table::empty_table).store_;
     auto it = store.find(str, DatumCompare());
     return it == store.end() ? NULL : it.operator->();
@@ -260,6 +261,14 @@ inline void Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).validate(first, last, now);
+}
+
+inline void Server::validate(Str key) {
+    LocalStr<24> next_key;
+    next_key.assign_uninitialized(key.length() + 1);
+    memcpy(next_key.mutable_data(), key.data(), key.length());
+    next_key.mutable_data()[key.length()] = 0;
+    validate(key, next_key);
 }
 
 inline size_t Server::validate_count(Str first, Str last) {
