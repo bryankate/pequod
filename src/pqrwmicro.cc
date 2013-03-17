@@ -93,6 +93,20 @@ void RwMicro::populate() {
     mandatory_assert(ok);
     if (push_)
         server_.add_join(Str("t|"), Str("t}"), j_);
+    if (prerefresh_) {
+        const int nu_active = nuser_ * pactive_ / 100;
+        char buf1[128], buf2[128];
+        for (int i = 0; i < nu_active; ++i) {
+            int u = i;
+            sprintf(buf1, "t|%05u|%010u", u, 0);
+            sprintf(buf2, "t|%05u}", u);
+            if (push_) {
+                server_.validate(Str(buf1, 18), Str(buf2, 8));
+                server_.count(Str(buf1, 18), Str(buf2, 8));
+            } else
+                pull(Str(buf1, 18), Str(buf2, 8), server_, j_);
+        }
+    }
 }
 
 void RwMicro::run() {
