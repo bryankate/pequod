@@ -270,7 +270,7 @@ void test_annotation() {
     j1.assign_parse("c|<a_id>|<time>|<b_id> = "
                     "using a|<a_id>|<b_id> "
                     "copy b|<b_id>|<time> pull "
-                    "with a_id:5d, time:10d, b_id:5d");
+                    "where a_id:5d, time:10d, b_id:5d");
     j1.ref();
     // will validate join each time and not install autopush triggers
     server.add_join("c|", "c}", &j1);
@@ -342,7 +342,7 @@ void test_op_count() {
     pq::Join j1;
     CHECK_TRUE(j1.assign_parse("\
 k|<uid> = count v|<aid>|<voter> using a|<uid>|<aid> \
-  with aid:5d, uid:5d, voter:5d"));
+  where aid:5d, uid:5d, voter:5d"));
     CHECK_EQ(j1.nsource(), 2);
 
     j1.ref();
@@ -777,10 +777,10 @@ void test_swap() {
 void test_iupdate() {
     pq::Server server;
     pq::Join j1;
-    CHECK_TRUE(j1.assign_parse("k|<author:5> = "
-                               "using b|<author>|<book_id:5> "
-                               "c|<book_id>|<chapter_id:5> "
-                               "count v|<chapter_id>|<voter:5>"));
+    CHECK_TRUE(j1.assign_parse("\
+k|<author> = count v|<chapter>|<voter>\
+  using b|<author>|<book>, c|<book>|<chapter>\
+  where author:5, chapter:5, book:5, voter:5"));
     j1.ref();
     server.add_join("k|", "k}", &j1);
 

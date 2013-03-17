@@ -376,7 +376,7 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_sum_match;
         else if (words[i] == "using")
             new_op = jvt_using;
-        else if (words[i] == "with")
+        else if (words[i] == "with" || words[i] == "where")
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
