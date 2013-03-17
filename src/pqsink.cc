@@ -12,8 +12,6 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 JoinRange::~JoinRange() {
-    for (auto it : flushables_)
-        delete it;
     while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
         delete sink;
 }
@@ -33,22 +31,12 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
     validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
     va.sink = new ValidJoinRange(first, last, this, now);
-    if (join_->maintained() || join_->staleness())
-        valid_ranges_.insert(va.sink);
-    else
-        flushables_.push_back(va.sink);
+    valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     Str last_valid = first;
-
-    for (auto it : flushables_) {
-        it->flush();
-        it->deref();
-    }
-    flushables_.clear();
-
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
         if (it->has_expired(now)) {

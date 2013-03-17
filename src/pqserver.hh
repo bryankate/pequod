@@ -69,8 +69,7 @@ class Server {
   public:
     typedef ServerStore store_type;
 
-    Server() {
-    }
+    inline Server();
 
     class const_iterator;
     inline const_iterator begin() const;
@@ -88,8 +87,8 @@ class Server {
     inline void remove_source(Str first, Str last, ValidJoinRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
-    inline void validate(Str first, Str last, uint64_t now = tstamp());
-    inline size_t validate_count(Str first, Str last, uint64_t now = tstamp());
+    inline void validate(Str first, Str last);
+    inline size_t validate_count(Str first, Str last);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -97,6 +96,7 @@ class Server {
   private:
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
+    uint64_t last_validate_at_;
     friend class const_iterator;
 };
 
@@ -140,6 +140,10 @@ inline auto Table::lower_bound(Str str) -> iterator {
 
 inline size_t Table::size() const {
     return store_.size();
+}
+
+inline Server::Server()
+    : last_validate_at_(0) {
 }
 
 inline Table& Server::make_table(Str name) {
@@ -249,14 +253,17 @@ inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
     make_table(tname).remove_source(first, last, sink);
 }
 
-inline void Server::validate(Str first, Str last, uint64_t now) {
+inline void Server::validate(Str first, Str last) {
+    uint64_t now = tstamp();
+    now += now == last_validate_at_;
+    last_validate_at_ = now;
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).validate(first, last, now);
 }
 
-inline size_t Server::validate_count(Str first, Str last, uint64_t now) {
-    validate(first, last, now);
+inline size_t Server::validate_count(Str first, Str last) {
+    validate(first, last);
     return count(first, last);
 }
 

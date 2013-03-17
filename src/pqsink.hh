@@ -103,7 +103,6 @@ class JoinRange : public ServerRangeBase {
   private:
     Join* join_;
     interval_tree<ValidJoinRange> valid_ranges_;
-    std::vector<ValidJoinRange*> flushables_;
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
@@ -151,10 +150,10 @@ inline size_t JoinRange::valid_ranges_size() const {
 inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
                                       uint64_t now)
     : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
-    if (jr_->join()->staleness())
-        expires_at_ = now + jr_->join()->staleness();
-    else
+    if (jr_->join()->maintained())
         expires_at_ = 0;
+    else
+        expires_at_ = now + jr_->join()->staleness();
 }
 
 inline void ValidJoinRange::ref() {
