@@ -244,7 +244,8 @@ String Join::expand_last(const Pattern& pat, Str sink_first, Str sink_last, cons
 
 SourceRange* Join::make_source(Server& server, const Match& m,
                                Str ibegin, Str iend, SinkRange* sink) {
-    SourceRange::parameters p{server, this, m, ibegin, iend, sink};
+    SourceRange::parameters p{server, this, nsource() - 1, m,
+            ibegin, iend, sink};
     if (jvt() == jvt_copy_last)
         return new CopySourceRange(p);
     else if (jvt() == jvt_count_match)
@@ -504,17 +505,38 @@ int Join::analyze(ErrorHandler* errh) {
     for (int m = 0; m != (1 << slot_capacity); ++m) {
         for (int s = 0; s != slot_capacity; ++s)
             if (m & (1 << s))
-                context_length_[m] += slotlen_[s];
+                context_length_[m] += slotlen_[s] + 1;
+    }
+
+    // create context_mask_
+    static_assert(slot_capacity <= 8 * sizeof(pat_mask_[0]),
+                  "slot_capacity too big for pat_mask_ entries");
+    context_mask_[0] = 0;
+    for (int p = 1; p != npat_; ++p) {
+        context_mask_[p] = 0;
+        for (int px = 1; px != p; ++px)
+            context_mask_[p] |= pat_mask_[px];
+        context_mask_[p] &= ~pat_mask_[p];
     }
 
     // create match_context_flags_
-    static_assert(slot_capacity <= 8 * sizeof(pat_mask_[0]),
-                  "slot_capacity too big for slotflags_ entries");
     for (int p = 0; p != npat_ - 1; ++p)
         match_context_flags_[p] = (p > 1 ? match_context_flags_[p - 1] : 0)
             | pat_mask_[p];
     for (int p = 0; p != npat_ - 1; ++p)
         match_context_flags_[p] &= ~pat_mask_[p];
+
+    // create sink_key_
+    sink_key_.assign_uninitialized(sink().key_length());
+    uint8_t* sk = sink_key_.mutable_udata();
+    for (const uint8_t* p = sink().pat_; p != sink().pat_ + sink().plen_; ++p)
+        if (*p < 128) {
+            *sk = *p;
+            ++sk;
+        } else {
+            memset(sk, 'X', slotlen_[*p - 128]);
+            sk += slotlen_[*p - 128];
+        }
 
     // success
     return 0;
@@ -522,6 +544,24 @@ int Join::analyze(ErrorHandler* errh) {
 
 bool Join::assign_parse(Str str, ErrorHandler* errh) {
     return hard_assign_parse(str, errh) >= 0;
+}
+
+Json Join::unparse_context(Str context) const {
+    Json j;
+    const uint8_t* ends = context.udata() + context.length();
+    for (const uint8_t* s = context.udata(); s != ends; ) {
+        j.set(slotname_[*s], Str(s + 1, slotlen_[*s]));
+        s += slotlen_[*s] + 1;
+    }
+    return j;
+}
+
+Json Join::unparse_match(const Match& m) const {
+    Json j;
+    for (int s = 0; s != slot_capacity; ++s)
+        if (m.has_slot(s))
+            j.set(slotname_[s], m.slot(s));
+    return j;
 }
 
 String Join::hard_unparse_match_context(int joinpos, const Match& match) const {

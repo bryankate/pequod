@@ -109,10 +109,11 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     } else if (join_->maintained()) {
         if (r)
             va.server->add_source(r);
-        else
-            va.server->add_source(new InvalidatorRange
-                                  (*va.server, join_, joinpos, va.match,
-                                   Str(kf, kflen), Str(kl, kllen), va.sink));
+        else {
+            SourceRange::parameters p{*va.server, join_, joinpos, va.match,
+                    Str(kf, kflen), Str(kl, kllen), va.sink};
+            va.server->add_source(new InvalidatorRange(p));
+        }
     } else if (r)
         delete r;
 }
@@ -147,6 +148,20 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
       joinpos_(joinpos), notifier_(notifier) {
 }
 
+SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
+    : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
+    Join* j = jr_->join();
+    if (j->maintained())
+        expires_at_ = 0;
+    else
+        expires_at_ = now + j->staleness();
+
+    Match m;
+    j->sink().match_range(first, last, m);
+    context_mask_ = j->known_mask(m);
+    j->make_context(context_, m, context_mask_);
+}
+
 SinkRange::~SinkRange() {
     while (IntermediateUpdate* iu = updates_.unlink_leftmost_without_rebalance())
         delete iu;
@@ -155,7 +170,7 @@ SinkRange::~SinkRange() {
 }
 
 void SinkRange::add_update(int joinpos, const String& context,
-                                Str key, int notifier) {
+                           Str key, int notifier) {
     Match m;
     join()->source(joinpos).match(key, m);
     join()->parse_match_context(context, joinpos, m);
@@ -173,7 +188,7 @@ void SinkRange::add_update(int joinpos, const String& context,
 }
 
 bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
-                               Server& server, uint64_t now) {
+                          Server& server, uint64_t now) {
     if (first < iu->ibegin())
         first = iu->ibegin();
     if (iu->iend() < last)
