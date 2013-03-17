@@ -7,18 +7,18 @@ namespace pq {
 
 uint64_t SourceRange::allocated_key_bytes = 0;
 
-SourceRange::SourceRange(Server& server, Join* join, const Match& m,
-                         Str first, Str last)
-    : ibegin_(first), iend_(last), join_(join), joinpos_(join->nsource() - 1),
-      dst_table_(&server.make_table(join->sink().table_name())) {
-    assert(table_name(first, last));
+SourceRange::SourceRange(const parameters& p)
+    : ibegin_(p.first), iend_(p.last), join_(p.join),
+      joinpos_(p.join->nsource() - 1),
+      dst_table_(&p.server.make_table(p.join->sink().table_name())) {
+    assert(table_name(p.first, p.last));
     if (!ibegin_.is_local())
         allocated_key_bytes += ibegin_.length();
     if (!iend_.is_local())
         allocated_key_bytes += iend_.length();
 
     String str = String::make_uninitialized(join_->sink().key_length());
-    join_->sink().expand(str.mutable_udata(), m);
+    join_->sink().expand(str.mutable_udata(), p.match);
     results_.push_back(result{std::move(str), 0});
 }
 

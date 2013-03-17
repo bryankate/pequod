@@ -244,20 +244,21 @@ String Join::expand_last(const Pattern& pat, Str sink_first, Str sink_last, cons
 
 SourceRange* Join::make_source(Server& server, const Match& m,
                                Str ibegin, Str iend) {
+    SourceRange::parameters p{server, this, m, ibegin, iend};
     if (jvt() == jvt_copy_last)
-        return new CopySourceRange(server, this, m, ibegin, iend);
+        return new CopySourceRange(p);
     else if (jvt() == jvt_count_match)
-        return new CountSourceRange(server, this, m, ibegin, iend);
+        return new CountSourceRange(p);
     else if (jvt() == jvt_min_last)
-        return new MinSourceRange(server, this, m, ibegin, iend);
+        return new MinSourceRange(p);
     else if (jvt() == jvt_max_last)
-        return new MaxSourceRange(server, this, m, ibegin, iend);
+        return new MaxSourceRange(p);
     else if (jvt() == jvt_sum_match)
-        return new SumSourceRange(server, this, m, ibegin, iend);
+        return new SumSourceRange(p);
     else if (jvt() == jvt_bounded_copy_last)
-        return new BoundedCopySourceRange(server, this, m, ibegin, iend);
+        return new BoundedCopySourceRange(p);
     else if (jvt() == jvt_bounded_count_match)
-        return new BoundedCountSourceRange(server, this, m, ibegin, iend);
+        return new BoundedCountSourceRange(p);
     else
         assert(0);
 }
