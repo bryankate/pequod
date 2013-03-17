@@ -63,14 +63,14 @@ void Table::add_source(SourceRange* r) {
     source_ranges_.insert(r);
 }
 
-void Table::remove_source(Str first, Str last, SinkRange* sink) {
+void Table::remove_source(Str first, Str last, SinkRange* sink, Str context) {
     for (auto it = source_ranges_.begin_overlaps(first, last);
 	 it != source_ranges_.end(); )
 	if (it->join() == sink->join()) {
             SourceRange* sr = it.operator->();
             ++it;
 
-            sr->remove_sink(sink);
+            sr->remove_sink(sink, context);
             if (sr->empty()) {
                 source_ranges_.erase(sr);
                 delete sr;

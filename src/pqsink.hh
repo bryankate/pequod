@@ -33,10 +33,10 @@ class ServerRangeBase {
 
 class IntermediateUpdate : public ServerRangeBase {
   public:
-    IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
+    IntermediateUpdate(Str first, Str last, SinkRange* sink, int joinpos, const Match& m, int notifier);
 
     typedef Str endpoint_type;
-    inline Str key() const;
+    inline Str context() const;
     inline int notifier() const;
 
     friend std::ostream& operator<<(std::ostream&, const IntermediateUpdate&);
@@ -45,7 +45,6 @@ class IntermediateUpdate : public ServerRangeBase {
     rblinks<IntermediateUpdate> rblinks_;
   private:
     LocalStr<12> context_;
-    LocalStr<24> key_;
     int joinpos_;
     int notifier_;
 
@@ -67,7 +66,7 @@ class SinkRange : public ServerRangeBase {
 
     inline bool has_expired(uint64_t now) const;
 
-    void add_update(int joinpos, const String& context, Str key, int notifier);
+    void add_update(int joinpos, Str context, Str key, int notifier);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server, uint64_t now);
 
@@ -196,8 +195,8 @@ inline Datum* SinkRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
 }
 
-inline Str IntermediateUpdate::key() const {
-    return key_;
+inline Str IntermediateUpdate::context() const {
+    return context_;
 }
 
 inline int IntermediateUpdate::notifier() const {

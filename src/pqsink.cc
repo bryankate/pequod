@@ -102,10 +102,12 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
-        if (r)
-            // XXX want to remove just the right one
-            va.server->remove_source(r->ibegin(), r->iend(), va.sink);
-        delete r;
+        if (r) {
+            LocalStr<12> remove_context;
+            join_->make_context(remove_context, va.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
+            va.server->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
+            delete r;
+        }
     } else if (join_->maintained()) {
         if (r)
             va.server->add_source(r);
@@ -142,10 +144,12 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
 #endif
 
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
-                                       Str context, Str key,
-                                       int joinpos, int notifier)
-    : ServerRangeBase(first, last), context_(context), key_(key),
-      joinpos_(joinpos), notifier_(notifier) {
+                                       SinkRange* sink, int joinpos, const Match& m,
+                                       int notifier)
+    : ServerRangeBase(first, last), joinpos_(joinpos), notifier_(notifier) {
+    Join* j = sink->join();
+    unsigned context_mask = (j->context_mask(joinpos) | j->source_mask(joinpos)) & ~sink->context_mask();
+    j->make_context(context_, m, context_mask);
 }
 
 SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
@@ -169,19 +173,16 @@ SinkRange::~SinkRange() {
         hint_->deref();
 }
 
-void SinkRange::add_update(int joinpos, const String& context,
-                           Str key, int notifier) {
+void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
     Match m;
     join()->source(joinpos).match(key, m);
-    join()->parse_match_context(context, joinpos, m);
+    join()->assign_context(m, context);
     uint8_t kf[key_capacity], kl[key_capacity];
     int kflen = join()->expand_first(kf, join()->sink(), ibegin(), iend(), m);
     int kllen = join()->expand_last(kl, join()->sink(), ibegin(), iend(), m);
 
-    IntermediateUpdate* iu = new IntermediateUpdate(Str(kf, kflen),
-                                                    Str(kl, kllen),
-                                                    context,
-                                                    key, joinpos, notifier);
+    IntermediateUpdate* iu = new IntermediateUpdate
+        (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
     updates_.insert(iu);
 
     // std::cerr << *iu << "\n";
@@ -200,8 +201,8 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
     Join* join = jr_->join();
     JoinRange::validate_args va{first, last, Match(), &server, this, now,
             iu->notifier_};
-    join->source(iu->joinpos_).match(iu->key_, va.match);
-    join->parse_match_context(iu->context_, iu->joinpos_, va.match);
+    join->assign_context(va.match, context_);
+    join->assign_context(va.match, iu->context_);
     jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
@@ -238,7 +239,7 @@ void SinkRange::flush() {
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")
-           << iu.key() << " " << iu.context_ << "}";
+           << iu.context() << " " << iu.context_ << "}";
     return stream;
 }
 

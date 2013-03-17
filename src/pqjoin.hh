@@ -117,7 +117,8 @@ class Join {
     inline int slot(Str name) const;
 
     inline unsigned known_mask(const Match& m) const;
-    inline unsigned context_mask(int sourcei) const;
+    inline unsigned source_mask(int si) const;
+    inline unsigned context_mask(int si) const;
     inline int context_length(unsigned mask) const;
     inline void write_context(uint8_t* s, const Match& m, unsigned mask) const;
     template <int C>
@@ -388,8 +389,12 @@ inline unsigned Join::known_mask(const Match& m) const {
     return mask;
 }
 
-inline unsigned Join::context_mask(int sourcei) const {
-    return context_mask_[sourcei + 1];
+inline unsigned Join::source_mask(int si) const {
+    return pat_mask_[si + 1];
+}
+
+inline unsigned Join::context_mask(int si) const {
+    return context_mask_[si + 1];
 }
 
 inline int Join::context_length(unsigned mask) const {

@@ -17,7 +17,7 @@ SourceRange::SourceRange(const parameters& p)
         allocated_key_bytes += iend_.length();
 
     unsigned sink_mask = (p.sink ? p.sink->context_mask() : 0);
-    unsigned context = p.join->known_mask(p.match) & p.join->context_mask(p.joinpos) & ~sink_mask;
+    unsigned context = p.join->context_mask(p.joinpos) & ~sink_mask;
     results_.push_back(result{Str(), p.sink});
     p.join->make_context(results_.back().context, p.match, context);
     if (p.sink)
@@ -37,10 +37,10 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
-void SourceRange::remove_sink(SinkRange* sink) {
+void SourceRange::remove_sink(SinkRange* sink, Str context) {
     assert(join() == sink->join());
     for (int i = 0; i != results_.size(); )
-        if (results_[i].sink == sink) {
+        if (results_[i].sink == sink && results_[i].context == context) {
             results_[i] = results_.back();
             results_.pop_back();
         } else

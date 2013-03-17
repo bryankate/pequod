@@ -44,7 +44,7 @@ class SourceRange {
     inline Join* join() const;
     inline int joinpos() const;
     void take_results(SourceRange& r);
-    void remove_sink(SinkRange* sink);
+    void remove_sink(SinkRange* sink, Str context);
 
     inline bool check_match(Str key) const;
     enum notify_type {
@@ -199,7 +199,6 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
 
 inline InvalidatorRange::InvalidatorRange(const parameters& p)
     : SourceRange(p) {
-    results_[0].context = p.join->unparse_match_context(p.joinpos, p.match);
 }
 
 inline CopySourceRange::CopySourceRange(const parameters& p)
