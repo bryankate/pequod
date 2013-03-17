@@ -35,7 +35,7 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
-void SourceRange::remove_sink(ValidJoinRange* sink) {
+void SourceRange::remove_sink(SinkRange* sink) {
     assert(join() == sink->join());
     for (int i = 0; i != results_.size(); )
         if (results_[i].sink == sink) {

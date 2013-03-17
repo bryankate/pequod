@@ -15,7 +15,6 @@ class Server;
 class Match;
 class Datum;
 class Table;
-class ValidJoinRange;
 
 class SourceRange {
   public:
@@ -35,9 +34,9 @@ class SourceRange {
 
     inline Join* join() const;
     inline int joinpos() const;
-    inline void set_sink(ValidJoinRange* sink);
+    inline void set_sink(SinkRange* sink);
     void take_results(SourceRange& r);
-    void remove_sink(ValidJoinRange* sink);
+    void remove_sink(SinkRange* sink);
 
     inline bool check_match(Str key) const;
     enum notify_type {
@@ -58,7 +57,7 @@ class SourceRange {
   protected:
     struct result {
         String key;
-        ValidJoinRange* sink;
+        SinkRange* sink;
     };
 
     Join* join_;
@@ -74,7 +73,7 @@ class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(Server& server, Join* join, int joinpos,
                             const Match& match,
-                            Str first, Str last, ValidJoinRange* sink);
+                            Str first, Str last, SinkRange* sink);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
     virtual void notify(result&, const Datum*, const String&, int) const {}
@@ -183,7 +182,7 @@ inline bool SourceRange::check_match(Str key) const {
     return join_->source(joinpos_).match(key);
 }
 
-inline void SourceRange::set_sink(ValidJoinRange* sink) {
+inline void SourceRange::set_sink(SinkRange* sink) {
     assert(results_.size() == 1 && !results_[0].sink);
     if ((results_[0].sink = sink))
         sink->ref();
@@ -205,7 +204,7 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, ValidJoinRange* sink)
+inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, SinkRange* sink)
     : SourceRange(server, join, Match(), first, last) {
     joinpos_ = joinpos;
     results_[0].key = join->unparse_match_context(joinpos, match);

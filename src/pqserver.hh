@@ -35,12 +35,12 @@ class Table : public pequod_set_base_hook {
     inline void validate(Str first, Str last, uint64_t now);
 
     void add_source(SourceRange* r);
-    void remove_source(Str first, Str last, ValidJoinRange* sink);
+    void remove_source(Str first, Str last, SinkRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     void insert(Str key, String value);
     template <typename F>
-    void modify(Str key, const ValidJoinRange* sink, const F& func);
+    void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
 
@@ -85,7 +85,7 @@ class Server {
     inline void erase(Str key);
 
     inline void add_source(SourceRange* r);
-    inline void remove_source(Str first, Str last, ValidJoinRange* sink);
+    inline void remove_source(Str first, Str last, SinkRange* sink);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
     inline void validate(Str key);
@@ -187,7 +187,7 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
 }
 
 template <typename F>
-void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
+void Table::modify(Str key, const SinkRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
@@ -255,7 +255,7 @@ inline void Server::add_source(SourceRange* r) {
     make_table(tname).add_source(r);
 }
 
-inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
+inline void Server::remove_source(Str first, Str last, SinkRange* sink) {
     Str tname = table_name(first);
     assert(tname);
     make_table(tname).remove_source(first, last, sink);
