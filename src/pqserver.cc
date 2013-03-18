@@ -391,7 +391,7 @@ int main(int argc, char** argv) {
             pq::DirectClient client(server);
             pq::TwitterNewShim<pq::DirectClient> shim(client);
             pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         }
     } else if (mode == mode_hn) {

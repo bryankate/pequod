@@ -191,9 +191,6 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
     for (auto& sub : subs)
         ++users_[sub.second].nfollowers_;
 
-    // individual user posting weights are correlated with the number of
-    // followers. the correlation is close up until 1000 followers, after
-    // which some variance is introduced
     vector<double> wpost(nusers_, 0);
     for (uint32_t u = 0; u < nusers_; ++u) {
         users_[u].uid_ = u;
@@ -295,7 +292,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port) {
     rc = new RemoteClient(fd);
     shim = new TwitterNewShim<RemoteClient>(*rc);
     tr = new TwitterNewRunner<TwitterNewShim<RemoteClient> >(*shim, tp);
-    tr->populate();
+    twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;
     delete shim;

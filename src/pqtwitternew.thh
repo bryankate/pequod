@@ -256,7 +256,7 @@ class TwitterNewRunner {
   public:
     TwitterNewRunner(S& server, TwitterNewPopulator& tp);
 
-    tamed void populate();
+    tamed void populate(tamer::event<> done);
     void run(tamer::event<> done);
 
   private:
@@ -290,7 +290,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) 
 }
 
 tamed template <typename S>
-void TwitterNewRunner<S>::populate() {
+void TwitterNewRunner<S>::populate(tamer::event<> done) {
     tvars { boost::mt19937 gen;
             std::vector<std::pair<uint32_t, uint32_t> > subs;
             uint32_t nusers;
@@ -333,6 +333,7 @@ void TwitterNewRunner<S>::populate() {
     }
 
     twait { server_.initialize(tp_.pull(), tp_.push(), make_event()); }
+    done();
 }
 
 template <typename S>
