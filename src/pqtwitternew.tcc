@@ -66,6 +66,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       pull_(param["pull"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
+      overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
