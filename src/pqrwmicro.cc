@@ -134,14 +134,10 @@ void RwMicro::run() {
     getrusage(RUSAGE_SELF, &ru[0]);
     const int nu_active = nuser_ * pactive_ / 100;
     for (int i = 0; i < nops_; ++i) {
-        if (i >= (nops_ - nu_active) || (random() % 100 < prefresh_)) {
+        if (random() % 100 < prefresh_) {
             struct timeval optv[2];
             gettimeofday(&optv[0], NULL);
-            int u;
-            if (i >= nops_ - nu_active)
-                u = i - (nops_ - nu_active);
-            else
-                u = random() % nu_active;
+            int u = random() % nu_active;
             ++nrefresh;
             sprintf(buf1, "t|%05u|%010u", u, loadtime[u] + 1);
             sprintf(buf2, "t|%05u}", u);
