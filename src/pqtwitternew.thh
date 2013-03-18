@@ -30,6 +30,7 @@ struct TwitterUser {
     uint32_t ncheck_;
     size_t nread_;
     uint32_t load_time_;
+    bool loggedin_;
 
     inline uint32_t uid() const { return uid_; }
 
@@ -57,7 +58,7 @@ class TwitterNewPopulator {
     typedef boost::random_number_generator<boost::mt19937> rng_type;
     typedef boost::random::discrete_distribution<> op_dist_type;
     typedef boost::random::discrete_distribution<> post_dist_type;
-    typedef boost::random::uniform_int_distribution<> login_dist_type;
+    typedef boost::random::normal_distribution<> login_dist_type;
     typedef boost::random::uniform_int_distribution<> uni_dist_type;
 
     TwitterNewPopulator(const Json& param);
@@ -81,7 +82,7 @@ class TwitterNewPopulator {
     inline TwitterOp rand_op(generator_type& gen) { return (TwitterOp)op_dist_(gen); }
     inline uint32_t rand_user(generator_type& gen) { return uni_dist_(gen); }
     inline uint32_t rand_user_post(generator_type& gen) { return post_dist_(gen); }
-    inline uint32_t rand_user_login(generator_type& gen) { return login_dist_(gen); }
+    inline uint32_t rand_user_login(generator_type& gen);
 
   private:
     uint32_t nusers_;
@@ -129,6 +130,14 @@ inline const uint32_t* TwitterNewPopulator::end_followers(uint32_t user) const {
 
 inline TwitterUser& TwitterNewPopulator::mutable_user(uint32_t user) {
     return users_[user];
+}
+
+inline uint32_t TwitterNewPopulator::rand_user_login(generator_type& gen) {
+    int32_t r;
+    do {
+        r = login_dist_(gen);
+    } while (r < 0 || r >= (int32_t)nusers_);
+    return r;
 }
 
 
@@ -344,9 +353,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     for (uint32_t u = 0; u < nusers / 2; ++u) {
         do {
             user = &tp_.mutable_user(tp_.rand_user_login(gen));
-        } while(user->load_time_);
+        } while(user->loggedin_);
 
-        user->load_time_ = currtime_;
+        user->loggedin_ = true;
+        ++user->nlogin_;
         loggedin.push_back(user->uid());
     }
 
@@ -367,13 +377,16 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
             case op_subscribe:
                 user = &tp_.mutable_user(tp_.rand_user(gen));
-                uint32_t follower;
+                uint32_t following;
 
                 do {
-                    follower = tp_.rand_user(gen);
-                } while (follower == user->uid());
+                    following = tp_.rand_user(gen);
+                } while (following == user->uid());
 
-                server_.subscribe(user->uid(), follower, gr.make_event());
+                if (tp_.log())
+                    printf("%d: subscribe s|%08d|%08d\n", currtime_, user->uid(), following);
+
+                server_.subscribe(user->uid(), following, gr.make_event());
                 ++user->nsubscribe_;
                 break;
 
@@ -385,8 +398,12 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 slot = gen() % loggedin.size();
                 user = &tp_.mutable_user(loggedin[slot]);
 
+                if (tp_.log())
+                    printf("%d: logout %08d\n", currtime_, user->uid());
+
                 loggedin.erase(loggedin.begin() + slot);
                 user->load_time_ = 0;
+                user->loggedin_ = false;
                 ++user->nlogout_;
                 break;
 
@@ -398,9 +415,13 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 // keep lists of logged in and logged out users
                 do {
                     user = &tp_.mutable_user(tp_.rand_user_login(gen));
-                } while(user->load_time_);
+                } while(user->loggedin_);
+
+                if (tp_.log())
+                    printf("%d: login %08d\n", currtime_, user->uid());
 
                 loggedin.push_back(user->uid());
+                user->loggedin_ = true;
                 ++user->nlogin_;
                 // fall through to check timeline after login
 
