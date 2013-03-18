@@ -32,7 +32,7 @@ class ResultAnalyzer:
             self.exp[plotgroup] = []
         self.exp[plotgroup].append([('#_X_axis', plotkey)] + aj.items())
 
-    def getGNUData(self, fname, src, srcName = None):
+    def getGNUData(self, fname, header = None):
         if fname == None:
             f = sys.stderr
         else:
@@ -43,7 +43,7 @@ class ResultAnalyzer:
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
         
-        print >> f, "#", srcName if srcName else src
+        print >> f, "#", header
         plotgroups = sorted(self.exp.keys())
         for groupNumber, plotgroup in enumerate(plotgroups):
             points = self.exp[plotgroup]
@@ -65,14 +65,14 @@ class ResultAnalyzer:
         if f != sys.stderr:
             f.close()
 
-    def getCSVHorizon(self, fname, src, srcName = None):
+    def getCSVHorizon(self, fname, header):
         if fname == None:
             f = sys.stderr
         else:
             existed = os.path.exists(fname)
             f = open(fname, "a")
         cf = csv.writer(f, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        cf.writerow(["#" + (srcName if srcName else src)])
+        cf.writerow(["#" + header])
         plotgroups = sorted(self.exp.keys())
         if not existed:
             cf.writerow(["# note that the bandwidth is not real? Traffic between servers are double counted?"])
@@ -93,8 +93,8 @@ class ResultAnalyzer:
 
 if __name__ == "__main__":
     def test():
-        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro2')
-        expdir = "./last/rwmicro2"
+        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro_1')
+        expdir = "./last/rwmicro_1"
         for f in os.listdir(expdir):
             fpath = os.path.join(expdir, f)
             if not os.path.isdir(fpath):

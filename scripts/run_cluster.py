@@ -56,40 +56,36 @@ cluster = config.CLUSTERS[options.cluster]
 def getLoadName(load):
     return load['plotgroup'] + '_' + str(load['plotkey'])
 
+def runOneExpr(ename, opt, cluster, resultDir, finalDir):
+    expr = [x for x in allExpr if x['name'] == ename]
+    if not expr:
+        allExprNames = [x['name'] for x in allExpr]
+        raise Exception("Valid experiments are", ", ".join(allExprNames))
+    expr = expr[0]
+    analyzer = ResultAnalyzer(expr['xlabel'], ename)
+    exprDir = os.path.join(resultDir, expr['name'])
+    loads = [] if not opt.loads else opt.loads.split(',')
+    validLoads = [getLoadName(load) for load in expr['defs']]
+    for l in loads:
+        if not l in validLoads:
+            raise Exception("Unknown load: " + l, 'Candidates: ' + ', '.join(validLoads))
+    for load in expr['defs']:
+        lname = getLoadName(load)
+        if loads and not lname in loads: continue
+        loadResultDir = os.path.join(exprDir, lname)
+        os.makedirs(loadResultDir)
+        PequodLoadRunner.run(expr['name'], load, opt, cluster, loadResultDir)
+        analyzer.add(load['plotgroup'], loadResultDir, load['plotkey'])
+    basename = expr['name'] + '.data'
+    analyzer.getGNUData(os.path.join(exprDir, basename), os.path.join(finalDir, basename))
+    analyzer.getCSVHorizon("results/notebook.csv", os.path.join(finalDir, basename))
 try:
     finalDir = os.path.join("results", time.strftime("%Y_%m_%d-%H_%M_%S"))
     if options.expr:
-        expr = [x for x in allExpr if x['name'] == options.expr]
-        if not expr:
-            allExprNames = [x['name'] for x in allExpr]
-            raise Exception("Valid experiments are", ", ".join(allExprNames))
-        expr = expr[0]
-        if options.cluster != 'pwd':
-            remoteRun(options.serverConfig if options.serverConfig
-                                           else "git_pull_and_make", 
-                      [c['addr'] for c in cluster['clients']])
-            remoteRun(options.clientConfig if options.clientConfig
-                                           else "git_pull_and_make",
-                      [s['addr'] for s in cluster['servers']])
-        analyzer = ResultAnalyzer(expr['xlabel'], expr['name'])
-        exprDir = os.path.join(resultDir, expr['name'])
-        loads = [] if not options.loads else options.loads.split(',')
-        validLoads = [getLoadName(load) for load in expr['defs']]
-        for l in loads:
-            if not l in validLoads:
-                raise Exception("Unknown load: " + l, 'Candidates: ' + ', '.join(validLoads))
-        for load in expr['defs']:
-            lname = getLoadName(load)
-            if loads and not lname in loads: continue
-            loadResultDir = os.path.join(exprDir, lname)
-            os.makedirs(loadResultDir)
-            PequodLoadRunner.run(expr['name'], load, options, cluster, loadResultDir)
-            analyzer.add(load['plotgroup'], loadResultDir, load['plotkey'])
-        basename = expr['name'] + '.data'
-        analyzer.getGNUData(os.path.join(resultDir, basename),
-                            resultDir, os.path.join(finalDir, basename))
-        analyzer.getCSVHorizon("results/notebook.csv",
-                               resultDir, os.path.join(finalDir, basename))
+        allExprNames = [x['name'] for x in allExpr]
+        exprs = allExprNames if options.expr == 'all' else options.expr.split(',')
+        for e in exprs:
+            runOneExpr(e, options, cluster, resultDir, finalDir)
     elif options.machines:
         for s in cluster['servers']:
             print "Server: %s" % s['addr']
