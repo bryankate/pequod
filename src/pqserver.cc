@@ -35,10 +35,6 @@ Table::Table(Str name)
 const Table Table::empty_table{Str()};
 
 Table::~Table() {
-    clear();
-}
-
-void Table::clear() {
     while (SourceRange* r = source_ranges_.unlink_leftmost_without_rebalance()) {
         r->clear_without_deref();
         delete r;

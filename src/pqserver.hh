@@ -48,8 +48,6 @@ class Table : public pequod_set_base_hook {
     inline iterator erase(iterator it);
     inline iterator invalidate_erase(iterator it);
 
-    void clear();
-
     uint64_t ninsert_;
     uint64_t nmodify_;
     uint64_t nerase_;
