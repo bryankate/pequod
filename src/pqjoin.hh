@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "pqbase.hh"
 #include "str.hh"
+#include "local_str.hh"
 #include "json.hh"
 template <typename K, typename V> class HashTable;
 class Json;
@@ -28,9 +29,10 @@ class Match {
 
     inline Match();
 
+    inline bool has_slot(int slot) const;
+    inline Str slot(int slot) const;
     inline int known_length(int slot) const;
     inline const uint8_t* data(int slot) const;
-    inline Str slot(int slot) const;
 
     inline void set_slot(int slot, const char* data, int len);
     inline void set_slot(int slot, const uint8_t* data, int len);
@@ -58,16 +60,9 @@ class Pattern {
     inline int slot_length(int si) const;
     inline int slot_position(int si) const;
 
-    inline unsigned known_mask(const Match& m) const;
-
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
-
-    inline void expand(uint8_t* s, const Match& m) const;
-
-    bool assign_parse(Str str, HashTable<Str, int>& slotmap, ErrorHandler* errh);
-    bool assign_parse(Str str, ErrorHandler* errh);
 
     Json unparse_json() const;
     String unparse() const;
@@ -116,7 +111,20 @@ class Join {
 
     inline int slot(Str name) const;
 
-    inline void expand(uint8_t* out, Str str) const;
+    inline unsigned known_mask(const Match& m) const;
+    inline unsigned source_mask(int si) const;
+    inline unsigned context_mask(int si) const;
+    inline int context_length(unsigned mask) const;
+    inline void write_context(uint8_t* s, const Match& m, unsigned mask) const;
+    template <int C>
+    inline void make_context(LocalStr<C>& str, const Match& m, unsigned mask) const;
+    inline void assign_context(Match& m, Str context) const;
+    Json unparse_context(Str context) const;
+    Json unparse_match(const Match& m) const;
+
+    inline void expand_sink_key_context(Str context) const;
+    inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
+    inline Str sink_key() const;
 
     int expand_first(uint8_t* buf, const Pattern& pat,
                      Str sink_first, Str sink_last, const Match& match) const;
@@ -124,9 +132,6 @@ class Join {
     int expand_last(uint8_t* buf, const Pattern& pat,
                     Str sink_first, Str sink_last, const Match& match) const;
     String expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
-
-    inline String unparse_match_context(int joinpos, const Match& match) const;
-    inline void parse_match_context(Str context, int joinpos, Match& match) const;
 
     inline bool maintained() const;
     inline uint64_t staleness() const;
@@ -153,10 +158,11 @@ class Join {
     bool maintained_;   // if the output is kept up to date with changes to the input
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
-    uint8_t match_context_flags_[pcap - 1];
     Table* table_[pcap];
     Pattern pat_[pcap];
+    uint8_t context_mask_[pcap];
     uint8_t context_length_[1 << slot_capacity];
+    mutable LocalStr<24> sink_key_;
 
     enum { stype_unknown = 0, stype_text, stype_decimal, stype_binary_number };
     String slotname_[slot_capacity];
@@ -169,8 +175,6 @@ class Join {
     int parse_slot_names(Str word, String& out, ErrorHandler* errh);
     int hard_assign_parse(Str str, ErrorHandler* errh);
     int analyze(ErrorHandler* errh);
-    String hard_unparse_match_context(int joinpos, const Match& match) const;
-    void hard_parse_match_context(Str context, int joinpos, Match& match) const;
 };
 
 
@@ -182,16 +186,20 @@ inline void Match::clear() {
     memset(ms_.slotlen_, 0, sizeof(ms_.slotlen_));
 }
 
+inline bool Match::has_slot(int i) const {
+    return ms_.slotlen_[i];
+}
+
+inline Str Match::slot(int i) const {
+    return Str(slot_[i], ms_.slotlen_[i]);
+}
+
 inline int Match::known_length(int i) const {
     return ms_.slotlen_[i];
 }
 
 inline const uint8_t* Match::data(int i) const {
     return slot_[i];
-}
-
-inline Str Match::slot(int i) const {
-    return Str(slot_[i], ms_.slotlen_[i]);
 }
 
 inline void Match::set_slot(int i, const uint8_t* data, int len) {
@@ -242,14 +250,6 @@ inline int Pattern::slot_position(int slot) const {
     return slotpos_[slot];
 }
 
-inline unsigned Pattern::known_mask(const Match& m) const {
-    unsigned mask = 0;
-    for (int s = 0; s != slot_capacity; ++s)
-        if (m.known_length(s) == slotlen_[s])
-            mask |= 1 << s;
-    return mask;
-}
-
 inline bool Pattern::match(Str str) const {
     if (str.length() != key_length())
 	return false;
@@ -288,19 +288,6 @@ inline bool Pattern::match(Str s, Match& m) const {
 	    ss += slotlen;
 	}
     return true;
-}
-
-inline void Pattern::expand(uint8_t* s, const Match& m) const {
-    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
-	if (*p < 128) {
-	    *s = *p;
-	    ++s;
-	} else {
-	    int slotlen = m.known_length(*p - 128);
-	    if (slotlen)
-		memcpy(s, m.data(*p - 128), slotlen);
-	    s += slotlen_[*p - 128];
-	}
 }
 
 inline Join::Join()
@@ -368,26 +355,72 @@ inline int Join::slot(Str name) const {
     return -1;
 }
 
-inline void Join::expand(uint8_t* s, Str str) const {
-    const Pattern& last = back_source();
-    const Pattern& first = sink();
-    for (const uint8_t* p = last.pat_; p != last.pat_ + last.plen_; ++p)
-	if (*p >= 128 && first.has_slot(*p - 128))
-	    memcpy(s + first.slotpos_[*p - 128],
-		   str.udata() + last.slotpos_[*p - 128],
-		   last.slotlen_[*p - 128]);
+inline unsigned Join::known_mask(const Match& m) const {
+    unsigned mask = 0;
+    for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
+        if (m.known_length(s) == slotlen_[s])
+            mask |= 1 << s;
+    return mask;
 }
 
-inline String Join::unparse_match_context(int joinpos, const Match& match) const {
-    if (!match_context_flags_[joinpos + 1])
-        return String();
-    else
-        return hard_unparse_match_context(joinpos, match);
+inline unsigned Join::source_mask(int si) const {
+    return pat_mask_[si + 1];
 }
 
-inline void Join::parse_match_context(Str context, int joinpos, Match& match) const {
-    if (match_context_flags_[joinpos + 1])
-        hard_parse_match_context(context, joinpos, match);
+inline unsigned Join::context_mask(int si) const {
+    return context_mask_[si + 1];
+}
+
+inline int Join::context_length(unsigned mask) const {
+    assert(mask < (1 << slot_capacity));
+    return context_length_[mask];
+}
+
+inline void Join::write_context(uint8_t* s, const Match& m, unsigned mask) const {
+    for (int i = 0; mask; mask >>= 1, ++i)
+        if (mask & 1) {
+            assert(m.known_length(i) == slotlen_[i]);
+            *s++ = i;
+            memcpy(s, m.data(i), slotlen_[i]);
+            s += slotlen_[i];
+        }
+}
+
+template <int C>
+inline void Join::make_context(LocalStr<C>& str, const Match& m, unsigned mask) const {
+    str.assign_uninitialized(context_length(mask));
+    write_context(str.mutable_udata(), m, mask);
+}
+
+inline void Join::assign_context(Match& m, Str context) const {
+    const uint8_t* ends = context.udata() + context.length();
+    for (const uint8_t* s = context.udata(); s != ends; ) {
+        m.set_slot(*s, s + 1, slotlen_[*s]);
+        s += slotlen_[*s] + 1;
+    }
+}
+
+inline void Join::expand_sink_key_context(Str context) const {
+    const uint8_t* ends = context.udata() + context.length();
+    for (const uint8_t* s = context.udata(); s != ends; ) {
+        if (pat_[0].has_slot(*s))
+            memcpy(sink_key_.mutable_data() + pat_[0].slot_position(*s),
+                   s + 1, slotlen_[*s]);
+        s += slotlen_[*s] + 1;
+    }
+}
+
+inline void Join::expand_sink_key_source(Str source_key, unsigned mask) const {
+    mask = pat_mask_[0] & pat_mask_[npat_ - 1] & ~mask;
+    for (int s = 0; mask; mask >>= 1, ++s)
+        if (mask & 1)
+            memcpy(sink_key_.mutable_data() + pat_[0].slot_position(s),
+                   source_key.data() + pat_[npat_ - 1].slot_position(s),
+                   slotlen_[s]);
+}
+
+inline Str Join::sink_key() const {
+    return sink_key_;
 }
 
 bool operator==(const Pattern& a, const Pattern& b);

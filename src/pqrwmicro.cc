@@ -79,6 +79,12 @@ void RwMicro::populate() {
             server_.insert(Str(buf, 13), String(""));
         }
     }
+    int time = 1;
+    for (int u = 0; u < nuser_; ++u)
+        for (int i = 0; i < 10; ++i) {
+            sprintf(buf, "p|%05u|%010u", u, ++time);
+            server_.insert(buf, String("She likes movie moby"));
+        }
     delete[] b;
     j_ = new Join;
     bool ok = j_->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> = "
@@ -87,11 +93,25 @@ void RwMicro::populate() {
     mandatory_assert(ok);
     if (push_)
         server_.add_join(Str("t|"), Str("t}"), j_);
+    if (prerefresh_) {
+        const int nu_active = nuser_ * pactive_ / 100;
+        char buf1[128], buf2[128];
+        for (int i = 0; i < nu_active; ++i) {
+            int u = i;
+            sprintf(buf1, "t|%05u|%010u", u, 0);
+            sprintf(buf2, "t|%05u}", u);
+            if (push_) {
+                server_.validate(Str(buf1, 18), Str(buf2, 8));
+                server_.count(Str(buf1, 18), Str(buf2, 8));
+            } else
+                pull(Str(buf1, 18), Str(buf2, 8), server_, j_);
+        }
+    }
 }
 
 void RwMicro::run() {
     char buf1[128], buf2[128];
-    int time = 100, nread = 0, npost = 0, nrefresh = 0;
+    int time = 100000000, nread = 0, npost = 0, nrefresh = 0;
     int* loadtime = new int[nuser_];
     double trefresh = 0;
     struct rusage ru[2];

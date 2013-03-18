@@ -21,6 +21,7 @@ class SourceRange {
     struct parameters {
         Server& server;
         Join* join;
+        int joinpos;
         const Match& match;
         Str first;
         Str last;
@@ -43,7 +44,7 @@ class SourceRange {
     inline Join* join() const;
     inline int joinpos() const;
     void take_results(SourceRange& r);
-    void remove_sink(SinkRange* sink);
+    void remove_sink(SinkRange* sink, Str context);
 
     inline bool check_match(Str key) const;
     enum notify_type {
@@ -63,7 +64,7 @@ class SourceRange {
     rblinks<SourceRange> rblinks_;
   protected:
     struct result {
-        String key;
+        LocalStr<12> context;
         SinkRange* sink;
     };
 
@@ -72,18 +73,16 @@ class SourceRange {
     Table* dst_table_;  // todo: move this to the join?
     mutable local_vector<result, 4> results_;
 
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
 
 class InvalidatorRange : public SourceRange {
   public:
-    inline InvalidatorRange(Server& server, Join* join, int joinpos,
-                            const Match& match,
-                            Str first, Str last, SinkRange* sink);
+    inline InvalidatorRange(const parameters& p);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
-    virtual void notify(result&, const Datum*, const String&, int) const {}
+    virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
 };
 
 
@@ -91,7 +90,7 @@ class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 
@@ -99,28 +98,28 @@ class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class Bounds {
@@ -143,7 +142,7 @@ class BoundedCopySourceRange : public SourceRange {
   public:
     inline BoundedCopySourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -153,7 +152,7 @@ class BoundedCountSourceRange : public SourceRange {
   public:
     inline BoundedCountSourceRange(const parameters& p);
   protected:
-    virtual void notify(result& res, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -198,10 +197,8 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
-inline InvalidatorRange::InvalidatorRange(Server& server, Join* join, int joinpos, const Match& match, Str first, Str last, SinkRange* sink)
-    : SourceRange(parameters{server, join, Match(), first, last, sink}) {
-    joinpos_ = joinpos;
-    results_[0].key = join->unparse_match_context(joinpos, match);
+inline InvalidatorRange::InvalidatorRange(const parameters& p)
+    : SourceRange(p) {
 }
 
 inline CopySourceRange::CopySourceRange(const parameters& p)

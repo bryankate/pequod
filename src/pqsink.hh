@@ -33,10 +33,10 @@ class ServerRangeBase {
 
 class IntermediateUpdate : public ServerRangeBase {
   public:
-    IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
+    IntermediateUpdate(Str first, Str last, SinkRange* sink, int joinpos, const Match& m, int notifier);
 
     typedef Str endpoint_type;
-    inline Str key() const;
+    inline Str context() const;
     inline int notifier() const;
 
     friend std::ostream& operator<<(std::ostream&, const IntermediateUpdate&);
@@ -45,7 +45,6 @@ class IntermediateUpdate : public ServerRangeBase {
     rblinks<IntermediateUpdate> rblinks_;
   private:
     LocalStr<12> context_;
-    LocalStr<24> key_;
     int joinpos_;
     int notifier_;
 
@@ -54,7 +53,7 @@ class IntermediateUpdate : public ServerRangeBase {
 
 class SinkRange : public ServerRangeBase {
   public:
-    inline SinkRange(Str first, Str last, JoinRange* jr, uint64_t now);
+    SinkRange(Str first, Str last, JoinRange* jr, uint64_t now);
     ~SinkRange();
 
     inline void ref();
@@ -62,10 +61,12 @@ class SinkRange : public ServerRangeBase {
 
     inline Join* join() const;
     inline Table* table() const;
+    inline unsigned context_mask() const;
+    inline Str context() const;
 
     inline bool has_expired(uint64_t now) const;
 
-    void add_update(int joinpos, const String& context, Str key, int notifier);
+    void add_update(int joinpos, Str context, Str key, int notifier);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server, uint64_t now);
 
@@ -79,6 +80,8 @@ class SinkRange : public ServerRangeBase {
   private:
     JoinRange* jr_;
     int refcount_;
+    unsigned context_mask_;
+    LocalStr<12> context_;
     mutable Datum* hint_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
@@ -146,14 +149,6 @@ inline size_t JoinRange::valid_ranges_size() const {
     return valid_ranges_.size();
 }
 
-inline SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
-    if (jr_->join()->maintained())
-        expires_at_ = 0;
-    else
-        expires_at_ = now + jr_->join()->staleness();
-}
-
 inline void SinkRange::ref() {
     ++refcount_;
 }
@@ -169,6 +164,14 @@ inline Join* SinkRange::join() const {
 
 inline Table* SinkRange::table() const {
     return jr_->join()->sink_table();
+}
+
+inline unsigned SinkRange::context_mask() const {
+    return context_mask_;
+}
+
+inline Str SinkRange::context() const {
+    return context_;
 }
 
 inline bool SinkRange::has_expired(uint64_t now) const {
@@ -192,8 +195,8 @@ inline Datum* SinkRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
 }
 
-inline Str IntermediateUpdate::key() const {
-    return key_;
+inline Str IntermediateUpdate::context() const {
+    return context_;
 }
 
 inline int IntermediateUpdate::notifier() const {

@@ -159,9 +159,8 @@ inline LocalStr<C>& LocalStr<C>::operator=(const String_base<T>& x) {
 
 template <int C>
 inline void LocalStr<C>::assign_uninitialized(int length) {
-    if (length <= local_capacity
-        ? u_.length > local_capacity
-        : length > u_.length)
+    if (u_.length > local_capacity
+        && (length > u_.length || length <= local_capacity))
         delete[] u_.rem.data;
     if (length > local_capacity && length > u_.length)
         u_.rem.data = new char[length];

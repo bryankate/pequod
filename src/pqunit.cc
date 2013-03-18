@@ -910,7 +910,7 @@ void unit_tests(const std::set<String> &testcases) {
     //ADD_TEST(test_op_bounds);
     ADD_TEST(test_iupdate);
     ADD_TEST(test_iupdate2);
-    ADD_EXP_TEST(test_iupdate3);
+    ADD_TEST(test_iupdate3);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

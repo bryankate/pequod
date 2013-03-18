@@ -63,14 +63,14 @@ void Table::add_source(SourceRange* r) {
     source_ranges_.insert(r);
 }
 
-void Table::remove_source(Str first, Str last, SinkRange* sink) {
+void Table::remove_source(Str first, Str last, SinkRange* sink, Str context) {
     for (auto it = source_ranges_.begin_overlaps(first, last);
 	 it != source_ranges_.end(); )
 	if (it->join() == sink->join()) {
             SourceRange* sr = it.operator->();
             ++it;
 
-            sr->remove_sink(sink);
+            sr->remove_sink(sink, context);
             if (sr->empty()) {
                 source_ranges_.erase(sr);
                 delete sr;
@@ -226,6 +226,7 @@ static Clp_Option options[] = {
     // rwmicro params
     { "prefresh", 0, 7000, Clp_ValInt, 0 },
     { "nfollower", 0, 7001, Clp_ValInt, 0 },
+    { "prerefresh", 0, 7002, 0, Clp_Negate },
 };
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
@@ -331,6 +332,8 @@ int main(int argc, char** argv) {
             tp_param.set("prefresh", clp->val.i);
         else if (clp->option->long_name == String("nfollower"))
             tp_param.set("nfollower", clp->val.i);
+        else if (clp->option->long_name == String("prerefresh"))
+            tp_param.set("prerefresh", !clp->negated);
 
         // run single unit test
         else
