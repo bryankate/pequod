@@ -4,65 +4,13 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#define DO_PERF 0
 #if DO_PERF
 #include <sys/prctl.h>
 #include <sys/wait.h>
 #endif
 
 namespace pq {
-
-struct validate_args {
-    Str first;
-    Str last;
-    Match match;
-    Server* server;
-};
-
-static void pull(validate_args& va, int joinpos, Join* j) {
-    uint8_t kf[128], kl[128];
-    int kflen = j->expand_first(kf, j->source(joinpos),
-                                va.first, va.last, va.match);
-    int kllen = j->expand_last(kl, j->source(joinpos),
-                               va.first, va.last, va.match);
-    assert(Str(kf, kflen) <= Str(kl, kllen));
-
-    SourceRange* r = 0;
-    if (joinpos + 1 == j->nsource())
-        r = j->make_source(*va.server, va.match,
-                           Str(kf, kflen), Str(kl, kllen), nullptr);
-
-    auto it = va.server->lower_bound(Str(kf, kflen));
-    auto ilast = va.server->lower_bound(Str(kl, kllen));
-
-    Match::state mstate(va.match.save());
-    const Pattern& pat = j->source(joinpos);
-
-    for (; it != ilast; ++it) {
-	if (it->key().length() != pat.key_length())
-            continue;
-        // XXX PERFORMANCE can prob figure out ahead of time whether this
-        // match is simple/necessary
-        if (pat.match(it->key(), va.match)) {
-            if (r)
-                r->notify(it.operator->(), String(), SourceRange::notify_insert);
-            else
-                pull(va, joinpos + 1, j);
-        }
-        va.match.restore(mstate);
-    }
-    delete r;
-}
-
-static int pull(Str first, Str last, Server& server, Join* j) {
-    Str tname = table_name(first, last);
-    assert(tname);
-    Table& t = server.make_table(tname);
-    validate_args va{first, last, Match(), &server};
-    pull(va, 0, j);
-    size_t count = t.size();
-    t.clear();
-    return count;
-}
 
 void RwMicro::populate() {
     char buf[128];
@@ -87,12 +35,13 @@ void RwMicro::populate() {
         }
     delete[] b;
     j_ = new Join;
-    bool ok = j_->assign_parse("t|<user_id:5>|<time:10>|<poster_id:5> = "
-                               "using s|<user_id>|<poster_id> "
-                               "copy p|<poster_id>|<time>");
-    mandatory_assert(ok);
-    if (push_)
-        server_.add_join(Str("t|"), Str("t}"), j_);
+    String jtext = "t|<user_id:5>|<time:10>|<poster_id:5> = "
+                   "using s|<user_id>|<poster_id> "
+                   "copy p|<poster_id>|<time>";
+    if (!push_)
+        jtext.append(" pull");
+    mandatory_assert(j_->assign_parse(jtext.c_str()));
+    server_.add_join(Str("t|"), Str("t}"), j_);
     if (prerefresh_) {
         const int nu_active = nuser_ * pactive_ / 100;
         char buf1[128], buf2[128];
@@ -100,11 +49,8 @@ void RwMicro::populate() {
             int u = i;
             sprintf(buf1, "t|%05u|%010u", u, 0);
             sprintf(buf2, "t|%05u}", u);
-            if (push_) {
-                server_.validate(Str(buf1, 18), Str(buf2, 8));
-                server_.count(Str(buf1, 18), Str(buf2, 8));
-            } else
-                pull(Str(buf1, 18), Str(buf2, 8), server_, j_);
+            server_.validate(Str(buf1, 18), Str(buf2, 8));
+            server_.count(Str(buf1, 18), Str(buf2, 8));
         }
     }
 }
@@ -141,11 +87,8 @@ void RwMicro::run() {
             ++nrefresh;
             sprintf(buf1, "t|%05u|%010u", u, loadtime[u] + 1);
             sprintf(buf2, "t|%05u}", u);
-            if (push_) {
-                server_.validate(Str(buf1, 18), Str(buf2, 8));
-                nread += server_.count(Str(buf1, 18), Str(buf2, 8));
-            } else
-                nread += pull(Str(buf1, 18), Str(buf2, 8), server_, j_);
+            server_.validate(Str(buf1, 18), Str(buf2, 8));
+            nread += server_.count(Str(buf1, 18), Str(buf2, 8));
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);
