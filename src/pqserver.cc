@@ -65,18 +65,12 @@ void Table::add_source(SourceRange* r) {
 
 void Table::remove_source(Str first, Str last, SinkRange* sink, Str context) {
     for (auto it = source_ranges_.begin_overlaps(first, last);
-	 it != source_ranges_.end(); )
-	if (it->join() == sink->join()) {
-            SourceRange* sr = it.operator->();
-            ++it;
-
-            sr->remove_sink(sink, context);
-            if (sr->empty()) {
-                source_ranges_.erase(sr);
-                delete sr;
-            }
-	} else
-            ++it;
+	 it != source_ranges_.end(); ) {
+        SourceRange* source = it.operator->();
+        ++it;
+	if (source->join() == sink->join())
+            source->remove_sink(sink, context);
+    }
 }
 
 void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {

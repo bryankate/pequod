@@ -33,8 +33,11 @@ class Table : public pequod_set_base_hook {
     inline size_t size() const;
 
     inline void validate(Str first, Str last, uint64_t now);
+    inline void invalidate_dependents(Str key);
+    inline void invalidate_dependents(Str first, Str last);
 
     void add_source(SourceRange* r);
+    inline void unlink_source(SourceRange* r);
     void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
@@ -43,6 +46,7 @@ class Table : public pequod_set_base_hook {
     void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
+    inline iterator invalidate_erase(iterator it);
 
     void clear();
 
@@ -79,7 +83,8 @@ class Server {
     inline const Datum& operator[](Str str) const;
     inline size_t count(Str first, Str last) const;
 
-    Table& make_table(Str name);
+    const Table& table(Str tname) const;
+    Table& make_table(Str tname);
 
     inline void insert(Str key, const String& value);
     inline void erase(Str key);
@@ -148,9 +153,13 @@ inline Server::Server()
     : last_validate_at_(0) {
 }
 
-inline Table& Server::make_table(Str name) {
+inline const Table& Server::table(Str tname) const {
+    return tables_.get(tname, Table::empty_table);
+}
+
+inline Table& Server::make_table(Str tname) {
     bool inserted;
-    auto it = tables_.find_insert(name, inserted);
+    auto it = tables_.find_insert(tname, inserted);
     if (inserted) {
         it->server_ = this;
         tables_by_name_.insert(*it);
@@ -181,9 +190,43 @@ inline size_t Server::count(Str first, Str last) const {
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     Str key(d->key());
     for (auto it = source_ranges_.begin_contains(key);
-         it != source_ranges_.end(); ++it)
-        if (it->check_match(key))
-            it->notify(d, old_value, notifier);
+         it != source_ranges_.end(); ) {
+        // SourceRange::notify() might remove the SourceRange from the tree
+        SourceRange* source = it.operator->();
+        ++it;
+        if (source->check_match(key))
+            source->notify(d, old_value, notifier);
+    }
+}
+
+inline void Table::validate(Str first, Str last, uint64_t now) {
+    for (auto it = join_ranges_.begin_overlaps(first, last);
+	 it != join_ranges_.end(); ++it)
+        it->validate(first, last, *server_, now);
+}
+
+inline void Table::invalidate_dependents(Str key) {
+    for (auto it = source_ranges_.begin_contains(key);
+         it != source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+}
+
+inline void Table::invalidate_dependents(Str first, Str last) {
+    for (auto it = source_ranges_.begin_overlaps(first, last);
+         it != source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+}
+
+inline void Table::unlink_source(SourceRange* r) {
+    source_ranges_.erase(r);
 }
 
 template <typename F>
@@ -232,10 +275,12 @@ inline auto Table::erase(iterator it) -> iterator {
     return it;
 }
 
-inline void Table::validate(Str first, Str last, uint64_t now) {
-    for (auto it = join_ranges_.begin_overlaps(first, last);
-	 it != join_ranges_.end(); ++it)
-        it->validate(first, last, *server_, now);
+inline auto Table::invalidate_erase(iterator it) -> iterator {
+    Datum* d = it.operator->();
+    it = store_.erase(it);
+    invalidate_dependents(d->key());
+    d->invalidate();
+    return it;
 }
 
 inline void Server::insert(Str key, const String& value) {

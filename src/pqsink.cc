@@ -13,6 +13,7 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 
 JoinRange::~JoinRange() {
     while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+        // XXX no one else had better deref this shit
         delete sink;
 }
 
@@ -39,20 +40,18 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     Str last_valid = first;
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
-        if (it->has_expired(now)) {
-            SinkRange* vjr = it.operator->();
+        SinkRange* sink = it.operator->();
+        if (sink->has_expired(now)) {
             ++it;
-            valid_ranges_.erase(vjr);
-            vjr->flush();
-            vjr->deref();
-            continue;
+            sink->invalidate();
+        } else {
+            if (last_valid < sink->ibegin())
+                validate_one(last_valid, sink->ibegin(), server, now);
+            if (sink->need_update())
+                sink->update(first, last, server, now);
+            last_valid = sink->iend();
+            ++it;
         }
-        if (last_valid < it->ibegin())
-            validate_one(last_valid, it->ibegin(), server, now);
-        if (it->need_update())
-            it->update(first, last, server, now);
-        last_valid = it->iend();
-        ++it;
     }
     if (last_valid < last)
         validate_one(last_valid, last, server, now);
@@ -153,7 +152,7 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
 }
 
 SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
+    : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr} {
     Join* j = jr_->join();
     if (j->maintained())
         expires_at_ = 0;
@@ -185,6 +184,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
         (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
     updates_.insert(iu);
 
+    join()->sink_table()->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     // std::cerr << *iu << "\n";
 }
 
@@ -226,20 +226,36 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
     }
 }
 
-void SinkRange::flush() {
-    Table* t = table();
-    auto endit = t->lower_bound(iend());
-    for (auto it = t->lower_bound(ibegin()); it != endit; )
-        if (it->owner() == this)
-            it = t->erase(it);
-        else
-            ++it;
+void SinkRange::invalidate() {
+    if (valid()) {
+        jr_->valid_ranges_.erase(this);
+        Table* t = table();
+
+        auto endit = t->lower_bound(iend());
+        for (auto it = t->lower_bound(ibegin()); it != endit; )
+            if (it->owner() == this)
+                it = t->invalidate_erase(it);
+            else
+                ++it;
+
+        ibegin_ = Str();
+        if (refcount_ == 0)
+            delete this;
+    }
 }
 
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")
            << iu.context() << " " << iu.context_ << "}";
+    return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const SinkRange& sink) {
+    if (sink.valid())
+        stream << "SINK{" << sink.interval().unparse().printable() << "}";
+    else
+        stream << "SINK{INVALID}";
     return stream;
 }
 

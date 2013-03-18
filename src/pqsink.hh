@@ -59,6 +59,9 @@ class SinkRange : public ServerRangeBase {
     inline void ref();
     inline void deref();
 
+    inline bool valid() const;
+    void invalidate();
+
     inline Join* join() const;
     inline Table* table() const;
     inline unsigned context_mask() const;
@@ -73,7 +76,7 @@ class SinkRange : public ServerRangeBase {
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
 
-    void flush();
+    friend std::ostream& operator<<(std::ostream&, const SinkRange&);
 
   public:
     rblinks<SinkRange> rblinks_;
@@ -154,8 +157,12 @@ inline void SinkRange::ref() {
 }
 
 inline void SinkRange::deref() {
-    if (--refcount_ == 0)
-        delete this;            // XXX
+    if (--refcount_ == 0 && !valid())
+        delete this;
+}
+
+inline bool SinkRange::valid() const {
+    return !ibegin_.empty();
 }
 
 inline Join* SinkRange::join() const {

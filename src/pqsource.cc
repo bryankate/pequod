@@ -40,17 +40,22 @@ void SourceRange::remove_sink(SinkRange* sink, Str context) {
     assert(join() == sink->join());
     for (int i = 0; i != results_.size(); )
         if (results_[i].sink == sink && results_[i].context == context) {
+            sink->deref();
             results_[i] = results_.back();
             results_.pop_back();
         } else
             ++i;
+    if (results_.empty()) {
+        source_table()->unlink_source(this);
+        delete this;
+    }
 }
 
 void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     using std::swap;
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; )
-        if (!it->sink || true /* XXX it->sink->valid() */) {
+        if (!it->sink || it->sink->valid()) {
             unsigned sink_mask = it->sink ? it->sink->context_mask() : 0;
             if (sink_mask)
                 join_->expand_sink_key_context(it->sink->context());
@@ -65,6 +70,19 @@ void SourceRange::notify(const Datum* src, const String& old_value, int notifier
             results_.pop_back();
             --endit;
         }
+    if (results_.empty()) {
+        source_table()->unlink_source(const_cast<SourceRange*>(this));
+        delete this;
+    }
+}
+
+void SourceRange::invalidate() {
+    result* endit = results_.end();
+    for (result* it = results_.begin(); it != endit; ++it)
+        if (it->sink && it->sink->valid())
+            it->sink->invalidate();
+    source_table()->unlink_source(this);
+    delete this;
 }
 
 std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
