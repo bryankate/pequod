@@ -39,6 +39,8 @@ class SourceRange {
     inline void set_subtree_iend(Str subtree_iend);
 
     inline bool empty() const;
+
+    void invalidate();
     inline void clear_without_deref();
 
     inline Join* join() const;
