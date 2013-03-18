@@ -40,7 +40,7 @@ DROP VIEW IF EXISTS karma_v CASCADE;
 DROP TABLE IF EXISTS articles CASCADE;
 
 CREATE TABLE articles (
-    aid integer NOT NULL,
+    aid serial PRIMARY KEY,
     author integer,
     link text
 );
@@ -55,7 +55,7 @@ CREATE TABLE articles (
 DROP TABLE IF EXISTS comments CASCADE;
 
 CREATE TABLE comments (
-    cid integer NOT NULL,
+    cid serial PRIMARY KEY,
     aid integer,
     commenter integer,
     comment text

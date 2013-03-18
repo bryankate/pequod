@@ -41,7 +41,10 @@ class HackernewsPopulator {
     inline bool mk() const;
     inline bool ma() const;
     inline bool pg() const;
+    inline bool check_karma() const;
+    inline bool populate() const;
     inline void populate_from_files(uint32_t* nv, uint32_t* nc);
+    inline void set_defaults();
 
   private:
     Json param_;
@@ -60,6 +63,7 @@ class HackernewsPopulator {
     bool materialize_karma_;
     bool materialize_articles_;
     bool large_;
+    bool check_karma_;
 };
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
@@ -67,11 +71,11 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
       articles_(1000000),
-      pre_(param["narticles"].as_i(10)),
+      pre_(param["narticles"].as_i(100)),
       narticles_(0), ncomments_(0), 
       materialize_karma_(param["materialize"].as_b(false)),
       materialize_articles_(param["super_materialize"].as_b(false)),
-      large_(param["large"].as_b(false)) {
+      large_(param["large"].as_b(false)), check_karma_(true) {
 }
 
 inline uint32_t HackernewsPopulator::nusers() const {
@@ -90,6 +94,8 @@ inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article)
 }
 
 inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
+    if (!check_karma_)
+        return true;
     auto it = votes_.find(article);
     uint32_t author = articles_[article];
     mandatory_assert(it != votes_.end());    
@@ -174,8 +180,38 @@ inline bool HackernewsPopulator::pg() const {
     return param_["pg"].as_b(false);
 }
 
+inline bool HackernewsPopulator::check_karma() const {
+    return check_karma_;
+}
+
+inline bool HackernewsPopulator::populate() const {
+    return param_["populate"].as_b(false);
+}
+
+inline void HackernewsPopulator::set_defaults() {
+    if (param_["large"].as_b(false)) {
+        ncomments_ = 999245;
+        narticles_ = 99999;
+        nusers_ = 49999;
+    } else {
+        ncomments_ = 99;
+        narticles_ = 99;
+        nusers_ = 9;
+    }
+    check_karma_ = false;
+}
+
 inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc) {
     mandatory_assert(pg());
+
+    if (!populate() && param_["run"].as_b(false)) {
+        // Avoid population phase so we can run multiple processes to
+        // check performance.  Won't be able to prevent double votes
+        // or check karma.
+        set_defaults();
+        return;
+    }
+
     using std::string;
     using std::ifstream;
     using std::istringstream;
@@ -207,6 +243,8 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
     sprintf(cmd, "psql -p 5477 hn < %s > /dev/null", prefix);
     CHECK_EQ(system(cmd), 0);
 
+    if (!param_["run"].as_b(false))
+        return;
 
     char dataprefix[128];
     sprintf(dataprefix, "db/hn/hn.data.%s%s%s", sz, mat, p);

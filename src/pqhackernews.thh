@@ -69,7 +69,7 @@ tamed template <typename S>
 void HackernewsRunner<S>::read_article(uint32_t aid) {
     mandatory_assert(aid < hp_.narticles());
     twait {
-        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), make_event());
+        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), hp_.check_karma(), make_event());
     }
 }
 
@@ -83,31 +83,36 @@ void HackernewsRunner<S>::populate() {
     twait {
         server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), make_event());
     }
-    if (!hp_.pg()) {
-        gen.seed(13918);
-        for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
-            const uint32_t author = rng(hp_.nusers());
-            post_article(author, aid);
-            const uint32_t ncomment = rng(20);
-            for (uint32_t j = 1; j <= ncomment; ++j) {
-                nc++;
-                const uint32_t commentor = rng(hp_.nusers());
-                post_comment(commentor, aid);
-            }
-            const uint32_t nvote = rng(50);
-            for (uint32_t j = 0; j < nvote; ++j) {
-                const uint32_t voter = rng(hp_.nusers());
-                if (hp_.vote(aid, voter)) {
-                    ++nv;
-                    vote(voter, aid);
+    if (hp_.pg()) {
+        // All intialization work for DBs done here
+        hp_.populate_from_files(&nv, &nc);
+    } else {
+        if (!hp_.populate()) {
+            hp_.set_defaults();
+        } else {
+            gen.seed(13918);
+            for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
+                const uint32_t author = rng(hp_.nusers());
+                post_article(author, aid);
+                const uint32_t ncomment = rng(20);
+                for (uint32_t j = 1; j <= ncomment; ++j) {
+                    nc++;
+                    const uint32_t commentor = rng(hp_.nusers());
+                    post_comment(commentor, aid);
+                }
+                const uint32_t nvote = rng(50);
+                for (uint32_t j = 0; j < nvote; ++j) {
+                    const uint32_t voter = rng(hp_.nusers());
+                    if (hp_.vote(aid, voter)) {
+                        ++nv;
+                        vote(voter, aid);
+                    }
                 }
             }
         }
-    } else
-        // All intialization work for DBs done here
-        hp_.populate_from_files(&nv, &nc);
+    }
 
-    if (hp_.log()) {
+    if (hp_.log() && hp_.check_karma()) {
         std::cout << ": my karma table:\n";
         for (uint32_t i = 0; i < hp_.nusers(); i++)
             std::cout << " k " << i << ": " << hp_.karma(i) << "\n";

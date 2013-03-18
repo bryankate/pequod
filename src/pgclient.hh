@@ -40,11 +40,9 @@ class PostgresClient {
         return res;
     }
 
+
     void prepare(const char* stmt, const char* query, int nparams) {
-        PGresult* res = PQprepare(conn_, stmt,
-                                  query,
-                                  nparams,
-                                  NULL);
+        PGresult* res = PQprepare(conn_, stmt, query, nparams, NULL);
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
             std::cout << "Problem preparing: " << PQresultErrorMessage(res) << "\n";
             exit(1);
@@ -56,10 +54,11 @@ class PostgresClient {
         const char *paramValues[nparams];
         int paramLengths[nparams];
         int paramFormats[nparams];
+        uint32_t p[nparams];
         for (int i = 0; i < nparams; i++) {
-            uint32_t p = htonl(params[i]);
-            paramValues[i] = (char *)&p;
-            paramLengths[i] = sizeof(p);
+            p[i] = htonl(params[i]);
+            paramValues[i] = (char *)&(p[i]);
+            paramLengths[i] = sizeof(p[i]);
             paramFormats[i] = 1;
         }
         PGresult* res = PQexecPrepared(conn_, stmt,
@@ -69,7 +68,7 @@ class PostgresClient {
                                        paramFormats, 
                                        1);  // binary or not
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::cout << "Problem: " << PQresultErrorMessage(res) << "\n";
+            std::cout << "Problem executing Prepared statment " << stmt << ": " << PQresultErrorMessage(res) << "\n";
             exit(1);
         }
         return res;

@@ -191,3 +191,4 @@ if __name__ == "__main__":
         system("""echo "ANALYZE karma;" >> pg.dump%s""" % suffix)
     if options.materialize:
         system("""echo "ANALYZE karma_mv;" >> pg.dump%s""" % suffix)
+    [ system("""echo \"SELECT setval('%s_%s_seq', (SELECT MAX(%s) FROM %s));\" >> pg.dump%s""" % (t, idx, idx, t, suffix)) for t, idx in [("comments", "cid"), ("articles", "aid")] ]
