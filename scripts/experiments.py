@@ -4,7 +4,7 @@ import copy, math
 exps = []
 cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro "
 prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
-for i in range(0, 7):
+for i in range(0, 6):
     nfollower = math.pow(2, i)
     rwmicro = []
     cmd = cmdbase + ("--nfollower=%d" % nfollower)
