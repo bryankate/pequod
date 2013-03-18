@@ -194,6 +194,8 @@ static Clp_Option options[] = {
     { "large", 0, 1027, 0, Clp_Negate },
     { "super_materialize", 's', 1028, 0, Clp_Negate },
     { "rwmicro", 0, 1029, 0, Clp_Negate },
+    { "populate", 0, 1030, 0, Clp_Negate },
+    { "run", 0, 1031, 0, Clp_Negate }
 };
 
 enum { mode_unknown, mode_twitter, mode_hn, mode_facebook,
@@ -255,6 +257,10 @@ int main(int argc, char** argv) {
             tp_param.set("psubscribe", clp->val.i);
         else if (clp->option->long_name == String("rwmicro"))
             mode = mode_rwmicro;
+        else if (clp->option->long_name == String("populate"))
+            tp_param.set("populate", !clp->negated);
+        else if (clp->option->long_name == String("run"))
+            tp_param.set("run", !clp->negated);
 	else if (clp->option->long_name == String("facebook"))
             mode = mode_facebook;
         else if (clp->option->long_name == String("twitter"))
@@ -345,7 +351,10 @@ int main(int argc, char** argv) {
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
-            hr.run();
+            if (tp_param["run"]) {
+                std::cout << "Running hacker news...\n";
+                hr.run();
+            }
 #else
             mandatory_assert(false);
 #endif

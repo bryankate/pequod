@@ -41,6 +41,7 @@ class HackernewsPopulator {
     inline bool mk() const;
     inline bool ma() const;
     inline bool pg() const;
+    inline bool check_karma() const;
     inline void populate_from_files(uint32_t* nv, uint32_t* nc);
 
   private:
@@ -60,6 +61,7 @@ class HackernewsPopulator {
     bool materialize_karma_;
     bool materialize_articles_;
     bool large_;
+    bool check_karma_;
 };
 
 HackernewsPopulator::HackernewsPopulator(const Json& param)
@@ -71,7 +73,7 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       narticles_(0), ncomments_(0), 
       materialize_karma_(param["materialize"].as_b(false)),
       materialize_articles_(param["super_materialize"].as_b(false)),
-      large_(param["large"].as_b(false)) {
+      large_(param["large"].as_b(false)), check_karma_(true) {
 }
 
 inline uint32_t HackernewsPopulator::nusers() const {
@@ -174,8 +176,30 @@ inline bool HackernewsPopulator::pg() const {
     return param_["pg"].as_b(false);
 }
 
+inline bool HackernewsPopulator::check_karma() const {
+    return check_karma_;
+}
+
 inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc) {
     mandatory_assert(pg());
+
+    if (!param_["populate"].as_b(false) && param_["run"].as_b(false)) {
+        // Avoid population phase so we can run multiple processes to
+        // check performance.  Won't be able to prevent double votes
+        // or check karma.
+        if (param_["large"].as_b(false)) {
+            ncomments_ = 999245;
+            narticles_ = 99999;
+            nusers_ = 49999;
+        } else {
+            ncomments_ = 99;
+            narticles_ = 99;
+            nusers_ = 9;
+        }
+        check_karma_ = false;
+        return;
+    }
+
     using std::string;
     using std::ifstream;
     using std::istringstream;

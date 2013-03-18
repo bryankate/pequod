@@ -48,10 +48,11 @@ class HashHackerNewsShim {
         e();
     }
     template <typename R>
-    void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas,
+    void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas, bool check, 
                       preevent<R> e) {
         (void)author;
         (void)check_karmas;
+        (void)check;
         // get h|aid/hv
         size_t value_length;
         const char *hv = c_.get(String("h|") + String(aid), 0, &value_length);
@@ -168,7 +169,7 @@ class PQHackerNewsShim {
         e();
     }
     template <typename R>
-    void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas,
+    void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas, bool check,
                       preevent<R> e);
     template <typename R>
     void stats(preevent<R, Json> e) {
@@ -255,7 +256,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, pree
 
 template <typename S> template <typename R>
 void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
-                                       karmas_type& check_karmas, preevent<R> e) {
+                                       karmas_type& check_karmas, bool check, preevent<R> e) {
     char buf1[128], buf2[128];
     if (ma_) {
         sprintf(buf1, "ma|%07d%07d|", author, aid);
@@ -271,7 +272,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                 else
                     std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
             }
-            if (field == "k") {
+            if (field == "k" && check) {
                 String user = extract_spkey(4, bit->key());
                 uint32_t my_karma = check_karmas[user.to_i()];
                 uint32_t karma = bit->value().to_i();
@@ -415,7 +416,6 @@ class SQLHackernewsShim {
                     "GROUP BY articles.aid,comments.cid,karma.karma");
         }
         pg_.prepare("page", buf, 1);
-        std::cout << buf << "\n";
         e();
     }
 
@@ -471,7 +471,7 @@ class SQLHackernewsShim {
         e();
     }
     template <typename R>
-    void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas, preevent<R> e) {
+    void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas, bool check, preevent<R> e) {
         (void)author;
         if (log_) 
             printf("Reading article %d\n", aid);
@@ -541,18 +541,20 @@ class SQLHackernewsShim {
         }
 
         // Check karma
-        for (int i = 0; i < PQntuples(res); i++) {
-            if (PQgetisnull(res, i, 4))
-                continue;
-            char* kptr = PQgetvalue(res, i, 6);
-            kptr = &(kptr[4]);
-            uint32_t karma = ntohl(*((uint32_t *) kptr));
-            char* uptr = PQgetvalue(res, i, 4);
-            uint32_t user = ntohl(*((uint32_t *) uptr));
-            uint32_t my_karma = check_karmas[user];
-            if (karma > my_karma + 2 || my_karma > karma + 2) {
-                printf("Karma problem. mine: %d db's: %d user: %d\n", my_karma, karma, user);
-                mandatory_assert(false && "Karma mismatch");
+        if (check) {
+            for (int i = 0; i < PQntuples(res); i++) {
+                if (PQgetisnull(res, i, 4))
+                    continue;
+                char* kptr = PQgetvalue(res, i, 6);
+                kptr = &(kptr[4]);
+                uint32_t karma = ntohl(*((uint32_t *) kptr));
+                char* uptr = PQgetvalue(res, i, 4);
+                uint32_t user = ntohl(*((uint32_t *) uptr));
+                uint32_t my_karma = check_karmas[user];
+                if (karma > my_karma + 2 || my_karma > karma + 2) {
+                    printf("Karma problem. mine: %d db's: %d user: %d\n", my_karma, karma, user);
+                    mandatory_assert(false && "Karma mismatch");
+                }
             }
         }
         pg_.done(res);
