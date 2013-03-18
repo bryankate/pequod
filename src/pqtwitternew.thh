@@ -303,8 +303,14 @@ void TwitterNewRunner<S>::populate() {
     tp_.make_subscriptions(subs, gen);
     tp_.print_subscription_statistics(std::cout);
 
+    // need to assign this here because make_subscriptions
+    // can update tp_.nusers_ (when loaded from a file)
     nusers = tp_.nusers();
-    post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
+
+    if (tp_.overhead())
+        post_end_time = this->currtime_;
+    else
+        post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
 
     twait {
         std::cout << "Building subscription table." << std::endl;
@@ -313,7 +319,8 @@ void TwitterNewRunner<S>::populate() {
             if (tp_.log())
                 printf("subscribe s|%08d|%08d\n", x.first, x.second);
         }
-
+    }
+    twait {
         std::cout << "Populating twittersphere." << std::endl;
         while(currtime_ < post_end_time) {
             u = tp_.rand_user_post(gen);
