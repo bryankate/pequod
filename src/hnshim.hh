@@ -377,7 +377,7 @@ class SQLHackernewsShim {
 
     template <typename R>
     void post_populate(preevent<R> e) {
-        char buf[512];
+        char buf[1024];
         if (push_) {
             sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
                     "comments.cid,comments.commenter,comments.comment,"
@@ -415,6 +415,7 @@ class SQLHackernewsShim {
                     "GROUP BY articles.aid,comments.cid,karma.karma");
         }
         pg_.prepare("page", buf, 1);
+        std::cout << buf << "\n";
         e();
     }
 
@@ -511,29 +512,46 @@ class SQLHackernewsShim {
                          "WHERE articles.aid = %d "
                          "GROUP BY articles.aid,comments.cid,karma.karma", aid);
         }
-        // XXX: should use more general return type
-        //PGresult* res = pg_.query(buf);
+        // PGresult* res2 = pg_.query(buf);
         uint32_t params[1];
         params[0] = aid;
         PGresult* res = pg_.executePrepared("page", 1, params);
         if (log_) {
             printf("aid\tauthor\tlink\t\tcid\tuser\tcomment\tkarma\tvotes\n");
             for (int i = 0; i < PQntuples(res); i++) {
-                for (int j = 0; j < PQnfields(res); j++)
-                    std::cout << PQgetvalue(res, i, j) << "\t";
+                for (int j = 0; j < PQnfields(res); j++) {
+                    if (PQgetisnull(res, i, j)) {
+                        std::cout << "-\t";
+                        continue;
+                    }
+                    char* iptr = PQgetvalue(res, i, j);
+                    if (j < 2 || (j > 2 && j < 5)) {
+                        int ival = ntohl(*((uint32_t *) iptr));
+                        std::cout << ival << "\t";
+                    } else if (j > 5) {
+                        iptr = &(iptr[4]);
+                        int ival = ntohl(*((uint32_t *) iptr));
+                        std::cout << ival << "\t";
+                    } else {
+                        std::cout << iptr << "\t";
+                    }
+                }
                 std::cout << "\n";
             }
         }
 
         // Check karma
         for (int i = 0; i < PQntuples(res); i++) {
-            uint32_t karma = atoi(PQgetvalue(res, i, 6));
-            String user = PQgetvalue(res, i, 4);
-            if (user == "")
+            if (PQgetisnull(res, i, 4))
                 continue;
-            uint32_t my_karma = check_karmas[user.to_i()];
+            char* kptr = PQgetvalue(res, i, 6);
+            kptr = &(kptr[4]);
+            uint32_t karma = ntohl(*((uint32_t *) kptr));
+            char* uptr = PQgetvalue(res, i, 4);
+            uint32_t user = ntohl(*((uint32_t *) uptr));
+            uint32_t my_karma = check_karmas[user];
             if (karma > my_karma + 2 || my_karma > karma + 2) {
-                printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
+                printf("Karma problem. mine: %d db's: %d user: %d\n", my_karma, karma, user);
                 mandatory_assert(false && "Karma mismatch");
             }
         }
