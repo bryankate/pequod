@@ -200,16 +200,16 @@ void TwitterNewShim<S>::initialize(bool pull, bool push, tamer::event<> done) {
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     memcpy(buf_, "s|XXXX|XXXX", 11);
-    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
-    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(poster);
+    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 7, poster);
     server_.insert(Str(buf_, 11), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
     memcpy(buf_, "p|XXXX|XXXX", 11);
-    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(poster);
-    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(time);
+    write_in_net_order(buf_ + 2, poster);
+    write_in_net_order(buf_ + 7, time);
     server_.insert(Str(buf_, 11), value, done);
 }
 
@@ -217,32 +217,32 @@ template <typename S>
 inline void TwitterNewShim<S>::prepare_push_post(uint32_t poster, uint32_t time,
                                               const String& value) {
     memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
-    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(time);
-    *reinterpret_cast<uint32_t *>(buf_ + 12) = htonl(poster);
+    write_in_net_order(buf_ + 7, time);
+    write_in_net_order(buf_ + 12, poster);
     value_ = value;
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
-    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
+    write_in_net_order(buf_ + 2, subscriber);
     server_.insert(Str(buf_, 16), value_, done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
     memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
-    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
-    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(start_time);
-    *reinterpret_cast<uint32_t *>(buf_ + 14) = htonl(subscriber);
+    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 7, start_time);
+    write_in_net_order(buf_ + 14, subscriber);
     server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
-    *reinterpret_cast<uint32_t *>(buf_ + 2) = htonl(subscriber);
-    *reinterpret_cast<uint32_t *>(buf_ + 7) = htonl(start_time);
-    *reinterpret_cast<uint32_t *>(buf_ + 14) = htonl(subscriber);
+    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 7, start_time);
+    write_in_net_order(buf_ + 14, subscriber);
     server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), done);
 }
 
@@ -466,9 +466,9 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
                             ++it, ++user->nread_) {
                         assert(it->key().length() == 16);
                         assert(it->key()[0] == 't');
-                        std::cout << "  t|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 2))
-                                  << "|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 7))
-                                  << "|" << ntohl(*reinterpret_cast<const uint32_t *>(it->key().udata() + 12))
+                        std::cout << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
+                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
+                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
                                   << ": " << it->value() << "\n";
                     }
                 }
