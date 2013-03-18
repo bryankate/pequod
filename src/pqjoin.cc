@@ -198,16 +198,20 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             // the form "t|11111"! Detect this case.
             bool use_first = false;
             //std::cerr << "SINK " << sinklen << " " << sinkpat.slot_length(slot) << " " << matchlen << " "\n";
-            if (sinklen == sinkpat.slot_length(slot) && matchlen < sinklen
-                && sink_first.length() >= sinkpos + sinklen
-                && sink_last.length() == sinkpos + sinklen) {
-                const uint8_t* ldata = sink_last.udata() + sinkpos;
-                const uint8_t* fdata = sink_first.udata() + sinkpos;
-                int x = sinklen - 1;
-                while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
-                    --x;
-                use_first = x >= 0 && ldata[x] == fdata[x] + 1
-                    && memcmp(ldata, fdata, x) == 0;
+            if (sinklen == sinkpat.slot_length(slot)
+                && matchlen < sinklen
+                && sink_first.length() >= sinkpos + sinklen) {
+                if (memcmp(&sink_first[sinkpos], &sink_last[sinkpos], sinklen) == 0)
+                    use_first = true;
+                else if (sink_last.length() == sinkpos + sinklen) {
+                    const uint8_t* ldata = sink_last.udata() + sinkpos;
+                    const uint8_t* fdata = sink_first.udata() + sinkpos;
+                    int x = sinklen - 1;
+                    while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
+                        --x;
+                    use_first = x >= 0 && ldata[x] == fdata[x] + 1
+                        && memcmp(ldata, fdata, x) == 0;
+                }
             }
 
             const uint8_t* data;
