@@ -21,7 +21,7 @@ namespace pq {
 
 TwitterUser::TwitterUser()
     : nbackpost_(0), npost_(0), nsubscribe_(0), nlogout_(0),
-      nlogin_(0), ncheck_(0), nread_(0), load_time_(0),
+      nlogin_(0), ncheck_(0), nread_(0), load_time_(0), loggedin_(false),
       uid_((uint32_t)-1), nfollowers_(0) {
 }
 
@@ -66,6 +66,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       pull_(param["pull"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
+      overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
@@ -199,15 +200,14 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
 
         if (!users_[u].nfollowers_)
             continue;
-
-        if (users_[u].nfollowers_ < 1000)
-            wpost[u] = (uint32_t)std::log2(users_[u].nfollowers_);
+        else if (users_[u].nfollowers_ < 10)
+            wpost[u] = 0.1;
         else
-            wpost[u] = gen() % ((uint32_t)std::log2(users_[u].nfollowers_) * 2) + 1;
+            wpost[u] = gen() % (uint32_t)(std::log10(users_[u].nfollowers_) * 2) + 1;
     }
 
     post_dist_ = post_dist_type(wpost.begin(), wpost.end());
-    login_dist_ = login_dist_type(0, nusers_ - 1);
+    login_dist_ = login_dist_type(nusers_ / 2, nusers_ * 0.25);
     uni_dist_ = uni_dist_type(0, nusers_ - 1);
 
     followers_.clear();
