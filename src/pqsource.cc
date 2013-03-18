@@ -8,8 +8,7 @@ namespace pq {
 uint64_t SourceRange::allocated_key_bytes = 0;
 
 SourceRange::SourceRange(const parameters& p)
-    : ibegin_(p.first), iend_(p.last), join_(p.join), joinpos_(p.joinpos),
-      dst_table_(&p.server.make_table(p.join->sink().table_name())) {
+    : ibegin_(p.first), iend_(p.last), join_(p.join), joinpos_(p.joinpos) {
     assert(table_name(p.first, p.last));
     if (!ibegin_.is_local())
         allocated_key_bytes += ibegin_.length();
@@ -90,20 +89,20 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
 }
 
 void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {
-    dst_table_->modify(sink_key, sink, [=](Datum*) {
+    sink_table()->modify(sink_key, sink, [=](Datum*) {
              return notifier >= 0 ? src->value() : erase_marker();
         });
 }
 
 
 void CountSourceRange::notify(Str sink_key, SinkRange* sink, const Datum*, const String&, int notifier) const {
-    dst_table_->modify(sink_key, sink, [=](Datum* dst) {
+    sink_table()->modify(sink_key, sink, [=](Datum* dst) {
             return String(notifier + (dst ? dst->value().to_i() : 0));
         });
 }
 
 void MinSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const {
-    dst_table_->modify(sink_key, sink, [&](Datum* dst) -> String {
+    sink_table()->modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst || src->value() < dst->value())
                  return src->value();
             else if (old_value == dst->value()
@@ -115,7 +114,7 @@ void MinSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
 }
 
 void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const {
-    dst_table_->modify(sink_key, sink, [&](Datum* dst) -> String {
+    sink_table()->modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst || dst->value() < src->value())
                 return src->value();
             else if (old_value == dst->value()
@@ -132,7 +131,7 @@ void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
         src->value().to_i();
     if (notifier == notify_erase)
         diff *= -1;
-    dst_table_->modify(sink_key, sink, [&](Datum* dst) {
+    sink_table()->modify(sink_key, sink, [&](Datum* dst) {
             if (!dst)
                 return src->value();
             else if (diff)
@@ -145,7 +144,7 @@ void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
 void BoundedCopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& oldval, int notifier) const {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
-    dst_table_->modify(sink_key, sink, [=](Datum*) {
+    sink_table()->modify(sink_key, sink, [=](Datum*) {
             return notifier >= 0 ? src->value() : erase_marker();
         });
 }
@@ -156,7 +155,7 @@ void BoundedCountSourceRange::notify(Str sink_key, SinkRange* sink, const Datum*
         return;
     if (!notifier)
         return;
-    dst_table_->modify(sink_key, sink, [=](Datum* dst) {
+    sink_table()->modify(sink_key, sink, [=](Datum* dst) {
             return String(notifier + (dst ? dst->value().to_i() : 0));
         });
 }
