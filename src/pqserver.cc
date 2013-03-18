@@ -109,7 +109,7 @@ void Table::insert(Str key, String value) {
 
 void Table::pull_flush() {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
-        notify(d, String(), SourceRange::notify_erase);
+        invalidate_dependents(d->key());
         d->invalidate();
     }
     for (auto it = join_ranges_.begin(); it != join_ranges_.end(); ++it)
