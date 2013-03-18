@@ -39,7 +39,7 @@ class ResultAnalyzer:
             f = open(fname, "w")
 
         graphs = []
-        if self.ename == "rwmicro":
+        if self.ename == "rwmicro" or self.ename == "rwmicro2":
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
         
@@ -93,8 +93,8 @@ class ResultAnalyzer:
 
 if __name__ == "__main__":
     def test():
-        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro')
-        expdir = "./last/rwmicro"
+        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro2')
+        expdir = "./last/rwmicro2"
         for f in os.listdir(expdir):
             fpath = os.path.join(expdir, f)
             if not os.path.isdir(fpath):
