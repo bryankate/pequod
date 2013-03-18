@@ -142,6 +142,13 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
 }
 #endif
 
+void JoinRange::pull_flush() {
+    mandatory_assert(valid_ranges_.size() <= 1);
+    while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+        // XXX no one else had better deref this shit
+        delete sink;
+}
+
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        SinkRange* sink, int joinpos, const Match& m,
                                        int notifier)

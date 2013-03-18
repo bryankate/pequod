@@ -102,6 +102,7 @@ class JoinRange : public ServerRangeBase {
     inline size_t valid_ranges_size() const;
 
     void validate(Str first, Str last, Server& server, uint64_t now);
+    void pull_flush();
 
   public:
     rblinks<JoinRange> rblinks_;

@@ -93,7 +93,7 @@ void RwMicro::run() {
                 nread += server_.count(Str(buf1, 18), Str(buf2, 8));
             else {
                 nread += t.size();
-                t.flush();
+                t.pull_flush();
             }
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
