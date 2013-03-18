@@ -92,6 +92,8 @@ inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article)
 }
 
 inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
+    if (!check_karma_)
+        return true;
     auto it = votes_.find(article);
     uint32_t author = articles_[article];
     mandatory_assert(it != votes_.end());    
@@ -231,6 +233,8 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
     sprintf(cmd, "psql -p 5477 hn < %s > /dev/null", prefix);
     CHECK_EQ(system(cmd), 0);
 
+    if (!param_["run"].as_b(false))
+        return;
 
     char dataprefix[128];
     sprintf(dataprefix, "db/hn/hn.data.%s%s%s", sz, mat, p);

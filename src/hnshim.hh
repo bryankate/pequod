@@ -423,7 +423,7 @@ class SQLHackernewsShim {
     void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
         (void) check_karmas;
-        sprintf(buf, "INSERT INTO articles VALUES (%d, %d, '%s')", aid, author, v.data());
+        sprintf(buf, "INSERT INTO articles(author, link) VALUES (%d, '%s')", author, v.data());
         pg_.insert(buf);
         if (log_)
             printf("post %07d\n", aid);
@@ -444,8 +444,11 @@ class SQLHackernewsShim {
     void post_comment(uint32_t commentor, uint32_t author, uint32_t aid, uint32_t cid,
                       const String &v, preevent<R> e) {
         (void)author;
+        (void)cid;
         char buf[128];
-        sprintf(buf, "INSERT INTO comments VALUES (%d, %d, %d, '%s')", cid, aid, commentor, v.data());
+        if (log_)
+            printf("about to comment  %d %d\n", aid, commentor);
+        sprintf(buf, "INSERT INTO comments(aid, commenter, comment) VALUES (%d, %d, '%s')", aid, commentor, v.data());
         pg_.insert(buf);
         if (log_)
             printf("comment  %d %d\n", aid, commentor);
@@ -456,7 +459,7 @@ class SQLHackernewsShim {
     void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, preevent<R> e) {
         char buf[128];
         (void) check_karmas;
-        sprintf(buf, "INSERT INTO votes values (%d, %d)", aid, voter);
+        sprintf(buf, "INSERT INTO votes(aid, voter) values (%d, %d)", aid, voter);
         PGresult* res = pg_.insert(buf);
         int affected = atoi(PQcmdTuples(res));
         mandatory_assert(affected == 1);
@@ -475,44 +478,6 @@ class SQLHackernewsShim {
         (void)author;
         if (log_) 
             printf("Reading article %d\n", aid);
-        char buf[512];
-        if (push_) {
-            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                                 "comments.cid,comments.commenter,comments.comment,"
-                                 "karma.karma,count(votes.aid) as vote_count "
-                         "FROM articles "
-                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
-                         "LEFT OUTER JOIN karma ON comments.commenter=karma.author "
-                         "JOIN votes ON articles.aid=votes.aid "
-                         "WHERE articles.aid = %d "
-                         "GROUP BY articles.aid,comments.cid,karma.karma", aid);
-        } else if (mk_) {
-            // Materialized karma table, query it
-            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                                 "comments.cid,comments.commenter,comments.comment,"
-                                 "karma_mv.karma,count(votes.aid) as vote_count "
-                         "FROM articles "
-                         "LEFT OUTER JOIN comments ON articles.aid=comments.aid "
-                         "LEFT OUTER JOIN karma_mv ON comments.commenter=karma_mv.author "
-                         "JOIN votes ON articles.aid=votes.aid "
-                         "WHERE articles.aid = %d "
-                         "GROUP BY articles.aid,comments.cid,karma_mv.karma", aid);
-        } else {
-            // No karma_mv
-            sprintf(buf, "SELECT articles.aid,articles.author,articles.link,"
-                                 "comments.cid,comments.commenter,comments.comment,"
-                                 "karma.karma,count(votes.aid) as vote_count "
-                         "FROM articles "
-                         "LEFT JOIN comments ON articles.aid=comments.aid "
-                         "LEFT JOIN "
-                           "(SELECT articles.author, count(*) as karma FROM articles, votes WHERE "
-                           "articles.aid = votes.aid GROUP BY articles.author) AS karma "
-                           "ON comments.commenter=karma.author "
-                         "JOIN votes ON articles.aid=votes.aid "
-                         "WHERE articles.aid = %d "
-                         "GROUP BY articles.aid,comments.cid,karma.karma", aid);
-        }
-        // PGresult* res2 = pg_.query(buf);
         uint32_t params[1];
         params[0] = aid;
         PGresult* res = pg_.executePrepared("page", 1, params);

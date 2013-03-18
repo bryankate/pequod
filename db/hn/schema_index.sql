@@ -39,11 +39,11 @@ CREATE INDEX comments_aid ON comments (aid);
 CREATE INDEX comments_commenter ON comments (commenter);
 CREATE INDEX votes_aid ON votes (aid);
 
-ALTER TABLE ONLY articles
-    ADD CONSTRAINT articles_pkey PRIMARY KEY (aid);
+--ALTER TABLE ONLY articles
+--    ADD CONSTRAINT articles_pkey PRIMARY KEY (aid);
 
-ALTER TABLE ONLY comments
-    ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
+--ALTER TABLE ONLY comments
+--    ADD CONSTRAINT comments_pkey PRIMARY KEY (cid);
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA public FROM postgres;
