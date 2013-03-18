@@ -31,10 +31,8 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
-    if (join_->maintained()) {
-        va.sink = new SinkRange(first, last, this, now);
-        valid_ranges_.insert(va.sink);
-    }
+    va.sink = new SinkRange(first, last, this, now);
+    valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
 
