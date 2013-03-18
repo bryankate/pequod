@@ -326,7 +326,7 @@ void TwitterNewRunner<S>::populate() {
             u = tp_.rand_user_post(gen);
             if (tp_.log())
                 printf("%d: post p|%08d|%010d\n", currtime_, u, currtime_);
-            post(u, currtime_, "?!?(*#", make_event());
+            post(u, currtime_, String("?!?(*#"), make_event());
             ++tp_.mutable_user(u).nbackpost_;
             ++currtime_;
         }
@@ -389,7 +389,7 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
                 if (tp_.log())
                     printf("%d: post p|%08d|%010d\n", currtime_, user->uid(), currtime_);
 
-                post(user->uid(), currtime_, "?!?#*", gr.make_event());
+                post(user->uid(), currtime_, String("?!?#*"), gr.make_event());
                 ++user->npost_;
                 break;
 

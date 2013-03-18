@@ -383,17 +383,18 @@ int main(int argc, char** argv) {
     } else if (mode == mode_twitternew) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
-        pq::TwitterNewPopulator tp(tp_param);
+        pq::TwitterNewPopulator *tp = new pq::TwitterNewPopulator(tp_param);
 
         if (client_port >= 0)
-            run_twitter_new_remote(tp, client_port);
+            run_twitter_new_remote(*tp, client_port);
         else {
             pq::DirectClient client(server);
             pq::TwitterNewShim<pq::DirectClient> shim(client);
-            pq::TwitterNewRunner<decltype(shim)> tr(shim, tp);
+            pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
             tr.populate();
             tr.run(tamer::event<>());
         }
+        delete tp;
     } else if (mode == mode_hn) {
         if (tp_param["large"]) {
             tp_param.set("narticles", 100000);
