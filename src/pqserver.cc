@@ -385,7 +385,6 @@ int main(int argc, char** argv) {
             tr.populate();
             tr.run(tamer::event<>());
         }
-        delete tp;
     } else if (mode == mode_hn) {
         if (tp_param["large"]) {
             tp_param.set("narticles", 100000);
