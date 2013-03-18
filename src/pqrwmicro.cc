@@ -79,6 +79,7 @@ void RwMicro::run() {
     gettimeofday(&tv[0], NULL);
     getrusage(RUSAGE_SELF, &ru[0]);
     const int nu_active = nuser_ * pactive_ / 100;
+    Table& t = server_.make_table("t");
     for (int i = 0; i < nops_; ++i) {
         if (random() % 100 < prefresh_) {
             struct timeval optv[2];
@@ -88,7 +89,12 @@ void RwMicro::run() {
             sprintf(buf1, "t|%05u|%010u", u, loadtime[u] + 1);
             sprintf(buf2, "t|%05u}", u);
             server_.validate(Str(buf1, 18), Str(buf2, 8));
-            nread += server_.count(Str(buf1, 18), Str(buf2, 8));
+            if (push_)
+                nread += server_.count(Str(buf1, 18), Str(buf2, 8));
+            else {
+                nread += t.size();
+                t.flush();
+            }
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);

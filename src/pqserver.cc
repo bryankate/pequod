@@ -107,6 +107,13 @@ void Table::insert(Str key, String value) {
     ++ninsert_;
 }
 
+void Table::flush() {
+    while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
+        notify(d, String(), SourceRange::notify_erase);
+        d->invalidate();
+    }
+}
+
 void Table::erase(Str key) {
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end())
