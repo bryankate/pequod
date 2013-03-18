@@ -39,7 +39,7 @@ class ResultAnalyzer:
             f = open(fname, "w")
 
         graphs = []
-        if self.ename == "rwmicro" or self.ename == "rwmicro2":
+        if self.ename.startswith("rwmicro"):
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
         
