@@ -127,5 +127,12 @@ inline String& Datum::value() {
     return value_;
 }
 
+inline std::ostream& operator<<(std::ostream& stream, const Datum& d) {
+    if (!d.valid())
+        return stream << "[invalid]";
+    else
+        return stream << d.key() << "=" << d.value();
+}
+
 } // namespace
 #endif
