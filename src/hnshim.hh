@@ -258,6 +258,8 @@ template <typename S> template <typename R>
 void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, bool check, preevent<R> e) {
     char buf1[128], buf2[128];
+    if (log_) 
+        printf("Reading article %d\n", aid);
     if (ma_) {
         sprintf(buf1, "ma|%07d%07d|", author, aid);
         sprintf(buf2, "ma|%07d%07d}", author, aid);

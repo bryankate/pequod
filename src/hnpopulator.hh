@@ -42,7 +42,9 @@ class HackernewsPopulator {
     inline bool ma() const;
     inline bool pg() const;
     inline bool check_karma() const;
+    inline bool populate() const;
     inline void populate_from_files(uint32_t* nv, uint32_t* nc);
+    inline void set_defaults();
 
   private:
     Json param_;
@@ -69,7 +71,7 @@ HackernewsPopulator::HackernewsPopulator(const Json& param)
       nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
       articles_(1000000),
-      pre_(param["narticles"].as_i(10)),
+      pre_(param["narticles"].as_i(100)),
       narticles_(0), ncomments_(0), 
       materialize_karma_(param["materialize"].as_b(false)),
       materialize_articles_(param["super_materialize"].as_b(false)),
@@ -182,23 +184,31 @@ inline bool HackernewsPopulator::check_karma() const {
     return check_karma_;
 }
 
+inline bool HackernewsPopulator::populate() const {
+    return param_["populate"].as_b(false);
+}
+
+inline void HackernewsPopulator::set_defaults() {
+    if (param_["large"].as_b(false)) {
+        ncomments_ = 999245;
+        narticles_ = 99999;
+        nusers_ = 49999;
+    } else {
+        ncomments_ = 99;
+        narticles_ = 99;
+        nusers_ = 9;
+    }
+    check_karma_ = false;
+}
+
 inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc) {
     mandatory_assert(pg());
 
-    if (!param_["populate"].as_b(false) && param_["run"].as_b(false)) {
+    if (!populate() && param_["run"].as_b(false)) {
         // Avoid population phase so we can run multiple processes to
         // check performance.  Won't be able to prevent double votes
         // or check karma.
-        if (param_["large"].as_b(false)) {
-            ncomments_ = 999245;
-            narticles_ = 99999;
-            nusers_ = 49999;
-        } else {
-            ncomments_ = 99;
-            narticles_ = 99;
-            nusers_ = 9;
-        }
-        check_karma_ = false;
+        set_defaults();
         return;
     }
 
