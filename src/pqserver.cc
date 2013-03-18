@@ -211,6 +211,7 @@ static Clp_Option options[] = {
     { "super_materialize", 's', 5006, 0, Clp_Negate },
     { "populate", 0, 5007, 0, Clp_Negate },
     { "run", 0, 5008, 0, Clp_Negate },
+    { "materialize", 0, 5009, 0, Clp_Negate },
 
     // mostly analytics params
     { "proactive", 0, 6000, 0, Clp_Negate },
@@ -319,6 +320,8 @@ int main(int argc, char** argv) {
             tp_param.set("populate", !clp->negated);
         else if (clp->option->long_name == String("run"))
             tp_param.set("run", !clp->negated);
+	else if (clp->option->long_name == String("materialize"))
+	    tp_param.set("materialize", !clp->negated);
 
         // analytics
         else if (clp->option->long_name == String("proactive"))
@@ -430,7 +433,10 @@ int main(int argc, char** argv) {
             pq::PQHackerNewsShim<pq::Server> shim(server);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
-            hr.run();
+            if (tp_param["run"]) {
+                std::cout << "Running hacker news...\n";
+                hr.run();
+            }
         }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
