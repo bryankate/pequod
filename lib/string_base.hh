@@ -117,27 +117,27 @@ class String_base {
     /** @brief Return the @a i th character in the string.
 
 	Does not check bounds. @sa at() */
-    char operator[](int i) const {
+    const char& operator[](int i) const {
 	return data()[i];
     }
     /** @brief Return the @a i th character in the string.
 
 	Checks bounds: an assertion will fail if @a i is less than 0 or not
 	less than length(). @sa operator[] */
-    char at(int i) const {
+    const char& at(int i) const {
 	assert(unsigned(i) < unsigned(length()));
 	return data()[i];
     }
     /** @brief Return the first character in the string.
 
 	Does not check bounds. Same as (*this)[0]. */
-    char front() const {
+    const char& front() const {
 	return data()[0];
     }
     /** @brief Return the last character in the string.
 
 	Does not check bounds. Same as (*this)[length() - 1]. */
-    char back() const {
+    const char& back() const {
 	return data()[length() - 1];
     }
     /** @brief Test if this string is equal to the C string @a c_str. */

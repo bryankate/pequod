@@ -11,7 +11,6 @@ namespace pq {
 class Server;
 class Match;
 class JoinRange;
-class ValidJoinRange;
 
 class ServerRangeBase {
   public:
@@ -34,10 +33,10 @@ class ServerRangeBase {
 
 class IntermediateUpdate : public ServerRangeBase {
   public:
-    IntermediateUpdate(Str first, Str last, Str context, Str key, int joinpos, int notifier);
+    IntermediateUpdate(Str first, Str last, SinkRange* sink, int joinpos, const Match& m, int notifier);
 
     typedef Str endpoint_type;
-    inline Str key() const;
+    inline Str context() const;
     inline int notifier() const;
 
     friend std::ostream& operator<<(std::ostream&, const IntermediateUpdate&);
@@ -46,45 +45,52 @@ class IntermediateUpdate : public ServerRangeBase {
     rblinks<IntermediateUpdate> rblinks_;
   private:
     LocalStr<12> context_;
-    LocalStr<24> key_;
     int joinpos_;
     int notifier_;
 
-    friend class ValidJoinRange;
+    friend class SinkRange;
 };
 
-class ValidJoinRange : public ServerRangeBase {
+class SinkRange : public ServerRangeBase {
   public:
-    inline ValidJoinRange(Str first, Str last, JoinRange* jr, uint64_t now);
-    ~ValidJoinRange();
+    SinkRange(Str first, Str last, JoinRange* jr, uint64_t now);
+    ~SinkRange();
 
     inline void ref();
     inline void deref();
 
+    inline bool valid() const;
+    void invalidate();
+
     inline Join* join() const;
     inline Table* table() const;
+    inline unsigned context_mask() const;
+    inline Str context() const;
 
     inline bool has_expired(uint64_t now) const;
 
-    void add_update(int joinpos, const String& context, Str key, int notifier);
+    void add_update(int joinpos, Str context, Str key, int notifier);
     inline bool need_update() const;
-    void update(Str first, Str last, Server& server);
+    void update(Str first, Str last, Server& server, uint64_t now);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
 
-    void flush();
+    friend std::ostream& operator<<(std::ostream&, const SinkRange&);
 
   public:
-    rblinks<ValidJoinRange> rblinks_;
+    rblinks<SinkRange> rblinks_;
   private:
     JoinRange* jr_;
     int refcount_;
+    unsigned context_mask_;
+    LocalStr<12> context_;
     mutable Datum* hint_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
 
-    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server);
+    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server,
+                   uint64_t now);
 };
 
 class JoinRange : public ServerRangeBase {
@@ -95,20 +101,19 @@ class JoinRange : public ServerRangeBase {
     inline Join* join() const;
     inline size_t valid_ranges_size() const;
 
-    void validate(Str first, Str last, Server& server);
+    void validate(Str first, Str last, Server& server, uint64_t now);
 
   public:
     rblinks<JoinRange> rblinks_;
   private:
     Join* join_;
-    interval_tree<ValidJoinRange> valid_ranges_;
-    std::vector<ValidJoinRange*> flushables_;
+    interval_tree<SinkRange> valid_ranges_;
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
     void validate_step(validate_args& va, int joinpos);
 
-    friend class ValidJoinRange;
+    friend class SinkRange;
 };
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
@@ -147,41 +152,44 @@ inline size_t JoinRange::valid_ranges_size() const {
     return valid_ranges_.size();
 }
 
-inline ValidJoinRange::ValidJoinRange(Str first, Str last, JoinRange* jr,
-                                      uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(1), hint_{nullptr} {
-    if (jr_->join()->staleness())
-        expires_at_ = now + jr_->join()->staleness();
-    else
-        expires_at_ = 0;
-}
-
-inline void ValidJoinRange::ref() {
+inline void SinkRange::ref() {
     ++refcount_;
 }
 
-inline void ValidJoinRange::deref() {
-    if (--refcount_ == 0)
-        delete this;            // XXX
+inline void SinkRange::deref() {
+    if (--refcount_ == 0 && !valid())
+        delete this;
 }
 
-inline Join* ValidJoinRange::join() const {
+inline bool SinkRange::valid() const {
+    return !ibegin_.empty();
+}
+
+inline Join* SinkRange::join() const {
     return jr_->join();
 }
 
-inline Table* ValidJoinRange::table() const {
+inline Table* SinkRange::table() const {
     return jr_->join()->sink_table();
 }
 
-inline bool ValidJoinRange::has_expired(uint64_t now) const {
+inline unsigned SinkRange::context_mask() const {
+    return context_mask_;
+}
+
+inline Str SinkRange::context() const {
+    return context_;
+}
+
+inline bool SinkRange::has_expired(uint64_t now) const {
     return expires_at_ && expires_at_ < now;
 }
 
-inline bool ValidJoinRange::need_update() const {
+inline bool SinkRange::need_update() const {
     return !updates_.empty();
 }
 
-inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
+inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
     Datum* hd = hint == store.end() ? 0 : hint.operator->();
     if (hd)
         hd->ref();
@@ -190,12 +198,12 @@ inline void ValidJoinRange::update_hint(const ServerStore& store, ServerStore::i
     hint_ = hd;
 }
 
-inline Datum* ValidJoinRange::hint() const {
+inline Datum* SinkRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
 }
 
-inline Str IntermediateUpdate::key() const {
-    return key_;
+inline Str IntermediateUpdate::context() const {
+    return context_;
 }
 
 inline int IntermediateUpdate::notifier() const {

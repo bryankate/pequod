@@ -1,9 +1,8 @@
 #ifndef GSTORE_XINTERVAL_HH
 #define GSTORE_XINTERVAL_HH 1
 #include "compiler.hh"
+#include "straccum.hh"
 #include <iostream>
-class StringAccum;
-StringAccum &operator<<(StringAccum &sa, char c);
 
 template <typename T>
 class interval {
@@ -39,6 +38,8 @@ class interval {
     inline bool overlaps(const interval<T>& x) const;
     template <typename X> inline bool overlaps(const interval<X>& x) const;
     template <typename X> inline bool overlaps(const X& xbegin, const X& xend) const;
+
+    inline String unparse() const;
 
   private:
     T ibegin_;
@@ -210,6 +211,13 @@ std::ostream &operator<<(std::ostream &s, const interval<T> &x) {
 template <typename T>
 StringAccum &operator<<(StringAccum &sa, const interval<T> &x) {
     return (sa << '[' << x.ibegin() << ", " << x.iend() << ')');
+}
+
+template <typename T>
+String interval<T>::unparse() const {
+    StringAccum sa;
+    sa << *this;
+    return sa.take_string();
 }
 
 #endif

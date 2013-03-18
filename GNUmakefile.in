@@ -76,8 +76,9 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) -o $@ $<
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
@@ -104,6 +105,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsink.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
+        $(OBJDIR)/pqtwitternew.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqrwmicro.o \
@@ -126,61 +128,6 @@ $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
 
 $(OBJDIR)/pgbench: $(COMMON_OBJS) $(OBJDIR)/pgbench.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-# create files needed by exp/ directory
-$(OBJDIR)/gstore_server: $(PROTOGENDIR)/gstore.pb.h
-
-$(OBJDIR)/wikibot: $(COMMON_OBJS) $(OBJDIR)/wikibot.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/unit: $(COMMON_OBJS) $(OBJDIR)/unit.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/bench: $(COMMON_OBJS) $(OBJDIR)/bench.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/warehouse: $(COMMON_OBJS) $(OBJDIR)/warehouse.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/facebook: $(COMMON_OBJS) $(OBJDIR)/facebook.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/twitter: $(COMMON_OBJS) $(OBJDIR)/twitterapp.o $(OBJDIR)/twitter.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/closetwitter: $(COMMON_OBJS) $(OBJDIR)/twitterapp.o $(OBJDIR)/closetwitter.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/hackernews: $(COMMON_OBJS) $(OBJDIR)/hackernews.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/hackernews2: $(COMMON_OBJS) $(OBJDIR)/hackernews2.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/simplerhn: $(COMMON_OBJS) $(OBJDIR)/simplerhn.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/rtm1: $(COMMON_OBJS) $(OBJDIR)/rtm1.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/rtm2: $(COMMON_OBJS) $(OBJDIR)/rtm2.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/rtm3: $(COMMON_OBJS) $(OBJDIR)/rtm3.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/ydmao: $(COMMON_OBJS) $(OBJDIR)/ydmao.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/neha: $(COMMON_OBJS) $(OBJDIR)/neha.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/scanperf: $(COMMON_OBJS) $(OBJDIR)/scanperf.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/benchproto: $(COMMON_OBJS) $(OBJDIR)/benchproto.o $(OBJDIR)/micro1.pb.o $(OBJDIR)/micro2.px.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-$(OBJDIR)/benchproto.o: $(PROTOGENDIR)/micro1.pb.h $(PROTOGENDIR)/micro2.px.hh
 
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 

@@ -1,13 +1,10 @@
 #ifndef PEQUOD_SERVER_HH
 #define PEQUOD_SERVER_HH
-#include "pqdatum.hh"
-#include "interval_tree.hh"
 #include "local_vector.hh"
 #include "hashtable.hh"
-#include "pqbase.hh"
-#include "pqjoin.hh"
 #include "pqsource.hh"
 #include "pqsink.hh"
+#include "time.hh"
 class Json;
 
 namespace pq {
@@ -35,19 +32,25 @@ class Table : public pequod_set_base_hook {
     inline iterator lower_bound(Str key);
     inline size_t size() const;
 
-    inline void validate(Str first, Str last);
+    inline void validate(Str first, Str last, uint64_t now);
+    inline void invalidate_dependents(Str key);
+    inline void invalidate_dependents(Str first, Str last);
 
     void add_source(SourceRange* r);
-    void remove_source(Str first, Str last, ValidJoinRange* sink);
+    inline void unlink_source(SourceRange* r);
+    void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     void insert(Str key, String value);
     template <typename F>
-    void modify(Str key, const ValidJoinRange* sink, const F& func);
+    void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
+    inline iterator invalidate_erase(iterator it);
 
-    void clear();
+    uint64_t ninsert_;
+    uint64_t nmodify_;
+    uint64_t nerase_;
 
   private:
     store_type store_;
@@ -68,25 +71,27 @@ class Server {
   public:
     typedef ServerStore store_type;
 
-    Server() {
-    }
+    inline Server();
 
     class const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
     inline const Datum* find(Str str) const;
     inline store_type::const_iterator lower_bound(Str str) const;
+    inline const Datum& operator[](Str str) const;
     inline size_t count(Str first, Str last) const;
 
-    Table& make_table(Str name);
+    const Table& table(Str tname) const;
+    Table& make_table(Str tname);
 
     inline void insert(Str key, const String& value);
     inline void erase(Str key);
 
     inline void add_source(SourceRange* r);
-    inline void remove_source(Str first, Str last, ValidJoinRange* sink);
+    inline void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
+    inline void validate(Str key);
     inline void validate(Str first, Str last);
     inline size_t validate_count(Str first, Str last);
 
@@ -96,6 +101,7 @@ class Server {
   private:
     HashTable<Table> tables_;
     bi::set<Table> tables_by_name_;
+    uint64_t last_validate_at_;
     friend class const_iterator;
 };
 
@@ -141,9 +147,17 @@ inline size_t Table::size() const {
     return store_.size();
 }
 
-inline Table& Server::make_table(Str name) {
+inline Server::Server()
+    : last_validate_at_(0) {
+}
+
+inline const Table& Server::table(Str tname) const {
+    return tables_.get(tname, Table::empty_table);
+}
+
+inline Table& Server::make_table(Str tname) {
     bool inserted;
-    auto it = tables_.find_insert(name, inserted);
+    auto it = tables_.find_insert(tname, inserted);
     if (inserted) {
         it->server_ = this;
         tables_by_name_.insert(*it);
@@ -151,10 +165,16 @@ inline Table& Server::make_table(Str name) {
     return *it;
 }
 
-inline const Datum *Server::find(Str str) const {
+inline const Datum* Server::find(Str str) const {
     auto& store = tables_.get(table_name(str), Table::empty_table).store_;
     auto it = store.find(str, DatumCompare());
     return it == store.end() ? NULL : it.operator->();
+}
+
+inline const Datum& Server::operator[](Str str) const {
+    auto& store = tables_.get(table_name(str), Table::empty_table).store_;
+    auto it = store.find(str, DatumCompare());
+    return it == store.end() ? Datum::empty_datum : *it;
 }
 
 inline auto Server::lower_bound(Str str) const -> Table::const_iterator {
@@ -168,17 +188,51 @@ inline size_t Server::count(Str first, Str last) const {
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     Str key(d->key());
     for (auto it = source_ranges_.begin_contains(key);
-         it != source_ranges_.end(); ++it)
-        if (it->check_match(key))
-            it->notify(d, old_value, notifier);
+         it != source_ranges_.end(); ) {
+        // SourceRange::notify() might remove the SourceRange from the tree
+        SourceRange* source = it.operator->();
+        ++it;
+        if (source->check_match(key))
+            source->notify(d, old_value, notifier);
+    }
+}
+
+inline void Table::validate(Str first, Str last, uint64_t now) {
+    for (auto it = join_ranges_.begin_overlaps(first, last);
+	 it != join_ranges_.end(); ++it)
+        it->validate(first, last, *server_, now);
+}
+
+inline void Table::invalidate_dependents(Str key) {
+    for (auto it = source_ranges_.begin_contains(key);
+         it != source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+}
+
+inline void Table::invalidate_dependents(Str first, Str last) {
+    for (auto it = source_ranges_.begin_overlaps(first, last);
+         it != source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+}
+
+inline void Table::unlink_source(SourceRange* r) {
+    source_ranges_.erase(r);
 }
 
 template <typename F>
-void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
+void Table::modify(Str key, const SinkRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
-    if (!hint)
+    if (!hint || !hint->valid())
         p = store_.insert_check(key, DatumCompare(), cd);
     else {
         p.first = store_.iterator_to(*hint);
@@ -208,6 +262,7 @@ void Table::modify(Str key, const ValidJoinRange* sink, const F& func) {
             sink->update_hint(store_, p.first);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
+    ++nmodify_;
 }
 
 inline auto Table::erase(iterator it) -> iterator {
@@ -218,10 +273,12 @@ inline auto Table::erase(iterator it) -> iterator {
     return it;
 }
 
-inline void Table::validate(Str first, Str last) {
-    for (auto it = join_ranges_.begin_overlaps(first, last);
-	 it != join_ranges_.end(); ++it)
-        it->validate(first, last, *server_);
+inline auto Table::invalidate_erase(iterator it) -> iterator {
+    Datum* d = it.operator->();
+    it = store_.erase(it);
+    invalidate_dependents(d->key());
+    d->invalidate();
+    return it;
 }
 
 inline void Server::insert(Str key, const String& value) {
@@ -241,16 +298,27 @@ inline void Server::add_source(SourceRange* r) {
     make_table(tname).add_source(r);
 }
 
-inline void Server::remove_source(Str first, Str last, ValidJoinRange* sink) {
+inline void Server::remove_source(Str first, Str last, SinkRange* sink, Str context) {
     Str tname = table_name(first);
     assert(tname);
-    make_table(tname).remove_source(first, last, sink);
+    make_table(tname).remove_source(first, last, sink, context);
 }
 
 inline void Server::validate(Str first, Str last) {
+    uint64_t now = tstamp();
+    now += now == last_validate_at_;
+    last_validate_at_ = now;
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).validate(first, last);
+    make_table(tname).validate(first, last, now);
+}
+
+inline void Server::validate(Str key) {
+    LocalStr<24> next_key;
+    next_key.assign_uninitialized(key.length() + 1);
+    memcpy(next_key.mutable_data(), key.data(), key.length());
+    next_key.mutable_data()[key.length()] = 0;
+    validate(key, next_key);
 }
 
 inline size_t Server::validate_count(Str first, Str last) {

@@ -29,31 +29,45 @@ Pattern::Pattern() {
     clear();
 }
 
-void Pattern::append_literal(uint8_t ch) {
-    assert(ch < 128);
-    assert(plen_ < pcap);
-    pat_[plen_] = ch;
-    ++plen_;
-    ++klen_;
-}
-
-void Pattern::append_slot(int si, int len) {
-    assert(plen_ < pcap);
-    assert(si >= 0 && si < slot_capacity);
-    assert(!has_slot(si));
-    assert(len != 0);
-    slotlen_[si] = len;
-    slotpos_[si] = klen_;
-    pat_[plen_] = 128 + si;
-    ++plen_;
-    klen_ += len;
-}
-
 void Pattern::clear() {
     klen_ = plen_ = 0;
     memset(pat_, 0, sizeof(pat_));
     for (int i = 0; i != slot_capacity; ++i)
         slotlen_[i] = slotpos_[i] = 0;
+}
+
+void Pattern::match_range(Str first, Str last, Match& m) const {
+    const uint8_t* fs = first.udata(), *ls = last.udata();
+    const uint8_t* efs = fs + std::min(first.length(), last.length());
+    for (const uint8_t* p = pat_; p != pat_ + plen_ && fs != efs; ++p)
+        if (*p < 128) {
+            if (*fs != *p || *ls != *p)
+                return;
+            ++fs, ++ls;
+        } else {
+            const uint8_t* ms = m.data(*p - 128);
+            int ml = m.known_length(*p - 128);
+            int mp = 0;
+            while (mp != ml) {
+                if (fs + mp == efs || fs[mp] != ms[mp] || ls[mp] != ms[mp])
+                    return;
+                ++mp;
+            }
+            while (mp != slotlen_[*p - 128] && fs + mp != efs
+                   && fs[mp] == ls[mp])
+                ++mp;
+            if (mp != slotlen_[*p - 128] && fs + slotlen_[*p - 128] == efs
+                && fs[mp] + 1 == ls[mp]) {
+                for (int xp = mp + 1; xp != slotlen_[*p - 128]; ++xp)
+                    if (fs[xp] != 255 || ls[xp] != 0)
+                        goto do_not_extend;
+                mp = slotlen_[*p - 128];
+            do_not_extend: ;
+            }
+            if (mp != ml)
+                m.set_slot(*p - 128, fs, mp);
+            fs += mp, ls += mp;
+        }
 }
 
 bool operator==(const Pattern& a, const Pattern& b) {
@@ -184,16 +198,20 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             // the form "t|11111"! Detect this case.
             bool use_first = false;
             //std::cerr << "SINK " << sinklen << " " << sinkpat.slot_length(slot) << " " << matchlen << " "\n";
-            if (sinklen == sinkpat.slot_length(slot) && matchlen < sinklen
-                && sink_first.length() >= sinkpos + sinklen
-                && sink_last.length() == sinkpos + sinklen) {
-                const uint8_t* ldata = sink_last.udata() + sinkpos;
-                const uint8_t* fdata = sink_first.udata() + sinkpos;
-                int x = sinklen - 1;
-                while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
-                    --x;
-                use_first = x >= 0 && ldata[x] == fdata[x] + 1
-                    && memcmp(ldata, fdata, x) == 0;
+            if (sinklen == sinkpat.slot_length(slot)
+                && matchlen < sinklen
+                && sink_first.length() >= sinkpos + sinklen) {
+                if (memcmp(&sink_first[sinkpos], &sink_last[sinkpos], sinklen) == 0)
+                    use_first = true;
+                else if (sink_last.length() == sinkpos + sinklen) {
+                    const uint8_t* ldata = sink_last.udata() + sinkpos;
+                    const uint8_t* fdata = sink_first.udata() + sinkpos;
+                    int x = sinklen - 1;
+                    while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
+                        --x;
+                    use_first = x >= 0 && ldata[x] == fdata[x] + 1
+                        && memcmp(ldata, fdata, x) == 0;
+                }
             }
 
             const uint8_t* data;
@@ -229,21 +247,23 @@ String Join::expand_last(const Pattern& pat, Str sink_first, Str sink_last, cons
 }
 
 SourceRange* Join::make_source(Server& server, const Match& m,
-                               Str ibegin, Str iend) {
+                               Str ibegin, Str iend, SinkRange* sink) {
+    SourceRange::parameters p{server, this, nsource() - 1, m,
+            ibegin, iend, sink};
     if (jvt() == jvt_copy_last)
-        return new CopySourceRange(server, this, m, ibegin, iend);
+        return new CopySourceRange(p);
     else if (jvt() == jvt_count_match)
-        return new CountSourceRange(server, this, m, ibegin, iend);
+        return new CountSourceRange(p);
     else if (jvt() == jvt_min_last)
-        return new MinSourceRange(server, this, m, ibegin, iend);
+        return new MinSourceRange(p);
     else if (jvt() == jvt_max_last)
-        return new MaxSourceRange(server, this, m, ibegin, iend);
+        return new MaxSourceRange(p);
     else if (jvt() == jvt_sum_match)
-        return new SumSourceRange(server, this, m, ibegin, iend);
+        return new SumSourceRange(p);
     else if (jvt() == jvt_bounded_copy_last)
-        return new BoundedCopySourceRange(server, this, m, ibegin, iend);
+        return new BoundedCopySourceRange(p);
     else if (jvt() == jvt_bounded_count_match)
-        return new BoundedCountSourceRange(server, this, m, ibegin, iend);
+        return new BoundedCountSourceRange(p);
     else
         assert(0);
 }
@@ -376,7 +396,7 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_sum_match;
         else if (words[i] == "using")
             new_op = jvt_using;
-        else if (words[i] == "with")
+        else if (words[i] == "with" || words[i] == "where")
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
@@ -436,7 +456,7 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             return errh->error("pattern %<%p{Str}%> too long, max %d chars", &sourcestr[p], Pattern::pcap);
         Pattern& pat = pat_[p];
         pat.clear();
-        slotflags_[p] = 0;
+        pat_mask_[p] = 0;
         for (int j = 0; j != patstr[p].length(); ++j) {
             unsigned char x = patstr[p][j];
             pat.pat_[pat.plen_] = x;
@@ -444,10 +464,11 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             if (x < 128)
                 ++pat.klen_;
             else {
-                pat.slotlen_[x - 128] = slotlen_[x - 128];
-                pat.slotpos_[x - 128] = pat.klen_;
-                pat.klen_ += slotlen_[x - 128];
-                slotflags_[p] |= 1 << (x - 128);
+                int s = x - 128;
+                pat.slotlen_[s] = slotlen_[s];
+                pat.slotpos_[s] = pat.klen_;
+                pat.klen_ += slotlen_[s];
+                pat_mask_[p] |= 1 << s;
             }
         }
         if (pat.klen_ > key_capacity)
@@ -459,19 +480,10 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
 }
 
 int Join::analyze(ErrorHandler* errh) {
-    // create slotflags_
-    static_assert(slot_capacity <= 8 * sizeof(slotflags_[0]),
-                  "slot_capacity too big for slotflags_ entries");
-    for (int p = 0; p != npat_ - 1; ++p)
-        match_context_flags_[p] = (p > 1 ? match_context_flags_[p - 1] : 0)
-            | slotflags_[p];
-    for (int p = 0; p != npat_ - 1; ++p)
-        match_context_flags_[p] &= ~slotflags_[p];
-
     // account for slots across all patterns
     // completion_source_ is the source number after which sink() is complete
     int need_slots = 0;
-    for (int s = 0; s < slot_capacity; ++s)
+    for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
         if (sink().has_slot(s))
             need_slots |= 1 << s;
 
@@ -481,13 +493,47 @@ int Join::analyze(ErrorHandler* errh) {
         if (completion_source_ >= nsource()) {
             for (int s = 0; s < slot_capacity; ++s)
                 if (need_slots & (1 << s))
-                    return errh->error("slot %<%s%> in sink not defined by sources", slotname_[s].c_str());
+                    errh->error("slot %<%s%> in sink not defined by sources", slotname_[s].c_str());
+            return -1;
         }
         for (int s = 0; s < slot_capacity; ++s)
             if (source(completion_source_).has_slot(s)
                 && source(completion_source_).slot_length(s) == sink().slot_length(s))
                 need_slots &= ~(1 << s);
     }
+
+    // create context_length_
+    static_assert(key_capacity < (1U << (8 * sizeof(context_length_[0]))),
+                  "key_capacity too big for context_length_ entries");
+    memset(context_length_, 0, sizeof(context_length_));
+    for (int m = 0; m != (1 << slot_capacity); ++m) {
+        for (int s = 0; s != slot_capacity; ++s)
+            if (m & (1 << s))
+                context_length_[m] += slotlen_[s] + 1;
+    }
+
+    // create context_mask_
+    static_assert(slot_capacity <= 8 * sizeof(pat_mask_[0]),
+                  "slot_capacity too big for pat_mask_ entries");
+    context_mask_[0] = 0;
+    for (int p = 1; p != npat_; ++p) {
+        context_mask_[p] = 0;
+        for (int px = 1; px != p; ++px)
+            context_mask_[p] |= pat_mask_[px];
+        context_mask_[p] &= ~pat_mask_[p];
+    }
+
+    // create sink_key_
+    sink_key_.assign_uninitialized(sink().key_length());
+    uint8_t* sk = sink_key_.mutable_udata();
+    for (const uint8_t* p = sink().pat_; p != sink().pat_ + sink().plen_; ++p)
+        if (*p < 128) {
+            *sk = *p;
+            ++sk;
+        } else {
+            memset(sk, 'X', slotlen_[*p - 128]);
+            sk += slotlen_[*p - 128];
+        }
 
     // success
     return 0;
@@ -497,28 +543,22 @@ bool Join::assign_parse(Str str, ErrorHandler* errh) {
     return hard_assign_parse(str, errh) >= 0;
 }
 
-String Join::hard_unparse_match_context(int joinpos, const Match& match) const {
-    assert(joinpos >= 0 && joinpos < nsource());
-    int slot_flags = match_context_flags_[joinpos + 1];
-    StringAccum sa;
-    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
-        if (slot_flags & 1) {
-            assert(match.known_length(s) == slotlen_[s]);
-            sa.append(match.data(s), slotlen_[s]);
-        }
-    return sa.take_string();
+Json Join::unparse_context(Str context) const {
+    Json j;
+    const uint8_t* ends = context.udata() + context.length();
+    for (const uint8_t* s = context.udata(); s != ends; ) {
+        j.set(slotname_[*s], Str(s + 1, slotlen_[*s]));
+        s += slotlen_[*s] + 1;
+    }
+    return j;
 }
 
-void Join::hard_parse_match_context(Str context, int joinpos, Match& match) const {
-    assert(joinpos >= 0 && joinpos < nsource());
-    int slot_flags = match_context_flags_[joinpos + 1];
-    int pos = 0;
-    for (int s = 0; slot_flags; ++s, slot_flags >>= 1)
-        if (slot_flags & 1) {
-            assert(pos + slotlen_[s] <= context.length());
-            match.set_slot(s, context.data() + pos, slotlen_[s]);
-            pos += slotlen_[s];
-        }
+Json Join::unparse_match(const Match& m) const {
+    Json j;
+    for (int s = 0; s != slot_capacity; ++s)
+        if (m.has_slot(s))
+            j.set(slotname_[s], m.slot(s));
+    return j;
 }
 
 Json Pattern::unparse_json() const {

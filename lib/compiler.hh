@@ -822,6 +822,41 @@ inline double net_to_host_order(double x) {
     return host_to_net_order(x);
 }
 
+template <typename T> struct make_aliasable {};
+#define MAKE_ALIASABLE(T) template <> struct make_aliasable<T> { typedef T type __attribute__((__may_alias__)); }
+MAKE_ALIASABLE(unsigned char);
+MAKE_ALIASABLE(signed char);
+MAKE_ALIASABLE(char);
+MAKE_ALIASABLE(unsigned short);
+MAKE_ALIASABLE(short);
+MAKE_ALIASABLE(int);
+MAKE_ALIASABLE(unsigned);
+MAKE_ALIASABLE(long);
+MAKE_ALIASABLE(unsigned long);
+MAKE_ALIASABLE(long long);
+MAKE_ALIASABLE(unsigned long long);
+#undef MAKE_ALIASABLE
+
+template <typename T>
+inline void write_in_net_order(char* s, T x) {
+    *reinterpret_cast<typename make_aliasable<T>::type*>(s) = host_to_net_order(x);
+}
+
+template <typename T>
+inline void write_in_net_order(uint8_t* s, T x) {
+    write_in_net_order(reinterpret_cast<char*>(s), x);
+}
+
+template <typename T>
+inline T read_in_net_order(const char* s) {
+    return net_to_host_order(*reinterpret_cast<const typename make_aliasable<T>::type*>(s));
+}
+
+template <typename T>
+inline T read_in_net_order(const uint8_t* s) {
+    return read_in_net_order<T>(reinterpret_cast<const char*>(s));
+}
+
 
 inline uint64_t read_pmc(uint32_t ecx) {
     uint32_t a, d;

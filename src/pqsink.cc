@@ -12,9 +12,8 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 JoinRange::~JoinRange() {
-    for (auto it : flushables_)
-        delete it;
-    while (ValidJoinRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+    while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+        // XXX no one else had better deref this shit
         delete sink;
 }
 
@@ -23,48 +22,36 @@ struct JoinRange::validate_args {
     Str last;
     Match match;
     Server* server;
-    ValidJoinRange* sink;
+    SinkRange* sink;
+    uint64_t now;
     int notifier;
 };
 
 inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
-    validate_args va{first, last, Match(), &server, 0,
+    validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
-    va.sink = new ValidJoinRange(first, last, this, now);
-    if (join_->maintained() || join_->staleness())
-        valid_ranges_.insert(va.sink);
-    else
-        flushables_.push_back(va.sink);
+    va.sink = new SinkRange(first, last, this, now);
+    valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
 
-void JoinRange::validate(Str first, Str last, Server& server) {
-    uint64_t now = tstamp();
+void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     Str last_valid = first;
-
-    for (auto it : flushables_) {
-        it->flush();
-        it->deref();
-    }
-    flushables_.clear();
-
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
-        if (it->has_expired(now)) {
-            ValidJoinRange* vjr = it.operator->();
+        SinkRange* sink = it.operator->();
+        if (sink->has_expired(now)) {
             ++it;
-            valid_ranges_.erase(vjr);
-            vjr->flush();
-            vjr->deref();
-            continue;
+            sink->invalidate();
+        } else {
+            if (last_valid < sink->ibegin())
+                validate_one(last_valid, sink->ibegin(), server, now);
+            if (sink->need_update())
+                sink->update(first, last, server, now);
+            last_valid = sink->iend();
+            ++it;
         }
-        if (last_valid < it->ibegin())
-            validate_one(last_valid, it->ibegin(), server, now);
-        if (it->need_update())
-            it->update(first, last, server);
-        last_valid = it->iend();
-        ++it;
     }
     if (last_valid < last)
         validate_one(last_valid, last, server, now);
@@ -83,14 +70,13 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     // XXX PERFORMANCE this is not always necessary
     // XXX For now don't do this if the join is recursive
     if (table_name(Str(kf, kflen)) != join_->sink().table_name())
-        va.server->validate(Str(kf, kflen), Str(kl, kllen));
+        join_->source_table(joinpos)->validate(Str(kf, kflen), Str(kl, kllen),
+                                               va.now);
 
     SourceRange* r = 0;
-    if (joinpos + 1 == join_->nsource()) {
+    if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
-                               Str(kf, kflen), Str(kl, kllen));
-        r->set_sink(va.sink);
-    }
+                               Str(kf, kflen), Str(kl, kllen), va.sink);
 
     auto it = va.server->lower_bound(Str(kf, kflen));
     auto ilast = va.server->lower_bound(Str(kl, kllen));
@@ -115,17 +101,20 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
-        if (r)
-            // XXX want to remove just the right one
-            va.server->remove_source(r->ibegin(), r->iend(), va.sink);
-        delete r;
+        if (r) {
+            LocalStr<12> remove_context;
+            join_->make_context(remove_context, va.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
+            va.server->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
+            delete r;
+        }
     } else if (join_->maintained()) {
         if (r)
             va.server->add_source(r);
-        else
-            va.server->add_source(new InvalidatorRange
-                                  (*va.server, join_, joinpos, va.match,
-                                   Str(kf, kflen), Str(kl, kllen), va.sink));
+        else {
+            SourceRange::parameters p{*va.server, join_, joinpos, va.match,
+                    Str(kf, kflen), Str(kl, kllen), va.sink};
+            va.server->add_source(new InvalidatorRange(p));
+        }
     } else if (r)
         delete r;
 }
@@ -154,39 +143,53 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
 #endif
 
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
-                                       Str context, Str key,
-                                       int joinpos, int notifier)
-    : ServerRangeBase(first, last), context_(context), key_(key),
-      joinpos_(joinpos), notifier_(notifier) {
+                                       SinkRange* sink, int joinpos, const Match& m,
+                                       int notifier)
+    : ServerRangeBase(first, last), joinpos_(joinpos), notifier_(notifier) {
+    Join* j = sink->join();
+    unsigned context_mask = (j->context_mask(joinpos) | j->source_mask(joinpos)) & ~sink->context_mask();
+    j->make_context(context_, m, context_mask);
 }
 
-ValidJoinRange::~ValidJoinRange() {
+SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
+    : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr} {
+    Join* j = jr_->join();
+    if (j->maintained())
+        expires_at_ = 0;
+    else
+        expires_at_ = now + j->staleness();
+
+    Match m;
+    j->sink().match_range(first, last, m);
+    context_mask_ = j->known_mask(m);
+    j->make_context(context_, m, context_mask_);
+}
+
+SinkRange::~SinkRange() {
     while (IntermediateUpdate* iu = updates_.unlink_leftmost_without_rebalance())
         delete iu;
     if (hint_)
         hint_->deref();
 }
 
-void ValidJoinRange::add_update(int joinpos, const String& context,
-                                Str key, int notifier) {
+void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
     Match m;
     join()->source(joinpos).match(key, m);
-    join()->parse_match_context(context, joinpos, m);
+    join()->assign_context(m, context);
     uint8_t kf[key_capacity], kl[key_capacity];
     int kflen = join()->expand_first(kf, join()->sink(), ibegin(), iend(), m);
     int kllen = join()->expand_last(kl, join()->sink(), ibegin(), iend(), m);
 
-    IntermediateUpdate* iu = new IntermediateUpdate(Str(kf, kflen),
-                                                    Str(kl, kllen),
-                                                    context,
-                                                    key, joinpos, notifier);
+    IntermediateUpdate* iu = new IntermediateUpdate
+        (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
     updates_.insert(iu);
 
+    join()->sink_table()->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     // std::cerr << *iu << "\n";
 }
 
-bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
-                               Server& server) {
+bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
+                          Server& server, uint64_t now) {
     if (first < iu->ibegin())
         first = iu->ibegin();
     if (iu->iend() < last)
@@ -196,10 +199,10 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
         last = iu->iend();
 
     Join* join = jr_->join();
-    JoinRange::validate_args va{first, last, Match(), &server, this,
+    JoinRange::validate_args va{first, last, Match(), &server, this, now,
             iu->notifier_};
-    join->source(iu->joinpos_).match(iu->key_, va.match);
-    join->parse_match_context(iu->context_, iu->joinpos_, va.match);
+    join->assign_context(va.match, context_);
+    join->assign_context(va.match, iu->context_);
     jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
@@ -209,34 +212,50 @@ bool ValidJoinRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
     return iu->ibegin_ < iu->iend_;
 }
 
-void ValidJoinRange::update(Str first, Str last, Server& server) {
+void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
     for (auto it = updates_.begin_overlaps(first, last);
          it != updates_.end(); ) {
         IntermediateUpdate* iu = it.operator->();
         ++it;
 
         updates_.erase(iu);
-        if (update_iu(first, last, iu, server))
+        if (update_iu(first, last, iu, server, now))
             updates_.insert(iu);
         else
             delete iu;
     }
 }
 
-void ValidJoinRange::flush() {
-    Table* t = table();
-    auto endit = t->lower_bound(iend());
-    for (auto it = t->lower_bound(ibegin()); it != endit; )
-        if (it->owner() == this)
-            it = t->erase(it);
-        else
-            ++it;
+void SinkRange::invalidate() {
+    if (valid()) {
+        jr_->valid_ranges_.erase(this);
+        Table* t = table();
+
+        auto endit = t->lower_bound(iend());
+        for (auto it = t->lower_bound(ibegin()); it != endit; )
+            if (it->owner() == this)
+                it = t->invalidate_erase(it);
+            else
+                ++it;
+
+        ibegin_ = Str();
+        if (refcount_ == 0)
+            delete this;
+    }
 }
 
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")
-           << iu.key() << " " << iu.context_ << "}";
+           << iu.context() << " " << iu.context_ << "}";
+    return stream;
+}
+
+std::ostream& operator<<(std::ostream& stream, const SinkRange& sink) {
+    if (sink.valid())
+        stream << "SINK{" << sink.interval().unparse().printable() << "}";
+    else
+        stream << "SINK{INVALID}";
     return stream;
 }
 
