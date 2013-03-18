@@ -14,8 +14,8 @@ class RemoteClient {
     tamed void add_join(const String& first, const String& last,
                         const String& joinspec, event<Json> e);
 
+    tamed void get(const String& key, event<String> e);
     tamed void insert(const String& key, const String& value, event<> e);
-
     tamed void erase(const String& key, event<> e);
 
     tamed void count(const String& first, const String& last,

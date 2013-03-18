@@ -17,6 +17,16 @@ tamed void RemoteClient::add_join(const String& first, const String& last,
     e(rj);
 }
 
+tamed void RemoteClient::get(const String& key, event<String> e) {
+    tvars { Json j; unsigned long seq = this->seq_; }
+    twait {
+        fd_.call(Json::make_array(pq_get, seq_, key), make_event(j));
+        ++seq_;
+    }
+    assert(j[0] == -pq_get && j[1] == seq);
+    e(j && j[2].to_i() == pq_ok ? j[3].to_s() : String());
+}
+
 tamed void RemoteClient::insert(const String& key, const String& value,
                                 event<> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
