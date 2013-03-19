@@ -223,6 +223,7 @@ static Clp_Option options[] = {
     { "visualize", 0, 4007, 0, Clp_Negate },
     { "overhead", 0, 4008, 0, Clp_Negate },
     { "celebrity", 0, 4009, Clp_ValInt, 0 },
+    { "celebrity2", 0, 4010, Clp_ValInt, 0 },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -326,6 +327,8 @@ int main(int argc, char** argv) {
             tp_param.set("overhead", !clp->negated);
         else if (clp->option->long_name == String("celebrity"))
             tp_param.set("celebrity", clp->val.i);
+        else if (clp->option->long_name == String("celebrity2"))
+            tp_param.set("celebrity", clp->val.i).set("celebrity_type", 2);
 
         // hn
 	else if (clp->option->long_name == String("narticles"))

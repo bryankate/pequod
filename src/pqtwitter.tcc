@@ -26,7 +26,8 @@ TwitterPopulator::TwitterPopulator(const Json& param)
       duration_(param["duration"].as_i(1000000)),
       ppost_(param["ppost"].as_i(2)),
       psubscribe_(param["psubscribe"].as_i(3)),
-      celebrity_(param["celebrity"].as_i(0)) {
+      celebrity_(param["celebrity"].as_i(0)),
+      celebrity_type_(param["celebrity_type"].as_i(0)) {
 }
 
 uint32_t* TwitterPopulator::subscribe_probabilities(generator_type& gen) {
