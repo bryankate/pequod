@@ -22,7 +22,7 @@ namespace pq {
 TwitterUser::TwitterUser()
     : nbackpost_(0), npost_(0), nsubscribe_(0), nlogout_(0),
       nlogin_(0), ncheck_(0), nread_(0), load_time_(0), loggedin_(false),
-      uid_((uint32_t)-1), nfollowers_(0) {
+      uid_((uint32_t)-1), nfollowers_(0), celeb_(false) {
 }
 
 TwitterUser::Compare::Compare(CompareField field) : field_(field) {
@@ -68,6 +68,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       synchronous_(param["synchronous"].as_b(false)),
       overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
+      celebthresh_(param["celebrity"].as_i(0)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
@@ -194,6 +195,9 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
     vector<double> wpost(nusers_, 0);
     for (uint32_t u = 0; u < nusers_; ++u) {
         users_[u].uid_ = u;
+
+        if (celebthresh_ && users_[u].nfollowers_ > celebthresh_)
+            users_[u].celeb_ = true;
 
         if (!users_[u].nfollowers_)
             continue;
