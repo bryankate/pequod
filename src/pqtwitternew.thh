@@ -286,8 +286,6 @@ class TwitterNewRunner {
     S& server_;
     TwitterNewPopulator& tp_;
     uint32_t currtime_;
-    std::vector<uint32_t> active_;
-    std::vector<uint32_t> loggedin_;
 
     tamed void run_twitter(tamer::event<> done);
     tamed void run_overhead(tamer::event<> done);
@@ -556,7 +554,7 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
          .set("nsubscribes", nsubscribe)
          .set("nchecks", ncheck)
          .set("nposts_read", nread)
-         .set("nactive", active_.size() + loggedin_.size())
+         .set("nactive", active.size() + loggedin.size())
          .set("nlogins", nlogin).set("nlogouts", nlogout)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
