@@ -88,7 +88,10 @@ class TwitterShim {
     inline void mark_celebrity(uint32_t poster, tamer::preevent<R> e);
     template <typename R>
     inline void post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> e);
-    tamed void initialize(TwitterPopulator& tp, tamer::event<> e);
+
+    tamed void initialize(bool client_push, bool server_pull, uint32_t celebrity,
+                          int celebrity_type, uint32_t nusers, tamer::event<> done);
+
     inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -135,9 +138,10 @@ inline void TwitterShim<S>::add_follower(uint32_t subscriber, uint32_t poster, t
 }
 
 tamed template <typename S>
-void TwitterShim<S>::initialize(TwitterPopulator& tp, tamer::event<> done) {
+void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t celebrity,
+                                int celebrity_type, uint32_t nusers, tamer::event<> done) {
     tvars { Json j[4]; }
-    if (tp.push())
+    if (client_push)
         done();
     else {
         twait {
@@ -145,11 +149,11 @@ void TwitterShim<S>::initialize(TwitterPopulator& tp, tamer::event<> done) {
                              "t|<user>|<time>|<poster> = "
                              "copy p|<poster>|<time> "
                              "using s|<user>|<poster> "
-                             + String(tp.pull() ? "pull " : "") +
+                             + String(server_pull ? "pull " : "") +
                              "where user:5, time:10, poster:5",
                              make_event(j[0]));
-            if (tp.celebrity() && tp.celebrity_type() == 2) {
-                celeb_.assign(tp.nusers(), false);
+            if (celebrity && celebrity_type == 2) {
+                celeb_.assign(nusers, false);
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
                                  "copy s|<user>|<poster> "
@@ -162,8 +166,8 @@ void TwitterShim<S>::initialize(TwitterPopulator& tp, tamer::event<> done) {
                                  "using cs|<user>|<poster> "
                                  "where user:5, time:10, poster:5",
                                  make_event(j[1]));
-            } else if (tp.celebrity()) {
-                celeb_.assign(tp.nusers(), false);
+            } else if (celebrity) {
+                celeb_.assign(nusers, false);
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
                                  "pull copy cp|<poster>|<time> "
@@ -355,7 +359,8 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
         }
     }
 
-    twait { server_.initialize(tp_, make_event()); }
+    twait { server_.initialize(tp_.push(), tp_.pull(), tp_.celebrity(),
+                               tp_.celebrity_type(), tp_.nusers(), make_event()); }
 
     if (tp_.celebrity())
         twait {
