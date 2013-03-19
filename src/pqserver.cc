@@ -471,7 +471,8 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else {
-            pq::PQHackerNewsShim<pq::Server> shim(server);
+            pq::DirectClient dc(server);
+            pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
             if (tp_param["run"]) {

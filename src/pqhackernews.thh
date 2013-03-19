@@ -69,7 +69,7 @@ tamed template <typename S>
 void HackernewsRunner<S>::read_article(uint32_t aid) {
     mandatory_assert(aid < hp_.narticles());
     twait {
-        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), hp_.check_karma(), make_event());
+        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), hp_.check_karma(), tamer::event<>());
     }
 }
 
@@ -81,7 +81,7 @@ void HackernewsRunner<S>::populate() {
         uint32_t nv = 0, nc = 0;
     }
     twait {
-        server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), make_event());
+        server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>());
     }
     if (hp_.pg()) {
         // All intialization work for DBs done here
