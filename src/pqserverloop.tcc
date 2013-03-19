@@ -15,7 +15,7 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         msgpack_fd mpfd(cfd);
     }
     while (cfd) {
-        twait { mpfd.read(make_event(j)); }
+        twait { mpfd.read_request(make_event(j)); }
         if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
             break;
 
