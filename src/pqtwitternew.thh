@@ -580,6 +580,7 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
     // make sure the right number of total posts exists in the store
     for (uint32_t u = 0; u < nusers; ++u)
         server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
+    twait(gr);
 
     uint32_t nbackpost = 0, npost = 0;
 
