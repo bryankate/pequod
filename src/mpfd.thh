@@ -18,6 +18,10 @@ class msgpack_fd {
     template <typename R>
     void read(tamer::preevent<R, Json> done);
     inline void call(const Json& j, tamer::event<Json> reply);
+    template <typename R>
+    inline void pace(tamer::preevent<R> done);
+
+    inline Json status() const;
 
   private:
     tamer::fd fd_;
@@ -44,9 +48,15 @@ class msgpack_fd {
     tamer::event<> rdwake_;
     tamer::event<> rdkill_;
 
+    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 10 };
+    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 9 };
+    tamer::event<> pacer_;
+
     void check() const;
     bool read_once(Json* receiver);
     void write_once();
+    inline bool need_pace() const;
+    inline bool pace_recovered() const;
     tamed void writer_coroutine();
     tamed void reader_coroutine();
 };
@@ -82,6 +92,29 @@ void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
         rdwait_.push_back(receiver);
         rdwake_();
     }
+}
+
+inline bool msgpack_fd::need_pace() const {
+    return wrsize_ > wrpacelim && rdwait_.size() > rdpacelim;
+}
+
+inline bool msgpack_fd::pace_recovered() const {
+    return wrsize_ <= wrpacerecover && rdwait_.size() <= rdpacerecover;
+}
+
+template <typename R>
+inline void msgpack_fd::pace(tamer::preevent<R> done) {
+    if (need_pace())
+        pacer_ = tamer::distribute(pacer_, std::move(done));
+    else
+        done();
+}
+
+inline Json msgpack_fd::status() const {
+    //check();
+    return Json().set("buffered_write_bytes", wrsize_)
+        .set("buffered_read_bytes", rdlen_ - rdpos_)
+        .set("waiting_readers", rdwait_.size());
 }
 
 #endif

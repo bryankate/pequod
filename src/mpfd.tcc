@@ -108,6 +108,8 @@ tamed void msgpack_fd::reader_coroutine() {
         } else if (read_once(rdwait_.front().result_pointer())) {
             rdwait_.front().unblock();
             rdwait_.pop_front();
+            if (pace_recovered())
+                pacer_();
         }
     }
 
@@ -161,6 +163,8 @@ void msgpack_fd::write_once() {
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
         }
+        if (pace_recovered())
+            pacer_();
     } else if (amt == 0)
         fd_.close();
     else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
