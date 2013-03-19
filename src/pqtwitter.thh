@@ -407,6 +407,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
             load_times[u] = time;
             if (tp_.synchronous())
                 twait(gr);
+            else
+                twait { server_.pace(make_event()); }
         }
         ++time;
     }

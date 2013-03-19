@@ -486,6 +486,8 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
                 if (tp_.synchronous())
                     twait(gr);
+                else
+                    twait { server_.pace(make_event()); }
 
                 user->load_time_ = currtime_;
                 ++user->ncheck_;
