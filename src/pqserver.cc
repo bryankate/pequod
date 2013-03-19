@@ -222,10 +222,10 @@ static Clp_Option options[] = {
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
     { "popduration", 0, 4001, Clp_ValInt, 0 },
-    { "pread", 0, 4002, Clp_ValInt, 0 },
-    { "ppost", 0, 4003, Clp_ValInt, 0 },
-    { "psubscribe", 0, 4005, Clp_ValInt, 0 },
-    { "plogin", 0, 4006, Clp_ValInt, 0 },
+    { "pread", 0, 4002, Clp_ValDouble, 0 },
+    { "ppost", 0, 4003, Clp_ValDouble, 0 },
+    { "psubscribe", 0, 4005, Clp_ValDouble, 0 },
+    { "plogin", 0, 4006, Clp_ValDouble, 0 },
     { "graph", 0, 4007, Clp_ValStringNotOption, 0 },
     { "visualize", 0, 4008, 0, Clp_Negate },
     { "overhead", 0, 4009, 0, Clp_Negate },
@@ -249,10 +249,10 @@ static Clp_Option options[] = {
     { "buffer", 0, 6001, 0, Clp_Negate },
 
     // rwmicro params
-    { "prefresh", 0, 7000, Clp_ValInt, 0 },
-    { "nfollower", 0, 7001, Clp_ValInt, 0 },
-    { "pprerefresh", 0, 7002, Clp_ValInt, 0 },
-    { "pactive", 0, 7003, Clp_ValInt, 0 },
+    { "prefresh", 0, 7000, Clp_ValDouble, 0 },
+    { "nfollower", 0, 7001, Clp_ValDouble, 0 },
+    { "pprerefresh", 0, 7002, Clp_ValDouble, 0 },
+    { "pactive", 0, 7003, Clp_ValDouble, 0 },
 };
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
@@ -325,13 +325,13 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("popduration"))
             tp_param.set("popduration", clp->val.i);
         else if (clp->option->long_name == String("pread"))
-            tp_param.set("pread", clp->val.i);
+            tp_param.set("pread", clp->val.d);
         else if (clp->option->long_name == String("ppost"))
-            tp_param.set("ppost", clp->val.i);
+            tp_param.set("ppost", clp->val.d);
         else if (clp->option->long_name == String("psubscribe"))
-            tp_param.set("psubscribe", clp->val.i);
+            tp_param.set("psubscribe", clp->val.d);
         else if (clp->option->long_name == String("plogin"))
-            tp_param.set("plogin", clp->val.i);
+            tp_param.set("plogin", clp->val.d);
         else if (clp->option->long_name == String("graph"))
             tp_param.set("graph", clp->val.s);
         else if (clp->option->long_name == String("visualize"))
@@ -373,13 +373,13 @@ int main(int argc, char** argv) {
 
         // rwmicro
         else if (clp->option->long_name == String("prefresh"))
-            tp_param.set("prefresh", clp->val.i);
+            tp_param.set("prefresh", clp->val.d);
         else if (clp->option->long_name == String("nfollower"))
             tp_param.set("nfollower", clp->val.i);
         else if (clp->option->long_name == String("pprerefresh"))
-            tp_param.set("pprerefresh", clp->val.i);
+            tp_param.set("pprerefresh", clp->val.d);
         else if (clp->option->long_name == String("pactive"))
-            tp_param.set("pactive", clp->val.i);
+            tp_param.set("pactive", clp->val.d);
 
         // run single unit test
         else
