@@ -108,9 +108,10 @@ class TwitterHashShim {
     template <typename R>
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
-    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    inline void mark_celebrity(uint32_t poster, tamer::preevent<R> e);
     template <typename R>
-    inline void initialize(bool push, tamer::preevent<R> e);
+    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    inline void initialize(TwitterPopulator& tp, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -139,8 +140,8 @@ TwitterHashShim<S>::TwitterHashShim(S& server)
     : server_(server) {
 }
 
-template <typename S> template <typename R>
-inline void TwitterHashShim<S>::initialize(bool, tamer::preevent<R> done) {
+template <typename S>
+inline void TwitterHashShim<S>::initialize(TwitterPopulator&, tamer::event<> done) {
     done();
 }
 
@@ -148,6 +149,12 @@ template <typename S> template <typename R>
 inline void TwitterHashShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "s|%05u %05u", subscriber, poster);
     server_.append(Str(buf_, 7), Str(buf_ + 9, 5));
+    done();
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
+    (void) poster;
     done();
 }
 

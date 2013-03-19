@@ -400,6 +400,8 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
+        else if (words[i] == "and")
+            /* do nothing */;
         else if (op == jvt_slotdef || op == jvt_slotdef1) {
             withstr.push_back(words[i]);
             op = jvt_slotdef1;

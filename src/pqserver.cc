@@ -125,30 +125,43 @@ void Table::erase(Str key) {
 
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
-        valid_ranges_size = 0;
+        sink_ranges_size = 0;
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
-    for (auto& t : tables_) {
-        store_size += t.store_.size();
-        source_ranges_size += t.source_ranges_.size();
-        join_ranges_size += t.join_ranges_.size();
-        for (auto it = t.join_ranges_.begin(); it != t.join_ranges_.end(); ++it)
-            valid_ranges_size += it->valid_ranges_size();
-    }
 
     Json tables = Json::make_array();
-    for (auto t = tables_by_name_.begin(); t != tables_by_name_.end(); ++t) {
-        Json pt = Json().set("name", t->name())
-                        .set("ninsert", t->ninsert_)
-                        .set("nmodify", t->nmodify_)
-                        .set("nerase", t->nerase_);
+    for (auto& t : tables_by_name_) {
+        size_t source_size = t.source_ranges_.size();
+        size_t join_size = t.join_ranges_.size();
+        size_t sink_size = 0;
+        for (auto& jr : t.join_ranges_)
+            sink_size += jr.valid_ranges_size();
+
+        Json pt = Json().set("name", t.name());
+        if (t.ninsert_)
+            pt.set("ninsert", t.ninsert_);
+        if (t.nmodify_)
+            pt.set("nmodify", t.nmodify_);
+        if (t.nerase_)
+            pt.set("nerase", t.nerase_);
+        if (t.store_.size())
+            pt.set("store_size", t.store_.size());
+        if (source_size)
+            pt.set("source_ranges_size", source_size);
+        if (sink_size)
+            pt.set("sink_ranges_size", sink_size);
         tables.push_back(pt);
+
+        store_size += t.store_.size();
+        source_ranges_size += source_size;
+        join_ranges_size += join_size;
+        sink_ranges_size += sink_size;
     }
 
     return Json().set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
 	.set("join_ranges_size", join_ranges_size)
-	.set("valid_ranges_size", valid_ranges_size)
+	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
         .set("server_max_rss_mb", ru.ru_maxrss / 1024)
@@ -209,6 +222,7 @@ static Clp_Option options[] = {
     { "graph", 0, 4006, Clp_ValStringNotOption, 0 },
     { "visualize", 0, 4007, 0, Clp_Negate },
     { "overhead", 0, 4008, 0, Clp_Negate },
+    { "celebrity", 0, 4009, Clp_ValInt, 0 },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -309,7 +323,9 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("visualize"))
             tp_param.set("visualize", !clp->negated);
         else if (clp->option->long_name == String("overhead"))
-             tp_param.set("overhead", !clp->negated);
+            tp_param.set("overhead", !clp->negated);
+        else if (clp->option->long_name == String("celebrity"))
+            tp_param.set("celebrity", clp->val.i);
 
         // hn
 	else if (clp->option->long_name == String("narticles"))
@@ -371,7 +387,7 @@ int main(int argc, char** argv) {
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
 #else
             mandatory_assert(false);
@@ -381,7 +397,7 @@ int main(int argc, char** argv) {
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         } else if (client_port >= 0) {
             run_twitter_remote(tp, client_port);
@@ -389,7 +405,7 @@ int main(int argc, char** argv) {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         }
     } else if (mode == mode_twitternew) {
