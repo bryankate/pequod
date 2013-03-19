@@ -239,9 +239,8 @@ static Clp_Option options[] = {
     { "hnusers", 'x', 5004, Clp_ValInt, 0 },
     { "large", 0, 5005, 0, Clp_Negate },
     { "super_materialize", 's', 5006, 0, Clp_Negate },
-    { "populate", 0, 5007, 0, Clp_Negate },
-    { "run", 0, 5008, 0, Clp_Negate },
-    { "materialize", 0, 5009, 0, Clp_Negate },
+    { "populate_only", 0, 5007, 0, Clp_Negate },
+    { "run_only", 0, 5008, 0, Clp_Negate },
 
     // mostly analytics params
     { "proactive", 0, 6000, 0, Clp_Negate },
@@ -355,12 +354,10 @@ int main(int argc, char** argv) {
             tp_param.set("large", !clp->negated);
 	else if (clp->option->long_name == String("super_materialize"))
 	    tp_param.set("super_materialize", !clp->negated);
-        else if (clp->option->long_name == String("populate"))
-            tp_param.set("populate", !clp->negated);
-        else if (clp->option->long_name == String("run"))
-            tp_param.set("run", !clp->negated);
-	else if (clp->option->long_name == String("materialize"))
-	    tp_param.set("materialize", !clp->negated);
+        else if (clp->option->long_name == String("populate_only"))
+            tp_param.set("populate_only", !clp->negated);
+        else if (clp->option->long_name == String("run_only"))
+            tp_param.set("run_only", !clp->negated);
 
         // analytics
         else if (clp->option->long_name == String("proactive"))
@@ -463,10 +460,7 @@ int main(int argc, char** argv) {
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
-            if (tp_param["run"]) {
-                std::cout << "Running hacker news...\n";
-                hr.run();
-            }
+            hr.run();
 #else
             mandatory_assert(false);
 #endif
@@ -475,10 +469,7 @@ int main(int argc, char** argv) {
             pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
             hr.populate();
-            if (tp_param["run"]) {
-                std::cout << "Running hacker news...\n";
-                hr.run();
-            }
+            hr.run();
         }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))

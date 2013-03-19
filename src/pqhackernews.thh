@@ -80,33 +80,37 @@ void HackernewsRunner<S>::populate() {
         boost::random_number_generator<boost::mt19937> rng(gen);
         uint32_t nv = 0, nc = 0;
     }
-    twait {
-        server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>());
+    twait { server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>()); }
+
+    if (hp_.run_only()) {
+        printf("Not populating datastore\n");
+        hp_.set_defaults();
+        twait { server_.post_populate(make_event()); }
+        return;
     }
+
+    // Populate datastore
     if (hp_.pg()) {
-        // All intialization work for DBs done here
-        hp_.populate_from_files(&nv, &nc);
+        hp_.fill_db();
+        if (!hp_.populate_only())
+            hp_.populate_from_files(&nv, &nc);
     } else {
-        if (!hp_.populate()) {
-            hp_.set_defaults();
-        } else {
-            gen.seed(13918);
-            for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
-                const uint32_t author = rng(hp_.nusers());
-                post_article(author, aid);
-                const uint32_t ncomment = rng(20);
-                for (uint32_t j = 1; j <= ncomment; ++j) {
-                    nc++;
-                    const uint32_t commentor = rng(hp_.nusers());
-                    post_comment(commentor, aid);
-                }
-                const uint32_t nvote = rng(50);
-                for (uint32_t j = 0; j < nvote; ++j) {
-                    const uint32_t voter = rng(hp_.nusers());
-                    if (hp_.vote(aid, voter)) {
-                        ++nv;
-                        vote(voter, aid);
-                    }
+        gen.seed(13918);
+        for (uint32_t aid = 0; aid < hp_.pre(); aid++) {
+            const uint32_t author = rng(hp_.nusers());
+            post_article(author, aid);
+            const uint32_t ncomment = rng(20);
+            for (uint32_t j = 1; j <= ncomment; ++j) {
+                nc++;
+                const uint32_t commentor = rng(hp_.nusers());
+                post_comment(commentor, aid);
+            }
+            const uint32_t nvote = rng(50);
+            for (uint32_t j = 0; j < nvote; ++j) {
+                const uint32_t voter = rng(hp_.nusers());
+                if (hp_.vote(aid, voter)) {
+                    ++nv;
+                    vote(voter, aid);
                 }
             }
         }
@@ -119,9 +123,7 @@ void HackernewsRunner<S>::populate() {
         std::cout << ": end my karma table\n";
     }
 
-    twait {
-        server_.post_populate(make_event());
-    }
+    twait { server_.post_populate(make_event()); }
     std::cout << "Added " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << nv << " votes, " << nc << " comments." << std::endl;
 }
@@ -138,6 +140,8 @@ void HackernewsRunner<S>::run() {
         Json old_stats, stats;
         double start;
     }
+    if (hp_.populate_only())
+        return;
     gen.seed(13918);
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
