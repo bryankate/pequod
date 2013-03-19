@@ -32,7 +32,7 @@ class TwitterPopulator {
     inline bool pull() const;
     inline bool log() const;
     inline bool synchronous() const;
-    inline uint32_t celebrity() const;
+    inline int celebrity() const;
     inline int celebrity_type() const;
 
     void create_subscriptions(generator_type& gen);
@@ -57,7 +57,7 @@ class TwitterPopulator {
     uint32_t duration_;
     uint32_t ppost_;
     uint32_t psubscribe_;
-    uint32_t celebrity_;
+    int celebrity_;
     int celebrity_type_;
 
     std::vector<std::pair<uint32_t, uint32_t> > subs_;
@@ -263,7 +263,7 @@ inline bool TwitterPopulator::synchronous() const {
     return synchronous_;
 }
 
-inline uint32_t TwitterPopulator::celebrity() const {
+inline int TwitterPopulator::celebrity() const {
     return celebrity_;
 }
 
