@@ -26,9 +26,10 @@ class DirectClient {
 
     inline void pace(tamer::event<> done);
 
+    typedef ServerStore::const_iterator iterator;
+
     class scan_result {
       public:
-        typedef ServerStore::const_iterator iterator;
         scan_result() = default;
         inline scan_result(iterator first, iterator last);
         inline iterator begin() const;
@@ -69,6 +70,7 @@ class DirectClient {
     template <typename R>
     inline void stats(preevent<R, Json> e);
 
+    inline void pull_flush(Str tname);
   private:
     Server& server_;
 };
@@ -197,6 +199,11 @@ inline void DirectClient::pace(preevent<R> done) {
 template <typename R>
 inline void DirectClient::stats(preevent<R, Json> e) {
     e(server_.stats());
+}
+
+inline void DirectClient::pull_flush(Str tname) {
+    Table& t = server_.make_table(tname);
+    t.pull_flush();
 }
 
 } // namespace pq
