@@ -329,6 +329,16 @@ if test "$enable_timing" = yes; then
     AC_DEFINE_UNQUOTED([TIMING], [1], [Define to enable server side timing.])
 fi
 
+AC_ARG_ENABLE([tamer-debug],
+    [AS_HELP_STRING([--enable-tamer-debug],
+	    [Enable extra tamer debugging])],
+    [], [enable_tamer_debug=no])
+TAMERFLAGS=
+if test "$enable_tamer_debug" != no; then
+    TAMERFLAGS=-g
+fi
+AC_SUBST([TAMERFLAGS])
+
 AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
 
 dnl
