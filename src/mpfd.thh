@@ -50,8 +50,8 @@ class msgpack_fd {
     tamer::event<> rdwake_;
     tamer::event<> rdkill_;
 
-    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 10 };
-    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 9 };
+    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 14 };
+    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 13 };
     tamer::event<> pacer_;
 
     void check() const;
@@ -111,7 +111,7 @@ inline bool msgpack_fd::read_until_request(Json* result_pointer) {
 }
 
 inline bool msgpack_fd::need_pace() const {
-    return wrsize_ > wrpacelim && rdwait_.size() > rdpacelim;
+    return wrsize_ > wrpacelim || rdwait_.size() > rdpacelim;
 }
 
 inline bool msgpack_fd::pace_recovered() const {
