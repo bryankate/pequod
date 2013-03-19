@@ -89,31 +89,10 @@ class HashHackerNewsShim {
 template <typename S>
 class PQHackerNewsShim {
   public:
-    PQHackerNewsShim(S& server) : server_(server) {}
+    PQHackerNewsShim(S& server) : server_(server) { }
+
     tamed void initialize(bool log, bool mk, bool ma, bool push, tamer::event<> e);
-
     tamed void post_populate(event<> e);
-
-    void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, event<> e) {
-        char buf[128];
-        sprintf(buf, "a|%07d%07d", author, aid);
-        server_.insert(Str(buf, 16), v, e);
-        if (log_)
-            printf("post %.16s\n", buf);
-        sprintf(buf, "v|%07d%07d|%07d", author, aid, author);
-        server_.insert(Str(buf, 24), Str("1", 1), e);
-        if (log_)
-            printf("vote %.24s\n", buf);
-        if (push_) {
-            sprintf(buf, "k|%07d", author);
-            char buf1[128];
-            sprintf(buf1, "%07d", check_karmas[author]);
-            server_.insert(Str(buf, 9), Str(buf1, 7), e);
-            if (log_)
-                printf("updated karma %.9s %.7s\n", buf, buf1);
-        }
-        e();
-    }
 
     void post_comment(uint32_t commentor, uint32_t author, uint32_t aid, uint32_t cid,
                       const String &v, event<> e) {
@@ -122,25 +101,10 @@ class PQHackerNewsShim {
         if (log_)
             printf("comment  %.32s\n", buf);
         server_.insert(Str(buf, 32), v, e);
-        e();
     }
 
-    void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, event<> e) {
-        char buf[128];
-        sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
-        server_.insert(Str(buf, 24), Str("", 0), e);
-        if (log_)
-            printf("vote %.24s\n", buf);
-        if (push_) {
-            sprintf(buf, "k|%07d", author);
-            char buf1[128];
-            sprintf(buf1, "%07d", check_karmas[author]);
-            server_.insert(Str(buf, 9), Str(buf1, 7), e);
-            if (log_)
-                printf("updated karma %.9s %.7s\n", buf, buf1);
-        }
-        e();
-    }
+    tamed void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, event<> e);
+    tamed void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, event<> e);
     tamed void read_article(uint32_t aid, uint32_t author, karmas_type& check_karmas, bool check, event<> e);
 
     template <typename R>
@@ -215,7 +179,9 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
 
 tamed template <typename S>
 void PQHackerNewsShim<S>::post_populate(event<> e) {
-    tvars { typename S::scan_result scan_result; }
+    tvars { 
+        typename S::scan_result scan_result; 
+    }
     twait {
         if (!push_ && mk_) {
             String start = "k|";
@@ -235,9 +201,9 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
             server_.scan(start, end, make_event(scan_result));
             if (log_) {
                 std::cout << ": print validated [" << start << "," << end << ")\n";
-                //auto bit = server_.begin(); XXXXXXXXXXXXXX
-                //for (; bit != server_.end(); ++bit)
-                //std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+                auto bit = scan_result.begin();
+                for (; bit != scan_result.end(); ++bit)
+                std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
                 std::cout << ": end print validated [" << start << "," << end << ")\n";
                 std::cout << "Finished validate.\n";
             }
@@ -253,64 +219,58 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         char buf1[128], buf2[128];
         typename S::scan_result scan_result;
         String field, user, value;
-        uint32_t my_karma, karma, votect;
+        uint32_t my_karma, karma;
+        size_t votect;
         typename S::scan_result::iterator bit, cit;
     }
-    twait {
-        if (log_) 
-            printf("Reading article %d\n", aid);
-        if (ma_) {
-            sprintf(buf1, "ma|%07d%07d|", author, aid);
-            sprintf(buf2, "ma|%07d%07d}", author, aid);
-            server_.scan(buf1, buf2, make_event(scan_result));
-            bit = scan_result.begin();
-            for (; bit != scan_result.end(); ++bit) {
-                field = extract_spkey(2, bit->key());
-                if (log_) {
-                    if (field == "a")
-                        std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
-                    else
-                        std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
-                }
-                if (field == "k" && check) {
-                    user = extract_spkey(4, bit->key());
-                    my_karma = check_karmas[user.to_i()];
-                    karma = bit->value().to_i();
-                    if (karma != my_karma)
-                        printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
-                    mandatory_assert(karma == my_karma && "Karma mismatch");
-                }
+    if (log_) 
+        printf("Reading article %d\n", aid);
+    if (ma_) {
+        sprintf(buf1, "ma|%07d%07d|", author, aid);
+        sprintf(buf2, "ma|%07d%07d}", author, aid);
+        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
+        bit = scan_result.begin();
+        for (; bit != scan_result.end(); ++bit) {
+            field = extract_spkey(2, bit->key());
+            if (log_) {
+                if (field == "a")
+                    std::cout << "read " << bit->key() << ": " << bit->value() << "\n";
+                else
+                    std::cout << "  " << field << " " << bit->key() << ": " << bit->value() << "\n";
             }
-        } else {
-            // Article
-            sprintf(buf1, "a|%07d%07d", author, aid);
-            server_.get(Str(buf1, 16), make_event(value));
-            if (log_)
-                std::cout << "read " << buf1 << ":" << value << "\n";
-            
-            // Comments and Karma
-            sprintf(buf1, "c|%07d%07d|", author, aid);
-            sprintf(buf2, "c|%07d%07d}", author, aid);
-            server_.scan(buf1, buf2, make_event(scan_result));
-            bit = scan_result.begin();
-            for (; bit != scan_result.end(); ++bit) {
-                if (log_)
-                    std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-                get_karma(extract_spkey(3, bit->key()), check_karmas, make_event());
-            }
-        
-            // Votes
-            sprintf(buf1, "v|%07d%07d|", author, aid);
-            sprintf(buf2, "v|%07d%07d}", author, aid);
-            server_.scan(buf1, buf2, make_event(scan_result));
-            cit = scan_result.begin();
-            votect = 0;
-            for (; cit != scan_result.end(); ++cit) {
-                votect++;
-                if (log_)
-                    std::cout << "  v " << cit->key() << ": " << cit->value() << "\n";
+            if (field == "k" && check) {
+                user = extract_spkey(4, bit->key());
+                my_karma = check_karmas[user.to_i()];
+                karma = bit->value().to_i();
+                if (karma != my_karma)
+                    printf("Karma problem. mine: %d db's: %d user: %s\n", my_karma, karma, user.c_str());
+                mandatory_assert(karma == my_karma && "Karma mismatch");
             }
         }
+    } else {
+        // Article
+        sprintf(buf1, "a|%07d%07d", author, aid);
+        twait { server_.get(Str(buf1, 16), make_event(value)); }
+        if (log_)
+            std::cout << "read " << buf1 << ":" << value << "\n";
+        
+        // Comments and Karma
+        sprintf(buf1, "c|%07d%07d|", author, aid);
+        sprintf(buf2, "c|%07d%07d}", author, aid);
+        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
+        bit = scan_result.begin();
+        for (; bit != scan_result.end(); ++bit) {
+            if (log_)
+                std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
+            twait { get_karma(extract_spkey(3, bit->key()), check_karmas, make_event()); }
+        }
+        
+        // Votes
+        sprintf(buf1, "v|%07d%07d|", author, aid);
+        sprintf(buf2, "v|%07d%07d}", author, aid);
+        twait { server_.count(buf1, buf2, make_event(votect)); }
+        if (log_)
+            std::cout << "  v " << votect << "\n";
     }
     e();
 }
@@ -328,44 +288,88 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, even
         typename S::scan_result scan_result;
         typename S::scan_result::iterator bit, cit;
         String full_aid;
+        size_t votect;
     }
-    twait {
-        if (mk_ || push_) {
-            sprintf(buf3, "k|%s", user.c_str());
-            server_.get(Str(buf3, 9), make_event(value));
-            karma = atoi(value.c_str());
-            local_karma = check_karmas[user.to_i()];
-            mandatory_assert(karma == local_karma && "Karma mismatch");
+
+    if (mk_ || push_) {
+        sprintf(buf3, "k|%s", user.c_str());
+        twait { server_.get(Str(buf3, 9), make_event(value)); }
+        karma = atoi(value.c_str());
+        local_karma = check_karmas[user.to_i()];
+        mandatory_assert(karma == local_karma && "Karma mismatch");
+        if (log_)
+            std::cout << "  k " << user << ":" << karma << "\n";
+    } else {
+        karmact = 0;
+        sprintf(buf1, "a|%s0", user.c_str());
+        sprintf(buf2, "a|%s}", user.c_str());
+        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
+        for (bit = scan_result.begin(); bit != scan_result.end(); ++bit) {
             if (log_)
-                std::cout << "  k " << user << ":" << karma << "\n";
-        } else {
-            karmact = 0;
-            sprintf(buf1, "a|%s0", user.c_str());
-            sprintf(buf2, "a|%s}", user.c_str());
-            server_.scan(buf1, buf2, make_event(scan_result));
-            bit = scan_result.begin();
-            for (; bit != scan_result.end(); ++bit) {
-                if (log_)
-                    std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
-                full_aid = extract_spkey(1, bit->key());
-                sprintf(buf1, "v|%s|", full_aid.c_str());
-                sprintf(buf2, "v|%s}", full_aid.c_str());
-                server_.scan(buf1, buf2, make_event(scan_result));
-                cit = scan_result.begin();
-                for (; cit != scan_result.end(); ++cit) {
-                    karmact++;
-                    if (log_)
-                        std::cout << "      v " << cit->key() << ": " << cit->value() << "\n";
-                }
-            }
-            local_karma = check_karmas[user.to_i()];
-            mandatory_assert(karmact == local_karma && "Karma mismatch");
+                std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
+            full_aid = extract_spkey(1, bit->key());
+            sprintf(buf1, "v|%s|", full_aid.c_str());
+            sprintf(buf2, "v|%s}", full_aid.c_str());
+            twait { server_.count(buf1, buf2, make_event(votect)); }
+            karmact+=votect;
             if (log_)
-                std::cout << "  k " << user << ":" << karmact << "\n";
+                std::cout << "      v " << full_aid << ":" << votect << "\n";
+            votect = 0;
         }
+        local_karma = check_karmas[user.to_i()];
+        mandatory_assert(karmact == local_karma && "Karma mismatch");
+        if (log_)
+            std::cout << "  k " << user << ":" << karmact << "\n";
     }
     e();
 }
+
+tamed template <typename S>
+void PQHackerNewsShim<S>::post_article(uint32_t author, uint32_t aid, const String &v, 
+                                       karmas_type& check_karmas, event<> e) {
+    tvars {
+        char buf[128];
+    }
+    sprintf(buf, "a|%07d%07d", author, aid);
+    twait { server_.insert(Str(buf, 16), v, e); }
+    if (log_)
+        printf("post %.16s\n", buf);
+    sprintf(buf, "v|%07d%07d|%07d", author, aid, author);
+    twait { server_.insert(Str(buf, 24), Str("1", 1), e); }
+    if (log_)
+        printf("vote %.24s\n", buf);
+    if (push_) {
+        sprintf(buf, "k|%07d", author);
+        char buf1[128];
+        sprintf(buf1, "%07d", check_karmas[author]);
+        twait { server_.insert(Str(buf, 9), Str(buf1, 7), e); }
+        if (log_)
+            printf("updated karma %.9s %.7s\n", buf, buf1);
+    }
+    e();
+}
+
+tamed template <typename S>
+void PQHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid, 
+                               karmas_type& check_karmas, event<> e) {
+    tvars { 
+        char buf[128];
+    }
+    sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
+    twait { server_.insert(Str(buf, 24), Str("", 0), make_event()); }
+    if (log_)
+        printf("vote %.24s\n", buf);
+    if (push_) {
+        sprintf(buf, "k|%07d", author);
+        char buf1[128];
+        sprintf(buf1, "%07d", check_karmas[author]);
+        twait { server_.insert(Str(buf, 9), Str(buf1, 7), make_event()); }
+        if (log_)
+            printf("updated karma %.9s %.7s\n", buf, buf1);
+    }
+    e();
+}
+
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
