@@ -170,6 +170,10 @@ Json Server::stats() const {
         .set("tables", tables);
 }
 
+void Table::print_sources(std::ostream& stream) const {
+    stream << source_ranges_;
+}
+
 void Server::print(std::ostream& stream) {
     stream << "sources:" << std::endl;
     bool any = false;

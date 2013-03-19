@@ -1,5 +1,6 @@
 #include "pqsource.hh"
 #include "pqserver.hh"
+#include <typeinfo>
 
 namespace pq {
 
@@ -86,16 +87,19 @@ void SourceRange::invalidate() {
 }
 
 std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
-    stream << "{" << "[" << r.ibegin() << ", " << r.iend() << "): copy ->";
-    for (auto& res : r.results_)
-        if (res.sink && res.sink->context_mask()) {
-            Match m;
-            r.join_->assign_context(m, res.sink->context());
-            r.join_->assign_context(m, res.context);
-            stream << " " << r.join_->unparse_match(m);
-        } else
-            stream << " " << r.join_->unparse_context(res.context);
-    return stream << " ]" << r.subtree_iend() << "}";
+    stream << "{" << "[" << r.ibegin() << ", " << r.iend() << "): "
+           << typeid(r).name() << " ->";
+    for (auto& res : r.results_) {
+        stream << " ";
+        if (res.sink) {
+            stream << res.sink->interval();
+            if (res.context)
+                stream << "@";
+        }
+        if (res.context)
+            stream << r.join_->unparse_context(res.context);
+    }
+    return stream << "}";
 }
 
 
