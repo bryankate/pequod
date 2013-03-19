@@ -448,15 +448,15 @@ int main(int argc, char** argv) {
             pq::BuiltinHashClient client;
             pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
         } else if (tp_param["memcached"]) {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             pq::MemcachedClient client;
             pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
@@ -465,8 +465,8 @@ int main(int argc, char** argv) {
             pq::PostgresClient client;
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
@@ -477,8 +477,8 @@ int main(int argc, char** argv) {
                 pq::DirectClient dc(server);
                 pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
                 pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-                hr.populate();
-                hr.run();
+                hr.populate(tamer::event<>());
+                hr.run(tamer::event<>());
             }
         }
     } else if (mode == mode_facebook) {

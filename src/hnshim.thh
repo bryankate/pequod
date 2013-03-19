@@ -181,32 +181,31 @@ tamed template <typename S>
 void PQHackerNewsShim<S>::post_populate(event<> e) {
     tvars { 
         typename S::scan_result scan_result; 
+        String start, end;
     }
-    twait {
-        if (!push_ && mk_) {
-            String start = "k|";
-            String end = "k}";
-            server_.scan(start, end, make_event(scan_result));
-            if (log_) {
-                std::cout << ": print validated [" << start << "," << end << ")\n";
-                auto bit = scan_result.begin();
-                for (; bit != scan_result.end(); ++bit)
-                    std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
-                std::cout << ": end print validated [" << start << "," << end << ")\n";
-                std::cout << "Finished validate.\n";
-            }
-        } else if (!push_ && ma_) {
-            String start = "ma|";
-            String end = "ma}";
-            server_.scan(start, end, make_event(scan_result));
-            if (log_) {
-                std::cout << ": print validated [" << start << "," << end << ")\n";
-                auto bit = scan_result.begin();
-                for (; bit != scan_result.end(); ++bit)
+    if (!push_ && mk_) {
+        start = "k|";
+        end = "k}";
+        twait { server_.scan(start, end, make_event(scan_result)); }
+        if (log_) {
+            std::cout << ": print validated [" << start << "," << end << ")\n";
+            auto bit = scan_result.begin();
+            for (; bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
-                std::cout << ": end print validated [" << start << "," << end << ")\n";
-                std::cout << "Finished validate.\n";
-            }
+            std::cout << ": end print validated [" << start << "," << end << ")\n";
+            std::cout << "Finished validate.\n";
+        }
+    } else if (!push_ && ma_) {
+        start = "ma|";
+        end = "ma}";
+        twait { server_.scan(start, end, make_event(scan_result)); }
+        if (log_) {
+            std::cout << ": print validated [" << start << "," << end << ")\n";
+            auto bit = scan_result.begin();
+            for (; bit != scan_result.end(); ++bit)
+                std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
+            std::cout << ": end print validated [" << start << "," << end << ")\n";
+            std::cout << "Finished validate.\n";
         }
     }
     e();
