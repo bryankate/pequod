@@ -109,8 +109,7 @@ class TwitterHashShim {
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
     inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
-    template <typename R>
-    inline void initialize(bool push, tamer::preevent<R> e);
+    inline void initialize(bool push, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -139,8 +138,8 @@ TwitterHashShim<S>::TwitterHashShim(S& server)
     : server_(server) {
 }
 
-template <typename S> template <typename R>
-inline void TwitterHashShim<S>::initialize(bool, tamer::preevent<R> done) {
+template <typename S>
+inline void TwitterHashShim<S>::initialize(bool, tamer::event<> done) {
     done();
 }
 

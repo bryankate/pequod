@@ -368,7 +368,7 @@ int main(int argc, char** argv) {
             pq::MemcachedClient client;
             pq::TwitterHashShim<pq::MemcachedClient> shim(client);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
 #else
             mandatory_assert(false);
@@ -378,7 +378,7 @@ int main(int argc, char** argv) {
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         } else if (client_port >= 0) {
             run_twitter_remote(tp, client_port);
@@ -386,7 +386,7 @@ int main(int argc, char** argv) {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate();
+            tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         }
     } else if (mode == mode_twitternew) {

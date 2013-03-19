@@ -150,7 +150,7 @@ tamed void run_twitter_remote(TwitterPopulator& tp, int client_port) {
     rc = new RemoteClient(fd);
     shim = new TwitterShim<RemoteClient>(*rc);
     tr = new TwitterRunner<TwitterShim<RemoteClient> >(*shim, tp);
-    tr->populate();
+    twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;
     delete shim;

@@ -165,7 +165,7 @@ class TwitterRunner {
   public:
     TwitterRunner(S& server, TwitterPopulator& tp);
 
-    tamed void populate();
+    tamed void populate(tamer::event<> done);
     tamed void run(tamer::event<> done);
 
   private:
@@ -245,7 +245,7 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
 }
 
 tamed template <typename S>
-void TwitterRunner<S>::populate() {
+void TwitterRunner<S>::populate(tamer::event<> done) {
     tvars { boost::mt19937 gen; }
     gen.seed(0);
     tp_.create_subscriptions(gen);
@@ -270,7 +270,7 @@ void TwitterRunner<S>::populate() {
 
     tp_.print_subscription_statistics(std::cout);
 
-    twait { server_.initialize(tp_.push(), make_event()); }
+    server_.initialize(tp_.push(), done);
 }
 
 tamed template <typename S>
