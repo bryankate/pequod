@@ -2,6 +2,7 @@
 #ifndef PQTWITTER_HH
 #define PQTWITTER_HH 1
 #include <boost/random.hpp>
+#include <set>
 #include <utility>
 #include <vector>
 #include <iostream>
@@ -77,6 +78,10 @@ class TwitterShim {
   public:
     TwitterShim(S& server);
 
+    tamed inline void get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e);
+    template <typename R>
+    inline void add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+
     template <typename R>
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
@@ -107,6 +112,26 @@ class TwitterShim {
 template <typename S>
 TwitterShim<S>::TwitterShim(S& server)
     : server_(server) {
+}
+
+tamed template <typename S>
+inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e) {
+    tvars { typename S::scan_result scan_result; }
+    twait {
+        sprintf(buf_, "f|%05u| f|%05u}", poster, poster);
+        server_.scan(Str(buf_, 8), Str(buf_ + 9, 8), make_event(scan_result));
+    }
+    for (auto it = scan_result.begin(); it != scan_result.end(); ++it) {
+        Str key = it->key();
+        e.result_pointer()->insert(String(key.data() + 8, key.data() + 13).to_i());
+    }
+    e.unblock();
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+    sprintf(buf_, "f|%05u|%05u", poster, subscriber);
+    server_.insert(Str(buf_, 13), Str("1", 1), done);
 }
 
 tamed template <typename S>
@@ -295,14 +320,21 @@ inline TwitterRunner<S>::TwitterRunner(S& server, TwitterPopulator& tp)
 tamed template <typename S>
 void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
-    tvars { char buf[128]; }
+    tvars { 
+        char buf[128];
+        std::set<uint32_t> follower; 
+    }
     twait {
         server_.post(u, time, value, make_event());
-        if (tp_.push()) {
+    }
+    if (tp_.push()) {
+        twait {
+            server_.get_follower(u, make_event(follower));
+        }
+        twait {
             server_.prepare_push_post(u, time, value);
-            for (auto it = tp_.begin_followers(u);
-                 it != tp_.end_followers(u); ++it)
-                server_.push_post(*it, make_event());
+            for (auto& f : follower)
+                server_.push_post(f, make_event());
         }
     }
     e();
@@ -317,6 +349,7 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
     twait {
         for (auto& x : tp_.subscriptions()) {
             server_.subscribe(x.first, x.second, make_event());
+            server_.add_follower(x.first, x.second, make_event());
             if (tp_.log())
                 printf("subscribe s|%05d|%05d\n", x.first, x.second);
         }
@@ -385,6 +418,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
                 follower = rng(nusers);
             } while (follower == u);
             server_.subscribe(u, follower, gr.make_event());
+            server_.add_follower(u, follower, gr.make_event());
             ++nsubscribe;
         } else {
             tx = load_times[u];

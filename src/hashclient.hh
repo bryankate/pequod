@@ -3,6 +3,7 @@
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
+#include <set>
 #include "str.hh"
 #include "hashtable.hh"
 #include "string.hh"
@@ -105,6 +106,9 @@ class TwitterHashShim {
   public:
     TwitterHashShim(S& server);
 
+    inline void get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e);
+    inline void add_follower(uint32_t subscriber, uint32_t poster, tamer::event<> e);
+
     template <typename R>
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
     template <typename R>
@@ -140,6 +144,25 @@ class TwitterHashShim {
 template <typename S>
 TwitterHashShim<S>::TwitterHashShim(S& server)
     : server_(server) {
+}
+
+template <typename S>
+inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e) {
+    size_t len;
+    sprintf(buf_, "f|%05u", poster);
+    const char* v = server_.get(Str(buf_, 7), 0, &len);
+    CHECK_EQ(len % 5, size_t(0));
+    for (size_t i = 0; i < len; i+=5)
+        e.result_pointer()->insert(String(v + i, v + i + 5).to_i());
+    server_.done_get(v);
+    e.unblock();
+}
+
+template <typename S>
+inline void TwitterHashShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::event<> done) {
+    sprintf(buf_, "f|%05u %05u", poster, subscriber);
+    server_.append(Str(buf_, 7), Str(buf_ + 8, 5));
+    done();
 }
 
 template <typename S>
