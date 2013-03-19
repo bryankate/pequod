@@ -7,7 +7,8 @@ enum {
     pq_erase = 3,
     pq_count = 4,
     pq_scan = 5,
-    pq_stats = 6
+    pq_stats = 6,
+    pq_get = 7
 };
 
 enum {

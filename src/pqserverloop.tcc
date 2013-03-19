@@ -37,6 +37,13 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
                     rj[3] = errh.join();
             }
             break;
+        case pq_get:
+            if (j[2].is_s() && pq::table_name(j[2].as_s())) {
+                rj[2] = pq_ok;
+                server.validate(j[2].as_s());
+                rj[3] = server[j[2].as_s()].value();
+            }
+            break;
         case pq_insert:
             if (j[2].is_s() && j[3].is_s()) {
                 server.insert(j[2].as_s(), j[3].as_s());

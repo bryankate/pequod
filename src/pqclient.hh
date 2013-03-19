@@ -16,6 +16,9 @@ class DirectClient {
                   const String& join_text, preevent<R, Json> e);
 
     template <typename R>
+    inline void get(const String& key, preevent<R, String> e);
+
+    template <typename R>
     inline void insert(const String& key, const String& value, preevent<R> e);
     template <typename R>
     inline void erase(const String& key, preevent<R> e);
@@ -67,6 +70,12 @@ void DirectClient::add_join(const String& first, const String& last,
     if (!errh.empty())
         rj.set("message", errh.join());
     e(rj);
+}
+
+template <typename R>
+inline void DirectClient::get(const String& key, preevent<R, String> e) {
+    server_.validate(key);
+    e(server_[key].value());
 }
 
 template <typename R>
