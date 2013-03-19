@@ -150,7 +150,7 @@ inline void TwitterHashShim<S>::initialize(TwitterPopulator&, tamer::event<> don
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "s|%05u %05u", subscriber, poster);
-    server_.append(Str(buf_, 7), Str(buf_ + 9, 5));
+    server_.append(Str(buf_, 7), Str(buf_ + 8, 5));
     done();
 }
 

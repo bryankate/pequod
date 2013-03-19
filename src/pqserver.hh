@@ -50,6 +50,8 @@ class Table : public pequod_set_base_hook {
 
     void pull_flush();
 
+    void print_sources(std::ostream& stream) const;
+
     uint64_t ninsert_;
     uint64_t nmodify_;
     uint64_t nerase_;
