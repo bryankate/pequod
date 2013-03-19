@@ -106,7 +106,7 @@ class TwitterHashShim {
   public:
     TwitterHashShim(S& server);
 
-    inline void get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e);
+    inline void get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e);
     inline void add_follower(uint32_t subscriber, uint32_t poster, tamer::event<> e);
 
     template <typename R>
@@ -148,13 +148,16 @@ TwitterHashShim<S>::TwitterHashShim(S& server)
 }
 
 template <typename S>
-inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e) {
+inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e) {
     size_t len;
     sprintf(buf_, "f|%05u", poster);
     const char* v = server_.get(Str(buf_, 7), 0, &len);
     CHECK_EQ(len % 5, size_t(0));
+    std::set<uint32_t> follower;
     for (size_t i = 0; i < len; i+=5)
-        e.result_pointer()->insert(String(v + i, v + i + 5).to_i());
+        follower.insert(String(v + i, v + i + 5).to_i());
+    for (auto& f: follower)
+        e.result_pointer()->push_back(f);
     server_.done_get(v);
     e.unblock();
 }

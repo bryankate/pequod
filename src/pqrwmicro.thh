@@ -50,7 +50,7 @@ tamed template <typename S>
 void RwMicro<S>::post(uint32_t u, size_t time, Str value, tamer::event<> e) {
     tvars { 
         char buf[128];
-        std::set<uint32_t> follower; 
+        std::vector<uint32_t> follower; 
     }
     twait { server_.post(u, time, value, make_event()); }
     if (client_push_) {

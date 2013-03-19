@@ -78,7 +78,7 @@ class TwitterShim {
   public:
     TwitterShim(S& server);
 
-    tamed inline void get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e);
+    tamed inline void get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e);
     template <typename R>
     inline void add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
 
@@ -120,7 +120,7 @@ TwitterShim<S>::TwitterShim(S& server)
 }
 
 tamed template <typename S>
-inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::set<uint32_t> > e) {
+inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e) {
     tvars { typename S::scan_result scan_result; }
     twait {
         sprintf(buf_, "f|%05u| f|%05u}", poster, poster);
@@ -128,7 +128,7 @@ inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::set<
     }
     for (auto it = scan_result.begin(); it != scan_result.end(); ++it) {
         Str key = it->key();
-        e.result_pointer()->insert(String(key.data() + 8, key.data() + 13).to_i());
+        e.result_pointer()->push_back(String(key.data() + 8, key.data() + 13).to_i());
     }
     e.unblock();
 }
@@ -334,7 +334,7 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
     tvars { 
         char buf[128];
-        std::set<uint32_t> follower; 
+        std::vector<uint32_t> follower; 
     }
     twait {
         server_.post(u, time, value, make_event());
