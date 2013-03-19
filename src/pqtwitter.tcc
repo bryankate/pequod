@@ -16,6 +16,7 @@ const char TwitterPopulator::tweet_data[] = "...................................
 TwitterPopulator::TwitterPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
       push_(param["push"].as_b(false)),
+      pull_(param["pull"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       min_followers_(param["min_followers"].as_i(10)),
@@ -24,7 +25,8 @@ TwitterPopulator::TwitterPopulator(const Json& param)
       shape_(param["shape"].as_d(55)),
       duration_(param["duration"].as_i(1000000)),
       ppost_(param["ppost"].as_i(2)),
-      psubscribe_(param["psubscribe"].as_i(3)) {
+      psubscribe_(param["psubscribe"].as_i(3)),
+      celebrity_(param["celebrity"].as_i(0)) {
 }
 
 uint32_t* TwitterPopulator::subscribe_probabilities(generator_type& gen) {
@@ -150,7 +152,7 @@ tamed void run_twitter_remote(TwitterPopulator& tp, int client_port) {
     rc = new RemoteClient(fd);
     shim = new TwitterShim<RemoteClient>(*rc);
     tr = new TwitterRunner<TwitterShim<RemoteClient> >(*shim, tp);
-    tr->populate();
+    twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;
     delete shim;

@@ -20,3 +20,20 @@ for i in range(0, 6):
     ename = "rwmicro_%d" % nfollower
     exps.append({'name': ename, 'defs': rwmicro, 'xlabel' : 'refresh ratio (%)'})
 
+cmdbase = './obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=50'
+pactive = [100, 95, 90, 80, 60, 40, 20, 10, 5, 1]
+epolicy = []
+for pa in pactive:
+    epolicy.append(
+            {'plotgroup': 'push-dynamic',
+             'plotkey': pa,
+             'cmd': '%s --pactive=%d --pprerefresh=%d' % (cmdbase, pa, pa)})
+    epolicy.append(
+            {'plotgroup': 'push-all',
+             'plotkey': pa,
+             'cmd': '%s --pactive=%d --pprerefresh=100' % (cmdbase, pa)})
+    epolicy.append(
+            {'plotgroup': 'pull',
+             'plotkey': pa,
+             'cmd': '%s --pactive=%d --no-push' % (cmdbase, pa)})
+exps.append({'name': 'policy', 'defs' : epolicy, 'xlabel' : 'inactive users(%)'})
