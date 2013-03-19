@@ -221,7 +221,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         String field, user, value;
         uint32_t my_karma, karma;
         size_t votect;
-        typename S::scan_result::iterator bit, cit;
+        typename S::iterator bit, cit;
     }
     if (log_) 
         printf("Reading article %d\n", aid);
@@ -286,7 +286,7 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, even
         char buf2[128];
         uint32_t karmact, local_karma;
         typename S::scan_result scan_result;
-        typename S::scan_result::iterator bit, cit;
+        typename S::iterator bit, cit;
         String full_aid;
         size_t votect;
     }

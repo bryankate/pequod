@@ -26,9 +26,10 @@ class DirectClient {
 
     inline void pace(tamer::event<> done);
 
+    typedef ServerStore::const_iterator iterator;
+
     class scan_result {
       public:
-        typedef ServerStore::const_iterator iterator;
         scan_result() = default;
         inline scan_result(iterator first, iterator last);
         inline iterator begin() const;

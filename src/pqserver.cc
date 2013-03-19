@@ -471,11 +471,15 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else {
-            pq::DirectClient dc(server);
-            pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            if (client_port >= 0)
+                run_hn_remote(hp, client_port);
+            else  {
+                pq::DirectClient dc(server);
+                pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
+                pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+                hr.populate();
+                hr.run();
+            }
         }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))
