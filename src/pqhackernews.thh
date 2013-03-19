@@ -154,9 +154,7 @@ void HackernewsRunner<S>::run(event<> e) {
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
     twait { start = tstamp(); }
-    printf("Starting\n");
     for (i = 0; i < nops; ++i) {
-        printf("i %d\n", i);
         p = rng(100);
         user = rng(nusers);
         if (p < hp_.post_rate()) {
@@ -164,7 +162,6 @@ void HackernewsRunner<S>::run(event<> e) {
             npost++;
         } else {
             aid = rng(hp_.narticles());
-            printf("Reading %d\n", aid);
             twait { read_article(aid, make_event()); }
             nread++;
             if (p < hp_.vote_rate() && hp_.vote(aid, user)) {
