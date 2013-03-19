@@ -78,6 +78,7 @@ void RwMicro<S>::populate() {
                 while (b[follower = (random() % nuser_)]);
                 b[follower] = true;
                 server_.subscribe(follower, u, make_event());
+                server_.add_follower(follower, u, make_event());
             }
         }
         delete[] b;

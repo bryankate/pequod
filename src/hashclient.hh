@@ -3,7 +3,7 @@
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
-#include <set>
+#include <unordered_set>
 #include "str.hh"
 #include "hashtable.hh"
 #include "string.hh"
@@ -68,7 +68,7 @@ class MemcachedClient {
 class BuiltinHashClient {
   public:
     BuiltinHashClient() {
-        h_.rehash(100000);
+        h_.rehash(2000000);
     }
     void set(const Str k, const Str v) {
         h_[k] = v;
@@ -153,7 +153,7 @@ inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::
     sprintf(buf_, "f|%05u", poster);
     const char* v = server_.get(Str(buf_, 7), 0, &len);
     CHECK_EQ(len % 5, size_t(0));
-    std::set<uint32_t> follower;
+    std::unordered_set<uint32_t> follower;
     for (size_t i = 0; i < len; i+=5)
         follower.insert(String(v + i, v + i + 5).to_i());
     for (auto& f: follower)
