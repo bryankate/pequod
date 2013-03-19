@@ -8,6 +8,8 @@
 msgpack_fd::~msgpack_fd() {
     wrkill_();
     rdkill_();
+    wrwake_();
+    rdwake_();
 }
 
 void msgpack_fd::write(const Json& j) {

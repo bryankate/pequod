@@ -107,7 +107,7 @@ tamed void acceptor(tamer::fd listenfd, pq::Server& server) {
 }
 
 tamed void interrupt_catcher() {
-    twait { tamer::at_signal(SIGINT, make_event()); }
+    twait volatile { tamer::at_signal(SIGINT, make_event()); }
     exit(0);
 }
 
