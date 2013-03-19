@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 2493d1f022935e664c46c3595de56dd62e633ff4
+TAMER_COMMIT = 5793a4663217b1a3f3564f39201c7c5ecca9eb79
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
@@ -45,6 +45,7 @@ CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
 
 TAMER = tamer/compiler/tamer
+TAMERFLAGS = @TAMERFLAGS@
 LIBTAMER = tamer/tamer/.libs/libtamer.a
 
 
@@ -71,10 +72,10 @@ $(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) -o $@ $<
+	$(TAMER) $(TAMERFLAGS) -o $@ $<
 
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) -o $@ $<
+	$(TAMER) $(TAMERFLAGS) -o $@ $<
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh

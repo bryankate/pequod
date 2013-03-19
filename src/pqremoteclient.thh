@@ -23,6 +23,9 @@ class RemoteClient {
     tamed void add_count(const String& first, const String& last,
                          event<size_t> e);
 
+    template <typename R>
+    inline void pace(tamer::preevent<R> done);
+
     class iterator;
     class scanpair {
       public:
@@ -95,6 +98,11 @@ class RemoteClient {
 
 inline RemoteClient::RemoteClient(tamer::fd fd)
     : fd_(fd), seq_(0) {
+}
+
+template <typename R>
+inline void RemoteClient::pace(tamer::preevent<R> done) {
+    fd_.pace(done);
 }
 
 } // namespace pq

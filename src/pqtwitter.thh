@@ -33,6 +33,7 @@ class TwitterPopulator {
     inline bool log() const;
     inline bool synchronous() const;
     inline uint32_t celebrity() const;
+    inline int celebrity_type() const;
 
     void create_subscriptions(generator_type& gen);
     void print_subscription_statistics(std::ostream& stream) const;
@@ -57,6 +58,7 @@ class TwitterPopulator {
     uint32_t ppost_;
     uint32_t psubscribe_;
     uint32_t celebrity_;
+    int celebrity_type_;
 
     std::vector<std::pair<uint32_t, uint32_t> > subs_;
     std::vector<uint32_t> followers_;
@@ -91,6 +93,8 @@ class TwitterShim {
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
+    inline void pace(tamer::preevent<R> e);
+    template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
 
   private:
@@ -107,7 +111,7 @@ TwitterShim<S>::TwitterShim(S& server)
 
 tamed template <typename S>
 void TwitterShim<S>::initialize(TwitterPopulator& tp, tamer::event<> done) {
-    tvars { Json j, jx; }
+    tvars { Json j[4]; }
     if (tp.push())
         done();
     else {
@@ -118,22 +122,36 @@ void TwitterShim<S>::initialize(TwitterPopulator& tp, tamer::event<> done) {
                              "using s|<user>|<poster> "
                              + String(tp.pull() ? "pull " : "") +
                              "where user:5, time:10, poster:5",
-                             make_event(j));
-            if (tp.celebrity()) {
+                             make_event(j[0]));
+            if (tp.celebrity() && tp.celebrity_type() == 2) {
+                celeb_.assign(tp.nusers(), false);
+                server_.add_join("cs|", "cs}",
+                                 "cs|<user>|<poster> = "
+                                 "copy s|<user>|<poster> "
+                                 "using celeb|<poster> "
+                                 "where user:5, poster:5",
+                                 make_event(j[2]));
+                server_.add_join("t|", "t}",
+                                 "t|<user>|<time>|<poster> = "
+                                 "pull copy cp|<poster>|<time> "
+                                 "using cs|<user>|<poster> "
+                                 "where user:5, time:10, poster:5",
+                                 make_event(j[1]));
+            } else if (tp.celebrity()) {
                 celeb_.assign(tp.nusers(), false);
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
-                                 "copy cp|<poster>|<time> "
+                                 "pull copy cp|<poster>|<time> "
                                  "using s|<user>|<poster> "
                                  "and celeb|<poster> "
                                  "where user:5, time:10, poster:5",
-                                 make_event(jx));
+                                 make_event(j[1]));
             }
         }
-        if (j["message"])
-            std::cerr << "installing timeline join: " << j << "\n";
-        if (jx["message"])
-            std::cerr << "installing celebrity timeline join: " << jx << "\n";
+        if (j[0]["message"])
+            std::cerr << "installing timeline join: " << j[0] << "\n";
+        if (j[1]["message"])
+            std::cerr << "installing celebrity timeline join: " << j[1] << "\n";
         done();
     }
 }
@@ -182,6 +200,11 @@ template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
     server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterShim<S>::pace(tamer::preevent<R> done) {
+    server_.pace(done);
 }
 
 template <typename S> template <typename R>
@@ -242,6 +265,10 @@ inline bool TwitterPopulator::synchronous() const {
 
 inline uint32_t TwitterPopulator::celebrity() const {
     return celebrity_;
+}
+
+inline int TwitterPopulator::celebrity_type() const {
+    return celebrity_type_;
 }
 
 inline const std::vector<std::pair<uint32_t, uint32_t> >& TwitterPopulator::subscriptions() const {
@@ -380,6 +407,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
             load_times[u] = time;
             if (tp_.synchronous())
                 twait(gr);
+            else
+                twait { server_.pace(make_event()); }
         }
         ++time;
     }

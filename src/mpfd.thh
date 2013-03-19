@@ -14,10 +14,13 @@ class msgpack_fd {
     ~msgpack_fd();
 
     void write(const Json& j);
-    void read(tamer::event<Json> done);
     template <typename R>
-    void read(tamer::preevent<R, Json> done);
+    void read_request(tamer::preevent<R, Json> done);
     inline void call(const Json& j, tamer::event<Json> reply);
+    template <typename R>
+    inline void pace(tamer::preevent<R> done);
+
+    inline Json status() const;
 
   private:
     tamer::fd fd_;
@@ -28,6 +31,7 @@ class msgpack_fd {
         int pos;
     };
     std::deque<wrelem> wrelem_;
+    size_t wrsize_;
     bool wrblocked_;
     tamer::event<> wrwake_;
     tamer::event<> wrkill_;
@@ -40,20 +44,31 @@ class msgpack_fd {
     msgpack::streaming_parser rdparser_;
 
     std::deque<tamer::event<Json> > rdwait_;
+    unsigned long rdwait_seq_;
+    std::deque<tamer::event<Json> > rdreqwait_;
+    std::deque<Json> rdreqq_;
     tamer::event<> rdwake_;
     tamer::event<> rdkill_;
 
-    void check();
-    bool read_once(Json* receiver);
+    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 10 };
+    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 9 };
+    tamer::event<> pacer_;
+
+    void check() const;
+    bool dispatch(Json* result_pointer);
+    inline bool read_until_request(Json* result_pointer);
+    bool read_once(Json* result_pointer);
     void write_once();
+    inline bool need_pace() const;
+    inline bool pace_recovered() const;
     tamed void writer_coroutine();
     tamed void reader_coroutine();
 };
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : fd_(fd), wrblocked_(false),
+    : fd_(fd), wrsize_(0), wrblocked_(false),
       rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
-      rdblocked_(false) {
+      rdblocked_(false), rdwait_seq_(0) {
     wrelem_.push_back(wrelem());
     wrelem_.back().sa.reserve(wrcap);
     wrelem_.back().pos = 0;
@@ -62,25 +77,60 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd)
     reader_coroutine();
 }
 
+template <typename R>
+void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
+    if (!rdreqq_.empty()) {
+        swap(*receiver.result_pointer(), rdreqq_.front());
+        rdreqq_.pop_front();
+        receiver.unblock();
+    } else if (read_until_request(receiver.result_pointer()))
+        receiver.unblock();
+    else
+        rdreqwait_.push_back(receiver);
+}
+
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
+    assert(j.is_a() && j[1].is_i());
+    unsigned long seq = j[1].as_i();
+    assert(rdwait_.empty() || seq == rdwait_seq_ + rdwait_.size());
     write(j);
-    read(done);
+    if (rdwait_.empty())
+        rdwait_seq_ = seq;
+    if (done)
+        rdwait_.push_back(std::move(done));
+    read_until_request(0);
+}
+
+inline bool msgpack_fd::read_until_request(Json* result_pointer) {
+    while ((rdpos_ != rdlen_ || !rdblocked_) && read_once(result_pointer))
+        if (dispatch(result_pointer))
+            return true;
+    if (rdpos_ == rdlen_ && rdblocked_)
+        rdwake_();
+    return false;
+}
+
+inline bool msgpack_fd::need_pace() const {
+    return wrsize_ > wrpacelim && rdwait_.size() > rdpacelim;
+}
+
+inline bool msgpack_fd::pace_recovered() const {
+    return wrsize_ <= wrpacerecover && rdwait_.size() <= rdpacerecover;
 }
 
 template <typename R>
-void msgpack_fd::read(tamer::preevent<R, Json> receiver) {
-    while ((rdpos_ != rdlen_ || !rdblocked_)
-           && rdwait_.size() && read_once(rdwait_.front().result_pointer())) {
-        rdwait_.front().unblock();
-        rdwait_.pop_front();
-    }
-    if ((rdpos_ != rdlen_ || !rdblocked_)
-        && read_once(receiver.result_pointer()))
-        receiver.unblock();
-    else {
-        rdwait_.push_back(receiver);
-        rdwake_();
-    }
+inline void msgpack_fd::pace(tamer::preevent<R> done) {
+    if (need_pace())
+        pacer_ = tamer::distribute(pacer_, std::move(done));
+    else
+        done();
+}
+
+inline Json msgpack_fd::status() const {
+    //check();
+    return Json().set("buffered_write_bytes", wrsize_)
+        .set("buffered_read_bytes", rdlen_ - rdpos_)
+        .set("waiting_readers", rdwait_.size());
 }
 
 #endif

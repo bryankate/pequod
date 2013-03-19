@@ -168,6 +168,8 @@ class TwitterNewShim {
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
+    inline void pace(tamer::preevent<R> done);
+    template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
 
   private:
@@ -270,6 +272,11 @@ inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber, uint32_t 
     write_in_net_order(buf_ + 7, start_time);
     write_in_net_order(buf_ + 14, subscriber);
     server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), done);
+}
+
+template <typename S> template <typename R>
+inline void TwitterNewShim<S>::pace(tamer::preevent<R> done) {
+    server_.pace(done);
 }
 
 template <typename S> template <typename R>
@@ -509,6 +516,8 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
                 if (tp_.synchronous())
                     twait(gr);
+                else
+                    twait { server_.pace(make_event()); }
 
                 user->load_time_ = currtime_;
                 ++user->ncheck_;

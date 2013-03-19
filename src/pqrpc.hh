@@ -8,7 +8,8 @@ enum {
     pq_count = 4,
     pq_scan = 5,
     pq_stats = 6,
-    pq_get = 7
+    pq_get = 7,
+    pq_control = 8
 };
 
 enum {
