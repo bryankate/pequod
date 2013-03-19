@@ -405,8 +405,6 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
         loggedin.push_back(u);
     }
 
-    std::cout << loggedin.size() << " " << active.size() << std::endl;
-
     twait { server_.stats(make_event(old_stats)); }
 
     std::cout << "Starting workload." << std::endl;
@@ -452,6 +450,7 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
                 if (tp_.log())
                     printf("%d: logout %08d\n", currtime_, user->uid());
 
+                active.push_back(user->uid());
                 loggedin.erase(loggedin.begin() + slot);
                 user->load_time_ = 0;
                 user->loggedin_ = false;
