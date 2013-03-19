@@ -563,6 +563,7 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
 tamed template <typename S>
 void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
+
     tvars {
         boost::mt19937 gen;
         boost::random_number_generator<boost::mt19937> rng(gen);
@@ -574,7 +575,6 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
         TwitterUser* user = NULL;
         size_t nread = 0;
         Json old_stats, stats;
-        tamer::gather_rendezvous gr;
     }
 
     gen.seed(13918);
@@ -583,34 +583,35 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
     if (!tp_.push()) {
         // make sure every user has a valid range so that the
         // server will autopush any new posts
-        for (uint32_t u = 0; u < nusers; ++u)
-            server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
-
-        twait(gr);
+        twait {
+            for (uint32_t u = 0; u < nusers; ++u)
+                server_.timeline_add_count(u, 0, currtime_, make_event(nread));
+        }
         nread = 0;
     }
 
+    std::cout << "Starting overhead test." << std::endl;
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
-    std::cout << "Starting overhead test." << std::endl;
-    while (currtime_ != end_time) {
-        user = &tp_.mutable_user(tp_.rand_user_post(gen));
-        post(user->uid(), currtime_, "?!?#*", user->celeb(), gr.make_event());
-        ++user->npost_;
-        ++currtime_;
+    twait {
+        while (currtime_ != end_time) {
+            user = &tp_.mutable_user(tp_.rand_user_post(gen));
+            post(user->uid(), currtime_, "?!?#*", user->celeb(), make_event());
+            ++user->npost_;
+            ++currtime_;
+        }
     }
-
-    twait(gr);
 
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
     twait { server_.stats(make_event(stats)); }
 
-    // make sure the right number of total posts exists in the store
-    for (uint32_t u = 0; u < nusers; ++u)
-        server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
-    twait(gr);
+    std::cout << "Checking for correctness." << std::endl;
+    twait {
+        for (uint32_t u = 0; u < nusers; ++u)
+            server_.timeline_add_count(u, 0, currtime_, make_event(nread));
+    }
 
     uint32_t nbackpost = 0, npost = 0;
 
