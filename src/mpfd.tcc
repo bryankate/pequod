@@ -11,12 +11,16 @@ msgpack_fd::~msgpack_fd() {
 }
 
 void msgpack_fd::write(const Json& j) {
-    if (wrelem_.back().sa.length() >= wrhiwat) {
+    wrelem* w = &wrelem_.back();
+    if (w->sa.length() >= wrhiwat) {
         wrelem_.push_back(wrelem());
-        wrelem_.back().sa.reserve(wrcap);
-        wrelem_.back().pos = 0;
+        w = &wrelem_.back();
+        w->sa.reserve(wrcap);
+        w->pos = 0;
     }
-    msgpack::compact_unparser().unparse(wrelem_.back().sa, j);
+    int old_len = w->sa.length();
+    msgpack::compact_unparser().unparse(w->sa, j);
+    wrsize_ += w->sa.length() - old_len;
     wrwake_();
     if (!wrblocked_ && wrelem_.front().sa.length() >= wrlowat)
         write_once();
@@ -110,11 +114,11 @@ tamed void msgpack_fd::reader_coroutine() {
     kill();
 }
 
-void msgpack_fd::check() {
+void msgpack_fd::check() const {
     // document invariants
     assert(!wrelem_.empty());
-    for (size_t i = 0; i != wrelem_.size(); ++i)
-        assert(wrelem_[i].pos <= wrelem_[i].sa.length());
+    for (auto& w : wrelem_)
+        assert(w.pos <= w.sa.length());
     for (size_t i = 1; i < wrelem_.size(); ++i)
         assert(wrelem_[i].pos == 0);
     for (size_t i = 0; i + 1 < wrelem_.size(); ++i)
@@ -122,6 +126,10 @@ void msgpack_fd::check() {
     if (wrelem_.size() == 1)
         assert(wrelem_[0].pos < wrelem_[0].sa.length()
                || wrelem_[0].sa.empty());
+    size_t wrsize = 0;
+    for (auto& w : wrelem_)
+        wrsize += w.sa.length() - w.pos;
+    assert(wrsize == wrsize_);
 }
 
 void msgpack_fd::write_once() {
@@ -141,6 +149,7 @@ void msgpack_fd::write_once() {
     wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
+        wrsize_ -= amt;
         while (wrelem_.size() > 1
                && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
             amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
