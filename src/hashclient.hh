@@ -121,6 +121,8 @@ class TwitterHashShim {
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
+    inline void pace(tamer::preevent<R> e);
+    template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
 
   private:
@@ -209,6 +211,11 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
     }
     done(done.result() + n);
     server_.done_get(v);
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::pace(tamer::preevent<R> done) {
+    done();
 }
 
 template <typename S> template <typename R>

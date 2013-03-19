@@ -30,6 +30,9 @@ class DirectClient {
     inline void add_count(const String& first, const String& last,
                           preevent<R, size_t> e);
 
+    template <typename R>
+    inline void pace(preevent<R> done);
+
     class scan_result {
       public:
         typedef ServerStore::const_iterator iterator;
@@ -123,6 +126,11 @@ inline void DirectClient::scan(const String& first, const String& last,
     server_.validate(first, last);
     e(scan_result(server_.lower_bound(first),
                   server_.lower_bound(last)));
+}
+
+template <typename R>
+inline void DirectClient::pace(preevent<R> done) {
+    done();
 }
 
 template <typename R>
