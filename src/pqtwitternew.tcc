@@ -77,18 +77,25 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       max_subs_(param["max_subscriptions"].as_i(200)),
       shape_(param["shape"].as_d(55)) {
 
-    vector<double> op_weight(n_op);
-    op_weight[op_post] = param["ppost"].as_i(2);
-    op_weight[op_subscribe] = param["psubscribe"].as_i(3);
-    op_weight[op_login] = param["plogin"].as_i(5);
-    op_weight[op_logout] = param["plogout"].as_i(5);
+    vector<double> op_weight(n_op, 0);
 
-    double ptotal = 0;
-    for (uint32_t o = 0; o < op_check; ++o)
-        ptotal += op_weight[o];
+    if (overhead_) {
+        op_weight[op_post] = 100;
+        pct_active_ = 100;
+    }
+    else {
+        op_weight[op_post] = param["ppost"].as_i(2);
+        op_weight[op_subscribe] = param["psubscribe"].as_i(3);
+        op_weight[op_login] = param["plogin"].as_i(5);
+        op_weight[op_logout] = param["plogout"].as_i(5);
 
-    assert(ptotal < 100);
-    op_weight[op_check] = 100 - ptotal;
+        double ptotal = 0;
+        for (uint32_t o = 0; o < op_check; ++o)
+            ptotal += op_weight[o];
+
+        assert(ptotal < 100);
+        op_weight[op_check] = 100 - ptotal;
+    }
 
     op_dist_ = op_dist_type(op_weight.begin(), op_weight.end());
 }

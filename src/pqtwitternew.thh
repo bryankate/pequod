@@ -282,15 +282,13 @@ class TwitterNewRunner {
     TwitterNewRunner(S& server, TwitterNewPopulator& tp);
 
     tamed void populate(tamer::event<> done);
-    void run(tamer::event<> done);
+    tamed void run(tamer::event<> done);
 
   private:
     S& server_;
     TwitterNewPopulator& tp_;
     uint32_t currtime_;
 
-    tamed void run_twitter(tamer::event<> done);
-    tamed void run_overhead(tamer::event<> done);
     tamed void post(uint32_t u, uint32_t time, Str value, bool celeb, event<> e);
 };
 
@@ -368,16 +366,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     done();
 }
 
-template <typename S>
-void TwitterNewRunner<S>::run(tamer::event<> done) {
-    if (tp_.overhead())
-        run_overhead(done);
-    else
-        run_twitter(done);
-}
-
 tamed template <typename S>
-void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
+void TwitterNewRunner<S>::run(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
         boost::random_number_generator<boost::mt19937> rng(gen);
@@ -386,7 +376,8 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
         uint32_t nusers = this->tp_.nusers();
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
-        uint32_t horizon, slot;
+        uint32_t u, horizon, slot;
+        size_t dummy = 0;
         std::vector<uint32_t> active;
         std::vector<uint32_t> loggedin;
         TwitterUser* user = NULL;
@@ -397,15 +388,21 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
     gen.seed(13918);
 
     // create a working set of already logged in users
-    for (uint32_t u = 0; u < nusers; ++u) {
+    for (u = 0; u < nusers; ++u) {
         if (gen() % 100 >= tp_.pct_active())
             continue;
+
+        if (tp_.overhead() && !tp_.push()) {
+            server_.timeline_add_count(u, 0, 0, gr.make_event(dummy));
+            twait{ server_.pace(make_event()); }
+        }
 
         user = &tp_.mutable_user(u);
         user->loggedin_ = true;
         ++user->nlogin_;
         loggedin.push_back(u);
     }
+    twait(gr);
 
     twait { server_.stats(make_event(old_stats)); }
 
@@ -534,12 +531,23 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
+
     twait { server_.stats(make_event(stats)); }
+
+    if (tp_.overhead()) {
+        if (tp_.verbose()) { std::cout << "Finished overhead experiment, reading results." << std::endl; }
+        for (u = 0; u < nusers; ++u) {
+            user = &tp_.mutable_user(u);
+            server_.timeline_add_count(u, 0, 0, gr.make_event(user->nread_));
+            twait{ server_.pace(make_event()); }
+        }
+        twait(gr);
+    }
 
     uint32_t nbackpost = 0, npost = 0, nsubscribe = 0,
              nlogout = 0, nlogin = 0, ncheck = 0, nread = 0;
 
-    for (uint32_t u = 0; u < nusers; ++u) {
+    for (u = 0; u < nusers; ++u) {
         nbackpost += tp_.mutable_user(u).nbackpost_;
         npost += tp_.mutable_user(u).npost_;
         nsubscribe += tp_.mutable_user(u).nsubscribe_;
@@ -565,85 +573,6 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 
     tp_.print_visualization();
-    done();
-}
-
-tamed template <typename S>
-void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
-
-    tvars {
-        boost::mt19937 gen;
-        boost::random_number_generator<boost::mt19937> rng(gen);
-        struct rusage ru[2];
-        struct timeval tv[2];
-        uint32_t nusers = this->tp_.nusers();
-        uint32_t beg_time = this->currtime_;
-        uint32_t end_time = beg_time + this->tp_.duration();
-        uint32_t u;
-        TwitterUser* user = NULL;
-        size_t nread = 0;
-        Json old_stats, stats;
-        tamer::gather_rendezvous gr;
-    }
-
-    gen.seed(13918);
-    twait { server_.stats(make_event(old_stats)); }
-
-    if (!tp_.push()) {
-        // make sure every user has a valid range so that the
-        // server will autopush any new posts
-        for (u = 0; u < nusers; ++u) {
-            server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
-            twait{ server_.pace(make_event()); }
-        }
-    }
-    twait(gr);
-    nread = 0;
-
-    if (tp_.verbose()) { std::cout << "Starting overhead test." << std::endl; }
-    getrusage(RUSAGE_SELF, &ru[0]);
-    gettimeofday(&tv[0], 0);
-
-    while (currtime_ != end_time) {
-        user = &tp_.mutable_user(tp_.rand_user_post(gen));
-        post(user->uid(), currtime_, "?!?#*", user->celeb(), gr.make_event());
-        ++user->npost_;
-        ++currtime_;
-
-        twait{ server_.pace(make_event()); }
-    }
-    twait(gr);
-
-    getrusage(RUSAGE_SELF, &ru[1]);
-    gettimeofday(&tv[1], 0);
-    twait { server_.stats(make_event(stats)); }
-
-    if (tp_.verbose()) { std::cout << "Checking for correctness." << std::endl; }
-    for (u = 0; u < nusers; ++u) {
-        server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
-        twait { server_.pace(make_event()); }
-    }
-    twait(gr);
-
-    uint32_t nbackpost = 0, npost = 0;
-
-    for (uint32_t u = 0; u < nusers; ++u) {
-        nbackpost += tp_.mutable_user(u).nbackpost_;
-        npost += tp_.mutable_user(u).npost_;
-    }
-
-    if (stats.get("server_user_time")) {
-        stats["server_user_time"] -= old_stats["server_user_time"];
-        stats["server_system_time"] -= old_stats["server_system_time"];
-    }
-    stats.set("nbackposts", nbackpost)
-         .set("nposts", npost)
-         .set("nposts_read", nread)
-         .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
-         .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-         .set("real_time", to_real(tv[1] - tv[0]));
-    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-
     done();
 }
 
