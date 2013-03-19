@@ -220,11 +220,12 @@ static Clp_Option options[] = {
     { "pread", 0, 4002, Clp_ValInt, 0 },
     { "ppost", 0, 4003, Clp_ValInt, 0 },
     { "psubscribe", 0, 4005, Clp_ValInt, 0 },
-    { "graph", 0, 4006, Clp_ValStringNotOption, 0 },
-    { "visualize", 0, 4007, 0, Clp_Negate },
-    { "overhead", 0, 4008, 0, Clp_Negate },
-    { "celebrity", 0, 4009, Clp_ValInt, 0 },
-    { "celebrity2", 0, 4010, Clp_ValInt, 0 },
+    { "plogin", 0, 4006, Clp_ValInt, 0 },
+    { "graph", 0, 4007, Clp_ValStringNotOption, 0 },
+    { "visualize", 0, 4008, 0, Clp_Negate },
+    { "overhead", 0, 4009, 0, Clp_Negate },
+    { "celebrity", 0, 4010, Clp_ValInt, 0 },
+    { "celebrity2", 0, 4011, Clp_ValInt, 0 },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -322,6 +323,8 @@ int main(int argc, char** argv) {
             tp_param.set("ppost", clp->val.i);
         else if (clp->option->long_name == String("psubscribe"))
             tp_param.set("psubscribe", clp->val.i);
+        else if (clp->option->long_name == String("plogin"))
+            tp_param.set("plogin", clp->val.i);
         else if (clp->option->long_name == String("graph"))
             tp_param.set("graph", clp->val.s);
         else if (clp->option->long_name == String("visualize"))
