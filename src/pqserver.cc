@@ -493,9 +493,19 @@ int main(int argc, char** argv) {
         ar.populate();
         ar.run();
     } else if (mode == mode_rwmicro) {
-        pq::RwMicro rw(tp_param, server);
-        rw.populate();
-        rw.run();
+        if (tp_param["builtinhash"]) {
+            pq::BuiltinHashClient client;
+            pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
+            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
+            rw.populate();
+            rw.run();
+        } else {
+            pq::DirectClient client(server);
+            pq::TwitterShim<pq::DirectClient> shim(client);
+            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
+            rw.populate();
+            rw.run();
+        }
     }
 
     tamer::loop();
