@@ -118,9 +118,6 @@ tamed void msgpack_fd::reader_coroutine() {
     for (auto& e : rdwait_)
         e.unblock();
     rdwait_.clear();
-    for (auto& e : rdreqwait_)
-        e.unblock();
-    rdreqwait_.clear();
     kill();
 }
 
