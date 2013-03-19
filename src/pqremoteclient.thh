@@ -90,6 +90,9 @@ class RemoteClient {
 
     tamed void stats(event<Json> e);
 
+    void pull_flush(Str) {
+        mandatory_assert("unimplemented");
+    }
   private:
     msgpack_fd fd_;
     unsigned long seq_;

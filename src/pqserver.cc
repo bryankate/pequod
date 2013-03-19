@@ -217,6 +217,7 @@ static Clp_Option options[] = {
     { "seed", 0, 3005, Clp_ValInt, 0 },
     { "log", 0, 3006, 0, Clp_Negate },
     { "nops", 'o', 3007, Clp_ValInt, 0 },
+    { "verbose", 0, 3007, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -251,6 +252,7 @@ static Clp_Option options[] = {
     { "nfollower", 0, 7001, Clp_ValInt, 0 },
     { "pprerefresh", 0, 7002, Clp_ValInt, 0 },
     { "pactive", 0, 7003, Clp_ValInt, 0 },
+    { "client_push", 0, 7004, 0, Clp_Negate },
 };
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
@@ -314,6 +316,8 @@ int main(int argc, char** argv) {
             tp_param.set("log", !clp->negated);
         else if (clp->option->long_name == String("nops"))
             tp_param.set("nops", clp->val.i);
+        else if (clp->option->long_name == String("verbose"))
+            tp_param.set("verbose", !clp->negated);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
@@ -374,6 +378,8 @@ int main(int argc, char** argv) {
             tp_param.set("pprerefresh", clp->val.i);
         else if (clp->option->long_name == String("pactive"))
             tp_param.set("pactive", clp->val.i);
+        else if (clp->option->long_name == String("client_push"))
+            tp_param.set("client_push", !clp->negated);
 
         // run single unit test
         else
@@ -482,9 +488,19 @@ int main(int argc, char** argv) {
         ar.populate();
         ar.run();
     } else if (mode == mode_rwmicro) {
-        pq::RwMicro rw(tp_param, server);
-        rw.populate();
-        rw.run();
+        if (tp_param["builtinhash"]) {
+            pq::BuiltinHashClient client;
+            pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
+            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
+            rw.populate();
+            rw.run();
+        } else {
+            pq::DirectClient client(server);
+            pq::TwitterShim<pq::DirectClient> shim(client);
+            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
+            rw.populate();
+            rw.run();
+        }
     }
 
     tamer::loop();
