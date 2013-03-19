@@ -213,6 +213,7 @@ static Clp_Option options[] = {
     { "seed", 0, 3005, Clp_ValInt, 0 },
     { "log", 0, 3006, 0, Clp_Negate },
     { "nops", 'o', 3007, Clp_ValInt, 0 },
+    { "verbose", 0, 3007, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -311,6 +312,8 @@ int main(int argc, char** argv) {
             tp_param.set("log", !clp->negated);
         else if (clp->option->long_name == String("nops"))
             tp_param.set("nops", clp->val.i);
+        else if (clp->option->long_name == String("verbose"))
+            tp_param.set("verbose", !clp->negated);
 
         // twitter
         else if (clp->option->long_name == String("shape"))

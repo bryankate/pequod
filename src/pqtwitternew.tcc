@@ -68,6 +68,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       synchronous_(param["synchronous"].as_b(false)),
       overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
+      verbose_(param["verbose"].as_b(false)),
       celebthresh_(param["celebrity"].as_i(0)),
       pct_active_(param["pactive"].as_i(70)),
       graph_file_(param["graph"].as_s("")),
@@ -231,6 +232,9 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
 
 void TwitterNewPopulator::print_subscription_statistics(ostream& stream) {
     using namespace boost::accumulators;
+
+    if (!verbose_)
+        return;
 
     accumulator_set<uint32_t, stats<tag::variance> > acc;
     for (uint32_t i = 0; i != nusers_; ++i)

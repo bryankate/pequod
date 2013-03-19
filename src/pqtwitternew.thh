@@ -73,6 +73,7 @@ class TwitterNewPopulator {
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool overhead() const { return overhead_; }
+    inline bool verbose() const { return verbose_; }
 
     inline const uint32_t* begin_followers(uint32_t user) const;
     inline const uint32_t* end_followers(uint32_t user) const;
@@ -96,6 +97,7 @@ class TwitterNewPopulator {
     bool synchronous_;
     bool overhead_;
     bool visualize_;
+    bool verbose_;
     uint32_t celebthresh_;
     uint32_t pct_active_;
     String graph_file_;
@@ -323,7 +325,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     }
     gen.seed(112181);
 
-    std::cout << "Creating social graph." << std::endl;
+    if (tp_.verbose()) { std::cout << "Creating social graph." << std::endl; }
     tp_.make_subscriptions(subs, gen);
     tp_.print_subscription_statistics(std::cout);
 
@@ -337,7 +339,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
 
     twait {
-        std::cout << "Building subscription table." << std::endl;
+        if (tp_.verbose()) { std::cout << "Building subscription table." << std::endl; }
         for (auto& x : subs) {
             server_.subscribe(x.first, x.second, make_event());
             if (tp_.log())
@@ -349,7 +351,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
                 server_.mark_celebrity(u, make_event());
     }
 
-    std::cout << "Populating twittersphere." << std::endl;
+    if (tp_.verbose()) { std::cout << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
         u = tp_.rand_user_post(gen);
         if (tp_.log())
@@ -407,7 +409,7 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
     twait { server_.stats(make_event(old_stats)); }
 
-    std::cout << "Starting workload." << std::endl;
+    if (tp_.verbose()) { std::cout << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
@@ -521,9 +523,11 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
 
         ++currtime_;
 
-        uint32_t diff = currtime_ - beg_time;
-        if (currtime_ > beg_time && diff % (tp_.duration() / 10) == 0)
-            std::cout << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+        if (tp_.verbose()) {
+            uint32_t diff = currtime_ - beg_time;
+            if (currtime_ > beg_time && diff % (tp_.duration() / 10) == 0)
+                std::cout << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+        }
     }
 
     twait(gr);
@@ -596,7 +600,7 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
     twait(gr);
     nread = 0;
 
-    std::cout << "Starting overhead test." << std::endl;
+    if (tp_.verbose()) { std::cout << "Starting overhead test." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
@@ -614,7 +618,7 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
     gettimeofday(&tv[1], 0);
     twait { server_.stats(make_event(stats)); }
 
-    std::cout << "Checking for correctness." << std::endl;
+    if (tp_.verbose()) { std::cout << "Checking for correctness." << std::endl; }
     for (u = 0; u < nusers; ++u) {
         server_.timeline_add_count(u, 0, currtime_, gr.make_event(nread));
         twait { server_.pace(make_event()); }
