@@ -26,11 +26,14 @@ class RwMicro {
           nfollower_(param["nfollower"].as_i(100)), 
           server_(server),
           push_(param["push"].as_b(true)), j_(NULL),
-          pprerefresh_(param["pprerefresh"].as_i(0)) {
+          pprerefresh_(param["pprerefresh"].as_i(0)),
+          client_push_(param["client_push"].as_b(false)) {
     }
     tamed inline void populate();
     tamed inline void run();
   private:
+    tamed inline void post(uint32_t poster, size_t time, Str value, tamer::event<> e);
+
     int prefresh_;
     int pactive_;
     int nops_;
@@ -40,7 +43,26 @@ class RwMicro {
     bool push_;
     Join* j_;
     int pprerefresh_;
+    bool client_push_;
 };
+
+tamed template <typename S>
+void RwMicro<S>::post(uint32_t u, size_t time, Str value, tamer::event<> e) {
+    tvars { 
+        char buf[128];
+        std::set<uint32_t> follower; 
+    }
+    twait { server_.post(u, time, value, make_event()); }
+    if (client_push_) {
+        twait { server_.get_follower(u, make_event(follower)); }
+        twait {
+            server_.prepare_push_post(u, time, value);
+            for (auto& f : follower)
+                server_.push_post(f, make_event());
+        }
+    }
+    e();
+}
 
 tamed template <typename S>
 void RwMicro<S>::populate() {
@@ -64,9 +86,9 @@ void RwMicro<S>::populate() {
         int time = 1;
         for (int u = 0; u < nuser_; ++u)
             for (int i = 0; i < 10; ++i)
-                server_.post(u, ++time, String("She likes movie moby"), make_event());
+                post(u, ++time, String("She likes movie moby"), make_event());
     }
-    twait { server_.initialize(false, !push_, 0, 0, nuser_, !push_, make_event()); }
+    twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
     if (pprerefresh_) {
         twait {
             for (int i = 0; i < nuser_ * pprerefresh_ / 100; ++i)
@@ -117,7 +139,7 @@ void RwMicro<S>::run() {
             trefresh += to_real(optv[1] - optv[0]);
         } else {
             int poster = random() % nu_active;
-            server_.post(poster, ++time, String("She likes movie moby"), gr.make_event());
+            post(poster, ++time, String("She likes movie moby"), gr.make_event());
             ++npost;
         }
     }
