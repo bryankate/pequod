@@ -202,6 +202,7 @@ static Clp_Option options[] = {
     // rpc params
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
     { "listen", 'l', 2001, Clp_ValInt, Clp_Optional },
+    { "kill", 'k', 2002, 0, Clp_Negate },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -257,6 +258,7 @@ int main(int argc, char** argv) {
     tamer::initialize();
 
     int mode = mode_unknown, listen_port = 8000, client_port = -1;
+    bool kill_old_server = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -288,7 +290,8 @@ int main(int argc, char** argv) {
             mode = mode_listen;
             if (clp->have_val)
                 listen_port = clp->val.i;
-        }
+        } else if (clp->option->long_name == String("kill"))
+            kill_old_server = !clp->negated;
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -378,8 +381,8 @@ int main(int argc, char** argv) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
     } else if (mode == mode_listen) {
-        extern void server_loop(int port, pq::Server& server);
-        server_loop(listen_port, server);
+        extern void server_loop(int port, bool kill, pq::Server& server);
+        server_loop(listen_port, kill_old_server, server);
     } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);

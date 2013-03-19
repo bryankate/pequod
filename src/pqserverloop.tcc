@@ -81,6 +81,14 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
             rj[2] = pq_ok;
             rj[3] = server.stats();
             break;
+        case pq_control:
+            if (j[2].is_o()) {
+                if (j[2]["quit"])
+                    exit(0);
+                rj[2] = pq_ok;
+                rj[3] = Json::make_object();
+            }
+            break;
         }
 
         mpfd.write(rj);
@@ -103,9 +111,31 @@ tamed void interrupt_catcher() {
     exit(0);
 }
 
+tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
+    tvars { msgpack_fd mpfd(fd); Json j; double delay = 0.005; }
+    twait { mpfd.call(Json::make_array(pq_control, 1, Json().set("quit", true)),
+                      make_event(j)); }
+    fd.close();
+    while (done) {
+        delay = std::min(delay * 2, 0.1);
+        twait { tamer::at_delay(delay, make_event()); }
+        twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(fd)); }
+        if (!fd)
+            done();
+    }
+}
+
 } // namespace
 
-void server_loop(int port, pq::Server& server) {
+tamed void server_loop(int port, bool kill, pq::Server& server) {
+    tvars { tamer::fd killer; };
+    if (kill) {
+        twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(killer)); }
+        if (killer) {
+            std::cerr << "killing existing server on port " << port << "\n";
+            twait { kill_server(killer, port, make_event()); }
+        }
+    }
     std::cerr << "listening on port " << port << "\n";
     acceptor(tamer::tcp_listen(port), server);
     interrupt_catcher();
