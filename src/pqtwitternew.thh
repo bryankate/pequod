@@ -60,13 +60,13 @@ class TwitterNewPopulator {
     typedef boost::random_number_generator<boost::mt19937> rng_type;
     typedef boost::random::discrete_distribution<> op_dist_type;
     typedef boost::random::discrete_distribution<> post_dist_type;
-    typedef boost::random::normal_distribution<> login_dist_type;
     typedef boost::random::uniform_int_distribution<> uni_dist_type;
 
     TwitterNewPopulator(const Json& param);
 
     inline uint32_t nusers() const { return nusers_; }
     inline uint32_t duration() const { return duration_; }
+    inline uint32_t pct_active() const { return pct_active_; }
     inline bool push() const { return push_; }
     inline bool pull() const { return pull_; }
     inline bool pull_celeb() const { return celebthresh_; }
@@ -86,7 +86,6 @@ class TwitterNewPopulator {
     inline uint32_t rand_op(generator_type& gen) { return op_dist_(gen); }
     inline uint32_t rand_user(generator_type& gen) { return uni_dist_(gen); }
     inline uint32_t rand_user_post(generator_type& gen) { return post_dist_(gen); }
-    inline uint32_t rand_user_login(generator_type& gen);
 
   private:
     uint32_t nusers_;
@@ -98,6 +97,7 @@ class TwitterNewPopulator {
     bool overhead_;
     bool visualize_;
     uint32_t celebthresh_;
+    uint32_t pct_active_;
     String graph_file_;
     uint32_t min_followers_;
     uint32_t min_subs_;
@@ -110,7 +110,6 @@ class TwitterNewPopulator {
     std::vector<uint32_t> follower_ptrs_;
     op_dist_type op_dist_;
     post_dist_type post_dist_;
-    login_dist_type login_dist_;
     uni_dist_type uni_dist_;
 
     TwitterNewPopulator(const TwitterNewPopulator&) = delete;
@@ -137,15 +136,6 @@ inline const uint32_t* TwitterNewPopulator::end_followers(uint32_t user) const {
 inline TwitterUser& TwitterNewPopulator::mutable_user(uint32_t user) {
     return users_[user];
 }
-
-inline uint32_t TwitterNewPopulator::rand_user_login(generator_type& gen) {
-    int32_t r;
-    do {
-        r = login_dist_(gen);
-    } while (r < 0 || r >= (int32_t)nusers_);
-    return r;
-}
-
 
 template <typename S>
 class TwitterNewShim {
@@ -296,6 +286,8 @@ class TwitterNewRunner {
     S& server_;
     TwitterNewPopulator& tp_;
     uint32_t currtime_;
+    std::vector<uint32_t> active_;
+    std::vector<uint32_t> loggedin_;
 
     tamed void run_twitter(tamer::event<> done);
     tamed void run_overhead(tamer::event<> done);
@@ -394,27 +386,30 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
         uint32_t nusers = this->tp_.nusers();
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
-        uint32_t horizon;
-        TwitterUser* user = NULL;
+        uint32_t horizon, slot;
+        std::vector<uint32_t> active;
         std::vector<uint32_t> loggedin;
+        TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats;
         tamer::gather_rendezvous gr;
     }
-
     gen.seed(13918);
-    twait { server_.stats(make_event(old_stats)); }
 
     // create a working set of already logged in users
-    for (uint32_t u = 0; u < nusers / 2; ++u) {
-        do {
-            user = &tp_.mutable_user(tp_.rand_user_login(gen));
-        } while(user->loggedin_);
+    for (uint32_t u = 0; u < nusers; ++u) {
+        if (gen() % 100 >= tp_.pct_active())
+            continue;
 
+        user = &tp_.mutable_user(u);
         user->loggedin_ = true;
         ++user->nlogin_;
-        loggedin.push_back(user->uid());
+        loggedin.push_back(u);
     }
+
+    std::cout << loggedin.size() << " " << active.size() << std::endl;
+
+    twait { server_.stats(make_event(old_stats)); }
 
     std::cout << "Starting workload." << std::endl;
     getrusage(RUSAGE_SELF, &ru[0]);
@@ -450,7 +445,6 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
                 break;
 
             case op_logout:
-                uint32_t slot;
                 if (loggedin.empty())
                     break;
 
@@ -467,14 +461,12 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
                 break;
 
             case op_login:
-                if (loggedin.size() == nusers)
+                if (active.empty())
                     break;
 
-                // find a user to login. if this is too slow we can
-                // keep lists of logged in and logged out users
-                do {
-                    user = &tp_.mutable_user(tp_.rand_user_login(gen));
-                } while(user->loggedin_);
+                slot = gen() % active.size();
+                user = &tp_.mutable_user(active[slot]);
+                active.erase(active.begin() + slot);
 
                 if (tp_.log())
                     printf("%d: login %08d\n", currtime_, user->uid());
@@ -560,10 +552,12 @@ void TwitterNewRunner<S>::run_twitter(tamer::event<> done) {
         stats["server_user_time"] -= old_stats["server_user_time"];
         stats["server_system_time"] -= old_stats["server_system_time"];
     }
-    stats.set("nbackpost", nbackpost).set("nposts", npost)
-         .set("nsubscribe", nsubscribe)
-         .set("nupdate", ncheck).set("nposts_read", nread)
-         .set("nloggedin", nlogin).set("nloggedout", nlogout)
+    stats.set("nbackposts", nbackpost).set("nposts", npost)
+         .set("nsubscribes", nsubscribe)
+         .set("nchecks", ncheck)
+         .set("nposts_read", nread)
+         .set("nactive", active_.size() + loggedin_.size())
+         .set("nlogins", nlogin).set("nlogouts", nlogout)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
          .set("real_time", to_real(tv[1] - tv[0]));
@@ -641,7 +635,7 @@ void TwitterNewRunner<S>::run_overhead(tamer::event<> done) {
         stats["server_user_time"] -= old_stats["server_user_time"];
         stats["server_system_time"] -= old_stats["server_system_time"];
     }
-    stats.set("nbackpost", nbackpost)
+    stats.set("nbackposts", nbackpost)
          .set("nposts", npost)
          .set("nposts_read", nread)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))

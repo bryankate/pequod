@@ -69,6 +69,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       celebthresh_(param["celebrity"].as_i(0)),
+      pct_active_(param["pactive"].as_i(70)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
@@ -199,6 +200,8 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
         if (celebthresh_ && users_[u].nfollowers_ > celebthresh_)
             users_[u].celeb_ = true;
 
+        // assign individual post weights that correlate with the number
+        // of followers a user has. increase variance as the weight grows
         if (!users_[u].nfollowers_)
             continue;
         else if (users_[u].nfollowers_ < 10)
@@ -208,7 +211,6 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
     }
 
     post_dist_ = post_dist_type(wpost.begin(), wpost.end());
-    login_dist_ = login_dist_type(nusers_ / 2, nusers_ * 0.25);
     uni_dist_ = uni_dist_type(0, nusers_ - 1);
 
     followers_.clear();
