@@ -229,7 +229,8 @@ static Clp_Option options[] = {
     // rwmicro params
     { "prefresh", 0, 7000, Clp_ValInt, 0 },
     { "nfollower", 0, 7001, Clp_ValInt, 0 },
-    { "prerefresh", 0, 7002, 0, Clp_Negate },
+    { "pprerefresh", 0, 7002, Clp_ValInt, 0 },
+    { "pactive", 0, 7003, Clp_ValInt, 0 },
 };
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
@@ -343,8 +344,10 @@ int main(int argc, char** argv) {
             tp_param.set("prefresh", clp->val.i);
         else if (clp->option->long_name == String("nfollower"))
             tp_param.set("nfollower", clp->val.i);
-        else if (clp->option->long_name == String("prerefresh"))
-            tp_param.set("prerefresh", !clp->negated);
+        else if (clp->option->long_name == String("pprerefresh"))
+            tp_param.set("pprerefresh", clp->val.i);
+        else if (clp->option->long_name == String("pactive"))
+            tp_param.set("pactive", clp->val.i);
 
         // run single unit test
         else

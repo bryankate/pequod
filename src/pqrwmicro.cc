@@ -42,10 +42,9 @@ void RwMicro::populate() {
         jtext.append(" pull");
     mandatory_assert(j_->assign_parse(jtext.c_str()));
     server_.add_join(Str("t|"), Str("t}"), j_);
-    if (prerefresh_) {
-        const int nu_active = nuser_ * pactive_ / 100;
+    if (pprerefresh_) {
         char buf1[128], buf2[128];
-        for (int i = 0; i < nu_active; ++i) {
+        for (int i = 0; i < nuser_ * pprerefresh_ / 100; ++i) {
             int u = i;
             sprintf(buf1, "t|%05u|%010u", u, 0);
             sprintf(buf2, "t|%05u}", u);
@@ -99,7 +98,7 @@ void RwMicro::run() {
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);
         } else {
-            int poster = random() % nuser_;
+            int poster = random() % nu_active;
             sprintf(buf1, "p|%05u|%010u", poster, ++time);
             server_.insert(buf1, String("She likes movie moby"));
             ++npost;
@@ -108,7 +107,7 @@ void RwMicro::run() {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], NULL);
     Json stats = Json()
-        //.set("expected_post_read", pactive_)
+        .set("inactive", 100 - pactive_)
         //.set("actual_post_read", nread * 100.0 / (std::max(npost, 1) * nfollower_))
         .set("expected_prefresh", prefresh_)
         .set("actual_prefresh", nrefresh * 100.0 / nops_)

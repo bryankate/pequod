@@ -42,7 +42,10 @@ class ResultAnalyzer:
         if self.ename.startswith("rwmicro"):
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
-        
+        elif self.ename == "policy":
+            graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
+                                  "real_time", xcolumnName = "inactive"))
+       
         print >> f, "#", header
         plotgroups = sorted(self.exp.keys())
         for groupNumber, plotgroup in enumerate(plotgroups):
