@@ -66,6 +66,7 @@ class TwitterNewPopulator {
 
     inline uint32_t nusers() const { return nusers_; }
     inline uint32_t duration() const { return duration_; }
+    inline uint32_t postlimit() const { return postlimit_; }
     inline double pct_active() const { return pct_active_; }
     inline bool push() const { return push_; }
     inline bool pull() const { return pull_; }
@@ -91,6 +92,7 @@ class TwitterNewPopulator {
   private:
     uint32_t nusers_;
     uint32_t duration_;
+    uint32_t postlimit_;
     bool push_;
     bool pull_;
     bool log_;
@@ -377,7 +379,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
         uint32_t u, horizon, slot;
-        size_t dummy = 0, nfull = 0;
+        uint32_t postlimit = this->tp_.postlimit();
+        size_t dummy = 0, nfull = 0, npost = 0;
         std::vector<uint32_t> active;
         std::vector<uint32_t> loggedin;
         TwitterUser* user = NULL;
@@ -412,7 +415,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
-    while (currtime_ != end_time) {
+    while (currtime_ < end_time && ((postlimit) ? (npost < postlimit) : true)) {
         user = NULL;
 
         switch(tp_.rand_op(gen)) {
@@ -424,6 +427,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
                 post(user->uid(), currtime_, String("?!?#*"), user->celeb(), gr.make_event());
                 ++user->npost_;
+                ++npost;
                 break;
 
             case op_subscribe:
@@ -553,12 +557,11 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait(gr);
     }
 
-    uint32_t nbackpost = 0, npost = 0, nsubscribe = 0,
-             nlogout = 0, nlogin = 0, ncheck = 0, nread = 0;
+    uint32_t nbackpost = 0, nsubscribe = 0, nlogout = 0,
+             nlogin = 0, ncheck = 0, nread = 0;
 
     for (u = 0; u < nusers; ++u) {
         nbackpost += tp_.mutable_user(u).nbackpost_;
-        npost += tp_.mutable_user(u).npost_;
         nsubscribe += tp_.mutable_user(u).nsubscribe_;
         nlogout += tp_.mutable_user(u).nlogout_;
         nlogin += tp_.mutable_user(u).nlogin_;
