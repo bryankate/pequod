@@ -46,7 +46,7 @@ class Table : public pequod_set_base_hook {
     void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
-    inline iterator invalidate_erase(iterator it);
+    inline void invalidate_erase(Datum* d);
 
     void pull_flush();
 
@@ -237,7 +237,7 @@ void Table::modify(Str key, const SinkRange* sink, const F& func) {
         assert(0 && "Do you really need to call modify() with a null SinkRange? Talk to eddie");
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
-    Datum* hint = sink ? sink->hint() : 0;
+    Datum* hint = sink->hint();
     if (!hint || !hint->valid())
         p = store_.insert_check(key, DatumCompare(), cd);
     else {
@@ -254,17 +254,18 @@ void Table::modify(Str key, const SinkRange* sink, const F& func) {
     if (is_erase_marker(value)) {
         mandatory_assert(!p.second);
         p.first = store_.erase(p.first);
-        if (sink)
-            sink->update_hint(store_, p.first);
+        sink->update_hint(store_, p.first);
         notify(d, String(), SourceRange::notify_erase);
         d->invalidate();
     } else if (!is_unchanged_marker(value)) {
-        if (p.second)
+        if (p.second) {
             d = new Datum(key, sink);
+            sink->add_datum(d);
+        }
         d->value().swap(value);
         if (p.second)
             p.first = store_.insert_commit(*d, cd);
-        if (sink && d != hint)
+        if (d != hint)
             sink->update_hint(store_, p.first);
         notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     }
@@ -274,17 +275,17 @@ void Table::modify(Str key, const SinkRange* sink, const F& func) {
 inline auto Table::erase(iterator it) -> iterator {
     Datum* d = it.operator->();
     it = store_.erase(it);
+    if (d->owner())
+        d->owner()->remove_datum(d);
     notify(d, String(), SourceRange::notify_erase);
     d->invalidate();
     return it;
 }
 
-inline auto Table::invalidate_erase(iterator it) -> iterator {
-    Datum* d = it.operator->();
-    it = store_.erase(it);
+inline void Table::invalidate_erase(Datum* d) {
+    store_.erase(store_.iterator_to(*d));
     invalidate_dependents(d->key());
     d->invalidate();
-    return it;
 }
 
 inline void Server::insert(Str key, const String& value) {

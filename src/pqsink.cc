@@ -161,7 +161,8 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
 }
 
 SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr} {
+    : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr},
+      data_free_(uintptr_t(-1)) {
     Join* j = jr_->join();
     if (j->maintained())
         expires_at_ = 0;
@@ -238,16 +239,18 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
 void SinkRange::invalidate() {
     if (valid()) {
         jr_->valid_ranges_.erase(this);
-        Table* t = table();
 
-        auto endit = t->lower_bound(iend());
-        for (auto it = t->lower_bound(ibegin()); it != endit; )
-            if (it->owner() == this) {
-                it = t->invalidate_erase(it);
+        while (data_free_ != uintptr_t(-1)) {
+            uintptr_t pos = data_free_;
+            data_free_ = (uintptr_t) data_[pos];
+            data_[pos] = 0;
+        }
+
+        Table* t = table();
+        for (auto d : data_)
+            if (d) {
+                t->invalidate_erase(d);
                 ++invalidate_hit_keys;
-            } else {
-                ++it;
-                ++invalidate_miss_keys;
             }
 
         ibegin_ = Str();

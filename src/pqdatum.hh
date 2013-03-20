@@ -39,9 +39,12 @@ class Datum : public pequod_set_base_hook {
     LocalStr<24> key_;
     String value_;
     int refcount_;
+    int owner_position_;
     const SinkRange* owner_;
   public:
     pequod_set_member_hook member_hook_;
+
+    friend class SinkRange;
 };
 
 struct DatumCompare {
