@@ -44,6 +44,8 @@ class TwitterPopulator {
 
     inline std::pair<uint32_t, Str> random_post(generator_type& gen) const;
 
+    static const char tweet_data[];
+
   private:
     uint32_t nusers_;
     bool push_;
@@ -64,8 +66,6 @@ class TwitterPopulator {
     std::vector<std::pair<uint32_t, uint32_t> > subs_;
     std::vector<uint32_t> followers_;
     std::vector<uint32_t> follower_ptrs_;
-
-    static const char tweet_data[];
 
     TwitterPopulator(const TwitterPopulator&) = delete;
     TwitterPopulator& operator=(const TwitterPopulator&) = delete;
@@ -332,9 +332,9 @@ inline TwitterRunner<S>::TwitterRunner(S& server, TwitterPopulator& tp)
 tamed template <typename S>
 void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
-    tvars { 
+    tvars {
         char buf[128];
-        std::vector<uint32_t> follower; 
+        std::vector<uint32_t> follower;
     }
     twait {
         server_.post(u, time, value, make_event());
@@ -423,7 +423,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         if (time < post_end_time || a < tp_.ppost()) {
             if (tp_.log())
                 printf("%d: post p|%05d|%010d\n", time, u, time);
-            post(u, time, String("?!?#*"), gr.make_event());
+            post(u, time, String(TwitterPopulator::tweet_data, 5), gr.make_event());
             ++npost;
         } else if (a < tp_.psubscribe()) {
             uint32_t follower;

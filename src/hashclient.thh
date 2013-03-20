@@ -72,27 +72,30 @@ class MemcachedClient {
 #endif
 
 #if HAVE_HIREDIS
-class RedisClient {
+class RedisHashClient {
   public:
     struct RedisArg {
-        RedisClient *c_;
+        RedisHashClient *c_;
         tamer::event<Str> e_;
-        explicit RedisArg(RedisClient* c) : c_(c) {}
-        RedisArg(RedisClient* c, tamer::event<Str> e) : c_(c), e_(e) {}
+        explicit RedisArg(RedisHashClient* c) : c_(c) {}
+        RedisArg(RedisHashClient* c, tamer::event<Str> e) : c_(c), e_(e) {}
     };
 
-    RedisClient() : nsent_(0), ndone_(0), w_(100) {
+    RedisHashClient() : nsent_(0), ndone_(0), w_(400) {
         c_ = redisAsyncConnect("localhost", 6379);
         redisLibevAttach(EV_DEFAULT_ c_);
     }
     void get(const Str k, int32_t offset, tamer::event<Str> e) {
-        doone(getcb, new RedisArg(this, e), "GETRANGE %b %d -1", k.data(), k.length(), offset);
+        doone(getcb, new RedisArg(this, e), "GETRANGE %b %d -1", k.data(), 
+              size_t(k.length()), size_t(offset));
     }
     void set(const Str k, const Str v) {
-        doone(checkok, new RedisArg(this), "SET %b %b", k.data(), k.length(), v.data(), v.length());
+        doone(checkok, new RedisArg(this), "SET %b %b", k.data(), size_t(k.length()),
+              v.data(), size_t(v.length()));
     }
     void append(const Str k, const Str v) {
-        doone(checkok, new RedisArg(this), "APPEND %b %b", k.data(), k.length(), v.data(), v.length());
+        doone(nop, new RedisArg(this), "APPEND %b %b", k.data(), size_t(k.length()),
+              v.data(), size_t(v.length()));
     }
     void done_get(Str) {
     }
@@ -100,7 +103,14 @@ class RedisClient {
     static void checkok(redisAsyncContext* c, void* r, void* privdata) {
         mandatory_assert(c && r);
         redisReply* reply = reinterpret_cast<redisReply*>(r);
-        mandatory_assert(reply->type == REDIS_REPLY_STATUS && reply->integer == REDIS_OK);
+        CHECK_EQ(reply->type, REDIS_REPLY_STATUS);
+        CHECK_EQ(reply->integer, REDIS_OK);
+        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
+        ra->c_->onedone();
+        delete ra;
+    }
+    static void nop(redisAsyncContext* c, void* r, void* privdata) {
+        mandatory_assert(c && r);
         RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
         ra->c_->onedone();
         delete ra;
@@ -120,13 +130,13 @@ class RedisClient {
             ev_unloop (EV_DEFAULT_ EVUNLOOP_ONE);
     }
     void doone(redisCallbackFn *fn, void *privdata, const char *format, ...) {
-	if (nsent_ - ndone_ > w_)
-	    ev_loop(EV_DEFAULT_ 0);
-        ++nsent_;
 	va_list ap;
         va_start(ap, format);
         redisvAsyncCommand(c_, fn, privdata, format, ap); 
 	va_end(ap);
+        ++nsent_;
+	if (nsent_ - ndone_ > w_)
+	    ev_loop(EV_DEFAULT_ 0);
     }
     int nsent_;
     int ndone_;
@@ -302,6 +312,7 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
     tls->time = now;
     sprintf(buf_, "t|%05u", subscriber);
     twait { server_.get(Str(buf_, 7), tls->pos, make_event(v)); }
+    tls = &last_refresh_[subscriber];
     tls->pos += v.length();
     size_t n = 0;
     for (int pos = 0; (pos = v.find_left('\254', pos)) != -1; ++pos) {
