@@ -68,7 +68,7 @@ class HackernewsPopulator {
     bool check_karma_;
 };
 
-HackernewsPopulator::HackernewsPopulator(const Json& param)
+inline HackernewsPopulator::HackernewsPopulator(const Json& param)
     : param_(param), log_(param["log"].as_b(false)), push_(param["push"].as_b(false)), 
       nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
