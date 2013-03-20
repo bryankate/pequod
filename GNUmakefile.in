@@ -18,11 +18,11 @@ PROTOGENDIR = $(OBJDIR)
 
 TAMER_COMMIT = eddc1b83813b31edcdafb2366bcb51876ae59117
 
-INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
-LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
+INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR) -I./drivers/bin/include
+LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @REDIS_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
-LDFLAGS += -L/usr/local/lib -L/opt/local/lib
+LDFLAGS += -L/usr/local/lib -L/opt/local/lib -L./drivers/bin/lib
 
 @DEFAULT_MALLOC_ASSIGNMENT@
 ifeq ($(shell uname), Darwin)
