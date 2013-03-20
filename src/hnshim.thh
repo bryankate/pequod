@@ -52,33 +52,8 @@ class HashHackerNewsShim {
         e();
     }
 
-    void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas, bool check, 
-                      event<> e) {
-        (void)author;
-        (void)check_karmas;
-        (void)check;
-        // get h|aid/hv
-        size_t value_length;
-        const char *hv = c_.get(String("h|") + String(aid), 0, &value_length);
-        // get ac|aid/clist
-        const char *cl = c_.get(String("ac|") + String(aid), 0, &value_length);
-        // for each commentor/cid in clist:
-        Str clist(cl, value_length);
-        ssize_t ep;
-        for (ssize_t s = 0; (ep = clist.find_left('\255', s)) != -1; s = ep + 1) {
-            ssize_t p = clist.find_left('|', s);
-            mandatory_assert(p != -1);
-            Str commentor(cl + s, cl + p);
-            Str cid(cl + p + 1, cl + ep);
-            // get c|cid/cv
-            c_.done_get(c_.get(String("c|") + cid, 0, &value_length));
-            // get k|commentor/kc
-            c_.done_get(c_.get(String("k|") + commentor, 0, &value_length));
-        }
-        c_.done_get(hv);
-        c_.done_get(cl);
-        e();
-    }
+    tamed void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas, bool check, 
+                      event<> e);
     template <typename R>
     void stats(preevent<R, Json> e) {
         e(Json());
@@ -86,6 +61,45 @@ class HashHackerNewsShim {
   private:
     C& c_;
 };
+
+tamed template <typename S>
+inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author, 
+        karmas_type &check_karmas, bool check, event<> e) {
+    tvars {
+        Str hv, cl;
+        std::vector<Str> str;
+    }
+    (void)author;
+    (void)check_karmas;
+    (void)check;
+    twait { 
+        // get h|aid/hv
+        c_.get(String("h|") + String(aid), 0, make_event(hv));
+        // get ac|aid/clist
+        c_.get(String("ac|") + String(aid), 0, make_event(cl)); 
+    }
+    // for each commentor/cid in cl:
+    twait {
+        ssize_t ep;
+        for (ssize_t s = 0; (ep = cl.find_left('\255', s)) != -1; s = ep + 1) {
+            ssize_t p = cl.find_left('|', s);
+            mandatory_assert(p != -1);
+            Str commentor(cl.data() + s, cl.data() + p);
+            Str cid(cl.data() + p + 1, cl.data() + ep);
+            // get c|cid/cv
+            str.push_back(Str());
+            c_.get(String("c|") + cid, 0, make_event(str.back()));
+            // get k|commentor/kc
+            str.push_back(Str());
+            c_.get(String("k|") + commentor, 0, make_event(str.back()));
+        }
+    }
+    c_.done_get(hv);
+    c_.done_get(cl);
+    for (auto& v : str)
+        c_.done_get(v);
+    e();
+}
 
 template <typename S>
 class PQHackerNewsShim {

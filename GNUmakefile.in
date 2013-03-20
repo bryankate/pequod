@@ -91,8 +91,9 @@ $(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/src/pqtwitternew.tcc
 $(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/src/pqtwitternew.thh
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/hnshim.hh: $(top_srcdir)/src/hnshim.thh
+$(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
