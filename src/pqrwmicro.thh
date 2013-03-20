@@ -25,7 +25,7 @@ class RwMicro {
           nuser_(param["nusers"].as_i(1000)),
           nfollower_(param["nfollower"].as_i(100)), 
           server_(server),
-          push_(param["push"].as_b(true)), j_(NULL),
+          push_(param["push"].as_b(true)),
           pprerefresh_(param["pprerefresh"].as_i(0)),
           client_push_(param["client_push"].as_b(false)) {
     }
@@ -41,7 +41,6 @@ class RwMicro {
     int nfollower_;
     S& server_;
     bool push_;
-    Join* j_;
     int pprerefresh_;
     bool client_push_;
 };
