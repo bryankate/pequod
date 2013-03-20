@@ -39,7 +39,7 @@ class ResultAnalyzer:
             f = open(fname, "w")
 
         graphs = []
-        if self.ename.startswith("rwmicro"):
+        if self.ename.startswith("rwmicro") or self.ename.startswith("ehash"):
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
         elif self.ename == "policy":
@@ -97,7 +97,7 @@ class ResultAnalyzer:
 if __name__ == "__main__":
     def test():
         a = ResultAnalyzer('refresh ratio(%)', 'rwmicro_1')
-        expdir = "./last/rwmicro_1"
+        expdir = "./results/incomplete/ehash_1"
         for f in os.listdir(expdir):
             fpath = os.path.join(expdir, f)
             if not os.path.isdir(fpath):

@@ -2,6 +2,7 @@
 import copy, math
 
 exps = []
+# server pull and server push
 cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro "
 prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
 for i in range(0, 6):
@@ -20,6 +21,7 @@ for i in range(0, 6):
     ename = "rwmicro_%d" % nfollower
     exps.append({'name': ename, 'defs': rwmicro, 'xlabel' : 'refresh ratio (%)'})
 
+# policy
 cmdbase = './obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=50'
 pactive = [100, 95, 90, 80, 60, 40, 20, 10, 5, 1]
 epolicy = []
@@ -37,3 +39,18 @@ for pa in pactive:
              'plotkey': pa,
              'cmd': '%s --pactive=%d --no-push' % (cmdbase, pa)})
 exps.append({'name': 'policy', 'defs' : epolicy, 'xlabel' : 'inactive users(%)'})
+
+# hash
+cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro "
+prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
+for nfollower in [1, 16, 32]:
+    ehash = []
+    cmd = cmdbase + ("--nfollower=%d" % nfollower)
+    for pr in prefresh:
+        ehash.append(
+            {'plotgroup': "Hash",
+             'plotkey' : pr,
+             'cmd': "%s --prefresh=%d --client_push -b" % (cmd, pr)})
+    ename = "ehash_%d" % nfollower
+    exps.append({'name': ename, 'defs': ehash, 'xlabel' : 'refresh ratio (%)'})
+
