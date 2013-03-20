@@ -64,6 +64,9 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
 
+    int check_optimized_match(const Match& m) const;
+    inline void assign_optimized_match(Str str, int mopt, Match& m) const;
+
     Json unparse_json() const;
     String unparse() const;
 
@@ -288,6 +291,12 @@ inline bool Pattern::match(Str s, Match& m) const {
 	    ss += slotlen;
 	}
     return true;
+}
+
+inline void Pattern::assign_optimized_match(Str str, int mopt, Match& m) const {
+    for (int i = 0; mopt; ++i, mopt >>= 1)
+        if (mopt & 1)
+            m.set_slot(i, str.udata() + slotpos_[i], slotlen_[i]);
 }
 
 inline Join::Join()

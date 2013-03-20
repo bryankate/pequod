@@ -70,6 +70,17 @@ void Pattern::match_range(Str first, Str last, Match& m) const {
         }
 }
 
+int Pattern::check_optimized_match(const Match& m) const {
+    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
+        if (*p >= 128 && m.known_length(*p - 128) != slotlen_[*p - 128]) {
+            if (p + 1 != pat_ + plen_)
+                return -1;
+            else
+                return 1 << (*p - 128);
+        }
+    return 0;
+}
+
 bool operator==(const Pattern& a, const Pattern& b) {
     return a.plen_ == b.plen_
         && a.klen_ == b.klen_

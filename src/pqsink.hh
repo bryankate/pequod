@@ -53,7 +53,7 @@ class IntermediateUpdate : public ServerRangeBase {
 
 class SinkRange : public ServerRangeBase {
   public:
-    SinkRange(Str first, Str last, JoinRange* jr, uint64_t now);
+    SinkRange(JoinRange* jr, Str first, Str last, const Match& m, uint64_t now);
     ~SinkRange();
 
     inline void ref();

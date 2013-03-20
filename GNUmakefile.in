@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = eddc1b83813b31edcdafb2366bcb51876ae59117
+TAMER_COMMIT = 508f6ceecac60e637f29752e11a41c89e1429622
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR) -I./drivers/bin/include
 LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @REDIS_LIB@

@@ -33,7 +33,8 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va{first, last, Match(), &server, nullptr, now,
             SourceRange::notify_insert};
-    va.sink = new SinkRange(first, last, this, now);
+    join_->sink().match_range(first, last, va.match);
+    va.sink = new SinkRange(this, first, last, va.match, now);
     valid_ranges_.insert(va.sink);
     validate_step(va, 0);
 }
@@ -60,6 +61,8 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
 }
 
 void JoinRange::validate_step(validate_args& va, int joinpos) {
+    ++join_->source_table(joinpos)->nvalidate_;
+
     uint8_t kf[128], kl[128];
     int kflen = join_->expand_first(kf, join_->source(joinpos),
                                     va.first, va.last, va.match);
@@ -86,20 +89,33 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     Match::state mstate(va.match.save());
     const Pattern& pat = join_->source(joinpos);
 
-    for (; it != ilast; ++it) {
-	if (it->key().length() != pat.key_length())
-            continue;
+    // figure out whether match is necessary
+    int mopt = pat.check_optimized_match(va.match);
 
-        // XXX PERFORMANCE can prob figure out ahead of time whether this
-        // match is simple/necessary
-        if (pat.match(it->key(), va.match)) {
-            if (r)
-                r->notify(it.operator->(), String(), va.notifier);
-            else
-                validate_step(va, joinpos + 1);
-        }
-
-        va.match.restore(mstate);
+    if (mopt < 0) {
+        // match not optimizable
+        for (; it != ilast; ++it)
+            if (it->key().length() == pat.key_length()) {
+                if (pat.match(it->key(), va.match)) {
+                    if (r)
+                        r->notify(it.operator->(), String(), va.notifier);
+                    else
+                        validate_step(va, joinpos + 1);
+                }
+                va.match.restore(mstate);
+            }
+    } else {
+        // match optimizable
+        ++join_->source_table(joinpos)->nvalidate_optimized_;
+        for (; it != ilast; ++it)
+            if (it->key().length() == pat.key_length()) {
+                pat.assign_optimized_match(it->key(), mopt, va.match);
+                if (r)
+                    r->notify(it.operator->(), String(), va.notifier);
+                else
+                    validate_step(va, joinpos + 1);
+                va.match.restore(mstate);
+            }
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
@@ -160,7 +176,7 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
     j->make_context(context_, m, context_mask);
 }
 
-SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
+SinkRange::SinkRange(JoinRange* jr, Str first, Str last, const Match& m, uint64_t now)
     : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr},
       data_free_(uintptr_t(-1)) {
     Join* j = jr_->join();
@@ -169,8 +185,6 @@ SinkRange::SinkRange(Str first, Str last, JoinRange* jr, uint64_t now)
     else
         expires_at_ = now + j->staleness();
 
-    Match m;
-    j->sink().match_range(first, last, m);
     context_mask_ = j->known_mask(m);
     j->make_context(context_, m, context_mask_);
 }
