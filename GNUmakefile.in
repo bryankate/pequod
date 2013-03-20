@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 5793a4663217b1a3f3564f39201c7c5ecca9eb79
+TAMER_COMMIT = eddc1b83813b31edcdafb2366bcb51876ae59117
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
@@ -72,10 +72,10 @@ $(OBJDIR)/%.o: $(OBJDIR)/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) $(TAMERFLAGS) -o $@ $<
+	$(TAMER) $(TAMERFLAGS) -F .deps/$*.cc.d -o $@ $<
 
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
-	$(TAMER) $(TAMERFLAGS) -o $@ $<
+	$(TAMER) $(TAMERFLAGS) -F .deps/$*.hh.d -o $@ $<
 
 
 # make sure tamed versions get built first
