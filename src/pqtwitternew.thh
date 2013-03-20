@@ -377,7 +377,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
         uint32_t u, horizon, slot;
-        size_t dummy = 0;
+        size_t dummy = 0, nfull = 0;
         std::vector<uint32_t> active;
         std::vector<uint32_t> loggedin;
         TwitterUser* user = NULL;
@@ -399,7 +399,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
         user = &tp_.mutable_user(u);
         user->loggedin_ = true;
-        ++user->nlogin_;
         loggedin.push_back(u);
     }
     twait(gr);
@@ -487,8 +486,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 }
 
                 horizon = user->load_time_;
-                if (!horizon)
+                if (!horizon) {
                     horizon = currtime_ - 3200;
+                    ++nfull;
+                }
 
                 if (tp_.log()) {
                     printf("%d: scan [t|%08u|%010u, t|%08u})\n", currtime_,
@@ -572,6 +573,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     stats.set("nbackposts", nbackpost).set("nposts", npost)
          .set("nsubscribes", nsubscribe)
          .set("nchecks", ncheck)
+         .set("nfull", nfull)
          .set("nposts_read", nread)
          .set("nactive", active.size() + loggedin.size())
          .set("nlogins", nlogin).set("nlogouts", nlogout)

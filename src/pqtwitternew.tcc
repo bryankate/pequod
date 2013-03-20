@@ -61,7 +61,7 @@ bool TwitterUser::Compare::operator() (const uint32_t& a, const TwitterUser& b) 
 
 TwitterNewPopulator::TwitterNewPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
-      duration_(param["duration"].as_i(1000000)),
+      duration_(param["duration"].as_i(100000)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
       log_(param["log"].as_b(false)),
@@ -84,17 +84,17 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
         pct_active_ = 100;
     }
     else {
-        op_weight[op_post] = param["ppost"].as_d(2);
-        op_weight[op_subscribe] = param["psubscribe"].as_d(3);
+        // these are not percentages, but weights, so it is
+        // possible for them to sum != 100. the important thing
+        // is to get the right ratio of weights for your experiment.
+        // for example, the real twitter sees (according to the video i watched)
+        // a check:post ratio between 50:1 and 100:1 on a normal day.
+        // they also see 10x more social graph changes than posts
+        op_weight[op_post] = param["ppost"].as_d(1);
+        op_weight[op_subscribe] = param["psubscribe"].as_d(10);
         op_weight[op_login] = param["plogin"].as_d(5);
         op_weight[op_logout] = param["plogout"].as_d(5);
-
-        double ptotal = 0;
-        for (uint32_t o = 0; o < op_check; ++o)
-            ptotal += op_weight[o];
-
-        assert(ptotal < 100);
-        op_weight[op_check] = 100 - ptotal;
+        op_weight[op_check] = param["pread"].as_d(60);
     }
 
     op_dist_ = op_dist_type(op_weight.begin(), op_weight.end());
