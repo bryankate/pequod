@@ -130,16 +130,18 @@ void RwMicro<S>::run() {
     getrusage(RUSAGE_SELF, &ru[0]);
     for (int i = 0; i < nops_; ++i) {
         if (random() % 100 < prefresh_) {
+            int u = random() % nuser_;
+            if (u >= nu_active)
+                continue;
             struct timeval optv[2];
             gettimeofday(&optv[0], NULL);
-            int u = random() % nu_active;
             ++nrefresh;
             server_.timeline_add_count(u, loadtime[u] + 1, time, gr.make_event(nread));
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);
         } else {
-            int poster = random() % nu_active;
+            int poster = random() % nuser_;
             post(poster, ++time, String("She likes movie moby"), gr.make_event());
             ++npost;
         }
