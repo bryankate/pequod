@@ -55,6 +55,8 @@ class Table : public pequod_set_base_hook {
     uint64_t ninsert_;
     uint64_t nmodify_;
     uint64_t nerase_;
+    uint64_t nvalidate_;
+    uint64_t nvalidate_optimized_;
 
   private:
     store_type store_;
