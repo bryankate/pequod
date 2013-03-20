@@ -160,8 +160,8 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                 celeb_.assign(nusers, false);
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
-                                 "copy s|<user>|<poster> "
-                                 "using celeb|<poster> "
+                                 "copy celeb|<poster> "
+                                 "using s|<user>|<poster> "
                                  "where user:5, poster:5",
                                  make_event(j[2]));
                 server_.add_join("t|", "t}",

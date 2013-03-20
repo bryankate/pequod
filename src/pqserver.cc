@@ -222,10 +222,10 @@ static Clp_Option options[] = {
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
     { "popduration", 0, 4001, Clp_ValInt, 0 },
-    { "pread", 0, 4002, Clp_ValInt, 0 },
-    { "ppost", 0, 4003, Clp_ValInt, 0 },
-    { "psubscribe", 0, 4005, Clp_ValInt, 0 },
-    { "plogin", 0, 4006, Clp_ValInt, 0 },
+    { "pread", 0, 4002, Clp_ValDouble, 0 },
+    { "ppost", 0, 4003, Clp_ValDouble, 0 },
+    { "psubscribe", 0, 4005, Clp_ValDouble, 0 },
+    { "plogin", 0, 4006, Clp_ValDouble, 0 },
     { "graph", 0, 4007, Clp_ValStringNotOption, 0 },
     { "visualize", 0, 4008, 0, Clp_Negate },
     { "overhead", 0, 4009, 0, Clp_Negate },
@@ -240,19 +240,18 @@ static Clp_Option options[] = {
     { "hnusers", 'x', 5004, Clp_ValInt, 0 },
     { "large", 0, 5005, 0, Clp_Negate },
     { "super_materialize", 's', 5006, 0, Clp_Negate },
-    { "populate", 0, 5007, 0, Clp_Negate },
-    { "run", 0, 5008, 0, Clp_Negate },
-    { "materialize", 0, 5009, 0, Clp_Negate },
+    { "populate_only", 0, 5007, 0, Clp_Negate },
+    { "run_only", 0, 5008, 0, Clp_Negate },
 
     // mostly analytics params
     { "proactive", 0, 6000, 0, Clp_Negate },
     { "buffer", 0, 6001, 0, Clp_Negate },
 
     // rwmicro params
-    { "prefresh", 0, 7000, Clp_ValInt, 0 },
-    { "nfollower", 0, 7001, Clp_ValInt, 0 },
-    { "pprerefresh", 0, 7002, Clp_ValInt, 0 },
-    { "pactive", 0, 7003, Clp_ValInt, 0 },
+    { "prefresh", 0, 7000, Clp_ValDouble, 0 },
+    { "nfollower", 0, 7001, Clp_ValDouble, 0 },
+    { "pprerefresh", 0, 7002, Clp_ValDouble, 0 },
+    { "pactive", 0, 7003, Clp_ValDouble, 0 },
     { "client_push", 0, 7004, 0, Clp_Negate },
 };
 
@@ -326,13 +325,13 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("popduration"))
             tp_param.set("popduration", clp->val.i);
         else if (clp->option->long_name == String("pread"))
-            tp_param.set("pread", clp->val.i);
+            tp_param.set("pread", clp->val.d);
         else if (clp->option->long_name == String("ppost"))
-            tp_param.set("ppost", clp->val.i);
+            tp_param.set("ppost", clp->val.d);
         else if (clp->option->long_name == String("psubscribe"))
-            tp_param.set("psubscribe", clp->val.i);
+            tp_param.set("psubscribe", clp->val.d);
         else if (clp->option->long_name == String("plogin"))
-            tp_param.set("plogin", clp->val.i);
+            tp_param.set("plogin", clp->val.d);
         else if (clp->option->long_name == String("graph"))
             tp_param.set("graph", clp->val.s);
         else if (clp->option->long_name == String("visualize"))
@@ -359,12 +358,10 @@ int main(int argc, char** argv) {
             tp_param.set("large", !clp->negated);
 	else if (clp->option->long_name == String("super_materialize"))
 	    tp_param.set("super_materialize", !clp->negated);
-        else if (clp->option->long_name == String("populate"))
-            tp_param.set("populate", !clp->negated);
-        else if (clp->option->long_name == String("run"))
-            tp_param.set("run", !clp->negated);
-	else if (clp->option->long_name == String("materialize"))
-	    tp_param.set("materialize", !clp->negated);
+        else if (clp->option->long_name == String("populate_only"))
+            tp_param.set("populate_only", !clp->negated);
+        else if (clp->option->long_name == String("run_only"))
+            tp_param.set("run_only", !clp->negated);
 
         // analytics
         else if (clp->option->long_name == String("proactive"))
@@ -374,13 +371,13 @@ int main(int argc, char** argv) {
 
         // rwmicro
         else if (clp->option->long_name == String("prefresh"))
-            tp_param.set("prefresh", clp->val.i);
+            tp_param.set("prefresh", clp->val.d);
         else if (clp->option->long_name == String("nfollower"))
             tp_param.set("nfollower", clp->val.i);
         else if (clp->option->long_name == String("pprerefresh"))
-            tp_param.set("pprerefresh", clp->val.i);
+            tp_param.set("pprerefresh", clp->val.d);
         else if (clp->option->long_name == String("pactive"))
-            tp_param.set("pactive", clp->val.i);
+            tp_param.set("pactive", clp->val.d);
         else if (clp->option->long_name == String("client_push"))
             tp_param.set("client_push", !clp->negated);
 
@@ -451,15 +448,15 @@ int main(int argc, char** argv) {
             pq::BuiltinHashClient client;
             pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
         } else if (tp_param["memcached"]) {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             pq::MemcachedClient client;
             pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            hr.run();
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
@@ -468,21 +465,20 @@ int main(int argc, char** argv) {
             pq::PostgresClient client;
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            if (tp_param["run"]) {
-                std::cout << "Running hacker news...\n";
-                hr.run();
-            }
+            hr.populate(tamer::event<>());
+            hr.run(tamer::event<>());
 #else
             mandatory_assert(false);
 #endif
         } else {
-            pq::PQHackerNewsShim<pq::Server> shim(server);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
-            hr.populate();
-            if (tp_param["run"]) {
-                std::cout << "Running hacker news...\n";
-                hr.run();
+            if (client_port >= 0)
+                run_hn_remote(hp, client_port);
+            else  {
+                pq::DirectClient dc(server);
+                pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
+                pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+                hr.populate(tamer::event<>());
+                hr.run(tamer::event<>());
             }
         }
     } else if (mode == mode_facebook) {

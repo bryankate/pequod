@@ -70,7 +70,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       visualize_(param["visualize"].as_b(false)),
       verbose_(param["verbose"].as_b(false)),
       celebthresh_(param["celebrity"].as_i(0)),
-      pct_active_(param["pactive"].as_i(70)),
+      pct_active_(param["pactive"].as_d(70)),
       graph_file_(param["graph"].as_s("")),
       min_followers_(param["min_followers"].as_i(10)),
       min_subs_(param["min_subscriptions"].as_i(20)),
@@ -84,10 +84,10 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
         pct_active_ = 100;
     }
     else {
-        op_weight[op_post] = param["ppost"].as_i(2);
-        op_weight[op_subscribe] = param["psubscribe"].as_i(3);
-        op_weight[op_login] = param["plogin"].as_i(5);
-        op_weight[op_logout] = param["plogout"].as_i(5);
+        op_weight[op_post] = param["ppost"].as_d(2);
+        op_weight[op_subscribe] = param["psubscribe"].as_d(3);
+        op_weight[op_login] = param["plogin"].as_d(5);
+        op_weight[op_logout] = param["plogout"].as_d(5);
 
         double ptotal = 0;
         for (uint32_t o = 0; o < op_check; ++o)
