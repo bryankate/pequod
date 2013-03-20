@@ -233,6 +233,8 @@ inline void Table::unlink_source(SourceRange* r) {
 
 template <typename F>
 void Table::modify(Str key, const SinkRange* sink, const F& func) {
+    if (!sink)
+        assert(0 && "Do you really need to call modify() with a null SinkRange? Talk to eddie");
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink ? sink->hint() : 0;
