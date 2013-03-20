@@ -69,6 +69,9 @@ class SinkRange : public ServerRangeBase {
 
     inline bool has_expired(uint64_t now) const;
 
+    inline void add_datum(Datum* d) const;
+    inline void remove_datum(Datum* d) const;
+
     void add_update(int joinpos, Str context, Str key, int notifier);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server, uint64_t now);
@@ -91,6 +94,8 @@ class SinkRange : public ServerRangeBase {
     mutable Datum* hint_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
+    mutable uintptr_t data_free_;
+    mutable local_vector<Datum*, 12> data_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server,
                    uint64_t now);
@@ -187,6 +192,26 @@ inline Str SinkRange::context() const {
 
 inline bool SinkRange::has_expired(uint64_t now) const {
     return expires_at_ && expires_at_ < now;
+}
+
+inline void SinkRange::add_datum(Datum* d) const {
+    assert(d->owner() == this);
+    uintptr_t pos = data_free_;
+    if (pos == uintptr_t(-1)) {
+        pos = data_.size();
+        data_.push_back(d);
+    } else {
+        data_free_ = (uintptr_t) data_[pos];
+        data_[pos] = d;
+    }
+    d->owner_position_ = pos;
+}
+
+inline void SinkRange::remove_datum(Datum* d) const {
+    assert(d->owner() == this
+           && (size_t) d->owner_position_ < (size_t) data_.size());
+    data_[d->owner_position_] = (Datum*) data_free_;
+    data_free_ = d->owner_position_;
 }
 
 inline bool SinkRange::need_update() const {
