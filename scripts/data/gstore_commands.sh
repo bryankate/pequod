@@ -2,6 +2,8 @@
 
 set -e
 
+DRIVERS=~/pequod/drivers
+
 function reinstall_gstore_pdos() {
   #sudo aptitude install debian-archive-keyring -y
   sudo apt-get update
@@ -43,6 +45,24 @@ function git_pull_and_make() {
 
 function gokill() {
     killall gstore_server twitter hackernews -q
+}
+
+prepare_redis_client() {
+  if [ ! -f "$DRIVERS/bin/include/hiredis" ]; then
+    mkdir $DRIVERS $DRIVERS/bin -p
+    pushd $DRIVERS
+    git clone http://github.com/redis/hiredis.git
+    cd hiredis
+    make
+    PREFIX=$DRIVERS/bin make install
+    popd
+    sudo apt-get install libev-dev --yes
+  fi
+  pushd $BENCH
+  REDIS_ONLY=1 make clean
+  REDIS_ONLY=1 make
+  popd
+  test -f /usr/include/ev++.h || sudo apt-get install libev-dev --yes
 }
 
 if test $# -lt 1 ; then
