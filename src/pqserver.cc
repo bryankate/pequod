@@ -210,10 +210,13 @@ static Clp_Option options[] = {
     { "tests", 0, 1004, 0, 0 },
     { "hn", 'h', 1005, 0, Clp_Negate },
     { "analytics", 0, 1006, 0, Clp_Negate },
+    { "builtinhash", 'b', 1008, 0, Clp_Negate },
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1009, 0, Clp_Negate },
 #endif
-    { "builtinhash", 'b', 1008, 0, Clp_Negate },
+#if HAVE_HIREDIS
+    { "redis", 0, 1010, 0, Clp_Negate},
+#endif
 
     // rpc params
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
@@ -300,6 +303,8 @@ int main(int argc, char** argv) {
             mode = mode_analytics;
         else if (clp->option->long_name == String("memcached"))
             tp_param.set("memcached", !clp->negated);
+        else if (clp->option->long_name == String("redis"))
+            tp_param.set("redis", !clp->negated);
         else if (clp->option->long_name == String("builtinhash"))
             tp_param.set("builtinhash", !clp->negated);
 
@@ -516,6 +521,17 @@ int main(int argc, char** argv) {
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
             rw.populate();
             rw.run();
+        } else if (tp_param["redis"]) {
+#if HAVE_HIREDIS
+            pq::RedisHashClient *client = new pq::RedisHashClient;
+            typedef pq::TwitterHashShim<pq::RedisHashClient> shim_type;
+            shim_type *shim = new shim_type(*client);
+            pq::RwMicro<shim_type> *rw = new pq::RwMicro<shim_type>(tp_param, *shim);
+            rw->populate();
+            rw->run();
+#else
+            mandatory_assert(0);
+#endif
         } else {
             pq::DirectClient client(server);
             pq::TwitterShim<pq::DirectClient> shim(client);
