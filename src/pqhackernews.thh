@@ -46,32 +46,24 @@ inline HackernewsRunner<S>::HackernewsRunner(S& server, HackernewsPopulator& hp)
 tamed template <typename S>
 void HackernewsRunner<S>::post_article(uint32_t author, uint32_t aid, event<> e) {
     hp_.post_article(author, aid);
-    twait {
-        server_.post_article(author, aid, Str("lalalalaxx", 10), hp_.karmas(), e);
-    }
+    twait { server_.post_article(author, aid, Str("lalalalaxx", 10), hp_.karmas(), e); }
 }
 
 tamed template <typename S>
 void HackernewsRunner<S>::post_comment(uint32_t commentor, uint32_t aid, event<> e) {
-    twait {
-        server_.post_comment(commentor, hp_.articles()[aid], aid, hp_.next_comment(),
-                             Str("calalalaxx", 10), e);
-    }
+    twait { server_.post_comment(commentor, hp_.articles()[aid], aid, hp_.next_comment(),
+                                 Str("calalalaxx", 10), e); }
 }
 
 tamed template <typename S>
-    void HackernewsRunner<S>::vote(uint32_t voter, uint32_t aid, event<> e) {
-    twait {
-        server_.vote(voter, hp_.articles()[aid], aid, hp_.karmas(), e);
-    }
+void HackernewsRunner<S>::vote(uint32_t voter, uint32_t aid, event<> e) {
+    twait { server_.vote(voter, hp_.articles()[aid], aid, hp_.karmas(), e); }
 }
 
 tamed template <typename S>
     void HackernewsRunner<S>::read_article(uint32_t aid, event<> e) {
     mandatory_assert(aid < hp_.narticles());
-    twait {
-        server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), hp_.check_karma(), e);
-    }
+    twait { server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), hp_.check_karma(), e); }
 }
 
 tamed template <typename S>
@@ -98,22 +90,24 @@ void HackernewsRunner<S>::populate(event<> e) {
         if (!hp_.populate_only())
             hp_.populate_from_files(&nv, &nc);
     } else {
-        gen.seed(13918);
-        for (aid = 0; aid < hp_.pre(); aid++) {
-            author = rng(hp_.nusers());
-            twait { post_article(author, aid, make_event()); }
-            ncomment = rng(20);
-            for (j = 1; j <= ncomment; ++j) {
-                nc++;
-                commentor = rng(hp_.nusers());
-                twait { post_comment(commentor, aid, make_event()); }
-            }
-            nvote = rng(50);
-            for (j = 0; j < nvote; ++j) {
-                voter = rng(hp_.nusers());
-                if (hp_.vote(aid, voter)) {
-                    ++nv;
-                    twait { vote(voter, aid, make_event()); }
+        twait {
+            gen.seed(13918);
+            for (aid = 0; aid < hp_.pre(); aid++) {
+                author = rng(hp_.nusers());
+                post_article(author, aid, make_event());
+                ncomment = rng(20);
+                for (j = 1; j <= ncomment; ++j) {
+                    nc++;
+                    commentor = rng(hp_.nusers());
+                    post_comment(commentor, aid, make_event());
+                }
+                nvote = rng(50);
+                for (j = 0; j < nvote; ++j) {
+                    voter = rng(hp_.nusers());
+                    if (hp_.vote(aid, voter)) {
+                        ++nv;
+                        vote(voter, aid, make_event());
+                    }
                 }
             }
         }
@@ -142,10 +136,12 @@ void HackernewsRunner<S>::run(event<> e) {
         struct rusage ru[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
         Json old_stats, stats;
-        double start;
+        double start, tm;
         uint32_t i, p, user, aid;
+        tamer::gather_rendezvous gr;
     }
     if (hp_.populate_only()) {
+        printf("Not running experiment\n");
         e();
         return;
     }
@@ -157,22 +153,24 @@ void HackernewsRunner<S>::run(event<> e) {
         p = rng(100);
         user = rng(nusers);
         if (p < hp_.post_rate()) {
-            twait { post_article(user, hp_.next_aid(), make_event()); }
+            post_article(user, hp_.next_aid(), gr.make_event());
             npost++;
         } else {
             aid = rng(hp_.narticles());
-            twait { read_article(aid, make_event()); }
+            read_article(aid, gr.make_event());
             nread++;
             if (p < hp_.vote_rate() && hp_.vote(aid, user)) {
-                twait { vote(user, aid, make_event()); }
+                vote(user, aid, gr.make_event());
                 ++nvote;
             }
             if (p < hp_.comment_rate()) {
-                twait { post_comment(user, aid, make_event()); }
+                post_comment(user, aid, gr.make_event());
                 ncomment++;
             }
         }
     }
+    twait(gr);
+    tm = (tstamp() - start) / 1000000;
     getrusage(RUSAGE_SELF, &ru[1]);
     twait {
         server_.stats(make_event(stats));
@@ -185,7 +183,6 @@ void HackernewsRunner<S>::run(event<> e) {
 	.set("ncomment", ncomment).set("nvote", nvote)
 	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime)).merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-    double tm = (tstamp() - start) / 1000000;
     std::cout << nops << " done, " << tm << " seconds, " << nops/tm << " qps\n";
     e();
 }

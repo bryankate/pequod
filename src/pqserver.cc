@@ -466,18 +466,18 @@ int main(int argc, char** argv) {
             tp_param.set("narticles", 100000);
             tp_param.set("hnusers", 50000);
         }
-        pq::HackernewsPopulator hp(tp_param);
+        pq::HackernewsPopulator* hp = new pq::HackernewsPopulator(tp_param);
         if (tp_param["builtinhash"]) {
             pq::BuiltinHashClient client;
             pq::HashHackerNewsShim<pq::BuiltinHashClient> shim(client);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
             hr.populate(tamer::event<>());
             hr.run(tamer::event<>());
         } else if (tp_param["memcached"]) {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
             pq::MemcachedClient client;
             pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
             hr.populate(tamer::event<>());
             hr.run(tamer::event<>());
 #else
@@ -487,7 +487,7 @@ int main(int argc, char** argv) {
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
             pq::PostgresClient client;
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+            pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
             hr.populate(tamer::event<>());
             hr.run(tamer::event<>());
 #else
@@ -495,11 +495,11 @@ int main(int argc, char** argv) {
 #endif
         } else {
             if (client_port >= 0)
-                run_hn_remote(hp, client_port);
+                run_hn_remote(*hp, client_port);
             else  {
                 pq::DirectClient dc(server);
                 pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
-                pq::HackernewsRunner<decltype(shim)> hr(shim, hp);
+                pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
                 hr.populate(tamer::event<>());
                 hr.run(tamer::event<>());
             }

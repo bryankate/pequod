@@ -24,9 +24,9 @@ class HashHackerNewsShim {
     void post_populate(event<> e) { (void)e; }
 
     void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, event<> e) {
-        // add h|aid/author|v
+        // add a|aid/author|v
         (void) check_karmas;
-        c_.set(String("h|") + String(aid), String(author) + String("|") + v);
+        c_.set(String("a|") + String(aid), String(author) + String("|") + v);
         // XXX: append aid to ah|author?
         e();
     }
@@ -127,7 +127,7 @@ class PQHackerNewsShim {
         server_.stats(e);
     }
   private:
-    tamed void get_karma(String user, karmas_type& check_karmas, event<> e);
+    tamed void get_karma(String user, karmas_type& check_karmas, bool check, event<> e);
 
     bool log_;
     bool mk_;
@@ -264,7 +264,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
     } else {
         // Article
         sprintf(buf1, "a|%07d%07d", author, aid);
-        twait { server_.get(Str(buf1, 16), make_event(value)); }
+        twait { server_.get(buf1, make_event(value)); }
         if (log_)
             std::cout << "read " << buf1 << ":" << value << "\n";
         
@@ -276,7 +276,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         for (; bit != scan_result.end(); ++bit) {
             if (log_)
                 std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-            twait { get_karma(extract_spkey(3, bit->key()), check_karmas, make_event()); }
+            twait { get_karma(extract_spkey(3, bit->key()), check_karmas, check, make_event()); }
         }
         
         // Votes
@@ -290,12 +290,11 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
 }
 
 tamed template <typename S>
-void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, event<> e) {
+void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool check, event<> e) {
     tvars {
         char buf3[128];
         String value;
         uint32_t karma;
-        uint32_t my_karma;
         char buf1[128];
         char buf2[128];
         uint32_t karmact, local_karma;
@@ -309,12 +308,8 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, even
         sprintf(buf3, "k|%s", user.c_str());
         twait { server_.get(Str(buf3, 9), make_event(value)); }
         karma = atoi(value.c_str());
-        local_karma = check_karmas[user.to_i()];
-        mandatory_assert(karma == local_karma && "Karma mismatch");
-        if (log_)
-            std::cout << "  k " << user << ":" << karma << "\n";
     } else {
-        karmact = 0;
+        karma = 0;
         sprintf(buf1, "a|%s0", user.c_str());
         sprintf(buf2, "a|%s}", user.c_str());
         twait { server_.scan(buf1, buf2, make_event(scan_result)); }
@@ -325,16 +320,17 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, even
             sprintf(buf1, "v|%s|", full_aid.c_str());
             sprintf(buf2, "v|%s}", full_aid.c_str());
             twait { server_.count(buf1, buf2, make_event(votect)); }
-            karmact+=votect;
+            karma+=votect;
             if (log_)
                 std::cout << "      v " << full_aid << ":" << votect << "\n";
             votect = 0;
         }
-        local_karma = check_karmas[user.to_i()];
-        mandatory_assert(karmact == local_karma && "Karma mismatch");
-        if (log_)
-            std::cout << "  k " << user << ":" << karmact << "\n";
     }
+    local_karma = check_karmas[user.to_i()];
+    if (check)
+        mandatory_assert(karma == local_karma && "Karma mismatch");
+    if (log_)
+        std::cout << "  k " << user << ":" << karma << "\n";
     e();
 }
 
@@ -355,6 +351,7 @@ void PQHackerNewsShim<S>::post_article(uint32_t author, uint32_t aid, const Stri
     if (push_) {
         sprintf(buf, "k|%07d", author);
         char buf1[128];
+        // XXX: check_karmas is empty if we are in run_only mode!
         sprintf(buf1, "%07d", check_karmas[author]);
         twait { server_.insert(Str(buf, 9), Str(buf1, 7), e); }
         if (log_)
@@ -376,6 +373,7 @@ void PQHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid,
     if (push_) {
         sprintf(buf, "k|%07d", author);
         char buf1[128];
+        // XXX: check_karmas is empty if we are in run_only mode!
         sprintf(buf1, "%07d", check_karmas[author]);
         twait { server_.insert(Str(buf, 9), Str(buf1, 7), make_event()); }
         if (log_)
