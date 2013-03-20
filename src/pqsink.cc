@@ -36,7 +36,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
     valid_ranges_.insert(va.sink);
-    validate_step(va, 0);
+    validate_step(va, 0, 0);
 }
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
@@ -60,8 +60,9 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
         validate_one(last_valid, last, server, now);
 }
 
-void JoinRange::validate_step(validate_args& va, int joinpos) {
-    ++join_->source_table(joinpos)->nvalidate_;
+void JoinRange::validate_step(validate_args& va, int joinpos,
+                              ServerStore::const_iterator* hint) {
+    Table* sourcet = join_->source_table(joinpos);
 
     uint8_t kf[128], kl[128];
     int kflen = join_->expand_first(kf, join_->source(joinpos),
@@ -74,48 +75,69 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     // expanded yet.
     // XXX PERFORMANCE this is not always necessary
     // XXX For now don't do this if the join is recursive
-    if (table_name(Str(kf, kflen)) != join_->sink().table_name())
-        join_->source_table(joinpos)->validate(Str(kf, kflen), Str(kl, kllen),
-                                               va.now);
+    if (sourcet->name() != join_->sink().table_name())
+        sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
-    auto it = va.server->lower_bound(Str(kf, kflen));
-    auto ilast = va.server->lower_bound(Str(kl, kllen));
+    if (hint && (*hint)->key() >= Str(kl, kllen))
+        ++sourcet->nvalidate_skipped_;
 
-    Match::state mstate(va.match.save());
-    const Pattern& pat = join_->source(joinpos);
+    else {
+        auto it = sourcet->lower_bound(Str(kf, kflen));
+        auto ilast = sourcet->lower_bound(Str(kl, kllen));
 
-    // figure out whether match is necessary
-    int mopt = pat.check_optimized_match(va.match);
+        Match::state mstate(va.match.save());
+        const Pattern& pat = join_->source(joinpos);
 
-    if (mopt < 0) {
-        // match not optimizable
-        for (; it != ilast; ++it)
-            if (it->key().length() == pat.key_length()) {
-                if (pat.match(it->key(), va.match)) {
+        // figure out whether match is necessary
+        int mopt = pat.check_optimized_match(va.match);
+        ++sourcet->nvalidate_;
+
+        if (mopt < 0) {
+            // match not optimizable
+            for (; it != ilast; ++it)
+                if (it->key().length() == pat.key_length()) {
+                    if (pat.match(it->key(), va.match)) {
+                        if (r)
+                            r->notify(it.operator->(), String(), va.notifier);
+                        else
+                            validate_step(va, joinpos + 1, 0);
+                    }
+                    va.match.restore(mstate);
+                }
+        } else if (join_->check_increasing_match(joinpos, va.match)) {
+            // match optimizable, accesses next table in strictly increasing order
+            assert(!r);
+            ++sourcet->nvalidate_increasing_;
+            ++sourcet->nvalidate_optimized_;
+            ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
+            ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
+            for (; it != ilast && next_hint != end_next; ++it)
+                if (it->key().length() == pat.key_length()) {
+                    pat.assign_optimized_match(it->key(), mopt, va.match);
+                    validate_step(va, joinpos + 1, &next_hint);
+                    va.match.restore(mstate);
+                }
+        } else {
+            // match optimizable
+            ++sourcet->nvalidate_optimized_;
+            for (; it != ilast; ++it)
+                if (it->key().length() == pat.key_length()) {
+                    pat.assign_optimized_match(it->key(), mopt, va.match);
                     if (r)
                         r->notify(it.operator->(), String(), va.notifier);
                     else
-                        validate_step(va, joinpos + 1);
+                        validate_step(va, joinpos + 1, 0);
+                    va.match.restore(mstate);
                 }
-                va.match.restore(mstate);
-            }
-    } else {
-        // match optimizable
-        ++join_->source_table(joinpos)->nvalidate_optimized_;
-        for (; it != ilast; ++it)
-            if (it->key().length() == pat.key_length()) {
-                pat.assign_optimized_match(it->key(), mopt, va.match);
-                if (r)
-                    r->notify(it.operator->(), String(), va.notifier);
-                else
-                    validate_step(va, joinpos + 1);
-                va.match.restore(mstate);
-            }
+        }
+
+        if (hint)
+            *hint = ilast;
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
@@ -227,7 +249,7 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
             iu->notifier_};
     join->assign_context(va.match, context_);
     join->assign_context(va.match, iu->context_);
-    jr_->validate_step(va, iu->joinpos_ + 1);
+    jr_->validate_step(va, iu->joinpos_ + 1, 0);
 
     if (first == iu->ibegin())
         iu->ibegin_ = last;

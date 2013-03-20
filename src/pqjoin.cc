@@ -81,6 +81,27 @@ int Pattern::check_optimized_match(const Match& m) const {
     return 0;
 }
 
+bool Join::check_increasing_match(int si, const Match& m) const {
+    // Are all keys matching pattern source(si + 1) at match m
+    // less than all keys matching pattern source(si + 1) at a match m'
+    // which was obtained from later keys in source(si)?
+
+    assert(si >= 0 && si < npat_ - 1);
+    if (si == npat_ - 2)
+        return false;
+    unsigned prev_changing_slots = pat_mask_[si + 1] & pat_mask_[si + 2]
+        & ~known_mask(m);
+    if (prev_changing_slots == 0)
+        return false;
+    const Pattern& next = pat_[si + 2];
+    for (const uint8_t* p = next.pat_; p != next.pat_ + next.plen_; ++p)
+        if (*p >= 128
+            && m.known_length(*p - 128) != slotlen_[*p - 128]
+            && (prev_changing_slots & (1 << (*p - 128))))
+            return true;
+    return true;
+}
+
 bool operator==(const Pattern& a, const Pattern& b) {
     return a.plen_ == b.plen_
         && a.klen_ == b.klen_
