@@ -1,13 +1,14 @@
 #ifndef HN_CLIENT_HH
 #define HN_CLIENT_HH
 #include "check.hh"
-#include "tamer/tamer.hh"
-#include "tamer/event.hh"
+#include <tamer/tamer.hh>
 
 namespace pq {
 
 typedef const std::vector<uint32_t> karmas_type;
 using tamer::make_event;
+using tamer::event;
+using tamer::preevent;
 
 template <typename C>
 class HashHackerNewsShim {
