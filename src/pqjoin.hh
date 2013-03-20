@@ -129,6 +129,8 @@ class Join {
     inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
     inline Str sink_key() const;
 
+    bool check_increasing_match(int si, const Match& m) const;
+
     int expand_first(uint8_t* buf, const Pattern& pat,
                      Str sink_first, Str sink_last, const Match& match) const;
     String expand_first(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
