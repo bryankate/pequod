@@ -163,7 +163,8 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
         start = "k|";
         end = "k}";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
-    } else if (ma) {
+    }
+    if (ma) {
         // Materialize all articles
         printf("Materializing all article pages\n");
         start = "ma|";
@@ -183,10 +184,18 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
             "c|<author><seqid>|<cid>|<commenter> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[2])); }
 
+    } 
+    if (ma && !mk) {
         // Materialize karma inline
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
             "using c|<aid>|<cid>|<commenter> "
             "count v|<commenter><seq:7>|<voter:7>";
+        twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
+    }
+    if (ma && mk) {
+        // Materialize karma inline
+        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
+            "k|<commenter>";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     e();
@@ -203,7 +212,7 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
         end = "k}";
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
-            std::cout << ": print validated [" << start << "," << end << ")\n";
+            std::cout << ": print validated karma range [" << start << "," << end << ")\n";
             auto bit = scan_result.begin();
             for (; bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
@@ -215,7 +224,7 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
         end = "ma}";
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
-            std::cout << ": print validated [" << start << "," << end << ")\n";
+            std::cout << ": print validated ma range [" << start << "," << end << ")\n";
             auto bit = scan_result.begin();
             for (; bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
