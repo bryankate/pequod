@@ -3,6 +3,11 @@
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
+#if HAVE_HIREDIS
+#include <hiredis/hiredis.h>
+#include <hiredis/async.h>
+#include <hiredis/adapters/libev.h>
+#endif
 #include <unordered_set>
 #include "str.hh"
 #include "hashtable.hh"
@@ -62,6 +67,71 @@ class MemcachedClient {
     }
     memcached_st *c_;
     time_t expire_at_;
+};
+#endif
+
+#if HAVE_HIREDIS
+class RedisClient {
+  public:
+    struct RedisArg {
+        RedisClient *c_;
+        tamer::event<Str> e_;
+        explicit RedisArg(RedisClient* c) : c_(c) {}
+        RedisArg(RedisClient* c, tamer::event<Str> e) : c_(c), e_(e) {}
+    };
+
+    RedisClient() : nsent_(0), ndone_(0), w_(100) {
+        c_ = redisAsyncConnect("localhost", 6379);
+        redisLibevAttach(EV_DEFAULT_ c_);
+    }
+    void get(const Str k, int32_t offset, tamer::event<Str> e) {
+        doone(getcb, new RedisArg(this, e), "GETRANGE %b %d -1", k.data(), k.length(), offset);
+    }
+    void set(const Str k, const Str v) {
+        doone(checkok, new RedisArg(this), "SET %b %b", k.data(), k.length(), v.data(), v.length());
+    }
+    void append(const Str k, const Str v) {
+        doone(checkok, new RedisArg(this), "APPEND %b %b", k.data(), k.length(), v.data(), v.length());
+    }
+    void done_get(Str v) {
+    }
+  private:
+    static void checkok(redisAsyncContext* c, void* r, void* privdata) {
+        mandatory_assert(c && r);
+        redisReply* reply = reinterpret_cast<redisReply*>(r);
+        mandatory_assert(reply->type == REDIS_REPLY_STATUS && reply->integer == REDIS_OK);
+        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
+        ra->c_->onedone();
+        delete ra;
+    }
+    static void getcb(redisAsyncContext* c, void* r, void* privdata) {
+        mandatory_assert(c && r);
+        redisReply* reply = reinterpret_cast<redisReply*>(r);
+        mandatory_assert(reply->type == REDIS_REPLY_STRING);
+        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
+        ra->e_(Str(reply->str, reply->len));
+        ra->c_->onedone();
+        delete ra;
+    }
+    void onedone() {
+	++ndone_;
+	if (nsent_ - ndone_ <= w_ / 2)
+            ev_unloop (EV_DEFAULT_ EVUNLOOP_ONE);
+    }
+    void doone(redisCallbackFn *fn, void *privdata, const char *format, ...) {
+	if (nsent_ - ndone_ > w_)
+	    ev_loop(EV_DEFAULT_ 0);
+        ++nsent_;
+	va_list ap;
+        va_start(ap, format);
+        redisvAsyncCommand(c_, fn, privdata, format, ap); 
+	va_end(ap);
+    }
+    char buf_[4096];
+    int nsent_;
+    int ndone_;
+    int w_;
+    redisAsyncContext *c_;
 };
 #endif
 
