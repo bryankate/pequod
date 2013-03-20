@@ -78,6 +78,9 @@ class SinkRange : public ServerRangeBase {
 
     friend std::ostream& operator<<(std::ostream&, const SinkRange&);
 
+    static uint64_t invalidate_hit_keys;
+    static uint64_t invalidate_miss_keys;
+
   public:
     rblinks<SinkRange> rblinks_;
   private:

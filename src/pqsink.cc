@@ -6,6 +6,8 @@
 namespace pq {
 
 uint64_t ServerRangeBase::allocated_key_bytes = 0;
+uint64_t SinkRange::invalidate_hit_keys = 0;
+uint64_t SinkRange::invalidate_miss_keys = 0;
 
 JoinRange::JoinRange(Str first, Str last, Join* join)
     : ServerRangeBase(first, last), join_(join) {
@@ -240,10 +242,13 @@ void SinkRange::invalidate() {
 
         auto endit = t->lower_bound(iend());
         for (auto it = t->lower_bound(ibegin()); it != endit; )
-            if (it->owner() == this)
+            if (it->owner() == this) {
                 it = t->invalidate_erase(it);
-            else
+                ++invalidate_hit_keys;
+            } else {
                 ++it;
+                ++invalidate_miss_keys;
+            }
 
         ibegin_ = Str();
         if (refcount_ == 0)

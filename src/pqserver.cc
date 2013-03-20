@@ -158,16 +158,23 @@ Json Server::stats() const {
         sink_ranges_size += sink_size;
     }
 
-    return Json().set("store_size", store_size)
+    Json answer;
+    answer.set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
 	.set("join_ranges_size", join_ranges_size)
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("server_max_rss_mb", ru.ru_maxrss / 1024)
-        .set("source_allocated_key_bytes", SourceRange::allocated_key_bytes)
-        .set("sink_allocated_key_bytes", ServerRangeBase::allocated_key_bytes)
-        .set("tables", tables);
+        .set("server_max_rss_mb", ru.ru_maxrss / 1024);
+    if (SourceRange::allocated_key_bytes)
+        answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
+    if (ServerRangeBase::allocated_key_bytes)
+        answer.set("sink_allocated_key_bytes", ServerRangeBase::allocated_key_bytes);
+    if (SinkRange::invalidate_hit_keys)
+        answer.set("invalidate_hits", SinkRange::invalidate_hit_keys);
+    if (SinkRange::invalidate_miss_keys)
+        answer.set("invalidate_misses", SinkRange::invalidate_miss_keys);
+    return answer.set("tables", tables);
 }
 
 void Table::print_sources(std::ostream& stream) const {
