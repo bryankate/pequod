@@ -39,7 +39,7 @@ class ResultAnalyzer:
             f = open(fname, "w")
 
         graphs = []
-        if self.ename.startswith("rwmicro") or self.ename.startswith("ehash") or self.ename.startswith("client_push"):
+        if self.ename.startswith("rwmicro") or self.ename.startswith("ehash") or self.ename.startswith("client_push") or self.ename.startswith('remote_client_push'):
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "actual_prefresh"))
         elif self.ename == "policy":

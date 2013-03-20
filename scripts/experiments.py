@@ -68,3 +68,23 @@ for nfollower in [1, 16, 32]:
     ename = "client_push_%d" % nfollower
     exps.append({'name': ename, 'defs': client_push, 'xlabel' : 'refresh ratio (%)'})
 
+# remote_client_push
+cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --client=9901 "
+prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
+for nfollower in [1, 16, 32]:
+    client_push = []
+    cmd = cmdbase + ("--nfollower=%d" % nfollower)
+    for pr in prefresh:
+        client_push.append(
+            {'plotgroup': "remote_push",
+             'plotkey' : pr,
+             'server' : "./obj/pqserver -kl9901",
+             'cmd': "%s --prefresh=%d" % (cmd, pr)})
+        client_push.append(
+            {'plotgroup': "remote_client_push",
+             'plotkey' : pr,
+             'server' : "./obj/pqserver -kl9901",
+             'cmd': "%s --prefresh=%d --client_push" % (cmd, pr)})
+    ename = "remote_client_push_%d" % nfollower
+    exps.append({'name': ename, 'defs': client_push, 'xlabel' : 'refresh ratio (%)'})
+
