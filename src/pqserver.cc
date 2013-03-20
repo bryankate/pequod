@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("prefresh"))
             tp_param.set("prefresh", clp->val.d);
         else if (clp->option->long_name == String("nfollower"))
-            tp_param.set("nfollower", clp->val.i);
+            tp_param.set("nfollower", clp->val.d);
         else if (clp->option->long_name == String("pprerefresh"))
             tp_param.set("pprerefresh", clp->val.d);
         else if (clp->option->long_name == String("pactive"))
