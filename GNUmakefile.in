@@ -81,6 +81,7 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 # make sure tamed versions get built first
 $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
+$(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
 $(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
@@ -121,6 +122,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
         $(OBJDIR)/pqtwitternew.o \
+	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
