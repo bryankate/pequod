@@ -129,7 +129,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqserverloop.o \
 	$(OBJDIR)/pqunit.o \
 	$(OBJDIR)/mpfd.o \
-	$(OBJDIR)/pqremoteclient.o
+	$(OBJDIR)/pqremoteclient.o \
+	$(OBJDIR)/redisclient.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)

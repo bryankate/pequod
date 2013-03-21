@@ -13,6 +13,7 @@
 #include "json.hh"
 #include "time.hh"
 #include "check.hh"
+#include "redisclient.hh"
 
 namespace  {
 
@@ -971,6 +972,30 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
+void test_redis() {
+    pq::RedisSyncClient client;
+    client.set("hello", "world");
+    String v;
+    client.get("hello", v);
+    CHECK_EQ(v, "world");
+
+
+    client.get("k2", v);
+    CHECK_EQ(v, "");
+    int newlen = -1;
+    client.append("k2", "abc", newlen);
+    CHECK_EQ(newlen, 3);
+
+    client.append("k2", "def", newlen);
+    CHECK_EQ(newlen, 6);
+
+    client.get("k2", v);
+    CHECK_EQ(v, "abcdef");
+
+    client.getrange("k2", 1, -1, v);
+    CHECK_EQ(v, "bcdef");
+}
+
 } // namespace
 
 void unit_tests(const std::set<String> &testcases) {
@@ -992,6 +1017,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
+    ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
