@@ -1,0 +1,107 @@
+// -*- mode: c++ -*-
+#ifndef PEQUOD_REDIS_FD_HH
+#define PEQUOD_REDIS_FD_HH 1
+#include <tamer/tamer.hh>
+#include <tamer/fd.hh>
+#include <sys/uio.h>
+#include "redisclient.hh"
+#include "json.hh"
+#include "string.hh"
+#include <vector>
+#include <deque>
+
+class redis_fd {
+  public:
+    inline redis_fd(tamer::fd fd);
+    ~redis_fd();
+
+    inline void call(const Str j, tamer::event<String> reply);
+    template <typename R>
+    inline void pace(tamer::preevent<R> done);
+
+    inline Json status() const;
+
+  private:
+    void read(tamer::event<String> receiver);
+    void write(const Str req);
+
+    tamer::fd fd_;
+
+    enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
+    struct wrelem {
+        StringAccum sa;
+        int pos;
+    };
+    std::deque<wrelem> wrelem_;
+    size_t wrsize_;
+    bool wrblocked_;
+    tamer::event<> wrwake_;
+    tamer::event<> wrkill_;
+
+    enum { rdcap = 1 << 17 };
+    String rdbuf_;
+    size_t rdpos_;
+    size_t rdlen_;
+    bool rdblocked_;
+    pq::RedisReplyParser rdparser_;
+
+    std::deque<tamer::event<String> > rdwait_;
+    tamer::event<> rdwake_;
+    tamer::event<> rdkill_;
+
+    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 10 };
+    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 9 };
+    tamer::event<> pacer_;
+
+    void check() const;
+    bool read_once(String* receiver);
+    void write_once();
+    inline bool need_pace() const;
+    inline bool pace_recovered() const;
+    tamed void writer_coroutine();
+    tamed void reader_coroutine();
+};
+
+inline redis_fd::redis_fd(tamer::fd fd)
+    : fd_(fd), wrsize_(0), wrblocked_(false),
+      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
+      rdblocked_(false) {
+    wrelem_.push_back(wrelem());
+    wrelem_.back().sa.reserve(wrcap);
+    wrelem_.back().pos = 0;
+
+    writer_coroutine();
+    reader_coroutine();
+}
+
+inline void redis_fd::call(const Str req, tamer::event<String> done) {
+    write(req);
+    read(done);
+}
+
+inline bool redis_fd::need_pace() const {
+    return wrsize_ > wrpacelim && rdwait_.size() > rdpacelim;
+}
+
+inline bool redis_fd::pace_recovered() const {
+    return wrsize_ <= wrpacerecover && rdwait_.size() <= rdpacerecover;
+}
+
+template <typename R>
+inline void redis_fd::pace(tamer::preevent<R> done) {
+    if (need_pace())
+        pacer_ = tamer::distribute(pacer_, std::move(done));
+    else
+        done();
+}
+
+inline Json redis_fd::status() const {
+    //check();
+    return Json().set("buffered_write_bytes", wrsize_)
+        .set("buffered_read_bytes", rdlen_ - rdpos_)
+        .set("waiting_readers", rdwait_.size());
+}
+
+tamed void test_redis_async();
+
+#endif

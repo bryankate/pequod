@@ -14,6 +14,7 @@
 #include "time.hh"
 #include "check.hh"
 #include "redisclient.hh"
+#include "redisfd.hh"
 
 namespace  {
 
@@ -1018,6 +1019,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_EXP_TEST(test_redis);
+    ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

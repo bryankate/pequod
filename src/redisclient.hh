@@ -5,14 +5,14 @@
 
 namespace pq {
 
-class ReplyParser {
+class RedisReplyParser {
   public:
-    ReplyParser();
+    RedisReplyParser();
     int consume(const char* buf, size_t length);
     bool complete();
     void reset();
     bool has_value();
-    const String& value();
+    String& value();
   private:
     enum { Type, ReadVStr, VStrLF, BVStr, BVStrCR, BVStrLF, Done};
     char type_;

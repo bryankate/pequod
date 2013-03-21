@@ -18,11 +18,11 @@ PROTOGENDIR = $(OBJDIR)
 
 TAMER_COMMIT = 508f6ceecac60e637f29752e11a41c89e1429622
 
-INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR) -I./drivers/bin/include
-LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @REDIS_LIB@
+INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
+LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
-LDFLAGS += -L/usr/local/lib -L/opt/local/lib -L./drivers/bin/lib
+LDFLAGS += -L/usr/local/lib -L/opt/local/lib
 
 @DEFAULT_MALLOC_ASSIGNMENT@
 ifeq ($(shell uname), Darwin)
@@ -92,8 +92,12 @@ $(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/src/pqtwitternew.thh
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/hnshim.hh: $(top_srcdir)/src/hnshim.thh
 $(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
+$(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
+$(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
+$(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
+$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
@@ -130,7 +134,10 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqunit.o \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqremoteclient.o \
-	$(OBJDIR)/redisclient.o
+	$(OBJDIR)/redisclient.o \
+	$(OBJDIR)/redisfd.o \
+	$(OBJDIR)/hashclient.o \
+	$(OBJDIR)/pqrwmicro.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)

@@ -84,7 +84,7 @@ void RedisSyncClient::append(const String& k, const String& v, int& newlen) {
 }
 
 void RedisSyncClient::read_reply(String& v) {
-    ReplyParser p;
+    RedisReplyParser p;
     char buf[4096];
     while (!p.complete()) {
         int n = read(fd_, buf, sizeof(buf));
@@ -122,26 +122,27 @@ void RedisSyncClient::read_till_cr(String& v) {
     mandatory_assert(c == '\n');
 }
 
-ReplyParser::ReplyParser() : state_(Type) {
+RedisReplyParser::RedisReplyParser() : state_(Type) {
 }
 
-void ReplyParser::reset() {
+void RedisReplyParser::reset() {
     v_ = String::make_empty();
+    state_ = Type;
 }
 
-bool ReplyParser::complete() {
+bool RedisReplyParser::complete() {
     return state_ == Done;
 }
 
-const String& ReplyParser::value() {
+String& RedisReplyParser::value() {
     return v_;
 }
 
-bool ReplyParser::has_value() {
+bool RedisReplyParser::has_value() {
     return type_ == '$' && bstr_len_ >= 0;
 }
 
-int ReplyParser::consume(const char* buf, size_t length) {
+int RedisReplyParser::consume(const char* buf, size_t length) {
     mandatory_assert(state_ != Done);
     const char* p = buf;
     const char* const e = buf + length;

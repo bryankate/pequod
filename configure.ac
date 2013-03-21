@@ -290,13 +290,6 @@ AC_CHECK_DECLS([clock_gettime], [], [], [#if HAVE_TIME_H
 AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_CHECK_FUNCS([clock_gettime])
 
-AC_CHECK_FILE([./drivers/bin/include/hiredis/hiredis.h], [ac_cv_have_hiredis=yes])
-if test "$ac_cv_have_hiredis" = "yes"; then
-    AC_DEFINE([HAVE_HIREDIS], [1], [Define if hiredis is installed])]
-    REDIS_LIB="-L./drivers/bin/lib -lhiredis -Wl,-rpath,./drivers/bin/lib"
-fi
-AC_SUBST(REDIS_LIB)
-
 AC_ARG_ENABLE([superpage],
     [AS_HELP_STRING([--disable-superpage],
 	    [Disable superpage support])],
