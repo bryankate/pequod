@@ -60,8 +60,9 @@ class ResultAnalyzer:
                     raise Exception('%s too long' % x)
             print >> f, "#", "".join([("%20d" % (x + 1)) for x in range(len(names))])
             print >> f, "#", "".join(names)
-            # sort by plotkey
-            points = sorted(points)
+            # sort by plotkey (only if a number)
+            if len(points) and isinstance(points[0], (int, long, float)):
+                points = sorted(points)
             for p in points:
                 print >> f, " ", "".join([(("%20.2f" % x[1]) if isinstance(x[1], (int, long, float)) else x[1]) for x in p])
             print >> f
