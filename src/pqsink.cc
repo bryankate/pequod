@@ -88,7 +88,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
 
     else {
         auto it = sourcet->lower_bound(Str(kf, kflen));
-        auto ilast = sourcet->lower_bound(Str(kl, kllen));
+        auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
@@ -99,7 +99,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
 
         if (mopt < 0) {
             // match not optimizable
-            for (; it != ilast; ++it)
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     if (pat.match(it->key(), va.match)) {
                         if (r)
@@ -116,7 +116,8 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
             ++sourcet->nvalidate_optimized_;
             ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
             ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
-            for (; it != ilast && next_hint != end_next; ++it)
+            for (; it != itend && next_hint != end_next &&
+                     it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     validate_step(va, joinpos + 1, &next_hint);
@@ -125,7 +126,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         } else {
             // match optimizable
             ++sourcet->nvalidate_optimized_;
-            for (; it != ilast; ++it)
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     if (r)
@@ -137,7 +138,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         }
 
         if (hint)
-            *hint = ilast;
+            *hint = it;
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
