@@ -524,16 +524,14 @@ int main(int argc, char** argv) {
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
-            rw.populate();
-            rw.run();
+            rw.safe_run();
         } else if (tp_param["redis"]) {
 #if HAVE_HIREDIS
             pq::RedisHashClient *client = new pq::RedisHashClient;
             typedef pq::TwitterHashShim<pq::RedisHashClient> shim_type;
             shim_type *shim = new shim_type(*client);
             pq::RwMicro<shim_type> *rw = new pq::RwMicro<shim_type>(tp_param, *shim);
-            rw->populate();
-            rw->run();
+            rw->safe_run();
 #else
             mandatory_assert(0);
 #endif
@@ -541,8 +539,7 @@ int main(int argc, char** argv) {
             pq::DirectClient client(server);
             pq::TwitterShim<pq::DirectClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
-            rw.populate();
-            rw.run();
+            rw.safe_run();
         }
     }
 

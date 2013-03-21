@@ -29,9 +29,10 @@ class RwMicro {
           pprerefresh_(param["pprerefresh"].as_i(0)),
           client_push_(param["client_push"].as_b(false)) {
     }
-    tamed inline void populate();
-    tamed inline void run();
+    tamed void safe_run();
   private:
+    tamed inline void populate(tamer::event<> e);
+    tamed inline void run(tamer::event<> e);
     tamed inline void post(uint32_t poster, size_t time, Str value, tamer::event<> e);
 
     int prefresh_;
@@ -64,7 +65,13 @@ void RwMicro<S>::post(uint32_t u, size_t time, Str value, tamer::event<> e) {
 }
 
 tamed template <typename S>
-void RwMicro<S>::populate() {
+void RwMicro<S>::safe_run() {
+    twait { this->populate(make_event()); }
+    twait { this->run(make_event()); }
+}
+
+tamed template <typename S>
+void RwMicro<S>::populate(tamer::event<> e) {
     tvars { size_t nread = 0, time = 1; }
     srandom(1328);
     twait {
@@ -95,10 +102,11 @@ void RwMicro<S>::populate() {
                 server_.timeline_add_count(i, uint32_t(0), time, make_event(nread));
         }
     }
+    e();
 }
 
 tamed template <typename S>
-void RwMicro<S>::run() {
+void RwMicro<S>::run(tamer::event<> e) {
     tvars {
         int time = 100000000, npost = 0, nrefresh = 0;
         size_t nread = 0;
@@ -168,6 +176,7 @@ void RwMicro<S>::run() {
         .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     delete[] loadtime;
+    e();
 }
 
 };
