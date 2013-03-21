@@ -91,7 +91,8 @@ for nfollower in [1, 16, 32]:
 # real_twitter
 # we will set a post limit of 150K to stop the experiment
 # keep the post:check ratio at 1:65
-cmdbase = "./obj/pqserver --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
+cmdbase = "./obj/pqserver --twitternew --nusers=100000 --pactive=70 --postlimit=15000 --duration=100000000"
+#cmdbase = "./obj/pqserver --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
 modes = [["autopush", ""], ["pull", "--pull"], ["push", "--push"]]
 real_twitter = []
 for m in modes:
@@ -103,6 +104,7 @@ for m in modes:
                          'plotkey' : "login",
                          'server' : "./obj/pqserver -kl7777",
                          'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 0)});
+    '''
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "subscribe",
                          'server' : "./obj/pqserver -kl7777",
@@ -111,5 +113,6 @@ for m in modes:
                          'plotkey' : "all",
                          'server' : "./obj/pqserver -kl7777",
                          'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 10)});
+    '''
 exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
     
