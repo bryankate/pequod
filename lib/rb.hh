@@ -889,10 +889,10 @@ inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const 
     T* n = r_.root_;
     T* bound = 0;
     while (n) {
-        bool cmp = compare(key, *n);
-        if (cmp)
+        bool cmp = compare(*n, key);
+        if (!cmp)
             bound = n;
-        n = n->rblinks_.c_[!cmp].node();
+        n = n->rblinks_.c_[cmp].node();
     }
     return bound;
 }
