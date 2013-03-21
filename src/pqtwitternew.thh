@@ -89,6 +89,8 @@ class TwitterNewPopulator {
     inline uint32_t rand_user(generator_type& gen) { return uni_dist_(gen); }
     inline uint32_t rand_user_post(generator_type& gen) { return post_dist_(gen); }
 
+    static const char tweet_data[];
+
   private:
     uint32_t nusers_;
     uint32_t duration_;
@@ -152,7 +154,7 @@ class TwitterNewShim {
     inline void mark_celebrity(uint32_t poster, tamer::preevent<R> done);
     template <typename R>
     inline void post(uint32_t poster, uint32_t time, const String& value, bool celeb, tamer::preevent<R> e);
-    tamed void initialize(TwitterNewPopulator& tp, tamer::event<> e);
+    tamed void initialize(bool push, bool pull, bool pull_celeb, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -178,21 +180,22 @@ TwitterNewShim<S>::TwitterNewShim(S& server)
 }
 
 tamed template <typename S>
-void TwitterNewShim<S>::initialize(TwitterNewPopulator& tp, tamer::event<> done) {
+void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
+                                   tamer::event<> done) {
     tvars { Json j, cj; }
-    if (tp.push())
+    if (push)
         done();
     else {
         twait {
             server_.add_join("t|", "t}",
                              "t|<user_id>|<time>|<poster_id> = "
                              "copy p|<poster_id>|<time> " +
-                             String((tp.pull()) ? "pull " : "") +
+                             String((pull) ? "pull " : "") +
                              "using s|<user_id>|<poster_id> "
                              "where user_id:4n, time:4n, poster_id:4n",
                              make_event(j));
 
-            if (tp.pull_celeb())
+            if (pull_celeb)
                 server_.add_join("t|", "t}",
                                  "t|<user_id>|<time>|<poster_id> = "
                                  "copy cp|<poster_id>|<time> pull "
@@ -356,7 +359,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         u = tp_.rand_user_post(gen);
         if (tp_.log())
             printf("%d: post p|%08d|%010d\n", currtime_, u, currtime_);
-        post(u, currtime_, String("?!?(*#"), tp_.mutable_user(u).celeb(), gr.make_event());
+
+        post(u, currtime_, String(TwitterNewPopulator::tweet_data, 5),
+             tp_.mutable_user(u).celeb(), gr.make_event());
         ++tp_.mutable_user(u).nbackpost_;
         ++currtime_;
 
@@ -364,7 +369,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     }
     twait(gr);
 
-    twait { server_.initialize(tp_, make_event()); }
+    twait { server_.initialize(tp_.push(), tp_.pull(), tp_.pull_celeb(), make_event()); }
     done();
 }
 
@@ -421,11 +426,12 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         switch(tp_.rand_op(gen)) {
             case op_post:
                 user = &tp_.mutable_user(tp_.rand_user_post(gen));
-
                 if (tp_.log())
                     printf("%d: post p|%08d|%010d\n", currtime_, user->uid(), currtime_);
 
-                post(user->uid(), currtime_, String("?!?#*"), user->celeb(), gr.make_event());
+                post(user->uid(), currtime_, String(TwitterNewPopulator::tweet_data, 5),
+                     user->celeb(), gr.make_event());
+
                 ++user->npost_;
                 ++npost;
                 break;

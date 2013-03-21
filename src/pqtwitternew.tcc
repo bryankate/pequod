@@ -18,6 +18,11 @@ using std::ostream;
 using std::ofstream;
 
 namespace pq {
+const char TwitterNewPopulator::tweet_data[] = "................................"
+                                               "................................"
+                                               "................................"
+                                               "................................"
+                                               "................................";
 
 TwitterUser::TwitterUser()
     : nbackpost_(0), npost_(0), nsubscribe_(0), nlogout_(0),
@@ -77,6 +82,8 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       min_subs_(param["min_subscriptions"].as_i(20)),
       max_subs_(param["max_subscriptions"].as_i(200)),
       shape_(param["shape"].as_d(55)) {
+
+    assert(!(push_ && pull_));
 
     vector<double> op_weight(n_op, 0);
 
