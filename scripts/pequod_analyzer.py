@@ -45,6 +45,9 @@ class ResultAnalyzer:
         elif self.ename == "policy":
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime(second)", 
                                   "real_time", xcolumnName = "inactive"))
+        elif self.ename.startswith == "real_twitter":
+            graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime (s)", 
+                                  "real_time", xcolumnName = "real_time"))
        
         print >> f, "#", header
         plotgroups = sorted(self.exp.keys())
@@ -57,10 +60,11 @@ class ResultAnalyzer:
                     raise Exception('%s too long' % x)
             print >> f, "#", "".join([("%20d" % (x + 1)) for x in range(len(names))])
             print >> f, "#", "".join(names)
-            # sort by plotkey
-            points = sorted(points)
+            # sort by plotkey (only if a number)
+            if len(points) and isinstance(points[0], (int, long, float)):
+                points = sorted(points)
             for p in points:
-                print >> f, " ", "".join([("%20.2f" % x[1]) for x in p])
+                print >> f, " ", "".join([(("%20.2f" % x[1]) if isinstance(x[1], (int, long, float)) else x[1]) for x in p])
             print >> f
             for g in graphs:
                 g.setColumnNames(names)
@@ -89,7 +93,7 @@ class ResultAnalyzer:
             # sort by plotkey
             points = sorted(points)
             for p in points:
-                cf.writerow([("%.2f" % x[1]) for x in p])
+                cf.writerow([(("%.2f" % x[1]) if isinstance(x[1], (int, long, float)) else x[1]) for x in p])
         cf.writerow([])
         if f != sys.stderr:
             f.close()

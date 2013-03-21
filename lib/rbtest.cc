@@ -301,10 +301,10 @@ void fuzz(G& tree, int N) {
 struct rbtree_with_print {
     rbtree<rbwrapper<int> > tree;
     inline void insert(int val) {
-        tree.insert(new rbwrapper<int>(val));
+        tree.insert(*new rbwrapper<int>(val));
     }
     inline void find_and_erase(int val) {
-        tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+        tree.erase_and_dispose(*tree.find(rbwrapper<int>(val)));
     }
     inline void find(int) {
     }
@@ -322,16 +322,16 @@ struct rbtree_without_print {
     rbtree<rbwrapper<int> > tree;
     inline void insert(int val) {
 	//std::cerr << "insert " << val << "\n";
-        tree.insert(new rbwrapper<int>(val));
+        tree.insert(*new rbwrapper<int>(val));
 	//tree.check();
     }
     inline void find_and_erase(int val) {
 	//std::cerr << "erase " << val << "\n" << tree << "\n";
-        tree.erase_and_dispose(tree.find(rbwrapper<int>(val)));
+        tree.erase_and_dispose(*tree.find(rbwrapper<int>(val)));
 	//tree.check();
     }
     inline rbwrapper<int>* find(int val) {
-        return tree.find(rbwrapper<int>(val));
+        return tree.find(rbwrapper<int>(val)).operator->();
     }
     inline void phase(int) {
         tree.check();
@@ -421,17 +421,17 @@ int main(int argc, char **argv) {
 
     {
 	rbtree<rbwrapper<int> > tree;
-	tree.insert(new rbwrapper<int>(0));
+	tree.insert(*new rbwrapper<int>(0));
 	auto x = new rbwrapper<int>(1);
-	tree.insert(x);
-	tree.insert(new rbwrapper<int>(0));
-	tree.insert(new rbwrapper<int>(-2));
+	tree.insert(*x);
+	tree.insert(*new rbwrapper<int>(0));
+	tree.insert(*new rbwrapper<int>(-2));
 	auto y = new rbwrapper<int>(0);
-	tree.insert(y);
+	tree.insert(*y);
 	std::cerr << tree << "\n";
-	tree.erase_and_dispose(x);
+	tree.erase_and_dispose(*x);
 	std::cerr << tree << "\n";
-	tree.erase_and_dispose(y);
+	tree.erase_and_dispose(*y);
 	std::cerr << tree << "\n";
     }
 
@@ -439,7 +439,7 @@ int main(int argc, char **argv) {
         interval_tree<rbwrapper<int_interval> > tree;
         for (int i = 0; i < 100; ++i) {
             int a = random() % 1000;
-            tree.insert(new rbwrapper<int_interval>(a, a + random() % 200));
+            tree.insert(*new rbwrapper<int_interval>(a, a + random() % 200));
         }
         std::cerr << tree << "\n\n";
         for (auto it = tree.begin_contains(40); it != tree.end(); ++it)
@@ -451,10 +451,10 @@ int main(int argc, char **argv) {
 
     {
         interval_tree<rbwrapper<str_interval> > tree;
-        tree.insert(new rbwrapper<str_interval>("t|", "t}"));
-        tree.insert(new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
+        tree.insert(*new rbwrapper<str_interval>("t|", "t}"));
+        tree.insert(*new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
         std::cerr << tree << "\n\n";
-        tree.insert(new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
+        tree.insert(*new rbwrapper<str_interval>("t|00001|0000000001", "t|00001}"));
         std::cerr << tree << "\n\n";
     }
 }

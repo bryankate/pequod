@@ -227,13 +227,15 @@ TwitterHashShim<S>::TwitterHashShim(S& server)
 
 tamed template <typename S>
 inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e) {
-    tvars { Str v; }
+    tvars { 
+        Str v; 
+        std::unordered_set<uint32_t> follower;
+    }
     sprintf(buf_, "f|%05u", poster);
     twait {
         server_.get(Str(buf_, 7), 0, make_event(v));
     }
     CHECK_EQ(v.length() % 5, 0);
-    std::unordered_set<uint32_t> follower;
     for (int i = 0; i < v.length(); i+=5)
         follower.insert(String(v.data() + i, v.data() + i + 5).to_i());
     for (auto& f: follower)

@@ -35,7 +35,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
             SourceRange::notify_insert};
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
-    valid_ranges_.insert(va.sink);
+    valid_ranges_.insert(*va.sink);
     validate_step(va, 0, 0);
 }
 
@@ -87,8 +87,8 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         ++sourcet->nvalidate_skipped_;
 
     else {
-        auto it = sourcet->lower_bound(Str(kf, kflen));
-        auto ilast = sourcet->lower_bound(Str(kl, kllen));
+        auto it = sourcet->lower_bound_hint(Str(kf, kflen));
+        auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
@@ -99,7 +99,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
 
         if (mopt < 0) {
             // match not optimizable
-            for (; it != ilast; ++it)
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     if (pat.match(it->key(), va.match)) {
                         if (r)
@@ -116,7 +116,8 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
             ++sourcet->nvalidate_optimized_;
             ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
             ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
-            for (; it != ilast && next_hint != end_next; ++it)
+            for (; it != itend && next_hint != end_next &&
+                     it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     validate_step(va, joinpos + 1, &next_hint);
@@ -125,7 +126,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         } else {
             // match optimizable
             ++sourcet->nvalidate_optimized_;
-            for (; it != ilast; ++it)
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     if (r)
@@ -137,7 +138,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         }
 
         if (hint)
-            *hint = ilast;
+            *hint = it;
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
@@ -228,7 +229,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
 
     IntermediateUpdate* iu = new IntermediateUpdate
         (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
-    updates_.insert(iu);
+    updates_.insert(*iu);
 
     join()->sink_table()->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     // std::cerr << *iu << "\n";
@@ -264,9 +265,9 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
         IntermediateUpdate* iu = it.operator->();
         ++it;
 
-        updates_.erase(iu);
+        updates_.erase(*iu);
         if (update_iu(first, last, iu, server, now))
-            updates_.insert(iu);
+            updates_.insert(*iu);
         else
             delete iu;
     }
@@ -274,7 +275,7 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
 
 void SinkRange::invalidate() {
     if (valid()) {
-        jr_->valid_ranges_.erase(this);
+        jr_->valid_ranges_.erase(*this);
 
         while (data_free_ != uintptr_t(-1)) {
             uintptr_t pos = data_free_;
