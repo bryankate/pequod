@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <iostream>
 #include <iomanip>
+#include <iterator>
 #include "compiler.hh"
 #include "local_stack.hh"
 #ifndef rbaccount
@@ -106,33 +107,48 @@ class rbalgorithms {
 };
 
 template <typename T>
-class rbiterator {
+class rbconst_iterator : public std::iterator<std::forward_iterator_tag, T> {
   public:
-    inline rbiterator();
-    inline rbiterator(T* n);
+    inline rbconst_iterator() = default;
+    inline rbconst_iterator(const T* n);
 
     template <typename TT>
-    friend inline bool operator==(rbiterator<TT> a, rbiterator<TT> b);
+    friend inline bool operator==(rbconst_iterator<TT> a, rbconst_iterator<TT> b);
     template <typename TT>
-    friend inline bool operator!=(rbiterator<TT> a, rbiterator<TT> b);
+    friend inline bool operator!=(rbconst_iterator<TT> a, rbconst_iterator<TT> b);
 
     inline void operator++(int);
     inline void operator++();
     inline void operator--(int);
     inline void operator--();
 
+    inline const T& operator*() const;
+    inline const T* operator->() const;
+
+  protected:
+    T* n_;
+};
+
+template <typename T>
+class rbiterator : public rbconst_iterator<T> {
+  public:
+    inline rbiterator() = default;
+    inline rbiterator(T* n);
+
     inline T& operator*() const;
     inline T* operator->() const;
-
-  private:
-    T* n_;
 };
 
 template <typename T, typename Compare = default_comparator<T>,
 	  typename Reshape = return_false>
 class rbtree {
   public:
+    typedef T* pointer;
+    typedef const T* const_pointer;
     typedef T value_type;
+    typedef value_type key_type;
+    typedef T& reference;
+    typedef const T& const_reference;
     typedef Compare value_compare;
     typedef Reshape reshape_type;
     typedef T node_type;
@@ -146,25 +162,42 @@ class rbtree {
     inline bool empty() const;
     inline size_t size() const;
 
+    typedef rbconst_iterator<T> const_iterator;
     typedef rbiterator<T> iterator;
-    inline iterator begin() const;
-    inline iterator end() const;
-    inline iterator lower_bound(const value_type& x) const;
+    inline const_iterator begin() const;
+    inline iterator begin();
+    inline const_iterator end() const;
+    inline iterator end();
+    inline const_iterator lower_bound(const_reference x) const;
     template <typename K, typename Comp>
-    inline iterator lower_bound(const K& key, Comp compare) const;
-    inline iterator upper_bound(const value_type& x) const;
+    inline const_iterator lower_bound(const K& key, Comp compare) const;
+    inline iterator lower_bound(const_reference x);
     template <typename K, typename Comp>
-    inline iterator upper_bound(const K& key, Comp compare) const;
+    inline iterator lower_bound(const K& key, Comp compare);
+    inline const_iterator upper_bound(const_reference x) const;
+    template <typename K, typename Comp>
+    inline const_iterator upper_bound(const K& key, Comp compare) const;
+    inline iterator upper_bound(const_reference x);
+    template <typename K, typename Comp>
+    inline iterator upper_bound(const K& key, Comp compare);
 
-    template <typename X> inline node_type *find(const X &x);
-    template <typename X> inline const node_type *find(const X &x) const;
+    inline const_iterator find(const_reference& x) const;
+    inline iterator find(const_reference& x);
+    template <typename K, typename Comp>
+    inline const_iterator find(const K& key, Comp compare) const;
+    template <typename K, typename Comp>
+    inline iterator find(const K& key, Comp compare);
 
-    inline void insert(node_type* n);
+    inline const_iterator iterator_to(const_reference x) const;
+    inline iterator iterator_to(reference x);
 
-    inline void erase(node_type* x);
-    inline void erase_and_dispose(node_type* x);
+    inline void insert(reference n);
+
+    inline iterator erase(iterator it);
+    inline void erase(reference x);
+    inline void erase_and_dispose(reference x);
     template <typename Disposer>
-    inline void erase_and_dispose(node_type* x, Disposer d);
+    inline void erase_and_dispose(reference x, Disposer d);
 
     inline node_type* unlink_leftmost_without_rebalance();
 
@@ -175,17 +208,25 @@ class rbtree {
   private:
     rbpriv::rbrep1<T, Compare, Reshape> r_;
 
-    void delete_node(T* victim);
+    void delete_node(T* victim, T* successor_hint);
     void delete_node_fixup(rbnodeptr<T> p, bool child);
 
     template <typename K, typename Comp>
-    inline iterator lower_bound(const K& key, Comp& compare, bool) const;
+    inline T* find_any(const K& key, Comp& compare, bool) const;
     template <typename K, typename Comp>
-    inline iterator lower_bound(const K& key, Comp& compare, int) const;
+    inline T* find_any(const K& key, Comp& compare, int) const;
     template <typename K, typename Comp>
-    inline iterator upper_bound(const K& key, Comp& compare, bool) const;
+    inline T* find_first(const K& key, Comp& compare, bool) const;
     template <typename K, typename Comp>
-    inline iterator upper_bound(const K& key, Comp& compare, int) const;
+    inline T* find_first(const K& key, Comp& compare, int) const;
+    template <typename K, typename Comp>
+    inline T* lower_bound(const K& key, Comp& compare, bool) const;
+    template <typename K, typename Comp>
+    inline T* lower_bound(const K& key, Comp& compare, int) const;
+    template <typename K, typename Comp>
+    inline T* upper_bound(const K& key, Comp& compare, bool) const;
+    template <typename K, typename Comp>
+    inline T* upper_bound(const K& key, Comp& compare, int) const;
 };
 
 template <typename T>
@@ -410,7 +451,7 @@ void rbrep1<T, C, R>::insert_node(T* x) {
 } // namespace rbpriv
 
 template <typename T, typename C, typename R>
-void rbtree<T, C, R>::delete_node(T* victim_node) {
+void rbtree<T, C, R>::delete_node(T* victim_node, T* succ) {
     using std::swap;
     // find the node's color
     rbnodeptr<T> victim(victim_node, false);
@@ -418,24 +459,26 @@ void rbtree<T, C, R>::delete_node(T* victim_node) {
     bool child = p.find_child(victim_node);
 
     // swap with successor if necessary
-    rbnodeptr<T> succ;
     if (victim.child(0) && victim.child(1)) {
-        succ = victim.child(true);
-        bool schild = true;
-        while (succ.child(false))
-            schild = false, succ = succ.child(false);
+        if (!succ)
+            for (succ = victim.child(true).node();
+                 succ->rblinks_.c_[0];
+                 succ = succ->rblinks_.c_[0].node())
+                /* nada */;
+        rbnodeptr<T> succ_p = rbnodeptr<T>(succ->rblinks_.p_, false);
+        bool schild = succ == succ_p.child(true).node();
         if (p)
-            p.child(child) = succ.change_color(p.child(child).red());
+            p.child(child) = rbnodeptr<T>(succ, p.child(child).red());
         else
-            r_.root_ = succ.node();
-        swap(succ.node()->rblinks_, victim.node()->rblinks_);
+            r_.root_ = succ;
+        swap(succ->rblinks_, victim.node()->rblinks_);
         if (schild)
-            succ.child(schild) = victim.change_color(succ.child(schild).red());
-        succ.child(0).parent() = succ.child(1).parent() = succ.node();
+            succ->rblinks_.c_[schild] = victim.change_color(succ->rblinks_.c_[schild].red());
+        succ->rblinks_.c_[0].parent() = succ->rblinks_.c_[1].parent() = succ;
         p = victim.black_parent();
         child = schild;
     } else
-        succ = rbnodeptr<T>(0, false);
+        succ = nullptr;
 
     // splice out victim
     bool active = !victim.child(false);
@@ -455,12 +498,12 @@ void rbtree<T, C, R>::delete_node(T* victim_node) {
 
     // reshaping
     while (x && r_.reshape()(x.node())) {
-        if (x.node() == succ.node())
-            succ = rbnodeptr<T>(0, false);
+        if (x.node() == succ)
+            succ = nullptr;
         x = x.black_parent();
     }
-    while (succ && r_.reshape()(succ.node()))
-        succ = succ.black_parent();
+    while (succ && r_.reshape()(succ))
+        succ = succ->rblinks_.p_;
 
     if (!color)
         delete_node_fixup(p, child);
@@ -512,47 +555,124 @@ inline T* rbtree<T, C, R>::root() {
     return r_.root_;
 }
 
-template <typename T, typename C, typename R> template <typename X>
-inline T* rbtree<T, C, R>::find(const X& x) {
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline T* rbtree<T, C, R>::find_any(const K& key, Comp& compare, bool) const {
     T* n = r_.root_;
     while (n) {
-	int cmp = r_.compare(x, *n);
-	if (cmp == 0)
-	    break;
-	n = n->rblinks_.c_[cmp > 0].node();
+        if (compare(*n, key))
+            n = n->rblinks_.c_[true].node();
+        else if (compare(key, *n))
+            n = n->rblinks_.c_[false].node();
+        else
+            break;
     }
     return n;
 }
 
-template <typename T, typename C, typename R> template <typename X>
-inline const T* rbtree<T, C, R>::find(const X& x) const {
-    return const_cast<rbtree<T, C, R> *>(this)->find(x);
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline T* rbtree<T, C, R>::find_any(const K& key, Comp& compare, int) const {
+    T* n = r_.root_;
+    while (n) {
+        int cmp = compare(key, *n);
+        if (cmp == 0)
+            break;
+        n = n->rblinks_.c_[cmp > 0].node();
+    }
+    return n;
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline T* rbtree<T, C, R>::find_first(const K& key, Comp& compare, bool) const {
+    T* n = r_.root_;
+    T* answer = nullptr;
+    while (n) {
+        if (compare(*n, key))
+            n = n->rblinks_.c_[true].node();
+        else {
+            if (!compare(key, *n))
+                answer = n;
+            n = n->rblinks_.c_[false].node();
+        }
+    }
+    return answer;
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline T* rbtree<T, C, R>::find_first(const K& key, Comp& compare, int) const {
+    T* n = r_.root_;
+    T* answer = nullptr;
+    while (n) {
+        int cmp = compare(key, *n);
+        if (cmp == 0)
+            answer = n;
+        n = n->rblinks_.c_[cmp > 0].node();
+    }
+    return answer;
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::insert(T* node) {
+inline auto rbtree<T, C, R>::find(const_reference& x) const -> const_iterator {
+    return find_any(x, r_.get_compare(), (decltype(C()(x, *r_.root_))) 0);
+}
+
+template <typename T, typename C, typename R>
+inline auto rbtree<T, C, R>::find(const_reference& x) -> iterator {
+    return find_any(x, r_.get_compare(), (decltype(C()(x, *r_.root_))) 0);
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline auto rbtree<T, C, R>::find(const K& key, Comp compare) const -> const_iterator {
+    return find_any(key, compare, (decltype(compare(key, *r_.root_))) 0);
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+inline auto rbtree<T, C, R>::find(const K& key, Comp compare) -> iterator {
+    return find_any(key, compare, (decltype(compare(key, *r_.root_))) 0);
+}
+
+template <typename T, typename C, typename R>
+inline auto rbtree<T, C, R>::iterator_to(const node_type& x) const -> const_iterator {
+    return const_iterator(&x);
+}
+
+template <typename T, typename C, typename R>
+inline auto rbtree<T, C, R>::iterator_to(node_type& x) -> iterator {
+    return iterator(&x);
+}
+
+template <typename T, typename C, typename R>
+inline void rbtree<T, C, R>::insert(T& node) {
     rbaccount(insert);
-    r_.insert_node(node);
+    r_.insert_node(&node);
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::erase(T* node) {
+inline auto rbtree<T, C, R>::erase(iterator it) -> iterator {
     rbaccount(erase);
-    delete_node(node);
+    T* node = it.operator->();
+    ++it;
+    delete_node(node, it.operator->());
+    return it;
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::erase_and_dispose(T* node) {
+inline void rbtree<T, C, R>::erase(T& node) {
     rbaccount(erase);
-    delete_node(node);
-    delete node;
+    delete_node(&node, nullptr);
+}
+
+template <typename T, typename C, typename R>
+inline void rbtree<T, C, R>::erase_and_dispose(T& node) {
+    rbaccount(erase);
+    delete_node(&node, nullptr);
+    delete &node;
 }
 
 template <typename T, typename C, typename R> template <typename Disposer>
-inline void rbtree<T, C, R>::erase_and_dispose(T* node, Disposer d) {
+inline void rbtree<T, C, R>::erase_and_dispose(T& node, Disposer d) {
     rbaccount(erase);
-    delete_node(node);
-    d(node);
+    delete_node(&node, nullptr);
+    d(&node);
 }
 
 template <typename T, typename C, typename R>
@@ -685,102 +805,87 @@ inline T* rbalgorithms<T>::prev_node(T* n) {
 }
 
 template <typename T>
-inline rbiterator<T>::rbiterator() {
+inline rbconst_iterator<T>::rbconst_iterator(const T* n)
+    : n_(const_cast<T*>(n)) {
 }
 
 template <typename T>
-inline rbiterator<T>::rbiterator(T* n)
-    : n_(n) {
-}
-
-template <typename T>
-inline void rbiterator<T>::operator++(int) {
+inline void rbconst_iterator<T>::operator++(int) {
     n_ = rbalgorithms<T>::next_node(n_);
 }
 
 template <typename T>
-inline void rbiterator<T>::operator++() {
+inline void rbconst_iterator<T>::operator++() {
     n_ = rbalgorithms<T>::next_node(n_);
 }
 
 template <typename T>
-inline void rbiterator<T>::operator--(int) {
+inline void rbconst_iterator<T>::operator--(int) {
     n_ = rbalgorithms<T>::prev_node(n_);
 }
 
 template <typename T>
-inline void rbiterator<T>::operator--() {
+inline void rbconst_iterator<T>::operator--() {
     n_ = rbalgorithms<T>::prev_node(n_);
 }
 
 template <typename T>
-inline T& rbiterator<T>::operator*() const {
+inline const T& rbconst_iterator<T>::operator*() const {
     return *n_;
 }
 
 template <typename T>
-inline T* rbiterator<T>::operator->() const {
+inline const T* rbconst_iterator<T>::operator->() const {
     return n_;
 }
 
 template <typename T>
-inline bool operator==(rbiterator<T> a, rbiterator<T> b) {
+inline rbiterator<T>::rbiterator(T* n)
+    : rbconst_iterator<T>(n) {
+}
+
+template <typename T>
+inline T& rbiterator<T>::operator*() const {
+    return *this->n_;
+}
+
+template <typename T>
+inline T* rbiterator<T>::operator->() const {
+    return this->n_;
+}
+
+template <typename T>
+inline bool operator==(rbconst_iterator<T> a, rbconst_iterator<T> b) {
     return a.operator->() == b.operator->();
 }
 
 template <typename T>
-inline bool operator!=(rbiterator<T> a, rbiterator<T> b) {
+inline bool operator!=(rbconst_iterator<T> a, rbconst_iterator<T> b) {
     return a.operator->() != b.operator->();
 }
 
 template <typename T, typename R, typename A>
-rbiterator<T> rbtree<T, R, A>::begin() const {
-    return rbiterator<T>(r_.begin_);
+auto rbtree<T, R, A>::begin() const -> const_iterator {
+    return const_iterator(r_.begin_);
 }
 
 template <typename T, typename R, typename A>
-rbiterator<T> rbtree<T, R, A>::end() const {
-    return rbiterator<T>(0);
-}
-
-template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const {
-    T* n = r_.root_;
-    T* bound = 0;
-    while (n) {
-        bool cmp = compare(*n, key);
-        if (!cmp)
-            bound = n;
-        n = n->rblinks_.c_[cmp].node();
-    }
-    return bound;
-}
-
-template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, int) const {
-    T* n = r_.root_;
-    T* bound = 0;
-    while (n) {
-        int cmp = compare(*n, key);
-        if (cmp >= 0)
-            bound = n;
-        n = n->rblinks_.c_[cmp < 0].node();
-    }
-    return bound;
-}
-
-template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::lower_bound(const K& key, Comp compare) const {
-    return lower_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+auto rbtree<T, R, A>::begin() -> iterator {
+    return iterator(r_.begin_);
 }
 
 template <typename T, typename R, typename A>
-inline rbiterator<T> rbtree<T, R, A>::lower_bound(const value_type& x) const {
-    return lower_bound(x, r_.get_compare(), 0);
+auto rbtree<T, R, A>::end() const -> const_iterator {
+    return const_iterator(nullptr);
+}
+
+template <typename T, typename R, typename A>
+auto rbtree<T, R, A>::end() -> iterator {
+    return iterator(nullptr);
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, bool) const {
+inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const {
     T* n = r_.root_;
     T* bound = 0;
     while (n) {
@@ -793,7 +898,53 @@ inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, b
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, int) const {
+inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, int) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        int cmp = compare(key, *n);
+        if (cmp <= 0)
+            bound = n;
+        n = n->rblinks_.c_[cmp > 0].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp compare) const -> const_iterator {
+    return lower_bound(key, compare, (decltype(compare(key, *r_.root_))) 0);
+}
+
+template <typename T, typename R, typename A>
+inline auto rbtree<T, R, A>::lower_bound(const_reference x) const -> const_iterator {
+    return lower_bound(x, r_.get_compare(), 0);
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp compare) -> iterator {
+    return lower_bound(key, compare, (decltype(compare(key, *r_.root_))) 0);
+}
+
+template <typename T, typename R, typename A>
+inline auto rbtree<T, R, A>::lower_bound(const_reference x) -> iterator {
+    return lower_bound(x, r_.get_compare(), 0);
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline T* rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, bool) const {
+    T* n = r_.root_;
+    T* bound = 0;
+    while (n) {
+        bool cmp = compare(key, *n);
+        if (cmp)
+            bound = n;
+        n = n->rblinks_.c_[!cmp].node();
+    }
+    return bound;
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline T* rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, int) const {
     T* n = r_.root_;
     T* bound = 0;
     while (n) {
@@ -806,12 +957,22 @@ inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, i
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp compare) const {
+inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp compare) const -> const_iterator {
     return upper_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
 }
 
 template <typename T, typename R, typename A>
-inline rbiterator<T> rbtree<T, R, A>::upper_bound(const value_type& x) const {
+inline auto rbtree<T, R, A>::upper_bound(const_reference x) const -> const_iterator {
+    return upper_bound(x, r_.get_compare(), 0);
+}
+
+template <typename T, typename R, typename A> template <typename K, typename Comp>
+inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp compare) -> iterator {
+    return upper_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+}
+
+template <typename T, typename R, typename A>
+inline auto rbtree<T, R, A>::upper_bound(const_reference x) -> iterator {
     return upper_bound(x, r_.get_compare(), 0);
 }
 
