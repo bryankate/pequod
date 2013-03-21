@@ -252,6 +252,7 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
     tvars { 
        String v;
        tlstatus* tls;
+       size_t oldpos;
     }
     if (last_refresh_.size() <= subscriber)
         last_refresh_.resize(subscriber + 1);
@@ -260,9 +261,11 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
         tls->pos = 0;
     tls->time = now;
     sprintf(buf_, "t|%05u", subscriber);
-    twait { server_.get(Str(buf_, 7), int(tls->pos), make_event(v)); }
+    oldpos = tls->pos;
+    twait { server_.get(Str(buf_, 7), int(oldpos), make_event(v)); }
     tls = &last_refresh_[subscriber];
-    tls->pos += v.length();
+    if (tls->pos == oldpos)
+        tls->pos += v.length();
     size_t n = 0;
     for (int pos = 0; (pos = v.find_left('\254', pos)) != -1; ++pos) {
         const char *p;
