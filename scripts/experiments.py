@@ -99,7 +99,7 @@ for m in modes:
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "micro",
                          'server' : "./obj/pqserver -kl7777",
-                         'cmd': "--rwmicro --client=7777"});
+                         'cmd': "./obj/pqserver --rwmicro --client=7777"});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "base",
                          'server' : "./obj/pqserver -kl7777",
