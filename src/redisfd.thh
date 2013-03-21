@@ -16,8 +16,7 @@ class redis_fd {
     ~redis_fd();
 
     inline void call(const Str j, tamer::event<String> reply);
-    template <typename R>
-    inline void pace(tamer::preevent<R> done);
+    inline void pace(tamer::event<> done);
 
     inline Json status() const;
 
@@ -87,8 +86,7 @@ inline bool redis_fd::pace_recovered() const {
     return wrsize_ <= wrpacerecover && rdwait_.size() <= rdpacerecover;
 }
 
-template <typename R>
-inline void redis_fd::pace(tamer::preevent<R> done) {
+inline void redis_fd::pace(tamer::event<> done) {
     if (need_pace())
         pacer_ = tamer::distribute(pacer_, std::move(done));
     else

@@ -61,6 +61,9 @@ class MemcachedClient {
         mandatory_assert(0, "unimplemented: need to change the server side");
         e();
     }
+    void pace(tamer::event<> done) {
+        done();
+    }
   private:
     void check_error(memcached_return_t r) {
         if (r != MEMCACHED_SUCCESS) {
@@ -85,6 +88,7 @@ class RedisfdHashClient {
     tamed void append(Str k, Str v, tamer::event<> e);
     void done_get(String) {
     }
+    void pace(tamer::event<> done);
   private:
     redis_fd fd_;
 };
@@ -121,6 +125,9 @@ class BuiltinHashClient {
         else
             ev = String(ev.to_i() + 1);
         e();
+    }
+    void pace(tamer::event<> done) {
+        done();
     }
   private:
     HashTable<String, String> h_;
@@ -269,7 +276,7 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
 
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::pace(tamer::preevent<R> done) {
-    done();
+    server_.pace(done);
 }
 
 template <typename S> template <typename R>

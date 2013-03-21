@@ -24,4 +24,8 @@ tamed void RedisfdHashClient::append(Str k, Str v, tamer::event<> e) {
     e();
 }
 
+void RedisfdHashClient::pace(tamer::event<> e) {
+    fd_.pace(e);
+}
+
 }

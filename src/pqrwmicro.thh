@@ -121,6 +121,7 @@ void RwMicro<S>::run(tamer::event<> e) {
         Json old_stats, stats;
         tamer::gather_rendezvous gr;
         const int nu_active = this->nuser_ * this->pactive_ / 100;
+        int i = 0;
     }
     srandom(18181);
     bzero(loadtime, sizeof(*loadtime) * nuser_);
@@ -139,7 +140,7 @@ void RwMicro<S>::run(tamer::event<> e) {
     twait { server_.stats(make_event(old_stats)); }
     gettimeofday(&tv[0], NULL);
     getrusage(RUSAGE_SELF, &ru[0]);
-    for (int i = 0; i < nops_; ++i) {
+    while (i < nops_) {
         if (random() % 100 < prefresh_) {
             int u = random() % nuser_;
             if (u >= nu_active)
@@ -156,6 +157,8 @@ void RwMicro<S>::run(tamer::event<> e) {
             post(poster, ++time, String("She likes movie moby"), gr.make_event());
             ++npost;
         }
+        twait { server_.pace(make_event()); }
+        ++i;
     }
     twait(gr);
     getrusage(RUSAGE_SELF, &ru[1]);
