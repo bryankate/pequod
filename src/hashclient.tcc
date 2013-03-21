@@ -4,11 +4,11 @@
 namespace pq {
 
 void RedisfdHashClient::get(Str k, tamer::event<String> e) {
-   fd_.call(RedisCommand::make_get(k), e);
+    fd_.call(RedisCommand::make_get(k), e);
 }
 
 void RedisfdHashClient::getrange(Str k, int begin, int end, tamer::event<String> e) {
-   fd_.call(RedisCommand::make_getrange(k, begin, end), e);
+    fd_.call(RedisCommand::make_getrange(k, begin, end), e);
 }
 
 tamed void RedisfdHashClient::set(Str k, Str v, tamer::event<> e) {
