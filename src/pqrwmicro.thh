@@ -48,14 +48,14 @@ class RwMicro {
 tamed template <typename S>
 void RwMicro<S>::post(uint32_t u, size_t time, Str value, tamer::event<> e) {
     tvars { 
-        char buf[128];
-        std::vector<uint32_t> follower; 
+        std::vector<uint32_t> follower;
+        String s(value);
     }
-    twait { server_.post(u, time, value, make_event()); }
+    twait { server_.post(u, time, s, make_event()); }
     if (client_push_) {
         twait { server_.get_follower(u, make_event(follower)); }
         twait {
-            server_.prepare_push_post(u, time, value);
+            server_.prepare_push_post(u, time, s);
             for (auto& f : follower)
                 server_.push_post(f, make_event());
         }
