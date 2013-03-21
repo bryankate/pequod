@@ -76,9 +76,7 @@ class TwitterNewPopulator {
     inline bool overhead() const { return overhead_; }
     inline bool verbose() const { return verbose_; }
 
-    inline const uint32_t* begin_followers(uint32_t user) const;
-    inline const uint32_t* end_followers(uint32_t user) const;
-    inline TwitterUser& mutable_user(uint32_t user);
+    inline TwitterUser& mutable_user(uint32_t user) { return users_[user]; }
 
     void make_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
                             generator_type& gen);
@@ -112,8 +110,6 @@ class TwitterNewPopulator {
     double shape_;
 
     std::vector<TwitterUser> users_;
-    std::vector<uint32_t> followers_;
-    std::vector<uint32_t> follower_ptrs_;
     op_dist_type op_dist_;
     post_dist_type post_dist_;
     uni_dist_type uni_dist_;
@@ -126,22 +122,10 @@ class TwitterNewPopulator {
                               generator_type& gen);
     void synthetic_subscriptions(std::vector<std::pair<uint32_t, uint32_t> >& subs,
                                  generator_type& gen);
-    void make_followers(std::vector<std::pair<uint32_t, uint32_t>>& subs,
-                        std::vector<std::pair<uint32_t, uint32_t>>& followers,
-                        generator_type& gen);
+    void make_users(std::vector<std::pair<uint32_t, uint32_t>>& subs,
+                    generator_type& gen);
 };
 
-inline const uint32_t* TwitterNewPopulator::begin_followers(uint32_t user) const {
-    return followers_.data() + follower_ptrs_[user];
-}
-
-inline const uint32_t* TwitterNewPopulator::end_followers(uint32_t user) const {
-    return followers_.data() + follower_ptrs_[user + 1];
-}
-
-inline TwitterUser& TwitterNewPopulator::mutable_user(uint32_t user) {
-    return users_[user];
-}
 
 template <typename S>
 class TwitterNewShim {
@@ -163,6 +147,8 @@ class TwitterNewShim {
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    template <typename R>
+    inline void follower_scan(uint32_t poster, tamer::preevent<R, scan_result> e);
     template <typename R>
     inline void pace(tamer::preevent<R> done);
     template <typename R>
@@ -272,6 +258,15 @@ inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber, uint32_t 
 }
 
 template <typename S> template <typename R>
+inline void TwitterNewShim<S>::follower_scan(uint32_t poster,
+                                             tamer::preevent<R, scan_result> done) {
+    memcpy(buf_, "s|XXXX s|XXXX}", 19);
+    write_in_net_order(buf_ + 2, poster);
+    write_in_net_order(buf_ + 9, poster);
+    server_.scan(Str(buf_, 6), Str(buf_ + 7, 7), done);
+}
+
+template <typename S> template <typename R>
 inline void TwitterNewShim<S>::pace(tamer::preevent<R> done) {
     server_.pace(done);
 }
@@ -294,6 +289,8 @@ class TwitterNewRunner {
     TwitterNewPopulator& tp_;
     uint32_t currtime_;
 
+    template <typename R>
+    void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
     tamed void post(uint32_t u, uint32_t time, Str value, bool celeb, event<> e);
 };
 
@@ -302,16 +299,40 @@ inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
     : server_(server), tp_(tp), currtime_(1000000000) {
 }
 
+template <typename S> template <typename R>
+void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
+                                    uint32_t time, preevent<R> e) {
+    if (tp_.log())
+        printf("%d: subscribe s|%08d|%08d\n", time,
+               (tp_.push()) ? poster : subscriber,
+               (tp_.push()) ? subscriber : poster);
+
+    // in client push mode we reverse the subscriber key to make followers list
+    server_.subscribe((tp_.push()) ? poster : subscriber,
+                      (tp_.push()) ? subscriber : poster,
+                      e);
+}
+
 tamed template <typename S>
-void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, bool celeb, event<> e) {
-    tvars { char buf[128]; }
-    twait {
-        server_.post(u, time, value, celeb, make_event());
-        if (tp_.push()) {
-            server_.prepare_push_post(u, time, value);
-            for (auto it = tp_.begin_followers(u);
-                 it != tp_.end_followers(u); ++it)
-                server_.push_post(*it, make_event());
+void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value,
+                               bool celeb, event<> e) {
+    tvars { char buf[128];
+            typename S::scan_result scan_result;
+    }
+
+    if (tp_.log())
+        printf("%d: post p|%08d|%010d\n", time, u, time);
+
+    twait{ server_.post(u, time, value, celeb, make_event()); }
+
+    if (tp_.push()) {
+        twait { server_.follower_scan(u, make_event(scan_result)); }
+        server_.prepare_push_post(u, time, value);
+
+        twait {
+            for (auto it = scan_result.begin(); it != scan_result.end(); ++it)
+                server_.push_post(read_in_net_order<uint32_t>(it->key().data() + 7),
+                                  make_event());
         }
     }
     e();
@@ -343,11 +364,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 
     twait {
         if (tp_.verbose()) { std::cout << "Building subscription table." << std::endl; }
-        for (auto& x : subs) {
-            server_.subscribe(x.first, x.second, make_event());
-            if (tp_.log())
-                printf("subscribe s|%08d|%08d\n", x.first, x.second);
-        }
+        for (auto& x : subs)
+            subscribe(x.first, x.second, currtime_, make_event());
 
         for (u = 0; u < nusers; ++u)
             if (tp_.mutable_user(u).celeb())
@@ -357,9 +375,6 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (tp_.verbose()) { std::cout << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
         u = tp_.rand_user_post(gen);
-        if (tp_.log())
-            printf("%d: post p|%08d|%010d\n", currtime_, u, currtime_);
-
         post(u, currtime_, String(TwitterNewPopulator::tweet_data, 5),
              tp_.mutable_user(u).celeb(), gr.make_event());
         ++tp_.mutable_user(u).nbackpost_;
@@ -426,9 +441,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         switch(tp_.rand_op(gen)) {
             case op_post:
                 user = &tp_.mutable_user(tp_.rand_user_post(gen));
-                if (tp_.log())
-                    printf("%d: post p|%08d|%010d\n", currtime_, user->uid(), currtime_);
-
                 post(user->uid(), currtime_, String(TwitterNewPopulator::tweet_data, 5),
                      user->celeb(), gr.make_event());
 
@@ -444,10 +456,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     following = tp_.rand_user(gen);
                 } while (following == user->uid());
 
-                if (tp_.log())
-                    printf("%d: subscribe s|%08d|%08d\n", currtime_, user->uid(), following);
-
-                server_.subscribe(user->uid(), following, gr.make_event());
+                subscribe(user->uid(), following, currtime_, gr.make_event());
                 ++user->nsubscribe_;
                 break;
 
