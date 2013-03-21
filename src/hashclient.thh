@@ -3,16 +3,15 @@
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
-#if HAVE_HIREDIS
-#include <hiredis/hiredis.h>
-#include <hiredis/async.h>
-#include <hiredis/adapters/libev.h>
-#endif
 #include <tamer/tamer.hh>
 #include <unordered_set>
 #include "str.hh"
 #include "hashtable.hh"
 #include "string.hh"
+#include "redisclient.hh"
+#include "redisfd.hh"
+#include "pqclient.hh"
+#include "check.hh"
 
 namespace pq {
 
@@ -25,20 +24,23 @@ class MemcachedClient {
         mandatory_assert(c_);
         expire_at_ = ::time(NULL) + 20 * 60 * 60; // never expire
     }
-    void set(const Str k, const Str v) {
+    void set(const Str k, const Str v, tamer::event<> e) {
         auto r = memcached_set(c_, k.data(), k.length(),
                                v.data(), v.length(), expire_at_, 0);
         check_error(r);
+        e();
     }
-    void append(const Str k, const Str v) {
+    void append(const Str k, const Str v, tamer::event<> e) {
         auto r = memcached_append(c_, k.data(), k.length(),
                                   v.data(), v.length(), expire_at_, 0);
         if (r == MEMCACHED_NOTSTORED)
-            set(k, v);
-        else
+            set(k, v, e);
+        else {
             check_error(r);
+            e();
+        }
     }
-    void get(const Str okey, int32_t offset, tamer::event<Str> e) {
+    void get(const Str okey, int32_t offset, tamer::event<String> e) {
         String k(okey);
         k += String("@");
         k += String(offset);
@@ -48,16 +50,19 @@ class MemcachedClient {
         const char *v = memcached_get(c_, k.data(), k.length(), &value_length, &flags, 
                                       &error);
         if (error != MEMCACHED_SUCCESS)
-            e(Str());
+            e(String());
         else
-            e(Str(v, value_length));
+            e(String(v, value_length));
+        delete v;
     }
-    void done_get(Str v) {
-        if (v.s)
-            delete v.s;
+    void done_get(String) {
     }
-    void increment(const Str) {
+    void increment(const Str, tamer::event<> e) {
         mandatory_assert(0, "unimplemented: need to change the server side");
+        e();
+    }
+    void pace(tamer::event<> done) {
+        done();
     }
   private:
     void check_error(memcached_return_t r) {
@@ -71,109 +76,58 @@ class MemcachedClient {
 };
 #endif
 
-#if HAVE_HIREDIS
-class RedisHashClient {
+class RedisfdHashClient {
   public:
-    struct RedisArg {
-        RedisHashClient *c_;
-        tamer::event<Str> e_;
-        explicit RedisArg(RedisHashClient* c) : c_(c) {}
-        RedisArg(RedisHashClient* c, tamer::event<Str> e) : c_(c), e_(e) {}
-    };
-
-    RedisHashClient() : nsent_(0), ndone_(0), w_(400) {
-        c_ = redisAsyncConnect("localhost", 6379);
-        redisLibevAttach(EV_DEFAULT_ c_);
+    RedisfdHashClient(tamer::fd fd) : fd_(fd) {}
+    void get(Str k, tamer::event<String> e);
+    void get(Str k, int begin, tamer::event<String> e) {
+        getrange(k, begin, -1, e);
     }
-    void get(const Str k, int32_t offset, tamer::event<Str> e) {
-        doone(getcb, new RedisArg(this, e), "GETRANGE %b %d -1", k.data(), 
-              size_t(k.length()), size_t(offset));
+    void getrange(Str k, int begin, int end, tamer::event<String> e);
+    tamed void set(Str k, Str v, tamer::event<> e);
+    tamed void append(Str k, Str v, tamer::event<> e);
+    void done_get(String) {
     }
-    void set(const Str k, const Str v) {
-        doone(checkok, new RedisArg(this), "SET %b %b", k.data(), size_t(k.length()),
-              v.data(), size_t(v.length()));
-    }
-    void append(const Str k, const Str v) {
-        doone(nop, new RedisArg(this), "APPEND %b %b", k.data(), size_t(k.length()),
-              v.data(), size_t(v.length()));
-    }
-    void done_get(Str) {
-    }
+    void pace(tamer::event<> done);
   private:
-    static void checkok(redisAsyncContext* c, void* r, void* privdata) {
-        mandatory_assert(c && r);
-        redisReply* reply = reinterpret_cast<redisReply*>(r);
-        CHECK_EQ(reply->type, REDIS_REPLY_STATUS);
-        CHECK_EQ(reply->integer, REDIS_OK);
-        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
-        ra->c_->onedone();
-        delete ra;
-    }
-    static void nop(redisAsyncContext* c, void* r, void* privdata) {
-        mandatory_assert(c && r);
-        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
-        ra->c_->onedone();
-        delete ra;
-    }
-    static void getcb(redisAsyncContext* c, void* r, void* privdata) {
-        mandatory_assert(c && r);
-        redisReply* reply = reinterpret_cast<redisReply*>(r);
-        mandatory_assert(reply->type == REDIS_REPLY_STRING);
-        RedisArg* ra = reinterpret_cast<RedisArg *>(privdata);
-        ra->e_(Str(reply->str, reply->len));
-        ra->c_->onedone();
-        delete ra;
-    }
-    void onedone() {
-	++ndone_;
-	if (nsent_ - ndone_ <= w_ / 2)
-            ev_unloop (EV_DEFAULT_ EVUNLOOP_ONE);
-    }
-    void doone(redisCallbackFn *fn, void *privdata, const char *format, ...) {
-	va_list ap;
-        va_start(ap, format);
-        redisvAsyncCommand(c_, fn, privdata, format, ap); 
-	va_end(ap);
-        ++nsent_;
-	if (nsent_ - ndone_ > w_)
-	    ev_loop(EV_DEFAULT_ 0);
-    }
-    int nsent_;
-    int ndone_;
-    int w_;
-    redisAsyncContext *c_;
+    redis_fd fd_;
 };
-#endif
 
 class BuiltinHashClient {
   public:
     BuiltinHashClient() {
         h_.rehash(2000000);
     }
-    void set(const Str k, const Str v) {
+    void set(const Str k, const Str v, tamer::event<> e) {
         h_[k] = v;
+        e();
     }
-    void append(const Str k, const Str v) {
+    void append(const Str k, const Str v, tamer::event<> e) {
         auto& ev = h_[k];
         ev.append(v);
+        e();
     }
-    void get(const Str k, int32_t offset, tamer::event<Str> e) {
+    void get(const Str k, int32_t offset, tamer::event<String> e) {
         auto it = h_.find(k);
         if (it == h_.end())
-            e(Str());
+            e(String());
         else {
             mandatory_assert(it->second.length() >= offset);
-            e(Str(it->second.data() + offset, it->second.length() - offset));
+            e(String(it->second.data() + offset, it->second.length() - offset));
         }
     }
-    void done_get(Str) {
+    void done_get(String) {
     }
-    void increment(const Str k) {
+    void increment(const Str k, tamer::event<> e) {
         auto& ev = h_[k];
         if (ev.empty())
             ev = String(1);
         else
             ev = String(ev.to_i() + 1);
+        e();
+    }
+    void pace(tamer::event<> done) {
+        done();
     }
   private:
     HashTable<String, String> h_;
@@ -188,17 +142,14 @@ class TwitterHashShim {
     tamed void get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e);
     inline void add_follower(uint32_t subscriber, uint32_t poster, tamer::event<> e);
 
-    template <typename R>
-    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::event<> e);
     template <typename R>
     inline void mark_celebrity(uint32_t poster, tamer::preevent<R> e);
-    template <typename R>
-    inline void post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> e);
+    inline void post(uint32_t poster, uint32_t time, Str value, tamer::event<> e);
     inline void initialize(bool client_push, bool server_pull, uint32_t celebrity,
                            int celebrity_type, uint32_t, bool pure_server_pull, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, Str value);
-    template <typename R>
-    inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
+    inline void push_post(uint32_t subscriber, tamer::event<> e);
     typedef DirectClient::scan_result scan_result;
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
@@ -228,7 +179,7 @@ TwitterHashShim<S>::TwitterHashShim(S& server)
 tamed template <typename S>
 inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e) {
     tvars { 
-        Str v; 
+        String v; 
         std::unordered_set<uint32_t> follower;
     }
     sprintf(buf_, "f|%05u", poster);
@@ -247,8 +198,7 @@ inline void TwitterHashShim<S>::get_follower(uint32_t poster, tamer::event<std::
 template <typename S>
 inline void TwitterHashShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::event<> done) {
     sprintf(buf_, "f|%05u %05u", poster, subscriber);
-    server_.append(Str(buf_, 7), Str(buf_ + 8, 5));
-    done();
+    server_.append(Str(buf_, 7), Str(buf_ + 8, 5), done);
 }
 
 template <typename S>
@@ -258,11 +208,10 @@ inline void TwitterHashShim<S>::initialize(bool client_push, bool server_pull, u
     done();
 }
 
-template <typename S> template <typename R>
-inline void TwitterHashShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+template <typename S>
+inline void TwitterHashShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::event<> done) {
     sprintf(buf_, "s|%05u %05u", subscriber, poster);
-    server_.append(Str(buf_, 7), Str(buf_ + 8, 5));
-    done();
+    server_.append(Str(buf_, 7), Str(buf_ + 8, 5), done);
 }
 
 template <typename S> template <typename R>
@@ -271,11 +220,10 @@ inline void TwitterHashShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<
     done();
 }
 
-template <typename S> template <typename R>
-inline void TwitterHashShim<S>::post(uint32_t poster, uint32_t time, Str value, tamer::preevent<R> done) {
+template <typename S>
+inline void TwitterHashShim<S>::post(uint32_t poster, uint32_t time, Str value, tamer::event<> done) {
     sprintf(buf_, "p|%05u|%010u", poster, time);
-    server_.set(Str(buf_, 18), value);
-    done();
+    server_.set(Str(buf_, 18), value, done);
 }
 
 template <typename S>
@@ -286,11 +234,10 @@ inline void TwitterHashShim<S>::prepare_push_post(uint32_t poster, uint32_t time
     buflen_ = 25 + value.length();
 }
 
-template <typename S> template <typename R>
-inline void TwitterHashShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
+template <typename S>
+inline void TwitterHashShim<S>::push_post(uint32_t subscriber, tamer::event<> done) {
     sprintf(buf_ + 2, "%05u", subscriber);
-    server_.append(Str(buf_, 7), Str(buf_ + 8, buflen_ - 8));
-    done();
+    server_.append(Str(buf_, 7), Str(buf_ + 8, buflen_ - 8), done);
 }
 
 template <typename S> template <typename R>
@@ -303,8 +250,9 @@ inline void TwitterHashShim<S>::timeline_scan(uint32_t subscriber, uint32_t star
 tamed template <typename S>
 inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> done) {
     tvars { 
-       Str v;
+       String v;
        tlstatus* tls;
+       size_t oldpos;
     }
     if (last_refresh_.size() <= subscriber)
         last_refresh_.resize(subscriber + 1);
@@ -313,9 +261,11 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
         tls->pos = 0;
     tls->time = now;
     sprintf(buf_, "t|%05u", subscriber);
-    twait { server_.get(Str(buf_, 7), tls->pos, make_event(v)); }
+    oldpos = tls->pos;
+    twait { server_.get(Str(buf_, 7), int(oldpos), make_event(v)); }
     tls = &last_refresh_[subscriber];
-    tls->pos += v.length();
+    if (tls->pos == oldpos)
+        tls->pos += v.length();
     size_t n = 0;
     for (int pos = 0; (pos = v.find_left('\254', pos)) != -1; ++pos) {
         const char *p;
@@ -329,7 +279,7 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
 
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::pace(tamer::preevent<R> done) {
-    done();
+    server_.pace(done);
 }
 
 template <typename S> template <typename R>

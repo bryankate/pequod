@@ -29,7 +29,7 @@ const Datum Datum::empty_datum{Str()};
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
       nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
-      namelen_(name.length()) {
+      flush_at_(0), all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
 }
@@ -84,6 +84,8 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
         }
 
     join_ranges_.insert(*new JoinRange(first, last, join));
+    if (join->maintained() || join->staleness())
+        all_pull_ = false;
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -107,15 +109,15 @@ void Table::insert(Str key, String value) {
     }
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
+    all_pull_ = false;
 }
 
-void Table::pull_flush() {
+void Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
         invalidate_dependents(d->key());
         d->invalidate();
     }
-    for (auto it = join_ranges_.begin(); it != join_ranges_.end(); ++it)
-        it->pull_flush();
+    flush_at_ = now;
 }
 
 void Table::erase(Str key) {
@@ -219,9 +221,7 @@ static Clp_Option options[] = {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1009, 0, Clp_Negate },
 #endif
-#if HAVE_HIREDIS
     { "redis", 0, 1010, 0, Clp_Negate},
-#endif
 
     // rpc params
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
@@ -525,17 +525,11 @@ int main(int argc, char** argv) {
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
             rw.safe_run();
-        } else if (tp_param["redis"]) {
-#if HAVE_HIREDIS
-            pq::RedisHashClient *client = new pq::RedisHashClient;
-            typedef pq::TwitterHashShim<pq::RedisHashClient> shim_type;
-            shim_type *shim = new shim_type(*client);
-            pq::RwMicro<shim_type> *rw = new pq::RwMicro<shim_type>(tp_param, *shim);
-            rw->safe_run();
-#else
-            mandatory_assert(0);
-#endif
-        } else {
+        } else if (tp_param["redis"])
+            pq::run_rwmicro_redisfd(tp_param);
+        else if (client_port >= 0) 
+            pq::run_rwmicro_pqremote(tp_param, client_port);
+        else {
             pq::DirectClient client(server);
             pq::TwitterShim<pq::DirectClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);

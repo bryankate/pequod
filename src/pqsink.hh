@@ -110,13 +110,13 @@ class JoinRange : public ServerRangeBase {
     inline size_t valid_ranges_size() const;
 
     void validate(Str first, Str last, Server& server, uint64_t now);
-    void pull_flush();
 
   public:
     rblinks<JoinRange> rblinks_;
   private:
     Join* join_;
     interval_tree<SinkRange> valid_ranges_;
+    uint64_t flush_at_;
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;

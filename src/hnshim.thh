@@ -26,32 +26,13 @@ class HashHackerNewsShim {
     void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, event<> e) {
         // add a|aid/author|v
         (void) check_karmas;
-        c_.set(String("a|") + String(aid), String(author) + String("|") + v);
+        c_.set(String("a|") + String(aid), String(author) + String("|") + v, e);
         // XXX: append aid to ah|author?
-        e();
     }
 
-    void post_comment(uint32_t commentor, uint32_t author, uint32_t aid,
-                      uint32_t cid, const String &v, event<> e) {
-        (void)author;
-        // add c|cid/v
-        c_.set(String("c|") + String(cid), v);
-        // append commentor|cid to ac|aid
-        char buf[128];
-        sprintf(buf, "%d|%d\255", commentor, aid);
-        c_.append(String("ac|") + String(aid), Str(buf, strlen(buf)));
-        e();
-    }
-
-    void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, event<> e) {
-        // append voter to v|aid?
-        (void) check_karmas;
-        c_.append(String("v|") + String(aid), String(voter) + String(","));
-        // increment k|author
-        c_.increment(String("k|") + String(author));
-        e();
-    }
-
+    tamed void post_comment(uint32_t commentor, uint32_t author, uint32_t aid,
+                      uint32_t cid, const String &v, event<> e);
+    tamed void vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, event<> e);
     tamed void read_article(uint32_t aid, uint32_t author, karmas_type &check_karmas, bool check, 
                       event<> e);
     template <typename R>
@@ -63,11 +44,38 @@ class HashHackerNewsShim {
 };
 
 tamed template <typename S>
+void HashHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid, karmas_type& check_karmas, event<> e) {
+    // append voter to v|aid?
+    (void) check_karmas;
+    twait {
+        c_.append(String("v|") + String(aid), String(voter) + String(","), make_event());
+        // increment k|author
+        c_.increment(String("k|") + String(author), make_event());
+    }
+    e();
+}
+
+tamed template <typename S>
+inline void HashHackerNewsShim<S>::post_comment(uint32_t commentor, uint32_t author, uint32_t aid,
+                      uint32_t cid, const String &v, event<> e) {
+    (void)author;
+    twait {
+        // add c|cid/v
+        c_.set(String("c|") + String(cid), v, make_event());
+        // append commentor|cid to ac|aid
+        char buf[128];
+        sprintf(buf, "%d|%d\255", commentor, aid);
+        c_.append(String("ac|") + String(aid), Str(buf, strlen(buf)), make_event());
+    }
+    e();
+}
+
+tamed template <typename S>
 inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author, 
         karmas_type &check_karmas, bool check, event<> e) {
     tvars {
-        Str hv, cl;
-        std::vector<Str> str;
+        String hv, cl;
+        std::vector<String> str;
     }
     (void)author;
     (void)check_karmas;
@@ -87,10 +95,10 @@ inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
             Str commentor(cl.data() + s, cl.data() + p);
             Str cid(cl.data() + p + 1, cl.data() + ep);
             // get c|cid/cv
-            str.push_back(Str());
+            str.push_back(String());
             c_.get(String("c|") + cid, 0, make_event(str.back()));
             // get k|commentor/kc
-            str.push_back(Str());
+            str.push_back(String());
             c_.get(String("k|") + commentor, 0, make_event(str.back()));
         }
     }

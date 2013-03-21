@@ -27,7 +27,8 @@ class RwMicro {
           server_(server),
           push_(param["push"].as_b(true)),
           pprerefresh_(param["pprerefresh"].as_i(0)),
-          client_push_(param["client_push"].as_b(false)) {
+          client_push_(param["client_push"].as_b(false)),
+          follower_(nuser_) {
     }
     tamed void safe_run();
   private:
@@ -44,6 +45,7 @@ class RwMicro {
     bool push_;
     int pprerefresh_;
     bool client_push_;
+    std::vector<std::vector<uint32_t> > follower_;
 };
 
 tamed template <typename S>
@@ -52,13 +54,14 @@ void RwMicro<S>::post(uint32_t u, size_t time, Str value, tamer::event<> e) {
         std::vector<uint32_t> follower;
         String s(value);
     }
-    twait { server_.post(u, time, s, make_event()); }
-    if (client_push_) {
-        twait { server_.get_follower(u, make_event(follower)); }
-        twait {
+    twait {
+        server_.post(u, time, s, make_event()); 
+        if (client_push_) {
             server_.prepare_push_post(u, time, s);
-            for (auto& f : follower)
+            for (auto& f : follower_[u])
                 server_.push_post(f, make_event());
+            // punish client_push_ with a get_follower RPC
+            server_.get_follower(u, make_event(follower));
         }
     }
     e();
@@ -83,6 +86,7 @@ void RwMicro<S>::populate(tamer::event<> e) {
                 int follower;
                 while (b[follower = (random() % nuser_)]);
                 b[follower] = true;
+                follower_[u].push_back(follower);
                 server_.subscribe(follower, u, make_event());
                 server_.add_follower(follower, u, make_event());
             }
@@ -117,6 +121,7 @@ void RwMicro<S>::run(tamer::event<> e) {
         Json old_stats, stats;
         tamer::gather_rendezvous gr;
         const int nu_active = this->nuser_ * this->pactive_ / 100;
+        int i = 0;
     }
     srandom(18181);
     bzero(loadtime, sizeof(*loadtime) * nuser_);
@@ -135,7 +140,7 @@ void RwMicro<S>::run(tamer::event<> e) {
     twait { server_.stats(make_event(old_stats)); }
     gettimeofday(&tv[0], NULL);
     getrusage(RUSAGE_SELF, &ru[0]);
-    for (int i = 0; i < nops_; ++i) {
+    while (i < nops_) {
         if (random() % 100 < prefresh_) {
             int u = random() % nuser_;
             if (u >= nu_active)
@@ -152,6 +157,8 @@ void RwMicro<S>::run(tamer::event<> e) {
             post(poster, ++time, String("She likes movie moby"), gr.make_event());
             ++npost;
         }
+        twait { server_.pace(make_event()); }
+        ++i;
     }
     twait(gr);
     getrusage(RUSAGE_SELF, &ru[1]);
@@ -178,6 +185,9 @@ void RwMicro<S>::run(tamer::event<> e) {
     delete[] loadtime;
     e();
 }
+
+tamed void run_rwmicro_redisfd(Json& tp_param);
+tamed void run_rwmicro_pqremote(Json& tp_param, int client_port);
 
 };
 

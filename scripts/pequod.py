@@ -1,4 +1,5 @@
 import os, subprocess
+from time import sleep
 
 class PequodLoadRunner:
     @staticmethod
@@ -10,6 +11,7 @@ class PequodLoadRunner:
             stdout = os.path.join(resultDir, "trail_%d.json" % i)
             if ld.has_key('server'):
                 server = subprocess.Popen(ld['server'], shell = True)
+                sleep(1)
             else:
                 server = None
             print cmd

@@ -111,7 +111,6 @@ class TwitterShim {
     char buf_[key_capacity];
     String value_;
     std::vector<bool> celeb_;
-    bool pure_server_pull_;
 };
 
 template <typename S>
@@ -144,7 +143,6 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                 int celebrity_type, uint32_t nusers, bool pure_server_pull,
                                 tamer::event<> done) {
     tvars { Json j[4]; }
-    pure_server_pull_ = pure_server_pull;
     if (client_push)
         done();
     else {
@@ -227,16 +225,12 @@ template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
     server_.scan(Str(buf_, 18), Str(buf_ + 19, 8), done);
-    if (pure_server_pull_)
-        server_.pull_flush("t");
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
     server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), done);
-    if (pure_server_pull_)
-        server_.pull_flush("t");
 }
 
 template <typename S> template <typename R>

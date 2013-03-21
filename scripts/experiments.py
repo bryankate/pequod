@@ -91,19 +91,32 @@ for nfollower in [1, 16, 32]:
 # real_twitter
 # we will set a post limit of 150K to stop the experiment
 # keep the post:check ratio at 1:65
-cmdbase = "./obj/pqserver --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000--duration=100000000"
-exps.append({'name': "real_twitter", 
-             'defs': [{'plotgroup': "real_twitter",
-                       'plotkey' : "base",
-                       'cmd': "%s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, 1, 65, 0, 0, 0)},
-                      {'plotgroup': "real_twitter",
-                       'plotkey' : "login",
-                       'cmd': "%s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, 1, 60, 5, 5, 0)},
-                      {'plotgroup': "real_twitter",
-                       'plotkey' : "subscribe",
-                       'cmd': "%s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, 1, 65, 0, 0, 10)},
-                      {'plotgroup': "real_twitter",
-                       'plotkey' : "all",
-                       'cmd': "%s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, 1, 60, 5, 5, 10)}],
-             'xlabel': ''})
+cmdbase = "./obj/pqserver --client=7777 --twitternew --nusers=100000 --pactive=70 --postlimit=15000 --duration=100000000"
+#cmdbase = "./obj/pqserver --client=7777 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
+modes = [["micro", ""], ["autopush", ""], ["pull", "--pull"], ["push", "--push"]]
+real_twitter = []
+for m in modes:
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "micro",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "./obj/pqserver --rwmicro --client=7777"});
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "base",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 65, 0, 0, 0)});
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "login",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 0)});
+    '''
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "subscribe",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 65, 0, 0, 10)});
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "all",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 10)});
+    '''
+exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
     
