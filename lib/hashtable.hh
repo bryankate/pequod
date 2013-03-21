@@ -99,7 +99,7 @@ class HashTable<T> {
 
     struct elt {
 	T v;
-	elt *_hashnext;
+	elt *hashnext_;
 	elt(const T &v_)
 	    : v(v_) {
 	}
