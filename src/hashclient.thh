@@ -3,11 +3,6 @@
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
 #include <libmemcached/memcached.hpp>
 #endif
-#if HAVE_HIREDIS
-#include <hiredis/hiredis.h>
-#include <hiredis/async.h>
-#include <hiredis/adapters/libev.h>
-#endif
 #include <tamer/tamer.hh>
 #include <unordered_set>
 #include "str.hh"
