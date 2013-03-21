@@ -95,6 +95,58 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
     inline rbrep1(const Compare &compare, const Reshape &reshape);
     void insert_node(T* x);
 };
+
+template <typename C, typename Ret> class rbcomparator;
+
+template <typename C>
+class rbcomparator<C, bool> {
+  public:
+    inline rbcomparator(C comp)
+        : comp_(comp) {
+    }
+    template <typename A, typename B>
+    inline bool less(const A& a, const B& b) {
+        return comp_(a, b);
+    }
+    template <typename A, typename B>
+    inline bool greater(const A& a, const B& b) {
+        return comp_(b, a);
+    }
+    template <typename A, typename B>
+    inline int compare(const A& a, const B& b) {
+        return comp_(a, b) ? -1 : comp_(b, a);
+    }
+  private:
+    C comp_;
+};
+
+template <typename C>
+class rbcomparator<C, int> {
+  public:
+    inline rbcomparator(C comp)
+        : comp_(comp) {
+    }
+    template <typename A, typename B>
+    inline bool less(const A& a, const B& b) {
+        return comp_(a, b) < 0;
+    }
+    template <typename A, typename B>
+    inline bool greater(const A& a, const B& b) {
+        return comp_(a, b) > 0;
+    }
+    template <typename A, typename B>
+    inline int compare(const A& a, const B& b) {
+        return comp_(a, b);
+    }
+  private:
+    C comp_;
+};
+
+template <typename K, typename T, typename C>
+inline auto make_compare(C comp) -> rbcomparator<C, decltype(comp(*(K*)nullptr, *(T*)nullptr))> {
+    return rbcomparator<C, decltype(comp(*(K*)nullptr, *(T*)nullptr))>(comp);
+}
+
 } // namespace rbpriv
 
 template <typename T>
@@ -212,21 +264,13 @@ class rbtree {
     void delete_node_fixup(rbnodeptr<T> p, bool child);
 
     template <typename K, typename Comp>
-    inline T* find_any(const K& key, Comp& compare, bool) const;
+    inline T* find_any(const K& key, Comp comp) const;
     template <typename K, typename Comp>
-    inline T* find_any(const K& key, Comp& compare, int) const;
+    inline T* find_first(const K& key, Comp comp) const;
     template <typename K, typename Comp>
-    inline T* find_first(const K& key, Comp& compare, bool) const;
+    inline T* lower_bound_impl(const K& key, Comp comp) const;
     template <typename K, typename Comp>
-    inline T* find_first(const K& key, Comp& compare, int) const;
-    template <typename K, typename Comp>
-    inline T* lower_bound(const K& key, Comp& compare, bool) const;
-    template <typename K, typename Comp>
-    inline T* lower_bound(const K& key, Comp& compare, int) const;
-    template <typename K, typename Comp>
-    inline T* upper_bound(const K& key, Comp& compare, bool) const;
-    template <typename K, typename Comp>
-    inline T* upper_bound(const K& key, Comp& compare, int) const;
+    inline T* upper_bound_impl(const K& key, Comp comp) const;
 };
 
 template <typename T>
@@ -556,24 +600,10 @@ inline T* rbtree<T, C, R>::root() {
 }
 
 template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline T* rbtree<T, C, R>::find_any(const K& key, Comp& compare, bool) const {
+inline T* rbtree<T, C, R>::find_any(const K& key, Comp comp) const {
     T* n = r_.root_;
     while (n) {
-        if (compare(*n, key))
-            n = n->rblinks_.c_[true].node();
-        else if (compare(key, *n))
-            n = n->rblinks_.c_[false].node();
-        else
-            break;
-    }
-    return n;
-}
-
-template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline T* rbtree<T, C, R>::find_any(const K& key, Comp& compare, int) const {
-    T* n = r_.root_;
-    while (n) {
-        int cmp = compare(key, *n);
+        int cmp = comp.compare(key, *n);
         if (cmp == 0)
             break;
         n = n->rblinks_.c_[cmp > 0].node();
@@ -582,27 +612,11 @@ inline T* rbtree<T, C, R>::find_any(const K& key, Comp& compare, int) const {
 }
 
 template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline T* rbtree<T, C, R>::find_first(const K& key, Comp& compare, bool) const {
+inline T* rbtree<T, C, R>::find_first(const K& key, Comp comp) const {
     T* n = r_.root_;
     T* answer = nullptr;
     while (n) {
-        if (compare(*n, key))
-            n = n->rblinks_.c_[true].node();
-        else {
-            if (!compare(key, *n))
-                answer = n;
-            n = n->rblinks_.c_[false].node();
-        }
-    }
-    return answer;
-}
-
-template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline T* rbtree<T, C, R>::find_first(const K& key, Comp& compare, int) const {
-    T* n = r_.root_;
-    T* answer = nullptr;
-    while (n) {
-        int cmp = compare(key, *n);
+        int cmp = comp.compare(key, *n);
         if (cmp == 0)
             answer = n;
         n = n->rblinks_.c_[cmp > 0].node();
@@ -612,22 +626,22 @@ inline T* rbtree<T, C, R>::find_first(const K& key, Comp& compare, int) const {
 
 template <typename T, typename C, typename R>
 inline auto rbtree<T, C, R>::find(const_reference& x) const -> const_iterator {
-    return find_any(x, r_.get_compare(), (decltype(C()(x, *r_.root_))) 0);
+    return find_any(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 template <typename T, typename C, typename R>
 inline auto rbtree<T, C, R>::find(const_reference& x) -> iterator {
-    return find_any(x, r_.get_compare(), (decltype(C()(x, *r_.root_))) 0);
+    return find_any(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline auto rbtree<T, C, R>::find(const K& key, Comp compare) const -> const_iterator {
-    return find_any(key, compare, (decltype(compare(key, *r_.root_))) 0);
+inline auto rbtree<T, C, R>::find(const K& key, Comp comp) const -> const_iterator {
+    return find_any(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename C, typename R> template <typename K, typename Comp>
-inline auto rbtree<T, C, R>::find(const K& key, Comp compare) -> iterator {
-    return find_any(key, compare, (decltype(compare(key, *r_.root_))) 0);
+inline auto rbtree<T, C, R>::find(const K& key, Comp comp) -> iterator {
+    return find_any(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename C, typename R>
@@ -885,11 +899,11 @@ auto rbtree<T, R, A>::end() -> iterator {
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const {
+inline T* rbtree<T, R, A>::lower_bound_impl(const K& key, Comp comp) const {
     T* n = r_.root_;
     T* bound = 0;
     while (n) {
-        bool cmp = compare(*n, key);
+        bool cmp = comp.greater(key, *n);
         if (!cmp)
             bound = n;
         n = n->rblinks_.c_[cmp].node();
@@ -898,44 +912,31 @@ inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, bool) const 
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline T* rbtree<T, R, A>::lower_bound(const K& key, Comp& compare, int) const {
-    T* n = r_.root_;
-    T* bound = 0;
-    while (n) {
-        int cmp = compare(key, *n);
-        if (cmp <= 0)
-            bound = n;
-        n = n->rblinks_.c_[cmp > 0].node();
-    }
-    return bound;
-}
-
-template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp compare) const -> const_iterator {
-    return lower_bound(key, compare, (decltype(compare(key, *r_.root_))) 0);
+inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp comp) const -> const_iterator {
+    return lower_bound_impl(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename R, typename A>
 inline auto rbtree<T, R, A>::lower_bound(const_reference x) const -> const_iterator {
-    return lower_bound(x, r_.get_compare(), 0);
+    return lower_bound_impl(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp compare) -> iterator {
-    return lower_bound(key, compare, (decltype(compare(key, *r_.root_))) 0);
+inline auto rbtree<T, R, A>::lower_bound(const K& key, Comp comp) -> iterator {
+    return lower_bound_impl(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename R, typename A>
 inline auto rbtree<T, R, A>::lower_bound(const_reference x) -> iterator {
-    return lower_bound(x, r_.get_compare(), 0);
+    return lower_bound_impl(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline T* rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, bool) const {
+inline T* rbtree<T, R, A>::upper_bound_impl(const K& key, Comp comp) const {
     T* n = r_.root_;
     T* bound = 0;
     while (n) {
-        bool cmp = compare(key, *n);
+        bool cmp = comp.less(key, *n);
         if (cmp)
             bound = n;
         n = n->rblinks_.c_[!cmp].node();
@@ -944,36 +945,23 @@ inline T* rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, bool) const 
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline T* rbtree<T, R, A>::upper_bound(const K& key, Comp& compare, int) const {
-    T* n = r_.root_;
-    T* bound = 0;
-    while (n) {
-        int cmp = compare(key, *n);
-        if (cmp < 0)
-            bound = n;
-        n = n->rblinks_.c_[cmp >= 0].node();
-    }
-    return bound;
-}
-
-template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp compare) const -> const_iterator {
-    return upper_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp comp) const -> const_iterator {
+    return upper_bound_impl(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename R, typename A>
 inline auto rbtree<T, R, A>::upper_bound(const_reference x) const -> const_iterator {
-    return upper_bound(x, r_.get_compare(), 0);
+    return upper_bound_impl(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 template <typename T, typename R, typename A> template <typename K, typename Comp>
-inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp compare) -> iterator {
-    return upper_bound(key, compare, (decltype(compare(*r_.root_, key))) 0);
+inline auto rbtree<T, R, A>::upper_bound(const K& key, Comp comp) -> iterator {
+    return upper_bound_impl(key, rbpriv::make_compare<K, T>(comp));
 }
 
 template <typename T, typename R, typename A>
 inline auto rbtree<T, R, A>::upper_bound(const_reference x) -> iterator {
-    return upper_bound(x, r_.get_compare(), 0);
+    return upper_bound_impl(x, rbpriv::make_compare<T, T>(r_.get_compare()));
 }
 
 #endif
