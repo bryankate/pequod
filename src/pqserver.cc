@@ -58,7 +58,7 @@ void Table::add_source(SourceRange* r) {
             delete r;
 	    return;
 	}
-    source_ranges_.insert(r);
+    source_ranges_.insert(*r);
 }
 
 void Table::remove_source(Str first, Str last, SinkRange* sink, Str context) {
@@ -83,7 +83,7 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
             return;
         }
 
-    join_ranges_.insert(new JoinRange(first, last, join));
+    join_ranges_.insert(*new JoinRange(first, last, join));
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {

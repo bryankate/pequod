@@ -237,7 +237,7 @@ inline void Table::invalidate_dependents(Str first, Str last) {
 }
 
 inline void Table::unlink_source(SourceRange* r) {
-    source_ranges_.erase(r);
+    source_ranges_.erase(*r);
 }
 
 template <typename F>

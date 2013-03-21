@@ -35,7 +35,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
             SourceRange::notify_insert};
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
-    valid_ranges_.insert(va.sink);
+    valid_ranges_.insert(*va.sink);
     validate_step(va, 0, 0);
 }
 
@@ -229,7 +229,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
 
     IntermediateUpdate* iu = new IntermediateUpdate
         (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
-    updates_.insert(iu);
+    updates_.insert(*iu);
 
     join()->sink_table()->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     // std::cerr << *iu << "\n";
@@ -265,9 +265,9 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
         IntermediateUpdate* iu = it.operator->();
         ++it;
 
-        updates_.erase(iu);
+        updates_.erase(*iu);
         if (update_iu(first, last, iu, server, now))
-            updates_.insert(iu);
+            updates_.insert(*iu);
         else
             delete iu;
     }
@@ -275,7 +275,7 @@ void SinkRange::update(Str first, Str last, Server& server, uint64_t now) {
 
 void SinkRange::invalidate() {
     if (valid()) {
-        jr_->valid_ranges_.erase(this);
+        jr_->valid_ranges_.erase(*this);
 
         while (data_free_ != uintptr_t(-1)) {
             uintptr_t pos = data_free_;

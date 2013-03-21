@@ -31,6 +31,7 @@ template <typename T, typename P> class interval_contains_iterator;
 
 template <typename T>
 class interval_tree {
+    typedef rbtree<T, interval_comparator, interval_rb_reshaper> tree_type;
   public:
     typedef T value_type;
     typedef typename T::endpoint_type endpoint_type;
@@ -43,15 +44,18 @@ class interval_tree {
     template <typename X> inline value_type* find(const X &i);
     template <typename X> inline const value_type* find(const X &i) const;
 
-    inline void insert(value_type* x);
+    inline void insert(value_type& x);
 
-    inline void erase(value_type* x);
-    inline void erase_and_dispose(value_type* x);
-    template <typename Dispose> inline void erase_and_dispose(value_type* x, Dispose d);
+    inline void erase(value_type& x);
+    inline void erase_and_dispose(value_type& x);
+    template <typename Dispose> inline void erase_and_dispose(value_type& x, Dispose d);
 
-    typedef rbiterator<T> iterator;
-    inline iterator begin() const;
-    inline iterator end() const;
+    typedef typename tree_type::const_iterator const_iterator;
+    typedef typename tree_type::iterator iterator;
+    inline const_iterator begin() const;
+    inline iterator begin();
+    inline const_iterator end() const;
+    inline iterator end();
 
     template <typename X>
     inline interval_contains_iterator<T, interval_interval_contains_predicate<interval<X> > >
@@ -84,7 +88,7 @@ class interval_tree {
     template <typename TT> friend std::ostream &operator<<(std::ostream &s, const interval_tree<TT> &x);
 
   private:
-    rbtree<T, interval_comparator, interval_rb_reshaper> t_;
+    tree_type t_;
 };
 
 template <typename T>
@@ -112,22 +116,22 @@ inline const T* interval_tree<T>::find(const X &i) const {
 }
 
 template <typename T>
-inline void interval_tree<T>::insert(value_type* node) {
+inline void interval_tree<T>::insert(value_type& node) {
     return t_.insert(node);
 }
 
 template <typename T>
-inline void interval_tree<T>::erase(T* node) {
+inline void interval_tree<T>::erase(T& node) {
     t_.erase(node);
 }
 
 template <typename T>
-inline void interval_tree<T>::erase_and_dispose(T* node) {
+inline void interval_tree<T>::erase_and_dispose(T& node) {
     t_.erase_and_dispose(node);
 }
 
 template <typename T> template <typename Disposer>
-inline void interval_tree<T>::erase_and_dispose(T* node, Disposer d) {
+inline void interval_tree<T>::erase_and_dispose(T& node, Disposer d) {
     t_.erase_and_dispose(node, d);
 }
 
@@ -294,12 +298,22 @@ void interval_contains_iterator<T, P>::advance(bool first) {
 }
 
 template <typename T>
-inline typename interval_tree<T>::iterator interval_tree<T>::begin() const {
+inline auto interval_tree<T>::begin() const -> const_iterator {
     return t_.begin();
 }
 
 template <typename T>
-inline typename interval_tree<T>::iterator interval_tree<T>::end() const {
+inline auto interval_tree<T>::begin() -> iterator {
+    return t_.begin();
+}
+
+template <typename T>
+inline auto interval_tree<T>::end() const -> const_iterator {
+    return t_.end();
+}
+
+template <typename T>
+inline auto interval_tree<T>::end() -> iterator {
     return t_.end();
 }
 
