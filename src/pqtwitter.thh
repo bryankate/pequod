@@ -111,7 +111,6 @@ class TwitterShim {
     char buf_[key_capacity];
     String value_;
     std::vector<bool> celeb_;
-    bool pure_server_pull_;
 };
 
 template <typename S>
@@ -144,7 +143,6 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                 int celebrity_type, uint32_t nusers, bool pure_server_pull,
                                 tamer::event<> done) {
     tvars { Json j[4]; }
-    pure_server_pull_ = pure_server_pull;
     if (client_push)
         done();
     else {
