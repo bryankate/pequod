@@ -812,7 +812,7 @@ inline rbiterator<T> rbtree<T, R, A>::upper_bound(const K& key, Comp compare) co
 
 template <typename T, typename R, typename A>
 inline rbiterator<T> rbtree<T, R, A>::upper_bound(const value_type& x) const {
-    return lower_bound(x, r_.get_compare(), 0);
+    return upper_bound(x, r_.get_compare(), 0);
 }
 
 #endif
