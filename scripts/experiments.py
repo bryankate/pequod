@@ -91,7 +91,7 @@ for nfollower in [1, 16, 32]:
 # real_twitter
 # we will set a post limit of 150K to stop the experiment
 # keep the post:check ratio at 1:65
-cmdbase = "./obj/pqserver --twitternew --client=7777 --nusers=5000 --pactive=70 --postlimit=100 --duration=100000000"
+cmdbase = "./obj/pqserver --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
 modes = [["autopush", ""], ["pull", "--pull"], ["push", "--push"]]
 real_twitter = []
 for m in modes:
