@@ -91,11 +91,15 @@ for nfollower in [1, 16, 32]:
 # real_twitter
 # we will set a post limit of 150K to stop the experiment
 # keep the post:check ratio at 1:65
-cmdbase = "./obj/pqserver --twitternew --nusers=100000 --pactive=70 --postlimit=15000 --duration=100000000"
-#cmdbase = "./obj/pqserver --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
-modes = [["autopush", ""], ["pull", "--pull"], ["push", "--push"]]
+cmdbase = "./obj/pqserver --client=7777 --twitternew --nusers=100000 --pactive=70 --postlimit=15000 --duration=100000000"
+#cmdbase = "./obj/pqserver --client=7777 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
+modes = [["micro", ""], ["autopush", ""], ["pull", "--pull"], ["push", "--push"]]
 real_twitter = []
 for m in modes:
+    real_twitter.append({'plotgroup': "%s" % m[0],
+                         'plotkey' : "micro",
+                         'server' : "./obj/pqserver -kl7777",
+                         'cmd': "--rwmicro --client=7777"});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "base",
                          'server' : "./obj/pqserver -kl7777",
