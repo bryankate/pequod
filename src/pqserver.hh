@@ -49,7 +49,7 @@ class Table : public pequod_set_base_hook {
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
 
-    void pull_flush();
+    inline void flush_for_pull(uint64_t now);
 
     void print_sources(std::ostream& stream) const;
 
@@ -65,13 +65,17 @@ class Table : public pequod_set_base_hook {
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    uint64_t flush_at_;
+    bool all_pull_;
     int namelen_;
     char name_[28];
   public:
     pequod_set_member_hook member_hook_;
   private:
     Server* server_;
+
     inline void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
+    void hard_flush_for_pull(uint64_t now);
 
     friend class Server;
 };
@@ -295,6 +299,11 @@ inline void Table::invalidate_erase(Datum* d) {
     store_.erase(store_.iterator_to(*d));
     invalidate_dependents(d->key());
     d->invalidate();
+}
+
+inline void Table::flush_for_pull(uint64_t now) {
+    if (all_pull_ && flush_at_ != now)
+        hard_flush_for_pull(now);
 }
 
 inline void Server::insert(Str key, const String& value) {

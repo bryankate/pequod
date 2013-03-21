@@ -10,7 +10,7 @@ uint64_t SinkRange::invalidate_hit_keys = 0;
 uint64_t SinkRange::invalidate_miss_keys = 0;
 
 JoinRange::JoinRange(Str first, Str last, Join* join)
-    : ServerRangeBase(first, last), join_(join) {
+    : ServerRangeBase(first, last), join_(join), flush_at_(0) {
 }
 
 JoinRange::~JoinRange() {
@@ -40,6 +40,13 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
 }
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
+    if (!join_->maintained() && !join_->staleness() && flush_at_ != now) {
+        join_->sink_table()->flush_for_pull(now);
+        while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+            delete sink;        // XXX be careful of refcounting
+        flush_at_ = now;
+    }
+
     Str last_valid = first;
     for (auto it = valid_ranges_.begin_overlaps(first, last);
          it != valid_ranges_.end(); ) {
@@ -182,13 +189,6 @@ std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     return stream << "}";
 }
 #endif
-
-void JoinRange::pull_flush() {
-    mandatory_assert(valid_ranges_.size() <= 1);
-    while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
-        // XXX no one else had better deref this shit
-        delete sink;
-}
 
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        SinkRange* sink, int joinpos, const Match& m,

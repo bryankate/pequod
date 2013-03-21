@@ -29,7 +29,7 @@ const Datum Datum::empty_datum{Str()};
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
       nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
-      namelen_(name.length()) {
+      flush_at_(0), all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
 }
@@ -84,6 +84,8 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
         }
 
     join_ranges_.insert(*new JoinRange(first, last, join));
+    if (join->maintained() || join->staleness())
+        all_pull_ = false;
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -107,15 +109,15 @@ void Table::insert(Str key, String value) {
     }
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
+    all_pull_ = false;
 }
 
-void Table::pull_flush() {
+void Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
         invalidate_dependents(d->key());
         d->invalidate();
     }
-    for (auto it = join_ranges_.begin(); it != join_ranges_.end(); ++it)
-        it->pull_flush();
+    flush_at_ = now;
 }
 
 void Table::erase(Str key) {
