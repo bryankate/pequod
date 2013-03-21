@@ -169,7 +169,6 @@ void TwitterNewPopulator::synthetic_subscriptions(vector<pair<uint32_t, uint32_t
 		other = std::upper_bound(sub_prob, sub_prob + nusers_, gen()) - sub_prob;
 	    } while (subvec[other / 32] & (1U << (other % 32)));
             subs.push_back(std::make_pair(i, other));
-            followers.push_back(std::make_pair(other, i));
             subvec[other / 32] |= 1U << (other % 32);
         }
     }
@@ -177,7 +176,7 @@ void TwitterNewPopulator::synthetic_subscriptions(vector<pair<uint32_t, uint32_t
     delete[] sub_prob;
     delete[] subvec;
 
-    make_followers(subs, followers, gen);
+    make_users(subs, gen);
 }
 
 void TwitterNewPopulator::import_subscriptions(vector<pair<uint32_t, uint32_t> >& subs,
@@ -190,20 +189,17 @@ void TwitterNewPopulator::import_subscriptions(vector<pair<uint32_t, uint32_t> >
 
     uint32_t user;
     uint32_t follower;
-    vector<pair<uint32_t, uint32_t>> followers;
 
     while(graph.good()) {
         graph >> user >> follower;
         subs.push_back(std::make_pair(follower, user));
-        followers.push_back(std::make_pair(user, follower));
     }
 
-    make_followers(subs, followers, gen);
+    make_users(subs, gen);
 }
 
-void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
-                                         vector<pair<uint32_t, uint32_t>>& followers,
-                                         generator_type& gen) {
+void TwitterNewPopulator::make_users(vector<pair<uint32_t, uint32_t>>& subs,
+                                     generator_type& gen) {
 
     users_ = vector<TwitterUser>(nusers_);
     for (auto& sub : subs)
@@ -228,20 +224,6 @@ void TwitterNewPopulator::make_followers(vector<pair<uint32_t, uint32_t>>& subs,
 
     post_dist_ = post_dist_type(wpost.begin(), wpost.end());
     uni_dist_ = uni_dist_type(0, nusers_ - 1);
-
-    followers_.clear();
-    followers_.reserve(followers.size());
-    follower_ptrs_.clear();
-    follower_ptrs_.reserve(nusers_ + 1);
-
-    std::sort(followers.begin(), followers.end());
-    for (auto& sub : followers) {
-        while (follower_ptrs_.size() <= sub.first)
-            follower_ptrs_.push_back(followers_.size());
-        followers_.push_back(sub.second);
-    }
-    while (follower_ptrs_.size() <= nusers_)
-        follower_ptrs_.push_back(followers_.size());
 }
 
 
