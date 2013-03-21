@@ -525,6 +525,8 @@ int main(int argc, char** argv) {
             rw.safe_run();
         } else if (tp_param["redis"])
             pq::run_rwmicro_redisfd(tp_param);
+        else if (client_port >= 0) 
+            pq::run_rwmicro_pqremote(tp_param, client_port);
         else {
             pq::DirectClient client(server);
             pq::TwitterShim<pq::DirectClient> shim(client);
