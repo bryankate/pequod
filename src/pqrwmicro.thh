@@ -179,6 +179,8 @@ void RwMicro<S>::run(tamer::event<> e) {
     e();
 }
 
+tamed void run_rwmicro_redisfd(Json& tp_param);
+
 };
 
 #endif
