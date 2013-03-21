@@ -333,18 +333,18 @@ tamed template <typename S>
 void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
                             event<> e) {
     tvars {
-        char buf[128];
         std::vector<uint32_t> follower;
+        String v(value);
     }
     twait {
-        server_.post(u, time, value, make_event());
+        server_.post(u, time, v, make_event());
     }
     if (tp_.push()) {
         twait {
             server_.get_follower(u, make_event(follower));
         }
         twait {
-            server_.prepare_push_post(u, time, value);
+            server_.prepare_push_post(u, time, v);
             for (auto& f : follower)
                 server_.push_post(f, make_event());
         }
