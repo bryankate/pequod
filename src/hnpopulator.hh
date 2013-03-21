@@ -41,12 +41,14 @@ class HackernewsPopulator {
     inline bool mk() const;
     inline bool ma() const;
     inline bool pg() const;
-    inline bool check_karma() const;
     inline bool populate_only() const;
     inline bool run_only() const;
     inline void fill_db();
     inline void populate_from_files(uint32_t* nv, uint32_t* nc);
     inline void set_defaults();
+
+    uint32_t ncomments;
+    uint32_t nvotes;
 
   private:
     Json param_;
@@ -61,23 +63,24 @@ class HackernewsPopulator {
     std::map<uint32_t, std::set<uint32_t> > votes_;
     uint32_t pre_;
     uint32_t narticles_;
-    uint32_t ncomments_;
     bool pull_;
     bool materialize_articles_;
     bool large_;
-    bool check_karma_;
+    bool run_only_;
 };
 
 inline HackernewsPopulator::HackernewsPopulator(const Json& param)
-    : param_(param), log_(param["log"].as_b(false)), push_(param["push"].as_b(false)), 
+    :  ncomments(0), nvotes(0), param_(param), log_(param["log"].as_b(false)), 
+       push_(param["push"].as_b(false)), 
       nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
       articles_(1000000),
       pre_(param["narticles"].as_i(100)),
-      narticles_(0), ncomments_(0), 
+      narticles_(0),
       pull_(param["pull"].as_b(false)),
       materialize_articles_(param["super_materialize"].as_b(false)),
-      large_(param["large"].as_b(false)), check_karma_(true) {
+      large_(param["large"].as_b(false)),
+      run_only_(param["run_only"].as_b(false)) {
 }
 
 inline uint32_t HackernewsPopulator::nusers() const {
@@ -96,8 +99,10 @@ inline void HackernewsPopulator::post_article(uint32_t author, uint32_t article)
 }
 
 inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
-    if (!check_karma_)
+    if (run_only_) {
+        nvotes++;
         return true;
+    }
     auto it = votes_.find(article);
     uint32_t author = articles_[article];
     mandatory_assert(it != votes_.end());    
@@ -105,6 +110,7 @@ inline bool HackernewsPopulator::vote(uint32_t article, uint32_t user) {
         return false;
     it->second.insert(user);
     ++karma_[author];
+    nvotes++;
     return true;
 }
 
@@ -114,8 +120,8 @@ inline uint32_t HackernewsPopulator::next_aid() {
 }
 
 inline uint32_t HackernewsPopulator::next_comment() {
-    mandatory_assert(ncomments_ < 10000000);
-    return ncomments_++;
+    mandatory_assert(ncomments < 10000000);
+    return ncomments++;
 }
 
 inline uint32_t HackernewsPopulator::narticles() const {
@@ -182,29 +188,29 @@ inline bool HackernewsPopulator::pg() const {
     return param_["pg"].as_b(false);
 }
 
-inline bool HackernewsPopulator::check_karma() const {
-    return check_karma_;
-}
-
 inline bool HackernewsPopulator::populate_only() const {
     return param_["populate_only"].as_b(false);
 }
 
 inline bool HackernewsPopulator::run_only() const {
-    return param_["run_only"].as_b(false);
+    return run_only_;
 }
 
 inline void HackernewsPopulator::set_defaults() {
     if (param_["large"].as_b(false)) {
-        ncomments_ = 999245;
-        narticles_ = 99999;
-        nusers_ = 49999;
+        ncomments = 949245;
+        narticles_ = 100000;
+        nusers_ = 50000;
+        nvotes = 2444184;
     } else {
-        ncomments_ = 99;
+        ncomments = 99;
         narticles_ = 99;
         nusers_ = 9;
+        nvotes = 99;
     }
-    check_karma_ = false;
+    for (uint32_t i = 0; i < narticles_; i++) {
+        articles_[i] = i % nusers_;
+    }
 }
 
 inline void HackernewsPopulator::fill_db() {
@@ -271,7 +277,8 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
     pre_ = 0;
     narticles_ = 0;
     nusers_ = 0;
-    ncomments_ = 0;
+    ncomments = 0;
+    nvotes = 0;
 
     while(infile) {
         if (!getline(infile, line))
@@ -330,7 +337,7 @@ inline void HackernewsPopulator::populate_from_files(uint32_t* nv, uint32_t* nc)
         if (author > nusers_) 
             nusers_ = author;
 
-        ncomments_++;
+        ncomments++;
         (*nc)++;
     }
 
