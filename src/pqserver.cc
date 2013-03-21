@@ -29,7 +29,7 @@ const Datum Datum::empty_datum{Str()};
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
       nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
-      namelen_(name.length()) {
+      all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
 }
@@ -84,6 +84,8 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
         }
 
     join_ranges_.insert(*new JoinRange(first, last, join));
+    if (join->maintained() || join->staleness())
+        all_pull_ = false;
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -107,6 +109,7 @@ void Table::insert(Str key, String value) {
     }
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
+    all_pull_ = false;
 }
 
 void Table::pull_flush() {

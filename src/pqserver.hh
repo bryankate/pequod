@@ -65,6 +65,7 @@ class Table : public pequod_set_base_hook {
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    bool all_pull_;
     int namelen_;
     char name_[28];
   public:
