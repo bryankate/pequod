@@ -87,7 +87,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         ++sourcet->nvalidate_skipped_;
 
     else {
-        auto it = sourcet->lower_bound(Str(kf, kflen));
+        auto it = sourcet->lower_bound_hint(Str(kf, kflen));
         auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());

@@ -28,6 +28,7 @@ class Table : public pequod_set_base_hook {
     typedef store_type::iterator iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
+    inline iterator lower_bound_hint(Str key);
     inline const_iterator lower_bound(Str key) const;
     inline iterator lower_bound(Str key);
     inline size_t size() const;
@@ -141,6 +142,10 @@ inline auto Table::begin() const -> const_iterator {
 
 inline auto Table::end() const -> const_iterator {
     return store_.end();
+}
+
+inline auto Table::lower_bound_hint(Str str) -> iterator {
+    return store_.lower_bound(str, DatumCompare());
 }
 
 inline auto Table::lower_bound(Str str) const -> const_iterator {
