@@ -70,7 +70,6 @@ class DirectClient {
     template <typename R>
     inline void stats(preevent<R, Json> e);
 
-    inline void pull_flush(Str tname);
   private:
     Server& server_;
 };
@@ -199,11 +198,6 @@ inline void DirectClient::pace(preevent<R> done) {
 template <typename R>
 inline void DirectClient::stats(preevent<R, Json> e) {
     e(server_.stats());
-}
-
-inline void DirectClient::pull_flush(Str tname) {
-    Table& t = server_.make_table(tname);
-    t.pull_flush();
 }
 
 } // namespace pq
