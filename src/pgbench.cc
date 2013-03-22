@@ -13,7 +13,8 @@ int main(int argv, char** argc) {
     pg.bench_prepared(n);
     double tm = (tstamp() - start) / 1000000;
     cout << "Prepared statement: " << tm << " Queries: " << n << " QPS: " << n/tm << endl;
-    return 0;
+
+    n = 100000;
     start = tstamp();
     pg.bench_params(n);
     tm = (tstamp() - start) / 1000000;

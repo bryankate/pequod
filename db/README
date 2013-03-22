@@ -10,6 +10,10 @@ emacs -nw /mnt/tmp/postgresql.conf
   -- bgwriter_lru_maxpages=0 (???)
 su - postgres -c "/usr/lib/postgresql/9.1/bin/pg_ctl -D /mnt/tmp -l /mnt/tmp/postgres.log start"
 
+OR
+
+su - postgres -c "numactl -C 5 /usr/lib/postgresql/9.1/bin/pg_ctl -D /mnt/tmp -l /mnt/tmp/postgres.log start"
+
 su postgres
 psql -p 5477
 CREATE ROLE neha WITH SUPERUSER CREATEDB LOGIN ENCRYPTED PASSWORD 'pequod';

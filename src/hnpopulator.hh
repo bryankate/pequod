@@ -81,6 +81,10 @@ inline HackernewsPopulator::HackernewsPopulator(const Json& param)
       materialize_articles_(param["super_materialize"].as_b(false)),
       large_(param["large"].as_b(false)),
       run_only_(param["run_only"].as_b(false)) {
+    if (push_) 
+        // I know this is weird, but this turns materialization off.
+        pull_ = true;
+        
 }
 
 inline uint32_t HackernewsPopulator::nusers() const {
