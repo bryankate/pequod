@@ -99,15 +99,15 @@ real_twitter = []
 for m in modes:
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "micro",
-                         #'server' : "./obj/pqserver -kl7007",
-                         'cmd': "./obj/pqserver --rwmicro --nusers=100000 --pactive=70 --nfollower=110 --prefresh=98 --nops=100000 %s" % m[2]});
+                         #'server' : "./obj/pqserver -kl=7007",
+                         'cmd': "./obj/pqserver --rwmicro --nusers=100000 --pactive=70 --nfollower=110 --postlen=5 --popduration=500000 --prefresh=98 --nops=1000000 %s" % m[2]});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "base",
-                         #'server' : "./obj/pqserver -kl7007",
+                         #'server' : "./obj/pqserver -kl=7007",
                          'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 65, 0, 0, 0)});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "all",
-                         #'server' : "./obj/pqserver -kl7007",
+                         #'server' : "./obj/pqserver -kl=7007",
                          'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 10)});
 exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
     
