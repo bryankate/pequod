@@ -25,6 +25,8 @@
 namespace pq {
 
 const Datum Datum::empty_datum{Str()};
+const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
+const Table Table::empty_table{Str()};
 
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
@@ -33,8 +35,6 @@ Table::Table(Str name)
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
 }
-
-const Table Table::empty_table{Str()};
 
 Table::~Table() {
     while (SourceRange* r = source_ranges_.unlink_leftmost_without_rebalance()) {

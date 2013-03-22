@@ -120,7 +120,7 @@ class JoinRange : public ServerRangeBase {
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
-    void validate_step(validate_args& va, int joinpos, ServerStore::const_iterator* hint);
+    void validate_step(validate_args& va, int joinpos, const Datum** hint);
 
     friend class SinkRange;
 };
