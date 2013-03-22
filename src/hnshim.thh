@@ -265,6 +265,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         uint32_t my_karma, karma;
         size_t votect;
         typename S::iterator bit, cit;
+        tamer::gather_rendezvous gr;
     }
     if (log_) 
         printf("Reading article %d\n", aid);
@@ -302,15 +303,14 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         sprintf(buf1_, "c|%07d%07d|", author, aid);
         sprintf(buf2_, "c|%07d%07d}", author, aid);
         twait { server_.scan(buf1_, buf2_, make_event(scan_resultc)); }
-        twait {
-            for (bit = scan_resultc.begin(); bit != scan_resultc.end(); ++bit) {
-                this->total_comments++;
-                if (log_)
-                    std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-                get_karma(extract_spkey(3, bit->key()), check_karmas, check, make_event());
-            }
-            scan_resultc.flush();
+        for (bit = scan_resultc.begin(); bit != scan_resultc.end(); ++bit) {
+            this->total_comments++;
+            if (log_)
+                std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
+            get_karma(extract_spkey(3, bit->key()), check_karmas, check, gr.make_event());
         }
+        scan_resultc.flush();
+        twait(gr);
         // Votes
         sprintf(buf1_, "v|%07d%07d|", author, aid);
         sprintf(buf2_, "v|%07d%07d}", author, aid);
