@@ -94,7 +94,7 @@ for nfollower in [1, 16, 32]:
 cmdbase = "./obj/pqserver --client=7777 --twitternew --nusers=100000 --pactive=70 --postlimit=15000 --duration=100000000"
 #cmdbase = "./obj/pqserver --client=7777 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
 # rwmicro and twitternew use different params, so m[1] and m[2] differ
-modes = [["autopush", "", "--push"], ["pull", "--pull", ""], ["push", "--push", "--client_push"]]
+modes = [["autopush", "", "--push"], ["pull", "--pull", "--no-push"], ["push", "--push", "--client_push"]]
 real_twitter = []
 for m in modes:
     real_twitter.append({'plotgroup': "%s" % m[0],
