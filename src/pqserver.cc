@@ -275,6 +275,7 @@ static Clp_Option options[] = {
     { "pprerefresh", 0, 7002, Clp_ValDouble, 0 },
     { "pactive", 0, 7003, Clp_ValDouble, 0 },
     { "client_push", 0, 7004, 0, Clp_Negate },
+    { "postlen", 0, 7005, Clp_ValInt, 0 },
 };
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
@@ -408,6 +409,8 @@ int main(int argc, char** argv) {
             tp_param.set("pactive", clp->val.d);
         else if (clp->option->long_name == String("client_push"))
             tp_param.set("client_push", !clp->negated);
+        else if (clp->option->long_name == String("postlen"))
+            tp_param.set("postlen", clp->val.i);
 
         // run single unit test
         else

@@ -14,6 +14,7 @@
 #include "time.hh"
 
 namespace pq {
+static const char post_data[] = "She likes movie moby";
 
 template <typename S>
 class RwMicro {
@@ -24,6 +25,8 @@ class RwMicro {
           nops_(param["nops"].as_i(100000)),
           nuser_(param["nusers"].as_i(1000)),
           nfollower_(param["nfollower"].as_i(100)), 
+          npop_(param["popduration"].as_i(0)),
+          postlen_(param["postlen"].as_i(20)),
           server_(server),
           push_(param["push"].as_b(true)),
           pprerefresh_(param["pprerefresh"].as_i(0)),
@@ -41,6 +44,8 @@ class RwMicro {
     int nops_;
     int nuser_;
     int nfollower_;
+    int npop_;
+    int postlen_;
     S& server_;
     bool push_;
     int pprerefresh_;
@@ -96,11 +101,17 @@ void RwMicro<S>::populate(tamer::event<> e) {
         delete[] b;
     }
     time = 1;
-    for (u = 0; u < nuser_; ++u)
-        for (i = 0; i < 10; ++i) {
-            post(u, ++time, String("She likes movie moby"), gr.make_event());
+    if (npop_)
+        for (i = 0; i < npop_; ++i) {
+            post(random() % nuser_, ++time, String(post_data, postlen_), gr.make_event());
             twait { server_.pace(make_event()); }
         }
+    else
+        for (u = 0; u < nuser_; ++u)
+            for (i = 0; i < 10; ++i) {
+                post(u, ++time, String(post_data, postlen_), gr.make_event());
+                twait { server_.pace(make_event()); }
+            }
     twait(gr);
     twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
     if (pprerefresh_) {
@@ -157,7 +168,7 @@ void RwMicro<S>::run(tamer::event<> e) {
             trefresh += to_real(optv[1] - optv[0]);
         } else {
             int poster = random() % nuser_;
-            post(poster, ++time, String("She likes movie moby"), gr.make_event());
+            post(poster, ++time, String(post_data, postlen_), gr.make_event());
             ++npost;
         }
         twait { server_.pace(make_event()); }
