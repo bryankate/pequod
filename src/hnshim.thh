@@ -39,6 +39,9 @@ class HashHackerNewsShim {
     void stats(preevent<R, Json> e) {
         e(Json());
     }
+    
+    void pace(event<> e) { e(); }
+
   private:
     C& c_;
 };
@@ -133,6 +136,11 @@ class PQHackerNewsShim {
     template <typename R>
     void stats(preevent<R, Json> e) {
         server_.stats(e);
+    }
+
+    template <typename R>
+    void pace(preevent<R> e) {
+        server_.pace(e);
     }
 
     int total_comments;
@@ -576,12 +584,15 @@ class SQLHackernewsShim {
         e(Json());
     }
 
+    void pace(event<> e) { e(); }
+
   private:
     C& pg_;
     bool log_;
     bool mk_;
     bool push_;
 };
+
 #endif
 
 };

@@ -166,6 +166,7 @@ void HackernewsRunner<S>::run(event<> e) {
                     ncomment++;
                 }
             }
+            twait { server_.pace(make_event()); }
         }
     }
     twait(gr);
