@@ -122,9 +122,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
             ++sourcet->nvalidate_increasing_;
             ++sourcet->nvalidate_optimized_;
             ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
-            ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
-            for (; it != itend && next_hint != end_next &&
-                     it->key() < Str(kl, kllen); ++it)
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     validate_step(va, joinpos + 1, &next_hint);
