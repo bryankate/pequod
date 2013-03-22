@@ -68,7 +68,7 @@ class HNPopulator:
 
         for aid in range(0, self.narticles):
             d = {}
-            author = randint(0, self.nusers-1)
+            author = aid%self.nusers
             d['author'] = author
             d['aid'] = aid
             d['text'] = "lalalala"
