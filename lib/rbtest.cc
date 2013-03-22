@@ -125,6 +125,24 @@ class default_comparator<rbwrapper<T> > {
     }
 };
 
+template <typename T> class less {};
+template <typename T>
+class less<rbwrapper<T> > {
+  public:
+    inline bool operator()(const rbwrapper<T>& a, const rbwrapper<T>& b) const {
+	return a.value() < b.value();
+    }
+    inline bool operator()(const rbwrapper<T>& a, const T& b) const {
+	return a.value() < b;
+    }
+    inline bool operator()(const T& a, const rbwrapper<T>& b) const {
+	return a < b.value();
+    }
+    inline bool operator()(const T& a, const T& b) const {
+	return a < b;
+    }
+};
+
 void print(interval<int> &x) {
     std::cerr << x << "\n";
 }
@@ -433,6 +451,26 @@ int main(int argc, char **argv) {
 	std::cerr << tree << "\n";
 	tree.erase_and_dispose(*y);
 	std::cerr << tree << "\n";
+    }
+
+    {
+        rbtree<rbwrapper<int> > tree;
+        tree.insert(*new rbwrapper<int>(0));
+        tree.insert(*new rbwrapper<int>(2));
+        for (int i = 0; i != 40; ++i)
+            tree.insert(*new rbwrapper<int>(1));
+        auto it = tree.lower_bound(1, default_comparator<rbwrapper<int>>());
+        assert(it->value() == 1);
+        --it;
+        assert(it->value() == 0);
+        it = tree.upper_bound(1, default_comparator<rbwrapper<int>>());
+        assert(it->value() == 2);
+        it = tree.lower_bound(1, less<rbwrapper<int>>());
+        assert(it->value() == 1);
+        --it;
+        assert(it->value() == 0);
+        it = tree.upper_bound(1, less<rbwrapper<int>>());
+        assert(it->value() == 2);
     }
 
     {
