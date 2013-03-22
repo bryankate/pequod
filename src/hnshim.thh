@@ -134,6 +134,10 @@ class PQHackerNewsShim {
     void stats(preevent<R, Json> e) {
         server_.stats(e);
     }
+
+    int total_comments;
+    int total_articles;
+
   private:
     tamed void get_karma(String user, karmas_type& check_karmas, bool check, event<> e);
 
@@ -171,7 +175,8 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
         start = "k|";
         end = "k}";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
-    } else if (ma) {
+    }
+    if (ma) {
         // Materialize all articles
         printf("Materializing all article pages\n");
         start = "ma|";
@@ -191,10 +196,18 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
             "c|<author><seqid>|<cid>|<commenter> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[2])); }
 
+    } 
+    if (ma && !mk) {
         // Materialize karma inline
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
             "using c|<aid>|<cid>|<commenter> "
             "count v|<commenter><seq:7>|<voter:7>";
+        twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
+    }
+    if (ma && mk) {
+        // Materialize karma inline
+        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
+            "k|<commenter>";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     e();
@@ -205,14 +218,15 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
     tvars { 
         typename S::scan_result scan_result; 
         String start, end;
+        typename S::iterator bit;
     }
     if (!push_ && mk_) {
         start = "k|";
         end = "k}";
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
-            std::cout << ": print validated [" << start << "," << end << ")\n";
-            auto bit = scan_result.begin();
+            std::cout << ": print validated karma range [" << start << "," << end << ")\n";
+            bit = scan_result.begin();
             for (; bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
             std::cout << ": end print validated [" << start << "," << end << ")\n";
@@ -223,8 +237,8 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
         end = "ma}";
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
-            std::cout << ": print validated [" << start << "," << end << ")\n";
-            auto bit = scan_result.begin();
+            std::cout << ": print validated ma range [" << start << "," << end << ")\n";
+            bit = scan_result.begin();
             for (; bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
             std::cout << ": end print validated [" << start << "," << end << ")\n";
@@ -239,8 +253,8 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, bool check, event<> e) {
     tvars {
         char buf1[128], buf2[128];
-        typename S::scan_result scan_result;
-        String field, user, value;
+        typename S::scan_result scan_resultma, scan_resultc;
+        String field, user, avalue;
         uint32_t my_karma, karma;
         size_t votect;
         typename S::iterator bit, cit;
@@ -250,9 +264,9 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
     if (ma_) {
         sprintf(buf1, "ma|%07d%07d|", author, aid);
         sprintf(buf2, "ma|%07d%07d}", author, aid);
-        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
-        bit = scan_result.begin();
-        for (; bit != scan_result.end(); ++bit) {
+        twait { server_.scan(buf1, buf2, make_event(scan_resultma)); }
+        bit = scan_resultma.begin();
+        for (; bit != scan_resultma.end(); ++bit) {
             field = extract_spkey(2, bit->key());
             if (log_) {
                 if (field == "a")
@@ -269,19 +283,21 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                 mandatory_assert(karma == my_karma && "Karma mismatch");
             }
         }
+        e();
     } else {
         // Article
         sprintf(buf1, "a|%07d%07d", author, aid);
-        twait { server_.get(buf1, make_event(value)); }
+        twait { server_.get(buf1, make_event(avalue)); }
         if (log_)
-            std::cout << "read " << buf1 << ":" << value << "\n";
-        
+            std::cout << "read " << buf1 << ":" << avalue << "\n";
+        this->total_articles++;
         // Comments and Karma
         sprintf(buf1, "c|%07d%07d|", author, aid);
         sprintf(buf2, "c|%07d%07d}", author, aid);
-        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
-        bit = scan_result.begin();
-        for (; bit != scan_result.end(); ++bit) {
+        twait { server_.scan(buf1, buf2, make_event(scan_resultc)); }
+        bit = scan_resultc.begin();
+        for (; bit != scan_resultc.end(); ++bit) {
+            this->total_comments++;
             if (log_)
                 std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
             twait { get_karma(extract_spkey(3, bit->key()), check_karmas, check, make_event()); }
@@ -293,8 +309,8 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         twait { server_.count(buf1, buf2, make_event(votect)); }
         if (log_)
             std::cout << "  v " << votect << "\n";
+        e();
     }
-    e();
 }
 
 tamed template <typename S>
@@ -334,11 +350,12 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
             votect = 0;
         }
     }
-    local_karma = check_karmas[user.to_i()];
-    if (check)
+    if (check) {
+        local_karma = check_karmas[user.to_i()];
         mandatory_assert(karma == local_karma && "Karma mismatch");
+    }
     if (log_)
-        std::cout << "  k " << user << ":" << karma << "\n";
+        std::cout << "  k " << user << ": " << karma << "\n";
     e();
 }
 

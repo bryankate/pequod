@@ -501,7 +501,7 @@ int main(int argc, char** argv) {
         } else {
             if (client_port >= 0)
                 run_hn_remote(*hp, client_port);
-            else  {
+            else {
                 pq::DirectClient dc(server);
                 pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
                 pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
