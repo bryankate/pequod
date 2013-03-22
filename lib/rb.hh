@@ -32,6 +32,7 @@ class rbnodeptr {
 
     inline T* node() const;
     inline rbnodeptr<T>& child(bool isright) const;
+    inline bool children_same_color() const;
     inline bool find_child(T* node) const;
     inline rbnodeptr<T>& load_color();
     inline rbnodeptr<T> set_child(bool isright, rbnodeptr<T> x, T*& root) const;
@@ -326,6 +327,11 @@ inline rbnodeptr<T>& rbnodeptr<T>::child(bool isright) const {
 }
 
 template <typename T>
+inline bool rbnodeptr<T>::children_same_color() const {
+    return ((node()->rblinks_.c_[0].x_ ^ node()->rblinks_.c_[1].x_) & 1) == 0;
+}
+
+template <typename T>
 inline bool rbnodeptr<T>::find_child(T* n) const {
     return x_ && node()->rblinks_.c_[1].node() == n;
 }
@@ -517,51 +523,82 @@ void rbtree<T, C, R>::insert_commit(T* x, rbnodeptr<T> p, bool child) {
     // link in new node; it's red
     x->rblinks_.p_ = p.node();
     x->rblinks_.c_[0] = x->rblinks_.c_[1] = rbnodeptr<T>(0, false);
-    rbnodeptr<T> z(x, true);
 
     // maybe set limits
-    if (!r_.limit_[0] || (p.node() == r_.limit_[0] && !child))
-        r_.limit_[0] = x;
-    if (!r_.limit_[1] || (p.node() == r_.limit_[1] && child))
-        r_.limit_[1] = x;
+    if (p) {
+        p.child(child) = rbnodeptr<T>(x, true);
+        if (p.node() == r_.limit_[child])
+            r_.limit_[child] = x;
+    } else
+        r_.root_ = r_.limit_[0] = r_.limit_[1] = x;
 
     // reshape
-    if (r_.reshape()(x)) {
-        if (p)
-            p.child(child) = z;
+    if (r_.reshape()(x))
         do {
             x = x->rblinks_.p_;
         } while (x && r_.reshape()(x));
-    }
 
     // flip up the tree
-    // invariant: z.red()
+    // invariant: we are looking at the `child` of `p`
+#define RB_INSERT_CODE 2
+#if RB_INSERT_CODE == 2 || RB_INSERT_CODE == 3
+    while (p.red()) {
+        rbnodeptr<T> gp = p.black_parent(), z;
+        bool gpchild = gp.find_child(p.node());
+        if (gp.child(!gpchild).red()) {
+            z = gp.flip();
+            p = z.black_parent().load_color();
+# if RB_INSERT_CODE == 3
+        } else if (!gpchild) {
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+# endif
+        } else {
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+        }
+        child = p.find_child(gp.node());
+        p.set_child(child, z, r_.root_);
+    }
+#elif RB_INSERT_CODE == 1
     rbnodeptr<T> gp;
-    while (p.red() && (gp = p.black_parent(),
-                       gp.child(0).red() && gp.child(1).red())) {
-        p.child(child) = z;
-        z = gp.flip();
-        p = z.black_parent();
-        child = p.find_child(z.node());
-        // get correct color for `p`
-        if (p && (gp = p.black_parent()))
-            p = gp.child(gp.find_child(p.node()));
+    while (p.red() && (gp = p.black_parent(), gp.children_same_color())) {
+        gp = gp.flip();
+        p = gp.black_parent().load_color();
+        child = p.find_child(gp.node());
+        p.set_child(child, gp, r_.root_);
     }
 
     // maybe one last rotation (pair)
-    // invariant: z.red()
     if (p.red()) {
-        p.child(child) = z;
-        gp = p.black_parent();
         bool gpchild = gp.find_child(p.node());
         if (gpchild != child)
             gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
-        z = gp.rotate(!gpchild, r_.reshape());
+        rbnodeptr<T> z = gp.rotate(!gpchild, r_.reshape());
         p = z.black_parent();
-        child = p.find_child(gp.node());
+        p.set_child(p.find_child(gp.node()), z, r_.root_);
     }
-
-    p.set_child(child, z, r_.root_);
+#else
+    while (p.red()) {
+        rbnodeptr<T> gp = p.black_parent(), z;
+        if (gp.child(0).red() && gp.child(1).red()) {
+            z = gp.flip();
+            p = gp.black_parent().load_color();
+        } else {
+            bool gpchild = gp.find_child(p.node());
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+        }
+        child = p.find_child(gp.node());
+        p.set_child(child, z, r_.root_);
+    }
+#endif
 }
 
 template <typename T, typename C, typename R>
