@@ -32,7 +32,9 @@ class rbnodeptr {
 
     inline T* node() const;
     inline rbnodeptr<T>& child(bool isright) const;
+    inline bool children_same_color() const;
     inline bool find_child(T* node) const;
+    inline rbnodeptr<T>& load_color();
     inline rbnodeptr<T> set_child(bool isright, rbnodeptr<T> x, T*& root) const;
     inline T*& parent() const;
     inline rbnodeptr<T> black_parent() const;
@@ -49,7 +51,7 @@ class rbnodeptr {
     size_t size() const;
     template <typename C>
     void check(T* parent, int this_black_height, int& black_height,
-               T* root, T* begin, C& compare) const;
+               T* root, T* begin, T* end, C& compare) const;
     void output(std::ostream& s, int indent, T* highlight) const;
 
   private:
@@ -84,7 +86,7 @@ struct rbreshape : private Reshape {
 template <typename T>
 struct rbrep0 {
     T* root_;
-    T* begin_;
+    T* limit_[2];
 };
 
 template <typename T, typename Compare, typename Reshape>
@@ -93,7 +95,6 @@ struct rbrep1 : public rbrep0<T>, public rbcompare<Compare>,
     typedef rbcompare<Compare> rbcompare_type;
     typedef rbreshape<Reshape, T> rbreshape_type;
     inline rbrep1(const Compare &compare, const Reshape &reshape);
-    void insert_node(T* x);
 };
 
 template <typename C, typename Ret> class rbcomparator;
@@ -154,6 +155,7 @@ class rbalgorithms {
   public:
     static inline T* next_node(T* n);
     static inline T* prev_node(T* n);
+    static inline T* prev_node(T* n, T* last);
     static inline T* step_node(T* n, bool forward);
     static inline T* edge_node(T* n, bool forward);
 };
@@ -245,6 +247,15 @@ class rbtree {
 
     inline void insert(reference n);
 
+    typedef std::pair<rbnodeptr<T>, bool> insert_commit_data;
+    template <typename K, typename Comp>
+    inline std::pair<iterator, bool>
+      insert_unique_check(const K& key, Comp compare, insert_commit_data& commit_data);
+    template <typename K, typename Comp>
+    inline std::pair<iterator, bool>
+      insert_unique_check(const_iterator hint, const K& key, Comp compare, insert_commit_data& commit_data);
+    inline iterator insert_unique_commit(reference x, const insert_commit_data& commit_data);
+
     inline iterator erase(iterator it);
     inline void erase(reference x);
     inline void erase_and_dispose(reference x);
@@ -260,9 +271,16 @@ class rbtree {
   private:
     rbpriv::rbrep1<T, Compare, Reshape> r_;
 
+    void insert_commit(T* x, rbnodeptr<T> p, bool child);
     void delete_node(T* victim, T* successor_hint);
     void delete_node_fixup(rbnodeptr<T> p, bool child);
 
+    template <typename K, typename Comp>
+    inline std::pair<iterator, bool>
+      insert_unique_check_impl(const K& key, Comp comp, insert_commit_data& commit_data);
+    template <typename K, typename Comp>
+    inline std::pair<iterator, bool>
+      insert_unique_check_impl(const_iterator hint, const K& key, Comp comp, insert_commit_data& commit_data);
     template <typename K, typename Comp>
     inline T* find_any(const K& key, Comp comp) const;
     template <typename K, typename Comp>
@@ -309,8 +327,22 @@ inline rbnodeptr<T>& rbnodeptr<T>::child(bool isright) const {
 }
 
 template <typename T>
+inline bool rbnodeptr<T>::children_same_color() const {
+    return ((node()->rblinks_.c_[0].x_ ^ node()->rblinks_.c_[1].x_) & 1) == 0;
+}
+
+template <typename T>
 inline bool rbnodeptr<T>::find_child(T* n) const {
     return x_ && node()->rblinks_.c_[1].node() == n;
+}
+
+template <typename T>
+inline rbnodeptr<T>& rbnodeptr<T>::load_color() {
+    assert(!red());
+    rbnodeptr<T> p;
+    if (x_ && (p = black_parent()) && p.child(p.find_child(node())).red())
+        x_ |= 1;
+    return *this;
 }
 
 template <typename T>
@@ -415,7 +447,7 @@ inline rbreshape<Reshape, T> &rbreshape<Reshape, T>::reshape() {
 template <typename T, typename C, typename R>
 inline rbrep1<T, C, R>::rbrep1(const C &compare, const R &reshape)
     : rbcompare_type(compare), rbreshape_type(reshape) {
-    this->root_ = this->begin_ = 0;
+    this->root_ = this->limit_[0] = this->limit_[1] = 0;
 }
 
 template <typename Compare>
@@ -435,64 +467,160 @@ template <typename T, typename C, typename R>
 rbtree<T, C, R>::~rbtree() {
 }
 
-namespace rbpriv {
-template <typename T, typename C, typename R>
-void rbrep1<T, C, R>::insert_node(T* x) {
-    // find insertion point
-    rbnodeptr<T> p(this->root_, false);
-    bool child = false;
-    while (p && (child = this->node_compare(*x, *p.node()) > 0,
-                 p.child(child)))
-        p = p.child(child);
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+auto rbtree<T, C, R>::insert_unique_check_impl(const K& key, Comp comp, insert_commit_data& commit_data)
+    -> std::pair<iterator, bool> {
+    rbnodeptr<T> p(r_.root_, false);
+    int cmp = 0;
+    while (p) {
+        cmp = comp.compare(key, *p.node());
+        if (cmp == 0)
+            return std::pair<iterator, bool>(iterator(p.node()), false);
+        if (!p.child(cmp > 0))
+            break;
+        p = p.child(cmp > 0);
+    }
+    commit_data.first = p;
+    commit_data.second = cmp > 0;
+    return std::pair<iterator, bool>(iterator(), true);
+}
 
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+auto rbtree<T, C, R>::insert_unique_check(const K& key, Comp comp,
+                                          insert_commit_data& commit_data)
+    -> std::pair<iterator, bool> {
+    return insert_unique_check_impl(key, rbpriv::make_compare<K, T>(comp), commit_data);
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+auto rbtree<T, C, R>::insert_unique_check_impl(const_iterator hint, const K& key, Comp comp,
+                                               insert_commit_data& commit_data)
+    -> std::pair<iterator, bool> {
+    T* h = const_cast<T*>(hint.operator->());
+    if (!h || comp.less(key, *h)) {
+        T* prev = h;
+        if (prev == r_.limit_[0]
+            || (prev = rbalgorithms<T>::prev_node(prev, r_.limit_[1]),
+                comp.greater(key, *prev))) {
+            if ((commit_data.second = !h || h->rblinks_.c_[false]))
+                h = prev;
+            commit_data.first = rbnodeptr<T>(h, false).load_color();
+            return std::pair<iterator, bool>(nullptr, true);
+        }
+    }
+    return insert_unique_check_impl(key, comp, commit_data);
+}
+
+template <typename T, typename C, typename R> template <typename K, typename Comp>
+auto rbtree<T, C, R>::insert_unique_check(const_iterator hint, const K& key, Comp comp,
+                                          insert_commit_data& commit_data)
+    -> std::pair<iterator, bool> {
+    return insert_unique_check_impl(hint, key, rbpriv::make_compare<K, T>(comp), commit_data);
+}
+
+template <typename T, typename C, typename R>
+void rbtree<T, C, R>::insert_commit(T* x, rbnodeptr<T> p, bool child) {
     // link in new node; it's red
     x->rblinks_.p_ = p.node();
     x->rblinks_.c_[0] = x->rblinks_.c_[1] = rbnodeptr<T>(0, false);
-    rbnodeptr<T> z(x, true);
 
-    // maybe set begin
-    if (!this->begin_ || (p.node() == this->begin_ && child == false))
-        this->begin_ = x;
+    // maybe set limits
+    if (p) {
+        p.child(child) = rbnodeptr<T>(x, true);
+        if (p.node() == r_.limit_[child])
+            r_.limit_[child] = x;
+    } else
+        r_.root_ = r_.limit_[0] = r_.limit_[1] = x;
 
     // reshape
-    if (this->reshape()(x)) {
-        if (p)
-            p.child(child) = z;
+    if (r_.reshape()(x))
         do {
             x = x->rblinks_.p_;
-        } while (x && this->reshape()(x));
-    }
+        } while (x && r_.reshape()(x));
 
     // flip up the tree
-    // invariant: z.red()
+    // invariant: we are looking at the `child` of `p`
+#define RB_INSERT_CODE 2
+#if RB_INSERT_CODE == 2 || RB_INSERT_CODE == 3
+    while (p.red()) {
+        rbnodeptr<T> gp = p.black_parent(), z;
+        bool gpchild = gp.find_child(p.node());
+        if (gp.child(!gpchild).red()) {
+            z = gp.flip();
+            p = z.black_parent().load_color();
+# if RB_INSERT_CODE == 3
+        } else if (!gpchild) {
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+# endif
+        } else {
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+        }
+        child = p.find_child(gp.node());
+        p.set_child(child, z, r_.root_);
+    }
+#elif RB_INSERT_CODE == 1
     rbnodeptr<T> gp;
-    while (p.red() && (gp = p.black_parent(),
-                       gp.child(0).red() && gp.child(1).red())) {
-        p.child(child) = z;
-        z = gp.flip();
-        p = z.black_parent();
-        child = p.find_child(z.node());
-        // get correct color for `p`
-        if (p && (gp = p.black_parent()))
-            p = gp.child(gp.find_child(p.node()));
+    while (p.red() && (gp = p.black_parent(), gp.children_same_color())) {
+        gp = gp.flip();
+        p = gp.black_parent().load_color();
+        child = p.find_child(gp.node());
+        p.set_child(child, gp, r_.root_);
     }
 
     // maybe one last rotation (pair)
-    // invariant: z.red()
     if (p.red()) {
-        p.child(child) = z;
-        gp = p.black_parent();
         bool gpchild = gp.find_child(p.node());
         if (gpchild != child)
-            gp.child(gpchild) = p.rotate(gpchild, this->reshape());
-        z = gp.rotate(!gpchild, this->reshape());
+            gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+        rbnodeptr<T> z = gp.rotate(!gpchild, r_.reshape());
         p = z.black_parent();
-        child = p.find_child(gp.node());
+        p.set_child(p.find_child(gp.node()), z, r_.root_);
     }
-
-    p.set_child(child, z, this->root_);
+#else
+    while (p.red()) {
+        rbnodeptr<T> gp = p.black_parent(), z;
+        if (gp.child(0).red() && gp.child(1).red()) {
+            z = gp.flip();
+            p = gp.black_parent().load_color();
+        } else {
+            bool gpchild = gp.find_child(p.node());
+            if (gpchild != child)
+                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
+            z = gp.rotate(!gpchild, r_.reshape());
+            p = z.black_parent();
+        }
+        child = p.find_child(gp.node());
+        p.set_child(child, z, r_.root_);
+    }
+#endif
 }
-} // namespace rbpriv
+
+template <typename T, typename C, typename R>
+inline auto rbtree<T, C, R>::insert_unique_commit(reference x, const insert_commit_data& commit_data)
+    -> iterator {
+    insert_commit(&x, commit_data.first, commit_data.second);
+    return iterator(&x);
+}
+
+template <typename T, typename C, typename R>
+void rbtree<T, C, R>::insert(reference x) {
+    rbaccount(insert);
+
+    // find insertion point
+    rbnodeptr<T> p(r_.root_, false);
+    bool child = false;
+    while (p && (child = r_.node_compare(x, *p.node()) > 0,
+                 p.child(child)))
+        p = p.child(child);
+
+    insert_commit(&x, p, child);
+}
 
 template <typename T, typename C, typename R>
 void rbtree<T, C, R>::delete_node(T* victim_node, T* succ) {
@@ -532,13 +660,14 @@ void rbtree<T, C, R>::delete_node(T* victim_node, T* succ) {
     if (x)
         x.parent() = p.node();
 
-    // maybe set begin_
-    if (victim.node() == this->r_.begin_) {
-        rbnodeptr<T> b = (x ? x : p);
-        while (b && b.child(false))
-            b = b.child(false);
-        this->r_.begin_ = b.node();
-    }
+    // maybe set limits
+    for (int i = 0; i != 2; ++i)
+        if (victim.node() == this->r_.limit_[i]) {
+            rbnodeptr<T> b = (x ? x : p);
+            while (b && b.child(i))
+                b = b.child(i);
+            this->r_.limit_[i] = b.node();
+        }
 
     // reshaping
     while (x && r_.reshape()(x.node())) {
@@ -655,12 +784,6 @@ inline auto rbtree<T, C, R>::iterator_to(node_type& x) -> iterator {
 }
 
 template <typename T, typename C, typename R>
-inline void rbtree<T, C, R>::insert(T& node) {
-    rbaccount(insert);
-    r_.insert_node(&node);
-}
-
-template <typename T, typename C, typename R>
 inline auto rbtree<T, C, R>::erase(iterator it) -> iterator {
     rbaccount(erase);
     T* node = it.operator->();
@@ -691,16 +814,16 @@ inline void rbtree<T, C, R>::erase_and_dispose(T& node, Disposer d) {
 
 template <typename T, typename C, typename R>
 inline T* rbtree<T, C, R>::unlink_leftmost_without_rebalance() {
-    T* node = r_.begin_;
+    T* node = r_.limit_[0];
     if (node) {
         rbnodeptr<T> n(node, false);
         if (n.child(true)) {
             n.child(true).parent() = n.parent();
-            r_.begin_ = rbalgorithms<T>::edge_node(n.child(true).node(), false);
+            r_.limit_[0] = rbalgorithms<T>::edge_node(n.child(true).node(), false);
         } else
-            r_.begin_ = n.parent();
+            r_.limit_[0] = n.parent();
     } else
-        r_.root_ = 0;
+        r_.root_ = r_.limit_[1] = 0;
     return node;
 }
 
@@ -747,7 +870,7 @@ inline size_t rbtree<T, C, R>::size() const {
 
 template <typename T> template <typename C>
 void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
-                         T* root, T* begin, C& compare) const {
+                         T* root, T* begin, T* end, C& compare) const {
     rbcheck_assert(node()->rblinks_.p_ == parent);
     if (parent) {
         int cmp = compare(*node(), *parent);
@@ -762,12 +885,14 @@ void rbnodeptr<T>::check(T* parent, int this_black_height, int& black_height,
         //rbcheck_assert(child(false).red() || !child(true).red()); /* LLRB */
         ++this_black_height;
     }
-    if (begin && !child(0))
+    if (begin && !child(false))
         assert(begin == node());
+    if (end && !child(true))
+        assert(end == node());
     for (int i = 0; i < 2; ++i)
         if (child(i))
             child(i).check(node(), this_black_height, black_height,
-                           root, i ? 0 : begin, compare);
+                           root, i ? 0 : begin, i ? end : 0, compare);
         else if (black_height == -1)
             black_height = this_black_height;
         else
@@ -781,9 +906,9 @@ int rbtree<T, C, R>::check() const {
     int black_height = -1;
     if (r_.root_)
         rbnodeptr<T>(r_.root_, false).check(0, 0, black_height, r_.root_,
-                                            r_.begin_, r_.get_compare());
+                                            r_.limit_[0], r_.limit_[1], r_.get_compare());
     else
-        assert(r_.begin_ == 0);
+        assert(!r_.limit_[0] && !r_.limit_[1]);
     return black_height;
 }
 
@@ -816,6 +941,11 @@ inline T* rbalgorithms<T>::next_node(T* n) {
 template <typename T>
 inline T* rbalgorithms<T>::prev_node(T* n) {
     return step_node(n, false);
+}
+
+template <typename T>
+inline T* rbalgorithms<T>::prev_node(T* n, T* last) {
+    return n ? step_node(n, false) : last;
 }
 
 template <typename T>
@@ -880,12 +1010,12 @@ inline bool operator!=(rbconst_iterator<T> a, rbconst_iterator<T> b) {
 
 template <typename T, typename R, typename A>
 auto rbtree<T, R, A>::begin() const -> const_iterator {
-    return const_iterator(r_.begin_);
+    return const_iterator(r_.limit_[0]);
 }
 
 template <typename T, typename R, typename A>
 auto rbtree<T, R, A>::begin() -> iterator {
-    return iterator(r_.begin_);
+    return iterator(r_.limit_[0]);
 }
 
 template <typename T, typename R, typename A>

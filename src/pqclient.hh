@@ -34,6 +34,7 @@ class DirectClient {
         inline scan_result(iterator first, iterator last);
         inline iterator begin() const;
         inline iterator end() const;
+        inline void flush();
       private:
         iterator first_;
         iterator last_;
@@ -131,6 +132,9 @@ inline auto DirectClient::scan_result::begin() const -> iterator {
 
 inline auto DirectClient::scan_result::end() const -> iterator {
     return last_;
+}
+
+inline void DirectClient::scan_result::flush() {
 }
 
 inline void DirectClient::scan(const String& first, const String& last,

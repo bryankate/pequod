@@ -154,6 +154,8 @@ class PQHackerNewsShim {
     bool ma_;
     bool push_;
     S& server_;
+    char buf1_[128];
+    char buf2_[128];
 };
 
 tamed template <typename S>
@@ -234,8 +236,7 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
             std::cout << ": print validated karma range [" << start << "," << end << ")\n";
-            bit = scan_result.begin();
-            for (; bit != scan_result.end(); ++bit)
+            for (bit = scan_result.begin(); bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
             std::cout << ": end print validated [" << start << "," << end << ")\n";
             std::cout << "Finished validate.\n";
@@ -246,8 +247,7 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
         twait { server_.scan(start, end, make_event(scan_result)); }
         if (log_) {
             std::cout << ": print validated ma range [" << start << "," << end << ")\n";
-            bit = scan_result.begin();
-            for (; bit != scan_result.end(); ++bit)
+            for (bit = scan_result.begin(); bit != scan_result.end(); ++bit)
                 std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
             std::cout << ": end print validated [" << start << "," << end << ")\n";
             std::cout << "Finished validate.\n";
@@ -260,19 +260,19 @@ tamed template <typename S>
 void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, bool check, event<> e) {
     tvars {
-        char buf1[128], buf2[128];
         typename S::scan_result scan_resultma, scan_resultc;
-        String field, user, avalue;
+        String field, user, avalue, kvalue;
         uint32_t my_karma, karma;
         size_t votect;
         typename S::iterator bit, cit;
+        tamer::gather_rendezvous gr;
     }
     if (log_) 
         printf("Reading article %d\n", aid);
     if (ma_) {
-        sprintf(buf1, "ma|%07d%07d|", author, aid);
-        sprintf(buf2, "ma|%07d%07d}", author, aid);
-        twait { server_.scan(buf1, buf2, make_event(scan_resultma)); }
+        sprintf(buf1_, "ma|%07d%07d|", author, aid);
+        sprintf(buf2_, "ma|%07d%07d}", author, aid);
+        twait { server_.scan(buf1_, buf2_, make_event(scan_resultma)); }
         bit = scan_resultma.begin();
         for (; bit != scan_resultma.end(); ++bit) {
             field = extract_spkey(2, bit->key());
@@ -294,27 +294,34 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         e();
     } else {
         // Article
-        sprintf(buf1, "a|%07d%07d", author, aid);
-        twait { server_.get(buf1, make_event(avalue)); }
+        sprintf(buf1_, "a|%07d%07d", author, aid);
+        twait { server_.get(Str(buf1_, 16), make_event(avalue)); }
         if (log_)
-            std::cout << "read " << buf1 << ":" << avalue << "\n";
+            std::cout << "read " << Str(buf1_, 16) << ":" << avalue << "\n";
         this->total_articles++;
         // Comments and Karma
-        sprintf(buf1, "c|%07d%07d|", author, aid);
-        sprintf(buf2, "c|%07d%07d}", author, aid);
-        twait { server_.scan(buf1, buf2, make_event(scan_resultc)); }
-        bit = scan_resultc.begin();
-        for (; bit != scan_resultc.end(); ++bit) {
+        sprintf(buf1_, "c|%07d%07d|", author, aid);
+        sprintf(buf2_, "c|%07d%07d}", author, aid);
+        twait { server_.scan(buf1_, buf2_, make_event(scan_resultc)); }
+        for (bit = scan_resultc.begin(); bit != scan_resultc.end(); ++bit) {
             this->total_comments++;
             if (log_)
                 std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-            twait { get_karma(extract_spkey(3, bit->key()), check_karmas, check, make_event()); }
+            String user = extract_spkey(3, bit->key());
+            if (mk_ || push_) {
+                sprintf(buf1_, "k|%s", user.c_str());
+                // XXX: implement get(String, tamer::event<String, String>) where
+                // the second parameter of event is the value to check against
+                server_.get(Str(buf1_, 9), gr.make_event(kvalue));
+            } else
+                get_karma(user, check_karmas, check, gr.make_event());
         }
-        
+        scan_resultc.flush();
+        twait(gr);
         // Votes
-        sprintf(buf1, "v|%07d%07d|", author, aid);
-        sprintf(buf2, "v|%07d%07d}", author, aid);
-        twait { server_.count(buf1, buf2, make_event(votect)); }
+        sprintf(buf1_, "v|%07d%07d|", author, aid);
+        sprintf(buf2_, "v|%07d%07d}", author, aid);
+        twait { server_.count(buf1_, buf2_, make_event(votect)); }
         if (log_)
             std::cout << "  v " << votect << "\n";
         e();
@@ -324,44 +331,32 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
 tamed template <typename S>
 void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool check, event<> e) {
     tvars {
-        char buf3[128];
         String value;
         uint32_t karma;
-        char buf1[128];
-        char buf2[128];
         uint32_t karmact, local_karma;
         typename S::scan_result scan_result;
         typename S::iterator bit, cit;
         String full_aid;
         size_t votect;
     }
-
-    if (mk_ || push_) {
-        sprintf(buf3, "k|%s", user.c_str());
-        twait { server_.get(Str(buf3, 9), make_event(value)); }
-        karma = atoi(value.c_str());
-    } else {
-        karma = 0;
-        sprintf(buf1, "a|%s0", user.c_str());
-        sprintf(buf2, "a|%s}", user.c_str());
-        twait { server_.scan(buf1, buf2, make_event(scan_result)); }
-        for (bit = scan_result.begin(); bit != scan_result.end(); ++bit) {
-            if (log_)
-                std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
-            full_aid = extract_spkey(1, bit->key());
-            sprintf(buf1, "v|%s|", full_aid.c_str());
-            sprintf(buf2, "v|%s}", full_aid.c_str());
-            twait { server_.count(buf1, buf2, make_event(votect)); }
-            karma+=votect;
-            if (log_)
-                std::cout << "      v " << full_aid << ":" << votect << "\n";
-            votect = 0;
-        }
+    karma = 0;
+    sprintf(buf1_, "a|%s0", user.c_str());
+    sprintf(buf2_, "a|%s}", user.c_str());
+    twait { server_.scan(buf1_, buf2_, make_event(scan_result)); }
+    for (bit = scan_result.begin(); bit != scan_result.end(); ++bit) {
+        if (log_)
+            std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
+        full_aid = extract_spkey(1, bit->key());
+        sprintf(buf1_, "v|%s|", full_aid.c_str());
+        sprintf(buf2_, "v|%s}", full_aid.c_str());
+        twait { server_.count(buf1_, buf2_, make_event(votect)); }
+        karma+=votect;
+        if (log_)
+            std::cout << "      v " << full_aid << ":" << votect << "\n";
+        votect = 0;
     }
-    if (check) {
-        local_karma = check_karmas[user.to_i()];
-        mandatory_assert(karma == local_karma && "Karma mismatch");
-    }
+    if (check)
+        CHECK_EQ(karma, local_karma);
     if (log_)
         std::cout << "  k " << user << ": " << karma << "\n";
     e();
@@ -370,25 +365,22 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
 tamed template <typename S>
 void PQHackerNewsShim<S>::post_article(uint32_t author, uint32_t aid, const String &v, 
                                        karmas_type& check_karmas, event<> e) {
-    tvars {
-        char buf[128];
-    }
-    sprintf(buf, "a|%07d%07d", author, aid);
-    twait { server_.insert(Str(buf, 16), v, e); }
+    sprintf(buf1_, "a|%07d%07d", author, aid);
     if (log_)
-        printf("post %.16s\n", buf);
-    sprintf(buf, "v|%07d%07d|%07d", author, aid, author);
-    twait { server_.insert(Str(buf, 24), Str("1", 1), e); }
+        printf("post %.16s\n", buf1_);
+    twait { server_.insert(Str(buf1_, 16), v, e); }
+
+    sprintf(buf1_, "v|%07d%07d|%07d", author, aid, author);
     if (log_)
-        printf("vote %.24s\n", buf);
+        printf("vote %.24s\n", buf1_);
+    twait { server_.insert(Str(buf1_, 24), Str("1", 1), e); }
     if (push_) {
-        sprintf(buf, "k|%07d", author);
-        char buf1[128];
+        sprintf(buf1_, "k|%07d", author);
         // XXX: check_karmas is empty if we are in run_only mode!
-        sprintf(buf1, "%07d", check_karmas[author]);
-        twait { server_.insert(Str(buf, 9), Str(buf1, 7), e); }
+        sprintf(buf2_, "%07d", check_karmas[author]);
         if (log_)
-            printf("updated karma %.9s %.7s\n", buf, buf1);
+            printf("updated karma %.9s %.7s\n", buf1_, buf2_);
+        twait { server_.insert(Str(buf1_, 9), Str(buf2_, 7), e); }
     }
     e();
 }
@@ -396,21 +388,17 @@ void PQHackerNewsShim<S>::post_article(uint32_t author, uint32_t aid, const Stri
 tamed template <typename S>
 void PQHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid, 
                                karmas_type& check_karmas, event<> e) {
-    tvars { 
-        char buf[128];
-    }
-    sprintf(buf, "v|%07d%07d|%07d", author, aid, voter);
-    twait { server_.insert(Str(buf, 24), Str("", 0), make_event()); }
+    sprintf(buf1_, "v|%07d%07d|%07d", author, aid, voter);
     if (log_)
-        printf("vote %.24s\n", buf);
+        printf("vote %.24s\n", buf1_);
+    twait { server_.insert(Str(buf1_, 24), Str("", 0), make_event()); }
     if (push_) {
-        sprintf(buf, "k|%07d", author);
-        char buf1[128];
+        sprintf(buf1_, "k|%07d", author);
         // XXX: check_karmas is empty if we are in run_only mode!
-        sprintf(buf1, "%07d", check_karmas[author]);
-        twait { server_.insert(Str(buf, 9), Str(buf1, 7), make_event()); }
+        sprintf(buf2_, "%07d", check_karmas[author]);
         if (log_)
-            printf("updated karma %.9s %.7s\n", buf, buf1);
+            printf("updated karma %.9s %.7s\n", buf1_, buf2_);
+        twait { server_.insert(Str(buf1_, 9), Str(buf2_, 7), make_event()); }
     }
     e();
 }

@@ -203,10 +203,10 @@ inline void HackernewsPopulator::set_defaults() {
         nusers_ = 50000;
         nvotes = 2444184;
     } else {
-        ncomments = 99;
-        narticles_ = 99;
-        nusers_ = 9;
-        nvotes = 99;
+        ncomments = 100;
+        narticles_ = 100;
+        nusers_ = 10;
+        nvotes = 100;
     }
     for (uint32_t i = 0; i < narticles_; i++) {
         articles_[i] = i % nusers_;

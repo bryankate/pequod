@@ -82,6 +82,9 @@ class RemoteClient {
         inline iterator end() const {
             return iterator(result_.array_data() + result_.size());
         }
+        inline void flush() {
+            result_.clear();
+        }
       private:
         mutable Json result_;
     };

@@ -73,6 +73,7 @@ void HackernewsRunner<S>::populate(event<> e) {
         boost::random_number_generator<boost::mt19937> rng(gen);
         uint32_t nv = 0, nc = 0, j = 0, i = 0;
         uint32_t author, ncomment, nvote, voter, aid, commentor;
+        tamer::gather_rendezvous gr;
     }
     twait { server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>()); }
 
@@ -86,29 +87,29 @@ void HackernewsRunner<S>::populate(event<> e) {
             if (!hp_.populate_only())
                 hp_.populate_from_files(&nv, &nc);
         } else {
-            twait {
-                gen.seed(13918);
-                for (aid = 0; aid < hp_.pre(); aid++) {
-                    // Need this to be deterministic.  Fake it for now.
-                    // author = rng(hp_.nusers());
-                    author = aid % hp_.nusers();
-                    post_article(author, aid, make_event());
-                    ncomment = rng(20);
-                    for (j = 1; j <= ncomment; ++j) {
-                        nc++;
-                        commentor = rng(hp_.nusers());
-                        post_comment(commentor, aid, make_event());
-                    }
-                    nvote = rng(50);
-                    for (j = 0; j < nvote; ++j) {
-                        voter = rng(hp_.nusers());
-                        if (hp_.vote(aid, voter)) {
-                            ++nv;
-                            vote(voter, aid, make_event());
-                        }
+            gen.seed(13918);
+            for (aid = 0; aid < hp_.pre(); aid++) {
+                // Need this to be deterministic.  Fake it for now.
+                // author = rng(hp_.nusers());
+                author = aid % hp_.nusers();
+                post_article(author, aid, gr.make_event());
+                ncomment = rng(20);
+                for (j = 1; j <= ncomment; ++j) {
+                    nc++;
+                    commentor = rng(hp_.nusers());
+                    post_comment(commentor, aid, gr.make_event());
+                }
+                nvote = rng(50);
+                for (j = 0; j < nvote; ++j) {
+                    voter = rng(hp_.nusers());
+                    if (hp_.vote(aid, voter)) {
+                        ++nv;
+                        vote(voter, aid, gr.make_event());
                     }
                 }
+                twait { server_.pace(make_event()); }
             }
+            twait(gr);
         }
     }
 
@@ -133,6 +134,7 @@ void HackernewsRunner<S>::run(event<> e) {
         const uint32_t nops = this->hp_.nops();
         const uint32_t nusers = this->hp_.nusers();
         struct rusage ru[2];
+        struct timeval tv[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
         Json old_stats, stats;
         double start, tm;
@@ -142,7 +144,7 @@ void HackernewsRunner<S>::run(event<> e) {
     gen.seed(13918);
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
-    twait { start = tstamp(); }
+    gettimeofday(&tv[0], NULL);
 
     if (hp_.populate_only()) {
         printf("Not running experiment\n");
@@ -170,20 +172,21 @@ void HackernewsRunner<S>::run(event<> e) {
         }
     }
     twait(gr);
-    tm = (tstamp() - start) / 1000000;
     getrusage(RUSAGE_SELF, &ru[1]);
-    twait {
-        server_.stats(make_event(stats));
-    }
+    gettimeofday(&tv[1], NULL);
+    twait { server_.stats(make_event(stats)); }
     if (stats.get("server_user_time")) {
         stats["server_user_time"] -= old_stats["server_user_time"];
         stats["server_system_time"] -= old_stats["server_system_time"];
     }
     stats = Json().set("nread", nread).set("npost", npost)
 	.set("ncomment", ncomment).set("nvote", nvote)
-	.set("time", to_real(ru[1].ru_utime - ru[0].ru_utime)).merge(stats);
+	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+	.set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
+	.set("real_time", to_real(tv[1] - tv[0]))
+        .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-    std::cout << nops << " done, " << tm << " seconds, " << nops/tm << " qps\n";
+    std::cout << nops << " done, " << tm << " seconds, " << nops/to_real(tv[1] - tv[0]) << " qps\n";
     e();
 }
 
