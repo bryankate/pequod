@@ -53,18 +53,32 @@ class ResultAnalyzer:
         plotgroups = sorted(self.exp.keys())
         for groupNumber, plotgroup in enumerate(plotgroups):
             points = self.exp[plotgroup]
-            names = [x[0] for x in points[0]]
-            names = [("%30s" % x) for x in names]
+            nameset = set()
+            for p in points:
+                for x in p:
+                    nameset.add(x[0])
+            names = [("%30s" % x) for x in sorted(nameset)]            
             for x in names:
                 if len(x.strip().rstrip()) >= 30:
                     raise Exception('%s too long' % x)
             print >> f, "#", "".join([("%20d" % (x + 1)) for x in range(len(names))])
             print >> f, "#", "".join(names)
             # sort by plotkey (only if a number)
-            if len(points) and isinstance(points[0], (int, long, float)):
+            if len(points) and isinstance(points[0][0][1], (int, long, float)):
                 points = sorted(points)
             for p in points:
-                print >> f, " ", "".join([(("%20.2f" % x[1]) if isinstance(x[1], (int, long, float)) else x[1]) for x in p])
+                data = [("%20.4f" % 0)] * len(names)
+                for idx in range(len(names)):
+                    pnames = [x[0] for x in p]
+                    pnames = [("%30s" % x) for x in pnames]                
+                    for x in pnames:
+                        if len(x.strip().rstrip()) >= 30:
+                            raise Exception('%s too long' % x)
+                    n = names[idx]
+                    if n in pnames:
+                        x = p[pnames.index(n)][1]
+                        data[idx] = (("%20.4f" % x) if isinstance(x, (int, long, float)) else x)
+                print >> f, " ", "".join(data)
             print >> f
             for g in graphs:
                 g.setColumnNames(names)
