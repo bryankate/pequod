@@ -261,7 +261,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, bool check, event<> e) {
     tvars {
         typename S::scan_result scan_resultma, scan_resultc;
-        String field, user, avalue;
+        String field, user, avalue, kvalue;
         uint32_t my_karma, karma;
         size_t votect;
         typename S::iterator bit, cit;
@@ -307,7 +307,14 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
             this->total_comments++;
             if (log_)
                 std::cout << "  c " << bit->key() << ": " << bit->value() << "\n";
-            get_karma(extract_spkey(3, bit->key()), check_karmas, check, gr.make_event());
+            String user = extract_spkey(3, bit->key());
+            if (mk_ || push_) {
+                sprintf(buf1_, "k|%s", user.c_str());
+                // XXX: implement get(String, tamer::event<String, String>) where
+                // the second parameter of event is the value to check against
+                server_.get(Str(buf1_, 9), gr.make_event(kvalue));
+            } else
+                get_karma(user, check_karmas, check, gr.make_event());
         }
         scan_resultc.flush();
         twait(gr);
@@ -332,29 +339,21 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
         String full_aid;
         size_t votect;
     }
-
-    if (mk_ || push_) {
-        sprintf(buf1_, "k|%s", user.c_str());
-        local_karma = check_karmas[user.to_i()];
-        twait { server_.get(Str(buf1_, 9), make_event(value)); }
-        karma = value.to_i();
-    } else {
-        karma = 0;
-        sprintf(buf1_, "a|%s0", user.c_str());
-        sprintf(buf2_, "a|%s}", user.c_str());
-        twait { server_.scan(buf1_, buf2_, make_event(scan_result)); }
-        for (bit = scan_result.begin(); bit != scan_result.end(); ++bit) {
-            if (log_)
-                std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
-            full_aid = extract_spkey(1, bit->key());
-            sprintf(buf1_, "v|%s|", full_aid.c_str());
-            sprintf(buf2_, "v|%s}", full_aid.c_str());
-            twait { server_.count(buf1_, buf2_, make_event(votect)); }
-            karma+=votect;
-            if (log_)
-                std::cout << "      v " << full_aid << ":" << votect << "\n";
-            votect = 0;
-        }
+    karma = 0;
+    sprintf(buf1_, "a|%s0", user.c_str());
+    sprintf(buf2_, "a|%s}", user.c_str());
+    twait { server_.scan(buf1_, buf2_, make_event(scan_result)); }
+    for (bit = scan_result.begin(); bit != scan_result.end(); ++bit) {
+        if (log_)
+            std::cout << "    a " << bit->key() << ": " << bit->value() << "\n";
+        full_aid = extract_spkey(1, bit->key());
+        sprintf(buf1_, "v|%s|", full_aid.c_str());
+        sprintf(buf2_, "v|%s}", full_aid.c_str());
+        twait { server_.count(buf1_, buf2_, make_event(votect)); }
+        karma+=votect;
+        if (log_)
+            std::cout << "      v " << full_aid << ":" << votect << "\n";
+        votect = 0;
     }
     if (check)
         CHECK_EQ(karma, local_karma);
