@@ -536,20 +536,19 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 break;
 
             case op_login:
-                if (active.empty())
-                    break;
-
                 do_login:
-                slot = gen() % active.size();
-                user = &tp_.mutable_user(active[slot]);
-                active.erase(active.begin() + slot);
+                if (!active.empty()) {
+                    slot = gen() % active.size();
+                    user = &tp_.mutable_user(active[slot]);
+                    active.erase(active.begin() + slot);
 
-                if (tp_.log())
-                    printf("%d: login %08d\n", currtime_, user->uid());
+                    if (tp_.log())
+                        printf("%d: login %08d\n", currtime_, user->uid());
 
-                loggedin.push_back(user->uid());
-                user->loggedin_ = true;
-                ++user->nlogin_;
+                    loggedin.push_back(user->uid());
+                    user->loggedin_ = true;
+                    ++user->nlogin_;
+                }
                 // fall through to check timeline after login
 
             case op_check:
