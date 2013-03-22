@@ -1,6 +1,7 @@
 #ifndef PQRWMICRO_HH
 #define PQRWMICRO_HH 1
 
+#include <iostream>
 #include <tamer/tamer.hh>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -81,25 +82,28 @@ void RwMicro<S>::safe_run() {
 tamed template <typename S>
 void RwMicro<S>::populate(tamer::event<> e) {
     tvars { size_t nread = 0, time = 1;
-            int u, i;
-            tamer::gather_rendezvous gr; }
-    srandom(1328);
-    twait {
-        bool *b = new bool[nuser_];
-        for (int u = 0; u < nuser_; ++u) {
-            bzero(b, nuser_ * sizeof(*b));
-            b[u] = true;
-            for (int j = 0; j < nfollower_; ++j) {
-                int follower;
-                while (b[follower = (random() % nuser_)]);
-                b[follower] = true;
-                follower_[u].push_back(follower);
-                server_.subscribe(follower, u, make_event());
-                server_.add_follower(follower, u, make_event());
-            }
-        }
-        delete[] b;
+            int u, i, j;
+            tamer::gather_rendezvous gr;
+            bool *b;
     }
+    srandom(1328);
+
+    b = new bool[nuser_];
+    for (u = 0; u < nuser_; ++u) {
+        bzero(b, nuser_ * sizeof(*b));
+        b[u] = true;
+        for (j = 0; j < nfollower_; ++j) {
+            int follower;
+            while (b[follower = (random() % nuser_)]);
+            b[follower] = true;
+            follower_[u].push_back(follower);
+            server_.subscribe(follower, u, gr.make_event());
+            server_.add_follower(follower, u, gr.make_event());
+            twait{ server_.pace(make_event()); }
+        }
+    }
+    delete[] b;
+    twait(gr);
     time = 1;
     if (npop_)
         for (i = 0; i < npop_; ++i) {
@@ -120,6 +124,7 @@ void RwMicro<S>::populate(tamer::event<> e) {
                 server_.timeline_add_count(i, uint32_t(0), time, make_event(nread));
         }
     }
+    std::cerr << "finished populating" << std::endl;
     e();
 }
 
