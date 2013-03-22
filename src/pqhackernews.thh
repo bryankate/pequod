@@ -73,6 +73,7 @@ void HackernewsRunner<S>::populate(event<> e) {
         boost::random_number_generator<boost::mt19937> rng(gen);
         uint32_t nv = 0, nc = 0, j = 0, i = 0;
         uint32_t author, ncomment, nvote, voter, aid, commentor;
+        tamer::gather_rendezvous gr;
     }
     twait { server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>()); }
 
@@ -86,29 +87,29 @@ void HackernewsRunner<S>::populate(event<> e) {
             if (!hp_.populate_only())
                 hp_.populate_from_files(&nv, &nc);
         } else {
-            twait {
-                gen.seed(13918);
-                for (aid = 0; aid < hp_.pre(); aid++) {
-                    // Need this to be deterministic.  Fake it for now.
-                    // author = rng(hp_.nusers());
-                    author = aid % hp_.nusers();
-                    post_article(author, aid, make_event());
-                    ncomment = rng(20);
-                    for (j = 1; j <= ncomment; ++j) {
-                        nc++;
-                        commentor = rng(hp_.nusers());
-                        post_comment(commentor, aid, make_event());
-                    }
-                    nvote = rng(50);
-                    for (j = 0; j < nvote; ++j) {
-                        voter = rng(hp_.nusers());
-                        if (hp_.vote(aid, voter)) {
-                            ++nv;
-                            vote(voter, aid, make_event());
-                        }
+            gen.seed(13918);
+            for (aid = 0; aid < hp_.pre(); aid++) {
+                // Need this to be deterministic.  Fake it for now.
+                // author = rng(hp_.nusers());
+                author = aid % hp_.nusers();
+                post_article(author, aid, gr.make_event());
+                ncomment = rng(20);
+                for (j = 1; j <= ncomment; ++j) {
+                    nc++;
+                    commentor = rng(hp_.nusers());
+                    post_comment(commentor, aid, gr.make_event());
+                }
+                nvote = rng(50);
+                for (j = 0; j < nvote; ++j) {
+                    voter = rng(hp_.nusers());
+                    if (hp_.vote(aid, voter)) {
+                        ++nv;
+                        vote(voter, aid, gr.make_event());
                     }
                 }
+                twait { server_.pace(make_event()); }
             }
+            twait(gr);
         }
     }
 
@@ -142,7 +143,7 @@ void HackernewsRunner<S>::run(event<> e) {
     gen.seed(13918);
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
-    twait { start = tstamp(); }
+    start = tstamp();
 
     if (hp_.populate_only()) {
         printf("Not running experiment\n");
