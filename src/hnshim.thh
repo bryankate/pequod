@@ -338,6 +338,7 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
 
     if (mk_ || push_) {
         sprintf(buf3, "k|%s", user.c_str());
+        local_karma = check_karmas[user.to_i()];
         twait { server_.get(Str(buf3, 9), make_event(value)); }
         karma = atoi(value.c_str());
     } else {
@@ -358,10 +359,8 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
             votect = 0;
         }
     }
-    if (check) {
-        local_karma = check_karmas[user.to_i()];
+    if (check)
         mandatory_assert(karma == local_karma && "Karma mismatch");
-    }
     if (log_)
         std::cout << "  k " << user << ": " << karma << "\n";
     e();
