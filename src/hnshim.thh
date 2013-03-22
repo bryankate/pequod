@@ -360,7 +360,7 @@ void PQHackerNewsShim<S>::get_karma(String user, karmas_type& check_karmas, bool
         }
     }
     if (check)
-        mandatory_assert(karma == local_karma && "Karma mismatch");
+        CHECK_EQ(karma, local_karma);
     if (log_)
         std::cout << "  k " << user << ": " << karma << "\n";
     e();
