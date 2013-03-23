@@ -91,8 +91,8 @@ for nfollower in [1, 16, 32]:
 # real_twitter
 # we will set a post limit of 200K to stop the experiment
 # keep the post:check ratio at 1:49
-cmdbase = "./obj/pqserver --client=7007 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=200000 --duration=100000000"
-microcmdbase = "./obj/pqserver --client=7007 --rwmicro --nusers=1794167  --pactive=70 --nfollower=41 --postlen=5 --popduration=1000000 --prefresh=98 --nops=10000000"
+cmdbase = "./obj/pqserver --client=7007 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=200000 --popduration=100000 --duration=100000000"
+microcmdbase = "./obj/pqserver --client=7007 --rwmicro --nusers=1794167  --pactive=70 --nfollower=41 --postlen=5 --popduration=100000 --prefresh=98 --nops=10000000"
 # rwmicro and twitternew use different params, so m[1] and m[2] differ
 #modes = [["autopush", "", "--push"], ["pull", "--pull", "--no-push"], ["push", "--push", "--client_push"]]
 modes = [["autopush", "", "--push"]]
