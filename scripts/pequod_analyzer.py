@@ -113,34 +113,25 @@ class ResultAnalyzer:
             f.close()
 
 if __name__ == "__main__":
-    def test():
-        a = ResultAnalyzer('refresh ratio(%)', 'rwmicro_1')
-        expdir = "./last/client_push_1"
-        for f in os.listdir(expdir):
-            fpath = os.path.join(expdir, f)
-            if not os.path.isdir(fpath):
-                continue
-            x = f.split('_')
-            print 'adding', x
-            a.add('_'.join(x[0:-1]), fpath, float(x[-1]))
-        a.getGNUData(None, "")
-        a.getGNUData(os.path.join(os.path.dirname(expdir), 'test.data'), expdir)
-        a.getCSVHorizon("./results/notebook.csv", expdir)
-
     def reanalyze(expdir):
-        a = ResultAnalyzer('xlabel', 'ename')
-        for f in os.listdir(expdir):
-            fpath = os.path.join(expdir, f)
-            if not os.path.isdir(fpath):
+        for ename in os.listdir(expdir):
+            epath = os.path.join(expdir, ename)
+            if not os.path.isdir(epath):
                 continue
-            x = f.split('_')
-            print 'adding', x
-            a.add('_'.join(x[0:-1]), fpath, float(x[-1]))
-        a.getGNUData(None, "")
-        a.getGNUData(os.path.join(expdir, 'gnuplot.data'), expdir)
+            print 'Experiment', ename
+            a = ResultAnalyzer('refresh ratio(%)', ename)
+            for load in os.listdir(epath):
+                loadpath = os.path.join(epath, load)
+                if not os.path.isdir(loadpath):
+                    continue
+                x = load.split('_')
+                print '\tWorkload', x
+                a.add('_'.join(x[0:-1]), loadpath, float(x[-1]))
+            a.getGNUData(None, "")
+            a.getGNUData(os.path.join(epath, ename + '.data'))
+            a.getCSVHorizon("./results/notebook.csv", expdir)
+
     if len(sys.argv) == 1:
-        test()
-    elif len(sys.argv) != 3:
-        print "Usage: %s <expdir>" % sys.argv[0]
+        reanalyze("./results/2013_03_20-13_32_36")
     else:
-        reanalyze(sys.argv[1], int(sys.argv[2]))
+        reanalyze(sys.argv[1])
