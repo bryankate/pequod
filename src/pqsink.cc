@@ -67,8 +67,7 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
         validate_one(last_valid, last, server, now);
 }
 
-void JoinRange::validate_step(validate_args& va, int joinpos,
-                              ServerStore::const_iterator* hint) {
+void JoinRange::validate_step(validate_args& va, int joinpos, const Datum** hint) {
     Table* sourcet = join_->source_table(joinpos);
 
     uint8_t kf[128], kl[128];
@@ -80,22 +79,19 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
-    // XXX PERFORMANCE this is not always necessary
-    // XXX For now don't do this if the join is recursive
-    if (sourcet->name() != join_->sink().table_name())
-        sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+    sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+    auto itend = sourcet->end();
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
-    if (hint && (*hint)->key() >= Str(kl, kllen))
+    if (hint && *hint && (*hint)->key() >= Str(kl, kllen))
         ++sourcet->nvalidate_skipped_;
 
     else {
         auto it = sourcet->lower_bound_hint(Str(kf, kflen));
-        auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
@@ -121,10 +117,8 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
             assert(!r);
             ++sourcet->nvalidate_increasing_;
             ++sourcet->nvalidate_optimized_;
-            ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
-            ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
-            for (; it != itend && next_hint != end_next &&
-                     it->key() < Str(kl, kllen); ++it)
+            const Datum* next_hint = nullptr;
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     pat.assign_optimized_match(it->key(), mopt, va.match);
                     validate_step(va, joinpos + 1, &next_hint);
@@ -145,7 +139,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos,
         }
 
         if (hint)
-            *hint = it;
+            *hint = it != itend ? it.operator->() : &Datum::max_datum;
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
