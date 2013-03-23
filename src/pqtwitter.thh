@@ -154,7 +154,25 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                              + String(server_pull ? "pull " : "") +
                              "where user:5, time:10, poster:5",
                              make_event(j[0]));
-            if (celebrity && celebrity_type == 2) {
+            if (celebrity && celebrity_type == 3) {
+                celeb_.assign(nusers, false);
+                server_.add_join("ct|", "ct}",
+                                 "ct|<time>|<poster> = copy cp|<poster>|<time> "
+                                 "where poster:5, time:10",
+                                 make_event(j[3]));
+                server_.add_join("cs|", "cs}",
+                                 "cs|<user>|<poster> = "
+                                 "copy celeb|<poster> "
+                                 "using s|<user>|<poster> "
+                                 "where user:5, poster:5",
+                                 make_event(j[2]));
+                server_.add_join("t|", "t}",
+                                 "t|<user>|<time>|<poster> = "
+                                 "pull copy ct|<time>|<poster> "
+                                 "using cs|<user>|<poster> "
+                                 "where user:5, time:10, poster:5",
+                                 make_event(j[1]));
+            } else if (celebrity && celebrity_type == 2) {
                 celeb_.assign(nusers, false);
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
