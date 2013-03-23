@@ -121,6 +121,7 @@ class JoinRange : public ServerRangeBase {
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
     void validate_step(validate_args& va, int joinpos);
+    void validate_filters(validate_args& va);
 
     friend class SinkRange;
 };

@@ -136,6 +136,7 @@ void Join::clear() {
     }
     jvt_ = 0;
     maintained_ = true;
+    filters_ = 0;
 }
 
 void Join::attach(Server& server) {
@@ -441,9 +442,14 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_count_match;
         else if (words[i] == "sum")
             new_op = jvt_sum_match;
-        else if (words[i] == "using")
-            new_op = jvt_using;
-        else if (words[i] == "with" || words[i] == "where")
+        else if (words[i] == "using") {
+            if (op != jvt_filter)
+                new_op = jvt_using;
+        } else if (words[i] == "filter") {
+            if (op == jvt_using)
+                op = -1;
+            new_op = jvt_filter;
+        } else if (words[i] == "with" || words[i] == "where")
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
@@ -455,7 +461,10 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             withstr.push_back(words[i]);
             op = jvt_slotdef1;
         } else {
-            if (op == jvt_using || op == -1)
+            if (op == jvt_filter) {
+                filters_ |= 1 << (sourcestr.size() - 1);
+                sourcestr.push_back(words[i]);
+            } else if (op == jvt_using || op == -1)
                 sourcestr.push_back(words[i]);
             else if (lastsourcestr)
                 return errh->error("syntax error near %<%p{Str}%>: transformation already defined", &words[i]);

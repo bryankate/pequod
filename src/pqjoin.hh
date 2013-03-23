@@ -94,7 +94,7 @@ enum JoinValueType {
     jvt_count_match, jvt_sum_match,
     jvt_bounded_copy_last, jvt_bounded_count_match,
     /* next ones are internal */
-    jvt_using, jvt_slotdef, jvt_slotdef1
+    jvt_using, jvt_filter, jvt_slotdef, jvt_slotdef1
 };
 
 class Join {
@@ -109,11 +109,11 @@ class Join {
     inline int nsource() const;
     inline int completion_source() const;
     inline const Pattern& sink() const;
-    inline const Pattern& source(int i) const;
+    inline const Pattern& source(int si) const;
     inline const Pattern& back_source() const;
 
     inline Table* sink_table() const;
-    inline Table* source_table(int i) const;
+    inline Table* source_table(int si) const;
 
     inline int slot(Str name) const;
 
@@ -128,6 +128,8 @@ class Join {
     inline void assign_context(Match& m, Str context) const;
     Json unparse_context(Str context) const;
     Json unparse_match(const Match& m) const;
+
+    inline bool source_is_filter(int si) const;
 
     inline void expand_sink_key_context(Str context) const;
     inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
@@ -165,6 +167,7 @@ class Join {
     uint64_t staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     bool maintained_;   // if the output is kept up to date with changes to the input
+    uint8_t filters_;
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
     Table* table_[pcap];
@@ -351,8 +354,8 @@ inline const Pattern& Join::sink() const {
     return pat_[0];
 }
 
-inline const Pattern& Join::source(int i) const {
-    return pat_[i + 1];
+inline const Pattern& Join::source(int si) const {
+    return pat_[si + 1];
 }
 
 inline const Pattern& Join::back_source() const {
@@ -363,8 +366,12 @@ inline Table* Join::sink_table() const {
     return table_[0];
 }
 
-inline Table* Join::source_table(int i) const {
-    return table_[i + 1];
+inline Table* Join::source_table(int si) const {
+    return table_[si + 1];
+}
+
+inline bool Join::source_is_filter(int si) const {
+    return filters_ & (1 << si);
 }
 
 inline int Join::slot(Str name) const {

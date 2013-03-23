@@ -27,12 +27,14 @@ struct JoinRange::validate_args {
     SinkRange* sink;
     uint64_t now;
     int notifier;
+    int filters;
+    Match::state filtermatch;
 };
 
 inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va{first, last, Match(), &server, nullptr, now,
-            SourceRange::notify_insert};
+            SourceRange::notify_insert, 0, Match::state()};
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
     valid_ranges_.insert(*va.sink);
@@ -67,6 +69,25 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
         validate_one(last_valid, last, server, now);
 }
 
+void JoinRange::validate_filters(validate_args& va) {
+    int filters = va.filters;
+    Match::state mstate = va.match.save();
+    va.match.restore(va.filtermatch);
+
+    for (int jp = 0; filters; ++jp, filters >>= 1)
+        if (filters & 1) {
+            uint8_t kf[128], kl[128];
+            int kflen = join_->expand_first(kf, join_->source(jp),
+                                            va.first, va.last, va.match);
+            int kllen = join_->expand_last(kl, join_->source(jp),
+                                           va.first, va.last, va.match);
+            assert(Str(kf, kflen) <= Str(kl, kllen));
+            join_->source_table(jp)->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+        }
+
+    va.match.restore(mstate);
+}
+
 void JoinRange::validate_step(validate_args& va, int joinpos) {
     Table* sourcet = join_->source_table(joinpos);
 
@@ -82,6 +103,19 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
+    if (!join_->maintained() && join_->source_is_filter(joinpos)) {
+        if (!va.filters)
+            va.filtermatch = va.match.save();
+        int known_at_sink = join_->source_mask(join_->nsource() - 1)
+            | join_->known_mask(va.filtermatch);
+        if ((join_->source_mask(joinpos) & ~known_at_sink) == 0) {
+            va.filters |= 1 << joinpos;
+            validate_step(va, joinpos + 1);
+            va.filters &= ~(1 << joinpos);
+            return;
+        }
+    }
+
     // need to validate the source ranges in case they have not been
     // expanded yet.
     if (Datum* lower_d = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now)) {
@@ -93,16 +127,43 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         ++sourcet->nvalidate_;
 
         // match not optimizable
-        for (; it != itend && it->key() < Str(kl, kllen); ++it)
-            if (it->key().length() == pat.key_length()) {
-                if (pat.match(it->key(), va.match)) {
-                    if (r)
-                        r->notify(it.operator->(), String(), va.notifier);
-                    else
+        if (!r) {
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
+                if (it->key().length() == pat.key_length()) {
+                    if (pat.match(it->key(), va.match))
                         validate_step(va, joinpos + 1);
+                    va.match.restore(mstate);
                 }
-                va.match.restore(mstate);
-            }
+        } else if (va.filters) {
+            bool filters_validated = false;
+            uint8_t filterstr[key_capacity];
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
+                if (it->key().length() == pat.key_length()) {
+                    if (pat.match(it->key(), va.match)) {
+                        if (!filters_validated) {
+                            validate_filters(va);
+                            filters_validated = true;
+                        }
+                        int filters = va.filters;
+                        for (int jp = 0; filters; ++jp, filters >>= 1)
+                            if (filters & 1) {
+                                int filterlen = join_->source(jp).expand(filterstr, va.match);
+                                if (!join_->source_table(jp)->count(Str(filterstr, filterlen)))
+                                    goto give_up;
+                            }
+                        r->notify(it.operator->(), String(), va.notifier);
+                    }
+                give_up:
+                    va.match.restore(mstate);
+                }
+        } else {
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
+                if (it->key().length() == pat.key_length()) {
+                    if (pat.match(it->key(), va.match))
+                        r->notify(it.operator->(), String(), va.notifier);
+                    va.match.restore(mstate);
+                }
+        }
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
@@ -204,7 +265,7 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
 
     Join* join = jr_->join();
     JoinRange::validate_args va{first, last, Match(), &server, this, now,
-            iu->notifier_};
+            iu->notifier_, 0, Match::state()};
     join->assign_context(va.match, context_);
     join->assign_context(va.match, iu->context_);
     jr_->validate_step(va, iu->joinpos_ + 1);
