@@ -17,3 +17,4 @@ perf.data.old
 results
 last
 drivers
+.redis_one.conf
