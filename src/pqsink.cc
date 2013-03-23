@@ -79,8 +79,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos, const Datum** hint
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
-    sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
-    auto itend = sourcet->end();
+    Datum* lower_d = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
@@ -90,8 +89,9 @@ void JoinRange::validate_step(validate_args& va, int joinpos, const Datum** hint
     if (hint && *hint && (*hint)->key() >= Str(kl, kllen))
         ++sourcet->nvalidate_skipped_;
 
-    else {
-        auto it = sourcet->lower_bound_hint(Str(kf, kflen));
+    else if (lower_d) {
+        auto it = sourcet->iterator_to(*lower_d);
+        auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);

@@ -9,6 +9,77 @@
 
 namespace {
 
+void process(pq::Server& server, const Json& j, Json& rj) {
+    int command = j[0].as_i();
+    if (command >= pq_get && command <= pq_add_join
+        && !(j[2].is_s() && pq::table_name(j[2].as_s())))
+        return;
+    if (command >= pq_count && command <= pq_add_join
+        && !(j[3].is_s() && pq::table_name(j[2].as_s(), j[3].as_s())))
+        return;
+
+    switch (command) {
+    case pq_add_join:
+        if (j[4].is_s()) {
+            pq::Join* join = new pq::Join;
+            ErrorAccumulator errh;
+            if (join->assign_parse(j[4].as_s(), &errh)) {
+                server.add_join(j[2].as_s(), j[3].as_s(), join);
+                rj[2] = pq_ok;
+            }
+            if (!errh.empty())
+                rj[3] = errh.join();
+        }
+        break;
+    case pq_get: {
+        rj[2] = pq_ok;
+        const pq::Datum* d = server.validate(j[2].as_s());
+        if (d && d->key() == j[2].as_s())
+            rj[3] = d->value();
+        else
+            rj[3] = String();
+        break;
+    }
+    case pq_insert:
+        server.insert(j[2].as_s(), j[3].as_s());
+        rj[2] = pq_ok;
+        break;
+    case pq_erase:
+        server.erase(j[2].as_s());
+        rj[2] = pq_ok;
+        break;
+    case pq_count:
+        rj[2] = pq_ok;
+        rj[3] = server.validate_count(j[2].as_s(), j[3].as_s());
+        break;
+    case pq_scan: {
+        rj[2] = pq_ok;
+        Json results = Json::make_array();
+        if (pq::Datum* d = server.validate(j[2].as_s(), j[3].as_s())) {
+            const pq::Table& t = server.table(pq::table_name(j[2].as_s()));
+            for (String ends = j[3].as_s();
+                 d && d->key() < ends;
+                 d = t.next_datum(d))
+                results.push_back(d->key()).push_back(d->value());
+        }
+        rj[3] = std::move(results);
+        break;
+    }
+    case pq_stats:
+        rj[2] = pq_ok;
+        rj[3] = server.stats();
+        break;
+    case pq_control:
+        if (j[2].is_o()) {
+            if (j[2]["quit"])
+                exit(0);
+            rj[2] = pq_ok;
+            rj[3] = Json::make_object();
+        }
+        break;
+    }
+}
+
 tamed void connector(tamer::fd cfd, pq::Server& server) {
     tvars {
         Json j, rj = Json::make_array(0, 0, 0);
@@ -22,74 +93,7 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         rj[0] = -j[0].as_i();
         rj[1] = j[1];
         rj[2] = pq_fail;
-
-        switch (j[0].as_i()) {
-        case pq_add_join:
-            if (j[2].is_s() && j[3].is_s() && j[4].is_s()
-                && pq::table_name(j[2].as_s(), j[3].as_s())) {
-                pq::Join* join = new pq::Join;
-                ErrorAccumulator errh;
-                if (join->assign_parse(j[4].as_s(), &errh)) {
-                    server.add_join(j[2].as_s(), j[3].as_s(), join);
-                    rj[2] = pq_ok;
-                }
-                if (!errh.empty())
-                    rj[3] = errh.join();
-            }
-            break;
-        case pq_get:
-            if (j[2].is_s() && pq::table_name(j[2].as_s())) {
-                rj[2] = pq_ok;
-                server.validate(j[2].as_s());
-                rj[3] = server[j[2].as_s()].value();
-            }
-            break;
-        case pq_insert:
-            if (j[2].is_s() && j[3].is_s()) {
-                server.insert(j[2].as_s(), j[3].as_s());
-                rj[2] = pq_ok;
-            }
-            break;
-        case pq_erase:
-            if (j[2].is_s()) {
-                server.erase(j[2].as_s());
-                rj[2] = pq_ok;
-            }
-            break;
-        case pq_count:
-            if (j[2].is_s() && j[3].is_s()
-                && pq::table_name(j[2].as_s(), j[3].as_s())) {
-                rj[2] = pq_ok;
-                server.validate(j[2].as_s(), j[3].as_s());
-                rj[3] = server.count(j[2].as_s(), j[3].as_s());
-            }
-            break;
-        case pq_scan:
-            if (j[2].is_s() && j[3].is_s()
-                && pq::table_name(j[2].as_s(), j[3].as_s())) {
-                rj[2] = pq_ok;
-                server.validate(j[2].as_s(), j[3].as_s());
-                Json results = Json::make_array();
-                auto last = server.lower_bound(j[3].as_s());
-                for (auto it = server.lower_bound(j[2].as_s());
-                     it != last; ++it)
-                    results.push_back(it->key()).push_back(it->value());
-                rj[3] = std::move(results);
-            }
-            break;
-        case pq_stats:
-            rj[2] = pq_ok;
-            rj[3] = server.stats();
-            break;
-        case pq_control:
-            if (j[2].is_o()) {
-                if (j[2]["quit"])
-                    exit(0);
-                rj[2] = pq_ok;
-                rj[3] = Json::make_object();
-            }
-            break;
-        }
+        process(server, j, rj);
 
         mpfd.write(rj);
     }

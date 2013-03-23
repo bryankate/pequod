@@ -31,7 +31,7 @@ const Table Table::empty_table{Str()};
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
       nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
-      flush_at_(0), all_pull_(true), namelen_(name.length()) {
+      njoins_(0), flush_at_(0), all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
 }
@@ -86,6 +86,7 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     join_ranges_.insert(*new JoinRange(first, last, join));
     if (join->maintained() || join->staleness())
         all_pull_ = false;
+    ++njoins_;
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -112,6 +113,24 @@ void Table::insert(Str key, String value) {
     all_pull_ = false;
 }
 
+inline Datum* Table::validate(Str first, Str last, uint64_t now) {
+    if (njoins_ != 0) {
+        if (njoins_ == 1) {
+            auto it = store_.lower_bound(first, DatumCompare());
+            if (it != store_.end() && it->key() < last && it->owner()
+                && it->owner()->valid() && !it->owner()->has_expired(now)
+                && it->owner()->ibegin() <= first && last <= it->owner()->iend()
+                && !it->owner()->need_update())
+                return it.operator->();
+        }
+        for (auto it = join_ranges_.begin_overlaps(first, last);
+             it != join_ranges_.end(); ++it)
+            it->validate(first, last, *server_, now);
+    }
+    auto it = store_.lower_bound(first, DatumCompare());
+    return it != store_.end() ? it.operator->() : nullptr;
+}
+
 void Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
         invalidate_dependents(d->key());
@@ -125,6 +144,15 @@ void Table::erase(Str key) {
     if (it != store_.end())
         erase(it);
     ++nerase_;
+}
+
+size_t Server::validate_count(Str first, Str last) {
+    Table& t = make_table(table_name(first));
+    Datum* d = validate(first, last);
+    size_t n = 0;
+    for (; d && d->key() < last; d = t.next_datum(d))
+        ++n;
+    return n;
 }
 
 Json Server::stats() const {
