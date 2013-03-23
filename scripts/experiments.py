@@ -110,4 +110,7 @@ for m in modes:
                          'server' : "./obj/pqserver -kl=7007",
                          'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 44, 5, 5, 10)});
 exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
-    
+
+# redis_hackernews. Document here.
+cmd = "./obj/pqserver --hn --redis --nops=1000000 --large"
+server = "cd scripts/redis-run; bash start.sh"

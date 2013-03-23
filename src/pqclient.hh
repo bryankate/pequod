@@ -27,7 +27,6 @@ class DirectClient {
     inline void pace(tamer::event<> done);
 
     typedef ServerStore::const_iterator iterator;
-
     class scan_result {
       public:
         scan_result() = default;
@@ -95,8 +94,11 @@ inline void DirectClient::add_join(const String& first, const String& last,
 }
 
 inline void DirectClient::get(const String& key, event<String> e) {
-    server_.validate(key);
-    e(server_[key].value());
+    const Datum* d = server_.validate(key);
+    if (d && d->key() == key)
+        e(d->value());
+    else
+        e(String());
 }
 
 inline void DirectClient::insert(const String& key, const String& value,
@@ -112,14 +114,12 @@ inline void DirectClient::erase(const String& key, event<> e) {
 
 inline void DirectClient::count(const String& first, const String& last,
                                 event<size_t> e) {
-    server_.validate(first, last);
-    e(server_.count(first, last));
+    e(server_.validate_count(first, last));
 }
 
 inline void DirectClient::add_count(const String& first, const String& last,
                                     event<size_t> e) {
-    server_.validate(first, last);
-    e(e.result() + server_.count(first, last));
+    e(e.result() + server_.validate_count(first, last));
 }
 
 inline DirectClient::scan_result::scan_result(iterator first, iterator last)
@@ -139,9 +139,12 @@ inline void DirectClient::scan_result::flush() {
 
 inline void DirectClient::scan(const String& first, const String& last,
                                event<scan_result> e) {
-    server_.validate(first, last);
-    e(scan_result(server_.lower_bound(first),
-                  server_.lower_bound(last)));
+    const Datum* d = server_.validate(first, last);
+    const Table& t = server_.table(table_name(first));
+    if (d)
+        e(scan_result(t.iterator_to(*d), t.lower_bound(last)));
+    else
+        e(scan_result(t.end(), t.end()));
 }
 
 inline void DirectClient::pace(event<> done) {
@@ -155,8 +158,11 @@ inline void DirectClient::stats(event<Json> e) {
 
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
-    server_.validate(key);
-    e(server_[key].value());
+    const Datum* d = server_.validate(key);
+    if (d && d->key() == key)
+        e(d->value());
+    else
+        e(String());
 }
 
 template <typename R>
@@ -175,23 +181,24 @@ inline void DirectClient::erase(const String& key, preevent<R> e) {
 template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
                                 preevent<R, size_t> e) {
-    server_.validate(first, last);
-    e(server_.count(first, last));
+    e(server_.validate_count(first, last));
 }
 
 template <typename R>
 inline void DirectClient::add_count(const String& first, const String& last,
                                     preevent<R, size_t> e) {
-    server_.validate(first, last);
-    e(e.result() + server_.count(first, last));
+    e(e.result() + server_.validate_count(first, last));
 }
 
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
-    server_.validate(first, last);
-    e(scan_result(server_.lower_bound(first),
-                  server_.lower_bound(last)));
+    const Datum* d = server_.validate(first, last);
+    const Table& t = server_.table(table_name(first));
+    if (d)
+        e(scan_result(t.iterator_to(*d), t.lower_bound(last)));
+    else
+        e(scan_result(t.end(), t.end()));
 }
 
 template <typename R>

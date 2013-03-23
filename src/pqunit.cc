@@ -995,6 +995,16 @@ void test_redis() {
 
     client.getrange("k2", 1, -1, v);
     CHECK_EQ(v, "bcdef");
+
+    int newv;
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 1);
+
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 2);
+
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 3);
 }
 
 } // namespace

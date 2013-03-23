@@ -41,6 +41,13 @@ String RedisCommand::make_append(const String& k, const String& v) {
     return std::move(sa.take_string());
 }
 
+String RedisCommand::make_incr(const String& k) {
+    StringAccum sa;
+    sa << "*2\r\n$4\r\nINCR\r\n";
+    sa << "$" << k.length() << "\r\n" << k << "\r\n";
+    return std::move(sa.take_string());
+}
+
 RedisSyncClient::RedisSyncClient() {
     fd_ = sock_helper::connect("localhost", 6379);
 }
@@ -93,6 +100,17 @@ void RedisSyncClient::read_reply(String& v) {
     }
     v = p.value();
 }
+
+void RedisSyncClient::incr(const String& k, int& newv) {
+    String cmd = RedisCommand::make_incr(k);
+    writen(cmd.data(), cmd.length());
+    if (debug)
+        std::cout << cmd << std::endl;
+    String v;
+    read_reply(v);
+    newv = v.to_i();
+}
+
 
 void RedisSyncClient::readn(void* buf, size_t count) {
     CHECK_EQ(read(fd_, buf, count), ssize_t(count));

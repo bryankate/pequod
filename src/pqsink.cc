@@ -36,7 +36,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
     valid_ranges_.insert(*va.sink);
-    validate_step(va, 0, 0);
+    validate_step(va, 0);
 }
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
@@ -67,7 +67,7 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
         validate_one(last_valid, last, server, now);
 }
 
-void JoinRange::validate_step(validate_args& va, int joinpos, const Datum** hint) {
+void JoinRange::validate_step(validate_args& va, int joinpos) {
     Table* sourcet = join_->source_table(joinpos);
 
     uint8_t kf[128], kl[128];
@@ -77,69 +77,32 @@ void JoinRange::validate_step(validate_args& va, int joinpos, const Datum** hint
                                    va.first, va.last, va.match);
     assert(Str(kf, kflen) <= Str(kl, kllen));
 
-    // need to validate the source ranges in case they have not been
-    // expanded yet.
-    sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
-    auto itend = sourcet->end();
-
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
-    if (hint && *hint && (*hint)->key() >= Str(kl, kllen))
-        ++sourcet->nvalidate_skipped_;
-
-    else {
-        auto it = sourcet->lower_bound_hint(Str(kf, kflen));
+    // need to validate the source ranges in case they have not been
+    // expanded yet.
+    if (Datum* lower_d = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now)) {
+        auto it = sourcet->iterator_to(*lower_d);
+        auto itend = sourcet->end();
 
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
-
-        // figure out whether match is necessary
-        int mopt = pat.check_optimized_match(va.match);
         ++sourcet->nvalidate_;
 
-        if (mopt < 0) {
-            // match not optimizable
-            for (; it != itend && it->key() < Str(kl, kllen); ++it)
-                if (it->key().length() == pat.key_length()) {
-                    if (pat.match(it->key(), va.match)) {
-                        if (r)
-                            r->notify(it.operator->(), String(), va.notifier);
-                        else
-                            validate_step(va, joinpos + 1, 0);
-                    }
-                    va.match.restore(mstate);
-                }
-        } else if (join_->check_increasing_match(joinpos, va.match)) {
-            // match optimizable, accesses next table in strictly increasing order
-            assert(!r);
-            ++sourcet->nvalidate_increasing_;
-            ++sourcet->nvalidate_optimized_;
-            const Datum* next_hint = nullptr;
-            for (; it != itend && it->key() < Str(kl, kllen); ++it)
-                if (it->key().length() == pat.key_length()) {
-                    pat.assign_optimized_match(it->key(), mopt, va.match);
-                    validate_step(va, joinpos + 1, &next_hint);
-                    va.match.restore(mstate);
-                }
-        } else {
-            // match optimizable
-            ++sourcet->nvalidate_optimized_;
-            for (; it != itend && it->key() < Str(kl, kllen); ++it)
-                if (it->key().length() == pat.key_length()) {
-                    pat.assign_optimized_match(it->key(), mopt, va.match);
+        // match not optimizable
+        for (; it != itend && it->key() < Str(kl, kllen); ++it)
+            if (it->key().length() == pat.key_length()) {
+                if (pat.match(it->key(), va.match)) {
                     if (r)
                         r->notify(it.operator->(), String(), va.notifier);
                     else
-                        validate_step(va, joinpos + 1, 0);
-                    va.match.restore(mstate);
+                        validate_step(va, joinpos + 1);
                 }
-        }
-
-        if (hint)
-            *hint = it != itend ? it.operator->() : &Datum::max_datum;
+                va.match.restore(mstate);
+            }
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
@@ -244,7 +207,7 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
             iu->notifier_};
     join->assign_context(va.match, context_);
     join->assign_context(va.match, iu->context_);
-    jr_->validate_step(va, iu->joinpos_ + 1, 0);
+    jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
         iu->ibegin_ = last;

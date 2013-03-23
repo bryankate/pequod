@@ -88,6 +88,7 @@ class RedisfdHashClient {
     tamed void append(Str k, Str v, tamer::event<> e);
     void done_get(String) {
     }
+    tamed void increment(Str k, tamer::event<> e);
     void pace(tamer::event<> done);
   private:
     redis_fd fd_;

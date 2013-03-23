@@ -16,8 +16,8 @@ class HashHackerNewsShim {
     HashHackerNewsShim(C &c) : c_(c) {
     }
 
-    void initialize(bool, bool mk, bool, bool, event<> e) {
-        mandatory_assert(!mk, "unimplemented: materializing all");
+    void initialize(bool, bool mk, bool ma, bool, event<> e) {
+        mandatory_assert(mk && !ma, "unimplemented: materializing all");
         e();
     }
 
@@ -78,7 +78,7 @@ inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         karmas_type &check_karmas, bool check, event<> e) {
     tvars {
         String hv, cl;
-        std::vector<String> str;
+        std::list<String> str;
     }
     (void)author;
     (void)check_karmas;

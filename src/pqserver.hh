@@ -33,7 +33,11 @@ class Table : public pequod_set_base_hook {
     inline iterator lower_bound(Str key);
     inline size_t size() const;
 
-    inline void validate(Str first, Str last, uint64_t now);
+    inline const_iterator iterator_to(const Datum& d) const;
+    inline iterator iterator_to(Datum& d);
+    inline Datum* next_datum(Datum* d) const;
+
+    Datum* validate(Str first, Str last, uint64_t now);
     inline void invalidate_dependents(Str key);
     inline void invalidate_dependents(Str first, Str last);
 
@@ -65,6 +69,7 @@ class Table : public pequod_set_base_hook {
     store_type store_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    unsigned njoins_;
     uint64_t flush_at_;
     bool all_pull_;
     int namelen_;
@@ -104,9 +109,9 @@ class Server {
     inline void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
-    inline void validate(Str key);
-    inline void validate(Str first, Str last);
-    inline size_t validate_count(Str first, Str last);
+    inline Datum* validate(Str key);
+    inline Datum* validate(Str first, Str last);
+    size_t validate_count(Str first, Str last);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -164,6 +169,20 @@ inline size_t Table::size() const {
     return store_.size();
 }
 
+inline auto Table::iterator_to(const Datum& d) const -> const_iterator {
+    return store_.iterator_to(d);
+}
+
+inline auto Table::iterator_to(Datum& d) -> iterator {
+    return store_.iterator_to(d);
+}
+
+inline Datum* Table::next_datum(Datum* d) const {
+    auto it = store_.iterator_to(*d);
+    ++it;
+    return it != store_.end() ? const_cast<Datum*>(it.operator->()) : 0;
+}
+
 inline Server::Server()
     : last_validate_at_(0) {
 }
@@ -212,12 +231,6 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
         if (source->check_match(key))
             source->notify(d, old_value, notifier);
     }
-}
-
-inline void Table::validate(Str first, Str last, uint64_t now) {
-    for (auto it = join_ranges_.begin_overlaps(first, last);
-	 it != join_ranges_.end(); ++it)
-        it->validate(first, last, *server_, now);
 }
 
 inline void Table::invalidate_dependents(Str key) {
@@ -329,26 +342,21 @@ inline void Server::remove_source(Str first, Str last, SinkRange* sink, Str cont
     make_table(tname).remove_source(first, last, sink, context);
 }
 
-inline void Server::validate(Str first, Str last) {
+inline Datum* Server::validate(Str first, Str last) {
     uint64_t now = tstamp();
     now += now == last_validate_at_;
     last_validate_at_ = now;
     Str tname = table_name(first, last);
     assert(tname);
-    make_table(tname).validate(first, last, now);
+    return make_table(tname).validate(first, last, now);
 }
 
-inline void Server::validate(Str key) {
+inline Datum* Server::validate(Str key) {
     LocalStr<24> next_key;
     next_key.assign_uninitialized(key.length() + 1);
     memcpy(next_key.mutable_data(), key.data(), key.length());
     next_key.mutable_data()[key.length()] = 0;
-    validate(key, next_key);
-}
-
-inline size_t Server::validate_count(Str first, Str last) {
-    validate(first, last);
-    return count(first, last);
+    return validate(key, next_key);
 }
 
 class Server::const_iterator {
