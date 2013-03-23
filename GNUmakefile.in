@@ -89,6 +89,8 @@ $(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
 $(OBJDIR)/pqtwitter.hh: $(top_srcdir)/src/pqtwitter.thh
 $(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/src/pqtwitternew.tcc
 $(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/src/pqtwitternew.thh
+$(OBJDIR)/pqanalytics.cc: $(top_srcdir)/src/pqanalytics.tcc
+$(OBJDIR)/pqanalytics.hh: $(top_srcdir)/src/pqanalytics.thh
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/hnshim.hh: $(top_srcdir)/src/hnshim.thh
 $(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
@@ -97,9 +99,10 @@ $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
 $(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh

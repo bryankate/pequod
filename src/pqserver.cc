@@ -519,9 +519,14 @@ int main(int argc, char** argv) {
         pq::facebook_populate(server, fp);
         pq::facebook_run(server, fp);
     } else if (mode == mode_analytics) {
-        pq::AnalyticsRunner ar(server, tp_param);
-        ar.populate();
-        ar.run();
+        if (client_port >= 0)
+            pq::run_analytics_remote(tp_param, client_port);
+        else {
+            pq::DirectClient client(server);
+            pq::AnalyticsShim<pq::DirectClient> shim(client);
+            pq::AnalyticsRunner<decltype(shim)> ar(shim, tp_param);
+            ar.safe_run();
+        }
     } else if (mode == mode_rwmicro) {
         if (tp_param["builtinhash"]) {
             pq::BuiltinHashClient client;
