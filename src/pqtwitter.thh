@@ -197,10 +197,9 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  make_event(j[1]));
             }
         }
-        if (j[0]["message"])
-            std::cerr << "installing timeline join: " << j[0] << "\n";
-        if (j[1]["message"])
-            std::cerr << "installing celebrity timeline join: " << j[1] << "\n";
+        for (int i = 0; i < 4; ++i)
+            if (j[i] && !j[i]["ok"])
+                std::cerr << "join error: " << j[i] << "\n";
         done();
     }
 }

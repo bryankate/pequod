@@ -82,7 +82,7 @@ inline DirectClient::DirectClient(Server& server)
 inline void DirectClient::add_join(const String& first, const String& last,
                                    const String& join_text, event<Json> e) {
     ErrorAccumulator errh;
-    Json rj;
+    Json rj = Json().set("range", Json::make_array(first, last));
     Join* j = new Join;
     if (j->assign_parse(join_text, &errh)) {
         server_.add_join(first, last, j);
