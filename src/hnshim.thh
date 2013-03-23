@@ -78,7 +78,7 @@ inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
         karmas_type &check_karmas, bool check, event<> e) {
     tvars {
         String hv, cl;
-        std::vector<String> str;
+        std::list<String> str;
     }
     (void)author;
     (void)check_karmas;
