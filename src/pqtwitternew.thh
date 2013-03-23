@@ -335,9 +335,10 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
 
 tamed template <typename S>
 void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) {
-    tvars { char buf[128];
-            typename S::scan_result scan_result;
-            TwitterUser* user;
+    tvars {
+        char buf[128];
+        typename S::scan_result scan_result;
+        TwitterUser* user;
     }
 
     if (tp_.log())
@@ -401,7 +402,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     }
     gen.seed(112181);
 
-    if (tp_.verbose()) { std::cout << "Creating social graph." << std::endl; }
+    if (tp_.verbose()) { std::cerr << "Creating social graph." << std::endl; }
     tp_.make_subscriptions(gen);
     tp_.print_subscription_statistics(std::cout);
 
@@ -415,7 +416,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
 
     twait {
-        if (tp_.verbose()) { std::cout << "Building subscription table." << std::endl; }
+        if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
         for (u = 0; u < nusers; ++u) {
             user = &tp_.mutable_user(u);
 
@@ -427,7 +428,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         }
     }
 
-    if (tp_.verbose()) { std::cout << "Populating twittersphere." << std::endl; }
+    if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
         u = tp_.rand_user_post(gen);
         post(u, currtime_, String(TwitterNewPopulator::tweet_data, 5), gr.make_event());
@@ -608,7 +609,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         if (tp_.verbose()) {
             uint32_t diff = currtime_ - beg_time;
             if (currtime_ > beg_time && diff % (tp_.duration() / 10) == 0)
-                std::cout << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+                std::cerr << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
         }
     }
 
@@ -620,7 +621,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     twait { server_.stats(make_event(stats)); }
 
     if (tp_.overhead()) {
-        if (tp_.verbose()) { std::cout << "Finished overhead experiment, reading results." << std::endl; }
+        if (tp_.verbose()) { std::cerr << "Finished overhead experiment, reading results." << std::endl; }
         for (u = 0; u < nusers; ++u) {
             user = &tp_.mutable_user(u);
             server_.timeline_add_count(u, 0, 0, gr.make_event(user->nread_));
