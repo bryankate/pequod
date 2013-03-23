@@ -137,7 +137,7 @@ void HackernewsRunner<S>::run(event<> e) {
         struct timeval tv[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
         Json old_stats, stats;
-        double start, tm;
+        double real_time;
         uint32_t i, p, user, aid;
         tamer::gather_rendezvous gr;
     }
@@ -179,14 +179,16 @@ void HackernewsRunner<S>::run(event<> e) {
         stats["server_user_time"] -= old_stats["server_user_time"];
         stats["server_system_time"] -= old_stats["server_system_time"];
     }
+    real_time = to_real(tv[1] - tv[0]);
     stats = Json().set("nread", nread).set("npost", npost)
 	.set("ncomment", ncomment).set("nvote", nvote)
 	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
 	.set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-	.set("real_time", to_real(tv[1] - tv[0]))
+	.set("real_time", real_time)
         .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-    std::cout << nops << " done, " << tm << " seconds, " << nops/to_real(tv[1] - tv[0]) << " qps\n";
+    std::cout << nops << " done, " << real_time << " seconds, " 
+              << nops / real_time << " qps\n";
     e();
 }
 
