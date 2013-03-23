@@ -179,32 +179,43 @@ TwitterNewShim<S>::TwitterNewShim(S& server)
 tamed template <typename S>
 void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                                    tamer::event<> done) {
-    tvars { Json j, cj; }
+    tvars { Json j[4]; }
     if (push)
         done();
     else {
         twait {
             server_.add_join("t|", "t}",
-                             "t|<user_id>|<time>|<poster_id> = "
-                             "copy p|<poster_id>|<time> " +
+                             "t|<user>|<time>|<poster> = "
+                             "copy p|<poster>|<time> " +
                              String((pull) ? "pull " : "") +
-                             "using s|<user_id>|<poster_id> "
-                             "where user_id:4n, time:4n, poster_id:4n",
-                             make_event(j));
+                             "using s|<user>|<poster> "
+                             "where user:4n, time:4n, poster:4n",
+                             make_event(j[0]));
 
-            if (pull_celeb)
+            if (pull_celeb) {
+                server_.add_join("ct|", "ct}",
+                                 "ct|<time>|<poster> = "
+                                 "copy cp|<poster>|<time> "
+                                 "where poster:4n, time:4n",
+                                 make_event(j[3]));
+                server_.add_join("cs|", "cs}",
+                                 "cs|<user>|<poster> = "
+                                 "copy c|<poster> "
+                                 "using s|<user>|<poster> "
+                                 "where user:4n, poster:4n",
+                                 make_event(j[2]));
                 server_.add_join("t|", "t}",
-                                 "t|<user_id>|<time>|<poster_id> = "
-                                 "copy cp|<poster_id>|<time> pull "
-                                 "using s|<user_id>|<poster_id> "
-                                 "and c|<poster_id> "
-                                 "where user_id:4n, time:4n, poster_id:4n",
-                                 make_event(cj));
+                                 "t|<user>|<time>|<poster> = "
+                                 "pull copy ct|<time>|<poster> "
+                                 "using filter cs|<user>|<poster> "
+                                 "where user:4n, time:4n, poster:4n",
+                                 make_event(j[1]));
+            }
         }
-        if (j["message"])
-            std::cerr << "installing timeline join: " << j << "\n";
-        if (cj["message"])
-            std::cerr << "installing celebrity timeline join: " << cj << "\n";
+
+        for (uint32_t i = 0; i < 4; ++i)
+            if (j[i]["message"])
+                std::cerr << "installing join: " << j[i] << "\n";
         done();
     }
 }
