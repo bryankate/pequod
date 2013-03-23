@@ -432,6 +432,8 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
+        else if (words[i] == "push")
+            maintained_ = true;
         else if (words[i] == "and")
             /* do nothing */;
         else if (op == jvt_slotdef || op == jvt_slotdef1) {
@@ -514,6 +516,12 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
 }
 
 int Join::analyze(ErrorHandler* errh) {
+    // check that sink() is not used as a source
+    for (int p = 1; p != npat_; ++p)
+        if (pat_[p].table_name() == pat_[0].table_name())
+            return errh->error("table %<%.*s%> used as both source and sink",
+                               pat_[p].table_name().length(), pat_[p].table_name().data());
+
     // account for slots across all patterns
     // completion_source_ is the source number after which sink() is complete
     int need_slots = 0;

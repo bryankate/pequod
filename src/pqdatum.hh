@@ -34,6 +34,7 @@ class Datum : public pequod_set_base_hook {
     inline String& value();
 
     static const Datum empty_datum;
+    static const Datum max_datum;
 
   private:
     LocalStr<24> key_;

@@ -89,26 +89,26 @@ for nfollower in [1, 16, 32]:
     exps.append({'name': ename, 'defs': client_push, 'xlabel' : 'refresh ratio (%)'})
 
 # real_twitter
-# we will set a post limit of 150K to stop the experiment
-# keep the post:check ratio at 1:65
-cmdbase = "./obj/pqserver --twitternew --nusers=100000 --pactive=70 --postlimit=20000 --duration=100000000"
-#cmdbase = "./obj/pqserver --client=7007 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=150000 --duration=100000000"
+# we will set a post limit of 200K to stop the experiment
+# keep the post:check ratio at 1:49
+cmdbase = "./obj/pqserver --client=7007 --twitternew --graph=twitter_graph_1.8M.dat --pactive=70 --postlimit=200000 --duration=100000000"
+microcmdbase = "./obj/pqserver --client=7007 --rwmicro --nusers=1794167  --pactive=70 --nfollower=41 --postlen=5 --popduration=1000000 --prefresh=98 --nops=10000000"
 # rwmicro and twitternew use different params, so m[1] and m[2] differ
 modes = [["autopush", "", "--push"], ["pull", "--pull", "--no-push"], ["push", "--push", "--client_push"]]
 real_twitter = []
 for m in modes:
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "micro",
-                         #'server' : "./obj/pqserver -kl=7007",
-                         'cmd': "./obj/pqserver --rwmicro --nusers=100000 --pactive=70 --nfollower=110 --postlen=5 --popduration=500000 --prefresh=98 --nops=1000000 %s" % m[2]});
+                         'server' : "./obj/pqserver -kl=7007",
+                         'cmd': "%s %s" % (microcmdbase, m[2])});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "base",
-                         #'server' : "./obj/pqserver -kl=7007",
-                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 65, 0, 0, 0)});
+                         'server' : "./obj/pqserver -kl=7007",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 49, 0, 0, 0)});
     real_twitter.append({'plotgroup': "%s" % m[0],
                          'plotkey' : "all",
-                         #'server' : "./obj/pqserver -kl=7007",
-                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 60, 5, 5, 10)});
+                         'server' : "./obj/pqserver -kl=7007",
+                         'cmd': "%s %s --ppost=%d --pread=%d --plogin=%d --plogout=%d --psubscribe=%d" % (cmdbase, m[1], 1, 44, 5, 5, 10)});
 exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
 
 # redis_hackernews. Document here.
