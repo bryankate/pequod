@@ -16,8 +16,8 @@ class HashHackerNewsShim {
     HashHackerNewsShim(C &c) : c_(c) {
     }
 
-    void initialize(bool, bool mk, bool, bool, event<> e) {
-        mandatory_assert(!mk, "unimplemented: materializing all");
+    void initialize(bool, bool mk, bool ma, bool, event<> e) {
+        mandatory_assert(mk && !ma, "unimplemented: materializing all");
         e();
     }
 
