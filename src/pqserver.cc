@@ -501,7 +501,9 @@ int main(int argc, char** argv) {
 #else
             mandatory_assert(false);
 #endif
-        } else {
+        } else if (tp_param["redis"])
+            run_hn_remote_redis(*hp);
+	else {
             if (client_port >= 0)
                 run_hn_remote(*hp, client_port);
             else {

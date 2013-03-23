@@ -191,6 +191,7 @@ void HackernewsRunner<S>::run(event<> e) {
 }
 
 tamed void run_hn_remote(HackernewsPopulator& hp, int client_port);
+tamed void run_hn_remote_redis(HackernewsPopulator& hp);
 
 };
 

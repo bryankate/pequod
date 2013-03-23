@@ -24,6 +24,12 @@ tamed void RedisfdHashClient::append(Str k, Str v, tamer::event<> e) {
     e();
 }
 
+tamed void RedisfdHashClient::increment(Str k, tamer::event<> e) {
+    tvars { String r; }
+    twait { fd_.call(RedisCommand::make_incr(k), make_event(r)); }
+    e();
+}
+
 void RedisfdHashClient::pace(tamer::event<> e) {
     fd_.pace(e);
 }
