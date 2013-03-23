@@ -70,6 +70,21 @@ void Pattern::match_range(Str first, Str last, Match& m) const {
         }
 }
 
+int Pattern::expand(uint8_t* s, const Match& m) const {
+    uint8_t* first = s;
+    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
+        if (*p < 128) {
+            *s = *p;
+            ++s;
+        } else {
+            memcpy(s, m.data(*p - 128), m.known_length(*p - 128));
+            s += m.known_length(*p - 128);
+            if (m.known_length(*p - 128) != slotlen_[*p - 128])
+                break;
+        }
+    return s - first;
+}
+
 int Pattern::check_optimized_match(const Match& m) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
         if (*p >= 128 && m.known_length(*p - 128) != slotlen_[*p - 128]) {

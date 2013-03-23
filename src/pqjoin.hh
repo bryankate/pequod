@@ -32,6 +32,7 @@ class Match {
     inline bool has_slot(int slot) const;
     inline Str slot(int slot) const;
     inline int known_length(int slot) const;
+    static inline int known_length(const state& state, int slot);
     inline const uint8_t* data(int slot) const;
 
     inline void set_slot(int slot, const char* data, int len);
@@ -63,6 +64,8 @@ class Pattern {
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
+
+    int expand(uint8_t* s, const Match& m) const;
 
     int check_optimized_match(const Match& m) const;
     inline void assign_optimized_match(Str str, int mopt, Match& m) const;
@@ -115,6 +118,7 @@ class Join {
     inline int slot(Str name) const;
 
     inline unsigned known_mask(const Match& m) const;
+    inline unsigned known_mask(const Match::state& mstate) const;
     inline unsigned source_mask(int si) const;
     inline unsigned context_mask(int si) const;
     inline int context_length(unsigned mask) const;
@@ -201,6 +205,10 @@ inline Str Match::slot(int i) const {
 
 inline int Match::known_length(int i) const {
     return ms_.slotlen_[i];
+}
+
+inline int Match::known_length(const state& state, int i) {
+    return state.slotlen_[i];
 }
 
 inline const uint8_t* Match::data(int i) const {
@@ -370,6 +378,14 @@ inline unsigned Join::known_mask(const Match& m) const {
     unsigned mask = 0;
     for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
         if (m.known_length(s) == slotlen_[s])
+            mask |= 1 << s;
+    return mask;
+}
+
+inline unsigned Join::known_mask(const Match::state& mstate) const {
+    unsigned mask = 0;
+    for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
+        if (Match::known_length(mstate, s) == slotlen_[s])
             mask |= 1 << s;
     return mask;
 }

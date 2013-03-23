@@ -32,6 +32,7 @@ class Table : public pequod_set_base_hook {
     inline const_iterator lower_bound(Str key) const;
     inline iterator lower_bound(Str key);
     inline size_t size() const;
+    inline size_t count(Str key) const;
 
     inline const_iterator iterator_to(const Datum& d) const;
     inline iterator iterator_to(Datum& d);
@@ -167,6 +168,10 @@ inline auto Table::lower_bound(Str str) -> iterator {
 
 inline size_t Table::size() const {
     return store_.size();
+}
+
+inline size_t Table::count(Str key) const {
+    return store_.count(key, DatumCompare());
 }
 
 inline auto Table::iterator_to(const Datum& d) const -> const_iterator {
