@@ -170,16 +170,16 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         if (r) {
             LocalStr<12> remove_context;
             join_->make_context(remove_context, va.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
-            va.server->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
+            sourcet->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
             delete r;
         }
     } else if (join_->maintained()) {
         if (r)
-            va.server->add_source(r);
+            sourcet->add_source(r);
         else {
             SourceRange::parameters p{*va.server, join_, joinpos, va.match,
                     Str(kf, kflen), Str(kl, kllen), va.sink};
-            va.server->add_source(new InvalidatorRange(p));
+            sourcet->add_source(new InvalidatorRange(p));
         }
     } else if (r)
         delete r;

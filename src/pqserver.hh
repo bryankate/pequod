@@ -32,6 +32,7 @@ class Table : public pequod_set_base_hook {
     inline const_iterator lower_bound(Str key) const;
     inline iterator lower_bound(Str key);
     inline size_t size() const;
+    inline const Datum& operator[](Str key) const;
     inline size_t count(Str key) const;
 
     inline const_iterator iterator_to(const Datum& d) const;
@@ -39,6 +40,7 @@ class Table : public pequod_set_base_hook {
     inline Datum* next_datum(Datum* d) const;
 
     Datum* validate(Str first, Str last, uint64_t now);
+    inline Datum* validate(Str key, uint64_t now);
     inline void invalidate_dependents(Str key);
     inline void invalidate_dependents(Str first, Str last);
 
@@ -95,19 +97,20 @@ class Server {
     class const_iterator;
     inline const_iterator begin() const;
     inline const_iterator end() const;
-    inline const Datum* find(Str str) const;
-    inline store_type::const_iterator lower_bound(Str str) const;
-    inline const Datum& operator[](Str str) const;
+    inline const Datum* find(Str key) const;
+    inline store_type::const_iterator lower_bound(Str key) const;
+    inline const Datum& operator[](Str key) const;
     inline size_t count(Str first, Str last) const;
 
     const Table& table(Str tname) const;
     Table& make_table(Str tname);
 
+    const Table& table_for(Str key) const;
+    Table& make_table_for(Str key);
+
     inline void insert(Str key, const String& value);
     inline void erase(Str key);
 
-    inline void add_source(SourceRange* r);
-    inline void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
     inline uint64_t next_validate_at();
@@ -171,6 +174,11 @@ inline size_t Table::size() const {
     return store_.size();
 }
 
+inline const Datum& Table::operator[](Str key) const {
+    auto it = store_.find(key, DatumCompare());
+    return it == store_.end() ? Datum::empty_datum : *it;
+}
+
 inline size_t Table::count(Str key) const {
     return store_.count(key, DatumCompare());
 }
@@ -197,6 +205,11 @@ inline const Table& Server::table(Str tname) const {
     return tables_.get(tname, Table::empty_table);
 }
 
+inline const Table& Server::table_for(Str key) const {
+    Str tname = table_name(key);
+    return tables_.get(tname, Table::empty_table);
+}
+
 inline Table& Server::make_table(Str tname) {
     bool inserted;
     auto it = tables_.find_insert(tname, inserted);
@@ -207,20 +220,30 @@ inline Table& Server::make_table(Str tname) {
     return *it;
 }
 
-inline const Datum* Server::find(Str str) const {
-    auto& store = tables_.get(table_name(str), Table::empty_table).store_;
-    auto it = store.find(str, DatumCompare());
+inline Table& Server::make_table_for(Str key) {
+    Str tname = table_name(key);
+    assert(tname);
+    bool inserted;
+    auto it = tables_.find_insert(tname, inserted);
+    if (inserted) {
+        it->server_ = this;
+        tables_by_name_.insert(*it);
+    }
+    return *it;
+}
+
+inline const Datum* Server::find(Str key) const {
+    auto& store = table_for(key).store_;
+    auto it = store.find(key, DatumCompare());
     return it == store.end() ? NULL : it.operator->();
 }
 
-inline const Datum& Server::operator[](Str str) const {
-    auto& store = tables_.get(table_name(str), Table::empty_table).store_;
-    auto it = store.find(str, DatumCompare());
-    return it == store.end() ? Datum::empty_datum : *it;
+inline const Datum& Server::operator[](Str key) const {
+    return table_for(key)[key];
 }
 
-inline auto Server::lower_bound(Str str) const -> Table::const_iterator {
-    return tables_.get(table_name(str), Table::empty_table).lower_bound(str);
+inline auto Server::lower_bound(Str key) const -> Table::const_iterator {
+    return table_for(key).lower_bound(key);
 }
 
 inline size_t Server::count(Str first, Str last) const {
@@ -237,6 +260,14 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
         if (source->check_match(key))
             source->notify(d, old_value, notifier);
     }
+}
+
+inline Datum* Table::validate(Str key, uint64_t now) {
+    LocalStr<24> next_key;
+    next_key.assign_uninitialized(key.length() + 1);
+    memcpy(next_key.mutable_data(), key.data(), key.length());
+    next_key.mutable_data()[key.length()] = 0;
+    return validate(key, next_key, now);
 }
 
 inline void Table::invalidate_dependents(Str key) {
@@ -326,26 +357,13 @@ inline void Table::flush_for_pull(uint64_t now) {
 }
 
 inline void Server::insert(Str key, const String& value) {
-    if (Str tname = table_name(key))
-        make_table(tname).insert(key, value);
+    make_table_for(key).insert(key, value);
 }
 
 inline void Server::erase(Str key) {
     auto tit = tables_.find(table_name(key));
     if (tit)
         tit->erase(key);
-}
-
-inline void Server::add_source(SourceRange* r) {
-    Str tname = table_name(r->ibegin());
-    assert(tname);
-    make_table(tname).add_source(r);
-}
-
-inline void Server::remove_source(Str first, Str last, SinkRange* sink, Str context) {
-    Str tname = table_name(first);
-    assert(tname);
-    make_table(tname).remove_source(first, last, sink, context);
 }
 
 inline uint64_t Server::next_validate_at() {
@@ -361,11 +379,7 @@ inline Datum* Server::validate(Str first, Str last) {
 }
 
 inline Datum* Server::validate(Str key) {
-    LocalStr<24> next_key;
-    next_key.assign_uninitialized(key.length() + 1);
-    memcpy(next_key.mutable_data(), key.data(), key.length());
-    next_key.mutable_data()[key.length()] = 0;
-    return validate(key, next_key);
+    return make_table_for(key).validate(key, next_validate_at());
 }
 
 class Server::const_iterator {
