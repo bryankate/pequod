@@ -140,7 +140,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
 	$(OBJDIR)/hashclient.o \
-	$(OBJDIR)/pqrwmicro.o
+	$(OBJDIR)/pqrwmicro.o \
+	$(OBJDIR)/pqmain.o
 
 $(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
