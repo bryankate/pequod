@@ -49,9 +49,14 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     if (!join_->maintained() && !join_->staleness() && flush_at_ != now) {
-        server.table_for(first).flush_for_pull(now);
-        while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
-            delete sink;        // XXX be careful of refcounting
+        Table& t = server.table_for(first, last);
+        if (t.flush_for_pull(now)) {
+            while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+                delete sink;        // XXX be careful of refcounting
+        } else {
+            while (!valid_ranges_.empty())
+                valid_ranges_.begin()->invalidate();
+        }
         flush_at_ = now;
     }
 

@@ -50,7 +50,7 @@ class Table : public pequod_set_base_hook {
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
 
-    inline void flush_for_pull(uint64_t now);
+    inline bool flush_for_pull(uint64_t now);
 
     void print_sources(std::ostream& stream) const;
 
@@ -77,7 +77,7 @@ class Table : public pequod_set_base_hook {
     Server* server_;
 
     inline void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
-    void hard_flush_for_pull(uint64_t now);
+    bool hard_flush_for_pull(uint64_t now);
 
     friend class Server;
 };
@@ -341,9 +341,8 @@ inline void Table::invalidate_erase(Datum* d) {
     d->invalidate();
 }
 
-inline void Table::flush_for_pull(uint64_t now) {
-    if (all_pull_ && flush_at_ != now)
-        hard_flush_for_pull(now);
+inline bool Table::flush_for_pull(uint64_t now) {
+    return all_pull_ && flush_at_ != now && hard_flush_for_pull(now);
 }
 
 inline void Server::insert(Str key, const String& value) {
