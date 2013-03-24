@@ -26,7 +26,7 @@ namespace pq {
 
 const Datum Datum::empty_datum{Str()};
 const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
-const Table Table::empty_table{Str()};
+Table Table::empty_table{Str()};
 
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
@@ -97,6 +97,7 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
 }
 
 void Table::insert(Str key, String value) {
+    assert(namelen_);
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;

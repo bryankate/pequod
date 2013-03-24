@@ -16,7 +16,7 @@ class Table : public pequod_set_base_hook {
 
     Table(Str name);
     ~Table();
-    static const Table empty_table;
+    static Table empty_table;
 
     typedef Str key_type;
     typedef Str key_const_reference;
@@ -24,12 +24,10 @@ class Table : public pequod_set_base_hook {
     inline Str hashkey() const;
     inline Str key() const;
 
-    typedef store_type::const_iterator const_iterator;
     typedef store_type::iterator iterator;
-    inline const_iterator begin() const;
-    inline const_iterator end() const;
+    inline iterator begin();
+    inline iterator end();
     inline iterator lower_bound_hint(Str key);
-    inline const_iterator lower_bound(Str key) const;
     inline iterator lower_bound(Str key);
     inline size_t size() const;
     inline const Datum& operator[](Str key) const;
@@ -94,11 +92,10 @@ class Server {
     inline const_iterator begin() const;
     inline const_iterator end() const;
     inline const Datum* find(Str key) const;
-    inline store_type::const_iterator lower_bound(Str key) const;
     inline const Datum& operator[](Str key) const;
     inline size_t count(Str first, Str last) const;
 
-    const Table& table(Str tname) const;
+    Table& table(Str tname) const;
     Table& make_table(Str tname);
 
     Table& table_for(Str key) const;
@@ -146,19 +143,15 @@ inline Str Table::key() const {
     return Str(name_, namelen_);
 }
 
-inline auto Table::begin() const -> const_iterator {
+inline auto Table::begin() -> iterator {
     return store_.begin();
 }
 
-inline auto Table::end() const -> const_iterator {
+inline auto Table::end() -> iterator {
     return store_.end();
 }
 
 inline auto Table::lower_bound_hint(Str str) -> iterator {
-    return store_.lower_bound(str, DatumCompare());
-}
-
-inline auto Table::lower_bound(Str str) const -> const_iterator {
     return store_.lower_bound(str, DatumCompare());
 }
 
@@ -183,8 +176,8 @@ inline Server::Server()
     : last_validate_at_(0) {
 }
 
-inline const Table& Server::table(Str tname) const {
-    return tables_.get(tname, Table::empty_table);
+inline Table& Server::table(Str tname) const {
+    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
 }
 
 inline Table& Server::table_for(Str key) const {
@@ -224,12 +217,9 @@ inline const Datum& Server::operator[](Str key) const {
     return table_for(key)[key];
 }
 
-inline auto Server::lower_bound(Str key) const -> Table::const_iterator {
-    return table_for(key).lower_bound(key);
-}
-
 inline size_t Server::count(Str first, Str last) const {
-    return std::distance(lower_bound(first), lower_bound(last));
+    Table& t = table_for(first);
+    return std::distance(t.lower_bound(first), t.lower_bound(last));
 }
 
 inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
@@ -278,8 +268,7 @@ inline void Table::unlink_source(SourceRange* r) {
 
 template <typename F>
 void Table::modify(Str key, const SinkRange* sink, const F& func) {
-    if (!sink)
-        assert(0 && "Do you really need to call modify() with a null SinkRange? Talk to eddie");
+    assert(namelen_ && sink);
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink->hint();
@@ -397,20 +386,20 @@ class Server::const_iterator {
         : ti_(begin ? s->tables_by_name_.begin() : s->tables_by_name_.end()),
           s_(s) {
         if (begin && ti_ != s->tables_by_name_.end()) {
-            si_ = ti_->begin();
+            si_ = const_cast<Table&>(*ti_).begin();
             fix();
         } else
             si_ = Table::empty_table.end();
     }
 
     inline void fix() {
-        while (si_ == ti_->end()) {
+        while (si_ == const_cast<Table&>(*ti_).end()) {
             ++ti_;
             if (ti_ == s_->tables_by_name_.end()) {
                 si_ = Table::empty_table.end();
                 break;
             } else
-                si_ = ti_->begin();
+                si_ = const_cast<Table&>(*ti_).begin();
         }
     }
     friend class Server;
