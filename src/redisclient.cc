@@ -18,10 +18,11 @@ String RedisCommand::make_getrange(const String& k, int begin, int end) {
     StringAccum sa;
     sa << "*4\r\n$8\r\nGETRANGE\r\n";
     sa << "$" << k.length() << "\r\n" << k << "\r\n";
-    String sb(begin);
-    sa << "$" << sb.length() << "\r\n" << sb << "\r\n";
-    String se(end);
-    sa << "$" << se.length() << "\r\n" << se << "\r\n";
+    static char buf_[128];
+    int n = sprintf(buf_, "%d", begin);
+    sa << "$" << n << "\r\n" << buf_ << "\r\n";
+    n = sprintf(buf_, "%d", end);
+    sa << "$" << n << "\r\n" << buf_ << "\r\n";
     return std::move(sa.take_string());
 }
 
