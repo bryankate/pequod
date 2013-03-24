@@ -1,9 +1,9 @@
 #!/bin/bash
 
+sudo service redis-server stop
 sudo umount /run/shm
 sudo mount -t tmpfs /dev/shm /run/shm
 mkdir /run/shm/redislog -p
-sudo service redis-server stop
 
 conf="
 appendonly yes
