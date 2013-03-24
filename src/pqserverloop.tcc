@@ -33,9 +33,11 @@ void process(pq::Server& server, const Json& j, Json& rj) {
         break;
     case pq_get: {
         rj[2] = pq_ok;
-        const pq::Datum* d = server.validate(j[2].as_s());
-        if (d && d->key() == j[2].as_s())
-            rj[3] = d->value();
+        String key = j[2].as_s();
+        pq::Table& t = server.table_for(key);
+        auto it = t.validate(key, server.next_validate_at());
+        if (it != t.end() && it->key() == key)
+            rj[3] = it->value();
         else
             rj[3] = String();
         break;
@@ -54,13 +56,14 @@ void process(pq::Server& server, const Json& j, Json& rj) {
         break;
     case pq_scan: {
         rj[2] = pq_ok;
+        String first = j[2].as_s(), last = j[3].as_s();
         Json results = Json::make_array();
-        if (pq::Datum* d = server.validate(j[2].as_s(), j[3].as_s())) {
-            const pq::Table& t = server.table(pq::table_name(j[2].as_s()));
-            for (String ends = j[3].as_s();
-                 d && d->key() < ends;
-                 d = t.next_datum(d))
-                results.push_back(d->key()).push_back(d->value());
+        pq::Table& t = server.table_for(first);
+        auto it = t.validate(first, last, server.next_validate_at());
+        auto itend = t.end();
+        while (it != itend && it->key() < last) {
+            results.push_back(it->key()).push_back(it->value());
+            ++it;
         }
         rj[3] = std::move(results);
         break;

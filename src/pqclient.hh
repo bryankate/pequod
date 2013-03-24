@@ -94,9 +94,10 @@ inline void DirectClient::add_join(const String& first, const String& last,
 }
 
 inline void DirectClient::get(const String& key, event<String> e) {
-    const Datum* d = server_.validate(key);
-    if (d && d->key() == key)
-        e(d->value());
+    Table& t = server_.table_for(key);
+    auto it = t.validate(key, server_.next_validate_at());
+    if (it != t.end() && it->key() == key)
+        e(it->value());
     else
         e(String());
 }
@@ -139,12 +140,9 @@ inline void DirectClient::scan_result::flush() {
 
 inline void DirectClient::scan(const String& first, const String& last,
                                event<scan_result> e) {
-    const Datum* d = server_.validate(first, last);
-    const Table& t = server_.table(table_name(first));
-    if (d)
-        e(scan_result(t.iterator_to(*d), t.lower_bound(last)));
-    else
-        e(scan_result(t.end(), t.end()));
+    Table& t = server_.table_for(first);
+    auto it = t.validate(first, last, server_.next_validate_at());
+    e(scan_result(it, t.lower_bound(last)));
 }
 
 inline void DirectClient::pace(event<> done) {
@@ -158,9 +156,10 @@ inline void DirectClient::stats(event<Json> e) {
 
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
-    const Datum* d = server_.validate(key);
-    if (d && d->key() == key)
-        e(d->value());
+    Table& t = server_.table_for(key);
+    auto it = t.validate(key, server_.next_validate_at());
+    if (it != t.end() && it->key() == key)
+        e(it->value());
     else
         e(String());
 }
@@ -193,12 +192,9 @@ inline void DirectClient::add_count(const String& first, const String& last,
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
-    const Datum* d = server_.validate(first, last);
-    const Table& t = server_.table(table_name(first));
-    if (d)
-        e(scan_result(t.iterator_to(*d), t.lower_bound(last)));
-    else
-        e(scan_result(t.end(), t.end()));
+    Table& t = server_.table_for(first);
+    auto it = t.validate(first, last, server_.next_validate_at());
+    e(scan_result(it, t.lower_bound(last)));
 }
 
 template <typename R>

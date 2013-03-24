@@ -113,7 +113,7 @@ void Table::insert(Str key, String value) {
     all_pull_ = false;
 }
 
-inline Datum* Table::validate(Str first, Str last, uint64_t now) {
+auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
     if (njoins_ != 0) {
         if (njoins_ == 1) {
             auto it = store_.lower_bound(first, DatumCompare());
@@ -121,14 +121,13 @@ inline Datum* Table::validate(Str first, Str last, uint64_t now) {
                 && it->owner()->valid() && !it->owner()->has_expired(now)
                 && it->owner()->ibegin() <= first && last <= it->owner()->iend()
                 && !it->owner()->need_update())
-                return it.operator->();
+                return it;
         }
         for (auto it = join_ranges_.begin_overlaps(first, last);
              it != join_ranges_.end(); ++it)
             it->validate(first, last, *server_, now);
     }
-    auto it = store_.lower_bound(first, DatumCompare());
-    return it != store_.end() ? it.operator->() : nullptr;
+    return store_.lower_bound(first, DatumCompare());
 }
 
 void Table::hard_flush_for_pull(uint64_t now) {
@@ -148,9 +147,10 @@ void Table::erase(Str key) {
 
 size_t Server::validate_count(Str first, Str last) {
     Table& t = make_table(table_name(first));
-    Datum* d = validate(first, last);
+    auto it = validate(first, last);
+    auto itend = t.end();
     size_t n = 0;
-    for (; d && d->key() < last; d = t.next_datum(d))
+    for (; it != itend && it->key() < last; ++it)
         ++n;
     return n;
 }

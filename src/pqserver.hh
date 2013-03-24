@@ -37,10 +37,9 @@ class Table : public pequod_set_base_hook {
 
     inline const_iterator iterator_to(const Datum& d) const;
     inline iterator iterator_to(Datum& d);
-    inline Datum* next_datum(Datum* d) const;
 
-    Datum* validate(Str first, Str last, uint64_t now);
-    inline Datum* validate(Str key, uint64_t now);
+    iterator validate(Str first, Str last, uint64_t now);
+    inline iterator validate(Str key, uint64_t now);
     inline void invalidate_dependents(Str key);
     inline void invalidate_dependents(Str first, Str last);
 
@@ -105,7 +104,7 @@ class Server {
     const Table& table(Str tname) const;
     Table& make_table(Str tname);
 
-    const Table& table_for(Str key) const;
+    Table& table_for(Str key) const;
     Table& make_table_for(Str key);
 
     inline void insert(Str key, const String& value);
@@ -114,8 +113,8 @@ class Server {
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
     inline uint64_t next_validate_at();
-    inline Datum* validate(Str key);
-    inline Datum* validate(Str first, Str last);
+    inline Table::iterator validate(Str key);
+    inline Table::iterator validate(Str first, Str last);
     size_t validate_count(Str first, Str last);
 
     Json stats() const;
@@ -191,12 +190,6 @@ inline auto Table::iterator_to(Datum& d) -> iterator {
     return store_.iterator_to(d);
 }
 
-inline Datum* Table::next_datum(Datum* d) const {
-    auto it = store_.iterator_to(*d);
-    ++it;
-    return it != store_.end() ? const_cast<Datum*>(it.operator->()) : 0;
-}
-
 inline Server::Server()
     : last_validate_at_(0) {
 }
@@ -205,9 +198,9 @@ inline const Table& Server::table(Str tname) const {
     return tables_.get(tname, Table::empty_table);
 }
 
-inline const Table& Server::table_for(Str key) const {
+inline Table& Server::table_for(Str key) const {
     Str tname = table_name(key);
-    return tables_.get(tname, Table::empty_table);
+    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
 }
 
 inline Table& Server::make_table(Str tname) {
@@ -262,7 +255,7 @@ inline void Table::notify(Datum* d, const String& old_value, SourceRange::notify
     }
 }
 
-inline Datum* Table::validate(Str key, uint64_t now) {
+inline auto Table::validate(Str key, uint64_t now) -> iterator {
     LocalStr<24> next_key;
     next_key.assign_uninitialized(key.length() + 1);
     memcpy(next_key.mutable_data(), key.data(), key.length());
@@ -372,13 +365,13 @@ inline uint64_t Server::next_validate_at() {
     return last_validate_at_ = now;
 }
 
-inline Datum* Server::validate(Str first, Str last) {
+inline Table::iterator Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
     return make_table(tname).validate(first, last, next_validate_at());
 }
 
-inline Datum* Server::validate(Str key) {
+inline Table::iterator Server::validate(Str key) {
     return make_table_for(key).validate(key, next_validate_at());
 }
 

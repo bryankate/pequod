@@ -118,10 +118,9 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
 
     // need to validate the source ranges in case they have not been
     // expanded yet.
-    if (Datum* lower_d = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now)) {
-        auto it = sourcet->iterator_to(*lower_d);
-        auto itend = sourcet->end();
-
+    auto it = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+    auto itend = sourcet->end();
+    if (it != itend) {
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
         ++sourcet->nvalidate_;
