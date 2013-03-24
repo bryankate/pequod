@@ -16,9 +16,15 @@ typedef boost::intrusive::set_member_hook<
 
 class Datum : public pequod_set_base_hook {
   public:
+    static const char table_marker[];
+
     explicit inline Datum(Str key);
     inline Datum(Str key, const SinkRange* owner);
     inline Datum(Str key, const String& value);
+
+    inline bool is_table() const;
+    inline const Table& table() const;
+    inline Table& table();
 
     inline bool valid() const;
     inline void invalidate();
@@ -93,6 +99,10 @@ inline Datum::Datum(Str key, const SinkRange* owner)
 
 inline Datum::Datum(Str key, const String& value)
     : key_(key), value_(value), refcount_(0), owner_{nullptr} {
+}
+
+inline bool Datum::is_table() const {
+    return value_.data() == table_marker;
 }
 
 inline bool Datum::valid() const {

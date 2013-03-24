@@ -5,16 +5,17 @@
 #include "pqsource.hh"
 #include "pqsink.hh"
 #include "time.hh"
+#include <iterator>
 class Json;
 
 namespace pq {
 namespace bi = boost::intrusive;
 
-class Table : public pequod_set_base_hook {
+class Table : public Datum {
   public:
     typedef ServerStore store_type;
 
-    Table(Str name);
+    Table(Str name, Table* parent, Server* server);
     ~Table();
     static Table empty_table;
 
@@ -22,9 +23,13 @@ class Table : public pequod_set_base_hook {
     typedef Str key_const_reference;
     inline Str name() const;
     inline Str hashkey() const;
-    inline Str key() const;
 
-    typedef store_type::iterator iterator;
+    typedef ServerStore::iterator local_iterator;
+    inline local_iterator lbegin();
+    inline local_iterator lend();
+    inline local_iterator lfind(Str key);
+
+    class iterator;
     inline iterator begin();
     inline iterator end();
     inline iterator lower_bound_hint(Str key);
@@ -43,6 +48,7 @@ class Table : public pequod_set_base_hook {
     void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
+    local_iterator insert(Table& t);
     void insert(Str key, String value);
     template <typename F>
     inline void modify(Str key, const SinkRange* sink, const F& func);
@@ -69,12 +75,8 @@ class Table : public pequod_set_base_hook {
     unsigned njoins_;
     uint64_t flush_at_;
     bool all_pull_;
-    int namelen_;
-    char name_[28];
-  public:
-    pequod_set_member_hook member_hook_;
-  private:
     Server* server_;
+    Table* parent_;
 
     std::pair<store_type::iterator, bool> prepare_modify(Str key, const SinkRange* sink, store_type::insert_commit_data& cd);
     void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const SinkRange* sink, String value);
@@ -82,17 +84,40 @@ class Table : public pequod_set_base_hook {
     bool hard_flush_for_pull(uint64_t now);
 
     friend class Server;
+    friend class iterator;
+};
+
+class Table::iterator : public std::iterator<std::forward_iterator_tag, Datum> {
+  public:
+    inline iterator() = default;
+    inline iterator(Table* table, ServerStore::iterator it);
+
+    inline Datum& operator*() const;
+    inline Datum* operator->() const;
+
+    inline bool operator==(const iterator& x) const;
+    inline bool operator!=(const iterator& x) const;
+
+    inline void operator++();
+
+  private:
+    ServerStore::iterator it_;
+    Table* table_;
+
+    inline void maybe_fix();
+    void fix();
+    friend class Table;
 };
 
 class Server {
   public:
     typedef ServerStore store_type;
 
-    inline Server();
+    Server();
 
-    class const_iterator;
-    inline const_iterator begin() const;
-    inline const_iterator end() const;
+    typedef Table::iterator iterator;
+    inline iterator begin();
+    inline iterator end();
     inline const Datum* find(Str key) const;
     inline const Datum& operator[](Str key) const;
     inline size_t count(Str first, Str last) const;
@@ -119,9 +144,10 @@ class Server {
     void print(std::ostream& stream);
 
   private:
-    HashTable<Table> tables_;
-    bi::set<Table> tables_by_name_;
+    mutable Table supertable_;
     uint64_t last_validate_at_;
+
+    Table::local_iterator create_table(Str tname);
     friend class const_iterator;
 };
 
@@ -135,32 +161,79 @@ inline bool operator>(const Table& a, const Table& b) {
     return a.key() > b.key();
 }
 
+inline void Table::iterator::maybe_fix() {
+    if (it_ == table_->store_.end() || it_->is_table())
+        fix();
+}
+
+inline Table::iterator::iterator(Table* table, ServerStore::iterator it)
+    : it_(it), table_(table) {
+    maybe_fix();
+}
+
+inline Datum& Table::iterator::operator*() const {
+    return *it_;
+}
+
+inline Datum* Table::iterator::operator->() const {
+    return it_.operator->();
+}
+
+inline bool Table::iterator::operator==(const iterator& x) const {
+    return it_ == x.it_;
+}
+
+inline bool Table::iterator::operator!=(const iterator& x) const {
+    return it_ != x.it_;
+}
+
+inline void Table::iterator::operator++() {
+    ++it_;
+    maybe_fix();
+}
+
 inline Str Table::name() const {
-    return Str(name_, namelen_);
+    return key();
 }
 
 inline Str Table::hashkey() const {
-    return Str(name_, namelen_);
+    return key();
 }
 
-inline Str Table::key() const {
-    return Str(name_, namelen_);
+inline const Table& Datum::table() const {
+    return static_cast<const Table&>(*this);
 }
 
-inline auto Table::begin() -> iterator {
+inline Table& Datum::table() {
+    return static_cast<Table&>(*this);
+}
+
+inline auto Table::lbegin() -> local_iterator {
     return store_.begin();
 }
 
-inline auto Table::end() -> iterator {
+inline auto Table::lend() -> local_iterator {
     return store_.end();
 }
 
+inline auto Table::lfind(Str key) -> local_iterator {
+    return store_.find(key, DatumCompare());
+}
+
+inline auto Table::begin() -> iterator {
+    return iterator(this, store_.begin());
+}
+
+inline auto Table::end() -> iterator {
+    return iterator(this, store_.end());
+}
+
 inline auto Table::lower_bound_hint(Str str) -> iterator {
-    return store_.lower_bound(str, DatumCompare());
+    return iterator(this, store_.lower_bound(str, DatumCompare()));
 }
 
 inline auto Table::lower_bound(Str str) -> iterator {
-    return store_.lower_bound(str, DatumCompare());
+    return iterator(this, store_.lower_bound(str, DatumCompare()));
 }
 
 inline size_t Table::size() const {
@@ -176,62 +249,38 @@ inline size_t Table::count(Str key) const {
     return store_.count(key, DatumCompare());
 }
 
-inline Server::Server()
-    : last_validate_at_(0) {
-}
-
 inline Table& Server::table(Str tname) const {
-    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
+    auto it = supertable_.lfind(tname);
+    return it != supertable_.lend() ? it->table() : Table::empty_table;
 }
 
 inline Table& Server::table_for(Str key) const {
-    Str tname = table_name(key);
-    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
+    return table(table_name(key));
 }
 
 inline Table& Server::table_for(Str first, Str last) const {
-    Str tname = table_name(first, last);
-    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
+    return table(table_name(first, last));
 }
 
 inline Table& Server::make_table(Str tname) {
-    bool inserted;
-    auto it = tables_.find_insert(tname, inserted);
-    if (inserted) {
-        it->server_ = this;
-        tables_by_name_.insert(*it);
-    }
-    return *it;
+    auto it = supertable_.lfind(tname);
+    if (unlikely(it == supertable_.lend()))
+        it = create_table(tname);
+    return it->table();
 }
 
 inline Table& Server::make_table_for(Str key) {
-    Str tname = table_name(key);
-    assert(tname);
-    bool inserted;
-    auto it = tables_.find_insert(tname, inserted);
-    if (inserted) {
-        it->server_ = this;
-        tables_by_name_.insert(*it);
-    }
-    return *it;
+    return make_table(table_name(key));
 }
 
 inline Table& Server::make_table_for(Str first, Str last) {
-    Str tname = table_name(first, last);
-    assert(tname);
-    bool inserted;
-    auto it = tables_.find_insert(tname, inserted);
-    if (inserted) {
-        it->server_ = this;
-        tables_by_name_.insert(*it);
-    }
-    return *it;
+    return make_table(table_name(first, last));
 }
 
 inline const Datum* Server::find(Str key) const {
-    auto& store = table_for(key).store_;
-    auto it = store.find(key, DatumCompare());
-    return it == store.end() ? NULL : it.operator->();
+    Table& t = table_for(key);
+    auto it = t.lfind(key);
+    return it != t.lend() ? it.operator->() : nullptr;
 }
 
 inline const Datum& Server::operator[](Str key) const {
@@ -296,8 +345,10 @@ inline void Table::modify(Str key, const SinkRange* sink, const F& func) {
 }
 
 inline auto Table::erase(iterator it) -> iterator {
+    assert(it.table_ == this);
     Datum* d = it.operator->();
-    it = store_.erase(it);
+    it.it_ = store_.erase(it.it_);
+    it.maybe_fix();
     if (d->owner())
         d->owner()->remove_datum(d);
     String old_value = erase_marker();
@@ -315,7 +366,8 @@ inline void Table::invalidate_erase(Datum* d) {
 
 inline auto Table::erase_invalid(iterator it) -> iterator {
     Datum* d = it.operator->();
-    it = store_.erase(it);
+    it.it_ = it.table_->store_.erase(it.it_);
+    it.maybe_fix();
     d->invalidate();
     return it;
 }
@@ -329,9 +381,9 @@ inline void Server::insert(Str key, const String& value) {
 }
 
 inline void Server::erase(Str key) {
-    auto tit = tables_.find(table_name(key));
-    if (tit)
-        tit->erase(key);
+    auto it = supertable_.lfind(table_name(key));
+    if (it != supertable_.lend())
+        static_cast<Table&>(*it).erase(key);
 }
 
 inline uint64_t Server::next_validate_at() {
@@ -350,64 +402,12 @@ inline Table::iterator Server::validate(Str key) {
     return make_table_for(key).validate(key, next_validate_at());
 }
 
-class Server::const_iterator {
-  public:
-    const_iterator() = default;
-
-    inline const Datum& operator*() const {
-        return *si_;
-    }
-    inline const Datum* operator->() const {
-        return si_.operator->();
-    }
-
-    inline void operator++() {
-        ++si_;
-        fix();
-    }
-
-    friend inline bool operator==(const const_iterator& a,
-                                  const const_iterator& b) {
-        return a.si_ == b.si_;
-    }
-    friend inline bool operator!=(const const_iterator& a,
-                                  const const_iterator& b) {
-        return a.si_ != b.si_;
-    }
-
-  private:
-    store_type::const_iterator si_;
-    bi::set<Table>::const_iterator ti_;
-    const Server* s_;
-    inline const_iterator(const Server* s, bool begin)
-        : ti_(begin ? s->tables_by_name_.begin() : s->tables_by_name_.end()),
-          s_(s) {
-        if (begin && ti_ != s->tables_by_name_.end()) {
-            si_ = const_cast<Table&>(*ti_).begin();
-            fix();
-        } else
-            si_ = Table::empty_table.end();
-    }
-
-    inline void fix() {
-        while (si_ == const_cast<Table&>(*ti_).end()) {
-            ++ti_;
-            if (ti_ == s_->tables_by_name_.end()) {
-                si_ = Table::empty_table.end();
-                break;
-            } else
-                si_ = const_cast<Table&>(*ti_).begin();
-        }
-    }
-    friend class Server;
-};
-
-inline Server::const_iterator Server::begin() const {
-    return const_iterator(this, true);
+inline Table::iterator Server::begin() {
+    return supertable_.begin();
 }
 
-inline Server::const_iterator Server::end() const {
-    return const_iterator(this, false);
+inline Table::iterator Server::end() {
+    return supertable_.end();
 }
 
 } // namespace

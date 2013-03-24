@@ -10,13 +10,30 @@ namespace pq {
 
 const Datum Datum::empty_datum{Str()};
 const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
-Table Table::empty_table{Str()};
+Table Table::empty_table{Str(), nullptr, nullptr};
+const char Datum::table_marker[] = "TABLE MARKER";
 
-Table::Table(Str name)
-    : ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      njoins_(0), flush_at_(0), all_pull_(true), namelen_(name.length()) {
-    assert(namelen_ <= (int) sizeof(name_));
-    memcpy(name_, name.data(), namelen_);
+void Table::iterator::fix() {
+ retry:
+    if (it_ == table_->store_.end()) {
+        if (table_->parent_) {
+            it_ = table_->parent_->store_.iterator_to(*table_);
+            table_ = table_->parent_;
+            ++it_;
+            goto retry;
+        }
+    } else if (it_->is_table()) {
+        table_ = &it_->table();
+        it_ = table_->store_.begin();
+        goto retry;
+    }
+}
+
+Table::Table(Str name, Table* parent, Server* server)
+    : Datum(name, String::make_stable(Datum::table_marker)),
+      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
+      njoins_(0), flush_at_(0), all_pull_(true),
+      server_{server}, parent_{parent} {
 }
 
 Table::~Table() {
@@ -27,8 +44,12 @@ Table::~Table() {
     while (JoinRange* r = join_ranges_.unlink_leftmost_without_rebalance())
         delete r;
     // delete store last since join_ranges_ have refs to Datums
-    while (Datum* d = store_.unlink_leftmost_without_rebalance())
-        delete d;
+    while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
+        if (d->is_table())
+            delete &d->table();
+        else
+            delete d;
+    }
 }
 
 void Table::add_source(SourceRange* r) {
@@ -79,8 +100,16 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     make_table(tname).add_join(first, last, join, errh);
 }
 
+auto Table::insert(Table& t) -> local_iterator {
+    // XXX assert?
+    store_type::insert_commit_data cd;
+    auto p = store_.insert_check(t.name(), DatumCompare(), cd);
+    assert(p.second);
+    return store_.insert_commit(t, cd);
+}
+
 void Table::insert(Str key, String value) {
-    assert(namelen_);
+    assert(name());
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -162,17 +191,18 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
                 && itx->owner()->valid() && !itx->owner()->has_expired(now)
                 && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
                 && !itx->owner()->need_update())
-                return it;
+                return iterator(this, it);
         }
         for (auto it = join_ranges_.begin_overlaps(first, last);
              it != join_ranges_.end(); ++it)
             it->validate(first, last, *server_, now);
     }
-    return store_.lower_bound(first, DatumCompare());
+    return iterator(this, store_.lower_bound(first, DatumCompare()));
 }
 
 bool Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
+        assert(!d->is_table());
         invalidate_dependents(d->key());
         d->invalidate();
     }
@@ -183,8 +213,18 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 void Table::erase(Str key) {
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end())
-        erase(it);
+        erase(iterator(this, it));
     ++nerase_;
+}
+
+Server::Server()
+    : supertable_(Str(), nullptr, this), last_validate_at_(0) {
+}
+
+auto Server::create_table(Str tname) -> Table::local_iterator {
+    assert(tname);
+    Table* t = new Table(tname, &supertable_, this);
+    return supertable_.insert(*t);
 }
 
 size_t Server::validate_count(Str first, Str last) {
@@ -216,7 +256,9 @@ Json Server::stats() const {
     getrusage(RUSAGE_SELF, &ru);
 
     Json tables = Json::make_array();
-    for (auto& t : tables_by_name_) {
+    for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
+        assert(it->is_table());
+        Table& t = it->table();
         Json j = Json().set("name", t.name());
         t.add_stats(j);
         for (auto it = j.obegin(); it != j.oend(); )
@@ -258,11 +300,14 @@ void Table::print_sources(std::ostream& stream) const {
 void Server::print(std::ostream& stream) {
     stream << "sources:" << std::endl;
     bool any = false;
-    for (auto& t : tables_by_name_)
+    for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
+        assert(it->is_table());
+        Table& t = it->table();
         if (!t.source_ranges_.empty()) {
             stream << t.source_ranges_;
             any = true;
         }
+    }
     if (!any)
         stream << "<empty>\n";
 }
