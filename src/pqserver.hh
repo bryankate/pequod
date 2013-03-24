@@ -35,9 +35,6 @@ class Table : public pequod_set_base_hook {
     inline const Datum& operator[](Str key) const;
     inline size_t count(Str key) const;
 
-    inline const_iterator iterator_to(const Datum& d) const;
-    inline iterator iterator_to(Datum& d);
-
     iterator validate(Str first, Str last, uint64_t now);
     inline iterator validate(Str key, uint64_t now);
     inline void invalidate_dependents(Str key);
@@ -180,14 +177,6 @@ inline const Datum& Table::operator[](Str key) const {
 
 inline size_t Table::count(Str key) const {
     return store_.count(key, DatumCompare());
-}
-
-inline auto Table::iterator_to(const Datum& d) const -> const_iterator {
-    return store_.iterator_to(d);
-}
-
-inline auto Table::iterator_to(Datum& d) -> iterator {
-    return store_.iterator_to(d);
 }
 
 inline Server::Server()
