@@ -110,6 +110,7 @@ class Server {
     inline void remove_source(Str first, Str last, SinkRange* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
+    inline uint64_t next_validate_at();
     inline Datum* validate(Str key);
     inline Datum* validate(Str first, Str last);
     size_t validate_count(Str first, Str last);
@@ -347,13 +348,16 @@ inline void Server::remove_source(Str first, Str last, SinkRange* sink, Str cont
     make_table(tname).remove_source(first, last, sink, context);
 }
 
-inline Datum* Server::validate(Str first, Str last) {
+inline uint64_t Server::next_validate_at() {
     uint64_t now = tstamp();
-    now += now == last_validate_at_;
-    last_validate_at_ = now;
+    now += now <= last_validate_at_;
+    return last_validate_at_ = now;
+}
+
+inline Datum* Server::validate(Str first, Str last) {
     Str tname = table_name(first, last);
     assert(tname);
-    return make_table(tname).validate(first, last, now);
+    return make_table(tname).validate(first, last, next_validate_at());
 }
 
 inline Datum* Server::validate(Str key) {
