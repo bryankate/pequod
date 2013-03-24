@@ -115,12 +115,13 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
     return store_.lower_bound(first, DatumCompare());
 }
 
-void Table::hard_flush_for_pull(uint64_t now) {
+bool Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
         invalidate_dependents(d->key());
         d->invalidate();
     }
     flush_at_ = now;
+    return true;
 }
 
 void Table::erase(Str key) {
