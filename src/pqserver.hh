@@ -99,7 +99,9 @@ class Server {
     Table& make_table(Str tname);
 
     Table& table_for(Str key) const;
+    Table& table_for(Str first, Str last) const;
     Table& make_table_for(Str key);
+    Table& make_table_for(Str first, Str last);
 
     inline void insert(Str key, const String& value);
     inline void erase(Str key);
@@ -185,6 +187,11 @@ inline Table& Server::table_for(Str key) const {
     return const_cast<Table&>(tables_.get(tname, Table::empty_table));
 }
 
+inline Table& Server::table_for(Str first, Str last) const {
+    Str tname = table_name(first, last);
+    return const_cast<Table&>(tables_.get(tname, Table::empty_table));
+}
+
 inline Table& Server::make_table(Str tname) {
     bool inserted;
     auto it = tables_.find_insert(tname, inserted);
@@ -197,6 +204,18 @@ inline Table& Server::make_table(Str tname) {
 
 inline Table& Server::make_table_for(Str key) {
     Str tname = table_name(key);
+    assert(tname);
+    bool inserted;
+    auto it = tables_.find_insert(tname, inserted);
+    if (inserted) {
+        it->server_ = this;
+        tables_by_name_.insert(*it);
+    }
+    return *it;
+}
+
+inline Table& Server::make_table_for(Str first, Str last) {
+    Str tname = table_name(first, last);
     assert(tname);
     bool inserted;
     auto it = tables_.find_insert(tname, inserted);

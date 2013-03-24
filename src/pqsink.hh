@@ -88,6 +88,7 @@ class SinkRange : public ServerRangeBase {
     rblinks<SinkRange> rblinks_;
   private:
     JoinRange* jr_;
+    Table* table_;
     int refcount_;
     unsigned context_mask_;
     LocalStr<12> context_;
@@ -180,7 +181,7 @@ inline Join* SinkRange::join() const {
 }
 
 inline Table* SinkRange::table() const {
-    return jr_->join()->sink_table();
+    return table_;
 }
 
 inline unsigned SinkRange::context_mask() const {

@@ -126,10 +126,9 @@ bool operator==(const Pattern& a, const Pattern& b) {
 
 void Join::clear() {
     npat_ = 0;
-    for (int i = 0; i != pcap; ++i) {
+    server_ = nullptr;
+    for (int i = 0; i != pcap; ++i)
         pat_[i].clear();
-        table_[i] = 0;
-    }
     for (int i = 0; i != slot_capacity; ++i) {
         slotlen_[i] = slottype_[i] = 0;
         slotname_[i] = String();
@@ -140,8 +139,7 @@ void Join::clear() {
 }
 
 void Join::attach(Server& server) {
-    for (int i = 0; i != npat_; ++i)
-        table_[i] = &server.make_table(pat_[i].table_name());
+    server_ = &server;
 }
 
 void Join::set_staleness(double s) {

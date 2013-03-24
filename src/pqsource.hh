@@ -45,8 +45,6 @@ class SourceRange {
 
     inline Join* join() const;
     inline int joinpos() const;
-    inline Table* source_table() const;
-    inline Table* sink_table() const;
     void take_results(SourceRange& r);
     void remove_sink(SinkRange* sink, Str context);
 
@@ -76,6 +74,7 @@ class SourceRange {
     int joinpos_;
     mutable local_vector<result, 4> results_;
 
+    inline void kill();
     virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
@@ -174,14 +173,6 @@ inline Join* SourceRange::join() const {
 
 inline int SourceRange::joinpos() const {
     return joinpos_;
-}
-
-inline Table* SourceRange::source_table() const {
-    return join_->source_table(joinpos_);
-}
-
-inline Table* SourceRange::sink_table() const {
-    return join_->sink_table();
 }
 
 inline bool SourceRange::empty() const {

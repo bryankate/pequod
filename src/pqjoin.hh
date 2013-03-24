@@ -18,6 +18,7 @@ class Server;
 class Table;
 
 enum { slot_capacity = 5 };
+enum { source_capacity = 4 };
 
 class Match {
   public:
@@ -112,8 +113,7 @@ class Join {
     inline const Pattern& source(int si) const;
     inline const Pattern& back_source() const;
 
-    inline Table* sink_table() const;
-    inline Table* source_table(int si) const;
+    inline Server& server() const;
 
     inline int slot(Str name) const;
 
@@ -161,7 +161,7 @@ class Join {
     bool same_structure(const Join& x) const;
 
   private:
-    enum { pcap = 5 };
+    enum { pcap = source_capacity + 1 };
     int npat_;
     int completion_source_;
     uint64_t staleness_;  // validated ranges can be used in this time window.
@@ -170,7 +170,7 @@ class Join {
     uint8_t filters_;
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
-    Table* table_[pcap];
+    Server* server_;
     Pattern pat_[pcap];
     uint8_t context_mask_[pcap];
     uint8_t context_length_[1 << slot_capacity];
@@ -362,12 +362,8 @@ inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
 }
 
-inline Table* Join::sink_table() const {
-    return table_[0];
-}
-
-inline Table* Join::source_table(int si) const {
-    return table_[si + 1];
+inline Server& Join::server() const {
+    return *server_;
 }
 
 inline bool Join::source_is_filter(int si) const {
