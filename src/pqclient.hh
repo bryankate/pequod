@@ -34,6 +34,7 @@ class DirectClient {
         inline iterator begin() const;
         inline iterator end() const;
         inline void flush();
+        inline size_t size() const;
       private:
         iterator first_;
         iterator last_;
@@ -136,6 +137,10 @@ inline auto DirectClient::scan_result::end() const -> iterator {
 }
 
 inline void DirectClient::scan_result::flush() {
+}
+
+inline size_t DirectClient::scan_result::size() const {
+    return std::distance(first_, last_);
 }
 
 inline void DirectClient::scan(const String& first, const String& last,

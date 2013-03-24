@@ -85,6 +85,9 @@ class RemoteClient {
         inline void flush() {
             result_.clear();
         }
+        inline size_t size() const {
+            return result_.size();
+        }
       private:
         mutable Json result_;
     };

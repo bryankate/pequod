@@ -167,7 +167,7 @@ void RwMicro<S>::run(tamer::event<> e) {
             struct timeval optv[2];
             gettimeofday(&optv[0], NULL);
             ++nrefresh;
-            server_.timeline_add_count(u, loadtime[u] + 1, time, gr.make_event(nread));
+            server_.timeline_scan_add_count(u, loadtime[u] + 1, time, gr.make_event(nread));
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);

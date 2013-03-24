@@ -97,6 +97,7 @@ class TwitterShim {
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
     typedef typename S::scan_result scan_result;
+    tamed inline void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     template <typename R>
@@ -236,6 +237,19 @@ inline void TwitterShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> do
     sprintf(buf_ + 2, "%05u", subscriber);
     buf_[7] = '|'; // replace terminating null
     server_.insert(Str(buf_, 24), value_, done);
+}
+
+tamed template <typename S>
+void TwitterShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start_time,
+                                             uint32_t now, tamer::event<size_t> e) {
+    tvars {
+        typename S::scan_result sr;
+    }
+    sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
+    twait {
+        server_.scan(Str(buf_, 18), Str(buf_ + 19, 8), make_event(sr));
+    }
+    e(e.result() + sr.size());
 }
 
 template <typename S> template <typename R>

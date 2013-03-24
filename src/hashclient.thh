@@ -155,6 +155,8 @@ class TwitterHashShim {
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     tamed void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
+    void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
+
     template <typename R>
     inline void pace(tamer::preevent<R> e);
     template <typename R>
@@ -239,6 +241,11 @@ template <typename S>
 inline void TwitterHashShim<S>::push_post(uint32_t subscriber, tamer::event<> done) {
     sprintf(buf_ + 2, "%05u", subscriber);
     server_.append(Str(buf_, 7), Str(buf_ + 8, buflen_ - 8), done);
+}
+
+template <typename S>
+inline void TwitterHashShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> done) {
+    timeline_add_count(subscriber, start_time, now, done);
 }
 
 template <typename S> template <typename R>
