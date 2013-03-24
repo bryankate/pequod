@@ -41,6 +41,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
     validate_args va(first, last, server, now, nullptr, SourceRange::notify_insert);
     join_->sink().match_range(va.rm);
     va.sink = new SinkRange(this, va.rm, now);
+    //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
     valid_ranges_.insert(*va.sink);
     validate_step(va, 0);
 }
@@ -117,6 +118,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     assert(Str(kf, kflen) <= Str(kl, kllen));
     Table* sourcet = &va.server->make_table_for(Str(kf, kflen), Str(kl, kllen));
     va.sourcet[joinpos] = sourcet;
+    //std::cerr << "examine " << Str(kf, kflen) << ", " << Str(kl, kllen) << "\n";
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
@@ -136,6 +138,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         if (!r) {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
+                    //std::cerr << "consider " << *it << "\n";
                     if (pat.match(it->key(), va.rm.match))
                         validate_step(va, joinpos + 1);
                     va.rm.match.restore(mstate);
@@ -146,6 +149,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     if (pat.match(it->key(), va.rm.match)) {
+                        //std::cerr << "consider match " << *it << "\n";
                         if (!filters_validated) {
                             validate_filters(va);
                             filters_validated = true;
@@ -154,6 +158,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
                         for (int jp = 0; filters; ++jp, filters >>= 1)
                             if (filters & 1) {
                                 int filterlen = join_->source(jp).expand(filterstr, va.rm.match);
+                                //std::cerr << "validate " << Str(filterstr, filterlen) << "\n";
                                 if (!va.sourcet[jp]->count(Str(filterstr, filterlen)))
                                     goto give_up;
                             }
@@ -165,6 +170,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         } else {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
+                    //std::cerr << "consider " << *it << "\n";
                     if (pat.match(it->key(), va.rm.match))
                         r->notify(it.operator->(), String(), va.notifier);
                     va.rm.match.restore(mstate);

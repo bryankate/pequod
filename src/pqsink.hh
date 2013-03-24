@@ -65,6 +65,7 @@ class SinkRange : public ServerRangeBase {
 
     inline Join* join() const;
     inline Table* table() const;
+    inline Table& make_table_for(Str key) const;
     inline unsigned context_mask() const;
     inline Str context() const;
 
