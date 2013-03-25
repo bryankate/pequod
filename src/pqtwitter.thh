@@ -32,6 +32,7 @@ class TwitterPopulator {
     inline bool push() const;
     inline bool pull() const;
     inline bool log() const;
+    inline bool full_scan() const;
     inline bool synchronous() const;
     inline int celebrity() const;
     inline int celebrity_type() const;
@@ -51,6 +52,7 @@ class TwitterPopulator {
     bool push_;
     bool pull_;
     bool log_;
+    bool full_scan_;
     bool synchronous_;
     uint32_t min_followers_;
     uint32_t min_subs_;
@@ -286,6 +288,7 @@ class TwitterRunner {
     S& server_;
     TwitterPopulator& tp_;
 
+    tamed void timeline_scan_count(uint32_t u, uint32_t tx, uint32_t time, tamer::event<size_t> done);
     tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
 };
 
@@ -319,6 +322,10 @@ inline bool TwitterPopulator::pull() const {
 
 inline bool TwitterPopulator::log() const {
     return log_;
+}
+
+inline bool TwitterPopulator::full_scan() const {
+    return full_scan_;
 }
 
 inline bool TwitterPopulator::synchronous() const {
@@ -417,6 +424,17 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
 }
 
 tamed template <typename S>
+void TwitterRunner<S>::timeline_scan_count(uint32_t u, uint32_t tx, uint32_t time, tamer::event<size_t> done) {
+    tvars {
+        typename S::scan_result scan_result;
+    }
+    twait {
+        server_.timeline_scan(u, tx, time, make_event(scan_result));
+    }
+    done(done.result() + std::distance(scan_result.begin(), scan_result.end()));
+}
+
+tamed template <typename S>
 void TwitterRunner<S>::run(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
@@ -473,6 +491,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
                 for (auto it = scan_result.begin(); it != scan_result.end();
                      ++it, ++nread)
                     std::cout << "  " << it->key() << ": " << it->value() << "\n";
+            } else if (tp_.full_scan()) {
+                timeline_scan_count(u, tx, time, gr.make_event(nread));
             } else {
                 server_.timeline_add_count(u, tx, time, gr.make_event(nread));
             }
