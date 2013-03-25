@@ -150,9 +150,6 @@ redis_micro.append(
      'cmd' : '%s --client_push --redis ' % cmdbase })
 exps.append({'name': 'redis_micro_16', 'defs': redis_micro, 'xlabel' : 'System'})
 
-cmd = "./obj/pqserver --hn --redis --nops=1000000 --large"
-server = "cd scripts/redis-run; bash start.sh"
-
 # network analytics
 cmdbase = "./obj/pqserver --analytics --popduration=10000 --duration=1000000 --proactive"
 analytics = []
@@ -163,3 +160,31 @@ analytics.append(
      'cmd': '%s --client=7008' % cmdbase})
 exps.append({'name': 'analytics', 'defs': analytics, 'xlabel' : ''})
 
+# breakdown
+cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 "
+breakdown = []
+prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
+for pr in prefresh:
+    breakdown.append(
+        {'plotgroup' : 'Base',
+         'plotkey' : pr,
+         'build' : './configure --disable-hint --disable-value-sharing; make -j8',
+         'server' : './obj/pqserver -kl=7277',
+         'cmd': '%s --client=7277 --prefresh=%d' % (cmdbase, pr) })
+    breakdown.append(
+        {'plotgroup' : 'Base_no_RPC',
+         'plotkey' : pr,
+         'build' : './configure --disable-hint --disable-value-sharing; make -j8',
+         'cmd': '%s --prefresh=%d' % (cmdbase, pr) })
+    breakdown.append(
+        {'plotgroup' : 'Hint_no_RPC',
+         'plotkey' : pr,
+         'build' : './configure --disable-value-sharing; make -j8',
+         'cmd': '%s --prefresh=%d' % (cmdbase, pr) })
+    breakdown.append(
+        {'plotgroup' : 'Hint_Value_Sharing_no_RPC',
+         'plotkey' : pr,
+         'build' : './configure ; make -j8',
+         'cmd': '%s --prefresh=%d' % (cmdbase, pr) })
+
+exps.append({'name': 'breakdown', 'defs': breakdown, 'xlabel' : 'Configuration'})

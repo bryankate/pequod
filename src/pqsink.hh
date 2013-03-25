@@ -221,12 +221,17 @@ inline bool SinkRange::need_update() const {
 }
 
 inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
+#if HAVE_HINT_ENABLED
     Datum* hd = hint == store.end() ? 0 : hint.operator->();
     if (hd)
         hd->ref();
     if (hint_)
         hint_->deref();
     hint_ = hd;
+#else
+    (void)store;
+    (void)hint;
+#endif
 }
 
 inline Datum* SinkRange::hint() const {

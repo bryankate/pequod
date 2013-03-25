@@ -109,9 +109,15 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
 }
 
 void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {
+#if HAVE_VALUE_SHARING_ENABLED
     sink->table()->modify(sink_key, sink, [=](Datum*) {
              return notifier >= 0 ? src->value() : erase_marker();
         });
+#else
+    sink->table()->modify(sink_key, sink, [=](Datum*) {
+             return notifier >= 0 ? String(src->value().data(), src->value().length()) : erase_marker();
+        });
+#endif
 }
 
 
