@@ -60,6 +60,7 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
         pq::Table& t = server.table_for(first);
         auto it = t.validate(first, last, server.next_validate_at());
         auto itend = t.end();
+        assert(!aj.shared());
         aj.clear();
         while (it != itend && it->key() < last) {
             aj.push_back(it->key()).push_back(it->value());
@@ -96,6 +97,7 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         rj[0] = -j[0].as_i();
         rj[1] = j[1];
         rj[2] = pq_fail;
+        rj[3] = Json();
         process(server, j, rj, aj);
 
         mpfd.write(rj);

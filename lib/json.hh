@@ -93,6 +93,7 @@ class Json { public:
 
     inline bool empty() const;
     inline size_type size() const;
+    inline bool shared() const;
 
     void clear();
 
@@ -1545,7 +1546,10 @@ inline Json::size_type Json::size() const {
     } else
 	return ajson()->size;
 }
-
+/** @brief Test if this complex Json is shared. */
+inline bool Json::shared() const {
+    return u_.c && (_type == j_array || _type == j_object) && u_.c->refcount > 1;
+}
 
 // Primitive methods
 
