@@ -86,7 +86,7 @@ class RemoteClient {
             result_.clear();
         }
         inline size_t size() const {
-            return result_.size();
+            return result_.size() / 2;
         }
       private:
         mutable Json result_;
