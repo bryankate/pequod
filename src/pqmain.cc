@@ -50,7 +50,7 @@ static Clp_Option options[] = {
     { "seed", 0, 3005, Clp_ValInt, 0 },
     { "log", 0, 3006, 0, Clp_Negate },
     { "nops", 'o', 3007, Clp_ValInt, 0 },
-    { "verbose", 0, 3007, 0, Clp_Negate },
+    { "verbose", 0, 3008, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -67,6 +67,7 @@ static Clp_Option options[] = {
     { "celebrity2", 0, 4011, Clp_ValInt, 0 },
     { "celebrity3", 0, 4012, Clp_ValInt, 0 },
     { "postlimit", 0, 4013, Clp_ValInt, 0 },
+    { "fetch", 0, 4014, 0, Clp_Negate },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -187,6 +188,8 @@ int main(int argc, char** argv) {
             tp_param.set("celebrity", clp->val.i).set("celebrity_type", 3);
         else if (clp->option->long_name == String("postlimit"))
             tp_param.set("postlimit", clp->val.i);
+        else if (clp->option->long_name == String("fetch"))
+            tp_param.set("fetch", !clp->negated);
 
         // hn
 	else if (clp->option->long_name == String("narticles"))

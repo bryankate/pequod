@@ -83,6 +83,7 @@ class TwitterNewPopulator {
     inline bool push() const { return push_; }
     inline bool pull() const { return pull_; }
     inline bool pull_celeb() const { return celebthresh_; }
+    inline bool fetch() const { return fetch_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool overhead() const { return overhead_; }
@@ -106,6 +107,7 @@ class TwitterNewPopulator {
     uint32_t postlimit_;
     bool push_;
     bool pull_;
+    bool fetch_;
     bool log_;
     bool synchronous_;
     bool overhead_;
@@ -154,6 +156,7 @@ class TwitterNewShim {
     typedef typename S::scan_result scan_result;
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
+    tamed inline void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
@@ -267,6 +270,23 @@ inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber, uint32_t start
     write_in_net_order(buf_ + 7, start_time);
     write_in_net_order(buf_ + 14, subscriber);
     server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), done);
+}
+
+tamed template <typename S>
+inline void TwitterNewShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start_time,
+                                                       uint32_t now, tamer::event<size_t> done) {
+    tvars {
+        typename S::scan_result sr;
+    }
+    memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
+    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 7, start_time);
+    write_in_net_order(buf_ + 14, subscriber);
+
+    twait {
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), make_event(sr));
+    }
+    done(done.result() + sr.size());
 }
 
 template <typename S> template <typename R>
@@ -598,6 +618,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                                   << ": " << it->value() << "\n";
                     }
                 }
+                else if (tp_.fetch())
+                    server_.timeline_scan_add_count(user->uid(), horizon,
+                                                    currtime_, gr.make_event(user->nread_));
                 else
                     server_.timeline_add_count(user->uid(), horizon,
                                                currtime_, gr.make_event(user->nread_));
