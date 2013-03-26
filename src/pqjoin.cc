@@ -6,6 +6,8 @@
 #include "error.hh"
 namespace pq {
 
+bool Join::allow_subtables = true;
+
 // k|<user> = count v|<follower>
 //      using s|<follower>|<time> using x|<user>|<poster>
 
@@ -317,6 +319,23 @@ String Join::expand_last(const Pattern& pat, const RangeMatch& rm) const {
     return sa.take_string();
 }
 
+int Join::pattern_subtable_length(int i) const {
+    if (!allow_subtables)
+        return 0;
+    int cut = 0, last_cut = 0;
+    const Pattern& pat = pat_[i];
+    for (const uint8_t* p = pat.pat_; p != pat.pat_ + pat.plen_; ++p)
+        if (*p < 128)
+            ++cut;
+        else if ((slottype_[*p - 128] & stype_subtables)
+                 && p + 1 != pat.pat_ + pat.plen_) {
+            cut += slotlen_[*p - 128];
+            last_cut = cut;
+        } else
+            break;
+    return last_cut;
+}
+
 SourceRange* Join::make_source(Server& server, const Match& m,
                                Str ibegin, Str iend, SinkRange* sink) {
     SourceRange::parameters p{server, this, nsource() - 1, m,
@@ -354,12 +373,18 @@ int Join::parse_slot_name(Str word, ErrorHandler* errh) {
             return errh->error("syntax error in slot in %<%p{Str}%>", &word);
         for (nc = 0; s != word.end() && isdigit((unsigned char) *s); ++s)
             nc = 10 * nc + *s - '0'; // XXX overflow
-        if (s != word.end() && *s == 's')
-            type = stype_text, ++s;
-        else if (s != word.end() && *s == 'd')
-            type = stype_decimal, ++s;
-        else if (s != word.end() && *s == 'n')
-            type = stype_binary_number, ++s;
+        for (; s != word.end(); ++s) {
+            if (*s == 's')
+                type = (type & ~stype_type_mask) | stype_text;
+            else if (*s == 'd')
+                type = (type & ~stype_type_mask) | stype_decimal;
+            else if (*s == 'n')
+                type = (type & ~stype_type_mask) | stype_binary_number;
+            else if (*s == 't')
+                type |= stype_subtables;
+            else
+                break;
+        }
     }
     if (name == nameend && nc == -1)
         return errh->error("syntax error in slot in %<%p{Str}%>", &word);

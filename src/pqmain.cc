@@ -51,6 +51,7 @@ static Clp_Option options[] = {
     { "log", 0, 3006, 0, Clp_Negate },
     { "nops", 'o', 3007, Clp_ValInt, 0 },
     { "verbose", 0, 3008, 0, Clp_Negate },
+    { "subtables", 0, 3009, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -160,6 +161,8 @@ int main(int argc, char** argv) {
             tp_param.set("nops", clp->val.i);
         else if (clp->option->long_name == String("verbose"))
             tp_param.set("verbose", !clp->negated);
+        else if (clp->option->long_name == String("subtables"))
+            pq::Join::allow_subtables = !clp->negated;
 
         // twitter
         else if (clp->option->long_name == String("shape"))

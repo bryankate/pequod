@@ -34,10 +34,6 @@ Table::Table(Str name, Table* parent, Server* server)
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent},
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
-          if (name == "t" || name == "s" || name == "p")
-              triecut_ = 7;
-          else if (name == "cs")
-              triecut_ = 8;
 }
 
 Table::~Table() {
@@ -174,6 +170,14 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).add_join(first, last, join, errh);
+
+    // handle cuts
+    for (int i = 0; i != join->npattern(); ++i) {
+        Table& t = make_table(join->pattern(i).table_name());
+        int tc = join->pattern_subtable_length(i);
+        if (t.triecut_ == 0 && t.store_.empty() && tc)
+            t.triecut_ = tc;
+    }
 }
 
 auto Table::insert(Table& t) -> local_iterator {
