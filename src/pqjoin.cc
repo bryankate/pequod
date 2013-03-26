@@ -70,6 +70,21 @@ void Pattern::match_range(Str first, Str last, Match& m) const {
         }
 }
 
+int Pattern::expand(uint8_t* s, const Match& m) const {
+    uint8_t* first = s;
+    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
+        if (*p < 128) {
+            *s = *p;
+            ++s;
+        } else {
+            memcpy(s, m.data(*p - 128), m.known_length(*p - 128));
+            s += m.known_length(*p - 128);
+            if (m.known_length(*p - 128) != slotlen_[*p - 128])
+                break;
+        }
+    return s - first;
+}
+
 int Pattern::check_optimized_match(const Match& m) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
         if (*p >= 128 && m.known_length(*p - 128) != slotlen_[*p - 128]) {
@@ -111,21 +126,20 @@ bool operator==(const Pattern& a, const Pattern& b) {
 
 void Join::clear() {
     npat_ = 0;
-    for (int i = 0; i != pcap; ++i) {
+    server_ = nullptr;
+    for (int i = 0; i != pcap; ++i)
         pat_[i].clear();
-        table_[i] = 0;
-    }
     for (int i = 0; i != slot_capacity; ++i) {
         slotlen_[i] = slottype_[i] = 0;
         slotname_[i] = String();
     }
     jvt_ = 0;
     maintained_ = true;
+    filters_ = 0;
 }
 
 void Join::attach(Server& server) {
-    for (int i = 0; i != npat_; ++i)
-        table_[i] = &server.make_table(pat_[i].table_name());
+    server_ = &server;
 }
 
 void Join::set_staleness(double s) {
@@ -426,19 +440,29 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             new_op = jvt_count_match;
         else if (words[i] == "sum")
             new_op = jvt_sum_match;
-        else if (words[i] == "using")
-            new_op = jvt_using;
-        else if (words[i] == "with" || words[i] == "where")
+        else if (words[i] == "using") {
+            if (op != jvt_filter)
+                new_op = jvt_using;
+        } else if (words[i] == "filter") {
+            if (op == jvt_using)
+                op = -1;
+            new_op = jvt_filter;
+        } else if (words[i] == "with" || words[i] == "where")
             new_op = jvt_slotdef;
         else if (words[i] == "pull")
             maintained_ = false;
+        else if (words[i] == "push")
+            maintained_ = true;
         else if (words[i] == "and")
             /* do nothing */;
         else if (op == jvt_slotdef || op == jvt_slotdef1) {
             withstr.push_back(words[i]);
             op = jvt_slotdef1;
         } else {
-            if (op == jvt_using || op == -1)
+            if (op == jvt_filter) {
+                filters_ |= 1 << (sourcestr.size() - 1);
+                sourcestr.push_back(words[i]);
+            } else if (op == jvt_using || op == -1)
                 sourcestr.push_back(words[i]);
             else if (lastsourcestr)
                 return errh->error("syntax error near %<%p{Str}%>: transformation already defined", &words[i]);
@@ -514,6 +538,12 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
 }
 
 int Join::analyze(ErrorHandler* errh) {
+    // check that sink() is not used as a source
+    for (int p = 1; p != npat_; ++p)
+        if (pat_[p].table_name() == pat_[0].table_name())
+            return errh->error("table %<%.*s%> used as both source and sink",
+                               pat_[p].table_name().length(), pat_[p].table_name().data());
+
     // account for slots across all patterns
     // completion_source_ is the source number after which sink() is complete
     int need_slots = 0;

@@ -1,6 +1,7 @@
 #ifndef PQRWMICRO_HH
 #define PQRWMICRO_HH 1
 
+#include <iostream>
 #include <tamer/tamer.hh>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -14,6 +15,7 @@
 #include "time.hh"
 
 namespace pq {
+static const char post_data[] = "She likes movie moby";
 
 template <typename S>
 class RwMicro {
@@ -24,6 +26,8 @@ class RwMicro {
           nops_(param["nops"].as_i(100000)),
           nuser_(param["nusers"].as_i(1000)),
           nfollower_(param["nfollower"].as_i(100)), 
+          npop_(param["popduration"].as_i(0)),
+          postlen_(param["postlen"].as_i(20)),
           server_(server),
           push_(param["push"].as_b(true)),
           pprerefresh_(param["pprerefresh"].as_i(0)),
@@ -41,6 +45,8 @@ class RwMicro {
     int nops_;
     int nuser_;
     int nfollower_;
+    int npop_;
+    int postlen_;
     S& server_;
     bool push_;
     int pprerefresh_;
@@ -76,39 +82,49 @@ void RwMicro<S>::safe_run() {
 tamed template <typename S>
 void RwMicro<S>::populate(tamer::event<> e) {
     tvars { size_t nread = 0, time = 1;
-            int u, i;
-            tamer::gather_rendezvous gr; }
-    srandom(1328);
-    twait {
-        bool *b = new bool[nuser_];
-        for (int u = 0; u < nuser_; ++u) {
-            bzero(b, nuser_ * sizeof(*b));
-            b[u] = true;
-            for (int j = 0; j < nfollower_; ++j) {
-                int follower;
-                while (b[follower = (random() % nuser_)]);
-                b[follower] = true;
-                follower_[u].push_back(follower);
-                server_.subscribe(follower, u, make_event());
-                server_.add_follower(follower, u, make_event());
-            }
-        }
-        delete[] b;
+            int u, i, j;
+            tamer::gather_rendezvous gr;
+            bool *b;
     }
+    srandom(1328);
+
+    twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
+    b = new bool[nuser_];
+    for (u = 0; u < nuser_; ++u) {
+        bzero(b, nuser_ * sizeof(*b));
+        b[u] = true;
+        for (j = 0; j < nfollower_; ++j) {
+            int follower;
+            while (b[follower = (random() % nuser_)]);
+            b[follower] = true;
+            follower_[u].push_back(follower);
+            server_.subscribe(follower, u, gr.make_event());
+            server_.add_follower(follower, u, gr.make_event());
+            twait{ server_.pace(make_event()); }
+        }
+    }
+    delete[] b;
+    twait(gr);
     time = 1;
-    for (u = 0; u < nuser_; ++u)
-        for (i = 0; i < 10; ++i) {
-            post(u, ++time, String("She likes movie moby"), gr.make_event());
+    if (npop_)
+        for (i = 0; i < npop_; ++i) {
+            post(random() % nuser_, ++time, String(post_data, postlen_), gr.make_event());
             twait { server_.pace(make_event()); }
         }
+    else
+        for (u = 0; u < nuser_; ++u)
+            for (i = 0; i < 10; ++i) {
+                post(u, ++time, String(post_data, postlen_), gr.make_event());
+                twait { server_.pace(make_event()); }
+            }
     twait(gr);
-    twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
     if (pprerefresh_) {
         twait {
             for (int i = 0; i < nuser_ * pprerefresh_ / 100; ++i)
                 server_.timeline_add_count(i, uint32_t(0), time, make_event(nread));
         }
     }
+    std::cerr << "finished populating" << std::endl;
     e();
 }
 
@@ -151,13 +167,13 @@ void RwMicro<S>::run(tamer::event<> e) {
             struct timeval optv[2];
             gettimeofday(&optv[0], NULL);
             ++nrefresh;
-            server_.timeline_add_count(u, loadtime[u] + 1, time, gr.make_event(nread));
+            server_.timeline_scan_add_count(u, loadtime[u] + 1, time, gr.make_event(nread));
             loadtime[u] = time;
             gettimeofday(&optv[1], NULL);
             trefresh += to_real(optv[1] - optv[0]);
         } else {
             int poster = random() % nuser_;
-            post(poster, ++time, String("She likes movie moby"), gr.make_event());
+            post(poster, ++time, String(post_data, postlen_), gr.make_event());
             ++npost;
         }
         twait { server_.pace(make_event()); }

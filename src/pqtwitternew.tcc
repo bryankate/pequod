@@ -70,6 +70,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       postlimit_(param["postlimit"].as_i(0)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
+      fetch_(param["fetch"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       overhead_(param["overhead"].as_b(false)),

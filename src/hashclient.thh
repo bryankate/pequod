@@ -88,6 +88,7 @@ class RedisfdHashClient {
     tamed void append(Str k, Str v, tamer::event<> e);
     void done_get(String) {
     }
+    tamed void increment(Str k, tamer::event<> e);
     void pace(tamer::event<> done);
   private:
     redis_fd fd_;
@@ -154,6 +155,9 @@ class TwitterHashShim {
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
     tamed void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
+    void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
+    void timeline_set_initial_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
+
     template <typename R>
     inline void pace(tamer::preevent<R> e);
     template <typename R>
@@ -240,6 +244,11 @@ inline void TwitterHashShim<S>::push_post(uint32_t subscriber, tamer::event<> do
     server_.append(Str(buf_, 7), Str(buf_ + 8, buflen_ - 8), done);
 }
 
+template <typename S>
+inline void TwitterHashShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> done) {
+    timeline_add_count(subscriber, start_time, now, done);
+}
+
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
     (void) subscriber, (void) start_time;
@@ -275,6 +284,11 @@ inline void TwitterHashShim<S>::timeline_add_count(uint32_t subscriber, uint32_t
     }
     done(done.result() + n);
     server_.done_get(v);
+}
+
+template <typename S>
+void TwitterHashShim<S>::timeline_set_initial_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> done) {
+    timeline_add_count(subscriber, start_time, now, done);
 }
 
 template <typename S> template <typename R>

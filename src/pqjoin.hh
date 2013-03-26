@@ -18,6 +18,7 @@ class Server;
 class Table;
 
 enum { slot_capacity = 5 };
+enum { source_capacity = 4 };
 
 class Match {
   public:
@@ -32,6 +33,7 @@ class Match {
     inline bool has_slot(int slot) const;
     inline Str slot(int slot) const;
     inline int known_length(int slot) const;
+    static inline int known_length(const state& state, int slot);
     inline const uint8_t* data(int slot) const;
 
     inline void set_slot(int slot, const char* data, int len);
@@ -64,6 +66,8 @@ class Pattern {
     inline bool match(Str str, Match& m) const;
     void match_range(Str first, Str last, Match& m) const;
 
+    int expand(uint8_t* s, const Match& m) const;
+
     int check_optimized_match(const Match& m) const;
     inline void assign_optimized_match(Str str, int mopt, Match& m) const;
 
@@ -91,7 +95,7 @@ enum JoinValueType {
     jvt_count_match, jvt_sum_match,
     jvt_bounded_copy_last, jvt_bounded_count_match,
     /* next ones are internal */
-    jvt_using, jvt_slotdef, jvt_slotdef1
+    jvt_using, jvt_filter, jvt_slotdef, jvt_slotdef1
 };
 
 class Join {
@@ -106,15 +110,15 @@ class Join {
     inline int nsource() const;
     inline int completion_source() const;
     inline const Pattern& sink() const;
-    inline const Pattern& source(int i) const;
+    inline const Pattern& source(int si) const;
     inline const Pattern& back_source() const;
 
-    inline Table* sink_table() const;
-    inline Table* source_table(int i) const;
+    inline Server& server() const;
 
     inline int slot(Str name) const;
 
     inline unsigned known_mask(const Match& m) const;
+    inline unsigned known_mask(const Match::state& mstate) const;
     inline unsigned source_mask(int si) const;
     inline unsigned context_mask(int si) const;
     inline int context_length(unsigned mask) const;
@@ -124,6 +128,8 @@ class Join {
     inline void assign_context(Match& m, Str context) const;
     Json unparse_context(Str context) const;
     Json unparse_match(const Match& m) const;
+
+    inline bool source_is_filter(int si) const;
 
     inline void expand_sink_key_context(Str context) const;
     inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
@@ -155,15 +161,16 @@ class Join {
     bool same_structure(const Join& x) const;
 
   private:
-    enum { pcap = 5 };
+    enum { pcap = source_capacity + 1 };
     int npat_;
     int completion_source_;
     uint64_t staleness_;  // validated ranges can be used in this time window.
                         // staleness_ > 0 implies maintained_ == false
     bool maintained_;   // if the output is kept up to date with changes to the input
+    uint8_t filters_;
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
-    Table* table_[pcap];
+    Server* server_;
     Pattern pat_[pcap];
     uint8_t context_mask_[pcap];
     uint8_t context_length_[1 << slot_capacity];
@@ -201,6 +208,10 @@ inline Str Match::slot(int i) const {
 
 inline int Match::known_length(int i) const {
     return ms_.slotlen_[i];
+}
+
+inline int Match::known_length(const state& state, int i) {
+    return state.slotlen_[i];
 }
 
 inline const uint8_t* Match::data(int i) const {
@@ -343,20 +354,20 @@ inline const Pattern& Join::sink() const {
     return pat_[0];
 }
 
-inline const Pattern& Join::source(int i) const {
-    return pat_[i + 1];
+inline const Pattern& Join::source(int si) const {
+    return pat_[si + 1];
 }
 
 inline const Pattern& Join::back_source() const {
     return pat_[npat_ - 1];
 }
 
-inline Table* Join::sink_table() const {
-    return table_[0];
+inline Server& Join::server() const {
+    return *server_;
 }
 
-inline Table* Join::source_table(int i) const {
-    return table_[i + 1];
+inline bool Join::source_is_filter(int si) const {
+    return filters_ & (1 << si);
 }
 
 inline int Join::slot(Str name) const {
@@ -370,6 +381,14 @@ inline unsigned Join::known_mask(const Match& m) const {
     unsigned mask = 0;
     for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
         if (m.known_length(s) == slotlen_[s])
+            mask |= 1 << s;
+    return mask;
+}
+
+inline unsigned Join::known_mask(const Match::state& mstate) const {
+    unsigned mask = 0;
+    for (int s = 0; s != slot_capacity && slotlen_[s]; ++s)
+        if (Match::known_length(mstate, s) == slotlen_[s])
             mask |= 1 << s;
     return mask;
 }

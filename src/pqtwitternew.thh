@@ -83,6 +83,7 @@ class TwitterNewPopulator {
     inline bool push() const { return push_; }
     inline bool pull() const { return pull_; }
     inline bool pull_celeb() const { return celebthresh_; }
+    inline bool fetch() const { return fetch_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool overhead() const { return overhead_; }
@@ -106,6 +107,7 @@ class TwitterNewPopulator {
     uint32_t postlimit_;
     bool push_;
     bool pull_;
+    bool fetch_;
     bool log_;
     bool synchronous_;
     bool overhead_;
@@ -154,6 +156,7 @@ class TwitterNewShim {
     typedef typename S::scan_result scan_result;
     template <typename R>
     inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
+    tamed inline void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
     template <typename R>
     inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
     template <typename R>
@@ -179,32 +182,43 @@ TwitterNewShim<S>::TwitterNewShim(S& server)
 tamed template <typename S>
 void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                                    tamer::event<> done) {
-    tvars { Json j, cj; }
+    tvars { Json j[4]; }
     if (push)
         done();
     else {
         twait {
             server_.add_join("t|", "t}",
-                             "t|<user_id>|<time>|<poster_id> = "
-                             "copy p|<poster_id>|<time> " +
+                             "t|<user>|<time>|<poster> = "
+                             "copy p|<poster>|<time> " +
                              String((pull) ? "pull " : "") +
-                             "using s|<user_id>|<poster_id> "
-                             "where user_id:4n, time:4n, poster_id:4n",
-                             make_event(j));
+                             "using s|<user>|<poster> "
+                             "where user:4n, time:4n, poster:4n",
+                             make_event(j[0]));
 
-            if (pull_celeb)
+            if (pull_celeb) {
+                server_.add_join("ct|", "ct}",
+                                 "ct|<time>|<poster> = "
+                                 "copy cp|<poster>|<time> "
+                                 "where poster:4n, time:4n",
+                                 make_event(j[3]));
+                server_.add_join("cs|", "cs}",
+                                 "cs|<user>|<poster> = "
+                                 "copy c|<poster> "
+                                 "using s|<user>|<poster> "
+                                 "where user:4n, poster:4n",
+                                 make_event(j[2]));
                 server_.add_join("t|", "t}",
-                                 "t|<user_id>|<time>|<poster_id> = "
-                                 "copy cp|<poster_id>|<time> pull "
-                                 "using s|<user_id>|<poster_id> "
-                                 "and c|<poster_id> "
-                                 "where user_id:4n, time:4n, poster_id:4n",
-                                 make_event(cj));
+                                 "t|<user>|<time>|<poster> = "
+                                 "pull copy ct|<time>|<poster> "
+                                 "using filter cs|<user>|<poster> "
+                                 "where user:4n, time:4n, poster:4n",
+                                 make_event(j[1]));
+            }
         }
-        if (j["message"])
-            std::cerr << "installing timeline join: " << j << "\n";
-        if (cj["message"])
-            std::cerr << "installing celebrity timeline join: " << cj << "\n";
+
+        for (uint32_t i = 0; i < 4; ++i)
+            if (j[i]["message"])
+                std::cerr << "installing join: " << j[i] << "\n";
         done();
     }
 }
@@ -256,6 +270,23 @@ inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber, uint32_t start
     write_in_net_order(buf_ + 7, start_time);
     write_in_net_order(buf_ + 14, subscriber);
     server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), done);
+}
+
+tamed template <typename S>
+inline void TwitterNewShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start_time,
+                                                       uint32_t now, tamer::event<size_t> done) {
+    tvars {
+        typename S::scan_result sr;
+    }
+    memcpy(buf_, "t|XXXX|XXXX t|XXXX}", 19);
+    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 7, start_time);
+    write_in_net_order(buf_ + 14, subscriber);
+
+    twait {
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), make_event(sr));
+    }
+    done(done.result() + sr.size());
 }
 
 template <typename S> template <typename R>
@@ -335,9 +366,10 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
 
 tamed template <typename S>
 void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) {
-    tvars { char buf[128];
-            typename S::scan_result scan_result;
-            TwitterUser* user;
+    tvars {
+        char buf[128];
+        typename S::scan_result scan_result;
+        TwitterUser* user;
     }
 
     if (tp_.log())
@@ -401,7 +433,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     }
     gen.seed(112181);
 
-    if (tp_.verbose()) { std::cout << "Creating social graph." << std::endl; }
+    if (tp_.verbose()) { std::cerr << "Creating social graph." << std::endl; }
     tp_.make_subscriptions(gen);
     tp_.print_subscription_statistics(std::cout);
 
@@ -415,7 +447,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
 
     twait {
-        if (tp_.verbose()) { std::cout << "Building subscription table." << std::endl; }
+        if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
         for (u = 0; u < nusers; ++u) {
             user = &tp_.mutable_user(u);
 
@@ -427,7 +459,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         }
     }
 
-    if (tp_.verbose()) { std::cout << "Populating twittersphere." << std::endl; }
+    if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
         u = tp_.rand_user_post(gen);
         post(u, currtime_, String(TwitterNewPopulator::tweet_data, 5), gr.make_event());
@@ -586,6 +618,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                                   << ": " << it->value() << "\n";
                     }
                 }
+                else if (tp_.fetch())
+                    server_.timeline_scan_add_count(user->uid(), horizon,
+                                                    currtime_, gr.make_event(user->nread_));
                 else
                     server_.timeline_add_count(user->uid(), horizon,
                                                currtime_, gr.make_event(user->nread_));
@@ -608,7 +643,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         if (tp_.verbose()) {
             uint32_t diff = currtime_ - beg_time;
             if (currtime_ > beg_time && diff % (tp_.duration() / 10) == 0)
-                std::cout << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+                std::cerr << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
         }
     }
 
@@ -620,7 +655,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     twait { server_.stats(make_event(stats)); }
 
     if (tp_.overhead()) {
-        if (tp_.verbose()) { std::cout << "Finished overhead experiment, reading results." << std::endl; }
+        if (tp_.verbose()) { std::cerr << "Finished overhead experiment, reading results." << std::endl; }
         for (u = 0; u < nusers; ++u) {
             user = &tp_.mutable_user(u);
             server_.timeline_add_count(u, 0, 0, gr.make_event(user->nread_));

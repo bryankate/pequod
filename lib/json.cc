@@ -165,9 +165,20 @@ Json &Json::ObjectJson::get_insert(Str key)
     }
 }
 
-Json::size_type Json::ObjectJson::erase(Str key)
-{
-    int *b = &hash_[bucket(key.data(), key.length())];
+void Json::ObjectJson::erase(int p) {
+    const ObjectItem& oi = item(p);
+    int* b = &hash_[bucket(oi.v_.first.data(), oi.v_.first.length())];
+    while (*b >= 0 && *b != p)
+        b = &os_[*b].next_;
+    assert(*b == p);
+    *b = os_[p].next_;
+    os_[p].~ObjectItem();
+    os_[p].next_ = -2;
+    ++nremoved_;
+}
+
+Json::size_type Json::ObjectJson::erase(Str key) {
+    int* b = &hash_[bucket(key.data(), key.length())];
     while (*b >= 0 && os_[*b].v_.first != key)
 	b = &os_[*b].next_;
     if (*b >= 0) {

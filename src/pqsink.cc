@@ -27,23 +27,36 @@ struct JoinRange::validate_args {
     SinkRange* sink;
     uint64_t now;
     int notifier;
+    int filters;
+    Match::state filtermatch;
+    Table* sourcet[source_capacity];
+
+    validate_args(Str first_, Str last_, Server& server_, uint64_t now_,
+                  SinkRange* sink_, int notifier_)
+        : first(first_), last(last_), server(&server_), sink(sink_),
+          now(now_), notifier(notifier_), filters(0) {
+    }
 };
 
 inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
-    validate_args va{first, last, Match(), &server, nullptr, now,
-            SourceRange::notify_insert};
+    validate_args va(first, last, server, now, nullptr, SourceRange::notify_insert);
     join_->sink().match_range(first, last, va.match);
     va.sink = new SinkRange(this, first, last, va.match, now);
     valid_ranges_.insert(*va.sink);
-    validate_step(va, 0, 0);
+    validate_step(va, 0);
 }
 
 void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     if (!join_->maintained() && !join_->staleness() && flush_at_ != now) {
-        join_->sink_table()->flush_for_pull(now);
-        while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
-            delete sink;        // XXX be careful of refcounting
+        Table& t = server.table_for(first, last);
+        if (t.flush_for_pull(now)) {
+            while (SinkRange* sink = valid_ranges_.unlink_leftmost_without_rebalance())
+                delete sink;        // XXX be careful of refcounting
+        } else {
+            while (!valid_ranges_.empty())
+                valid_ranges_.begin()->invalidate();
+        }
         flush_at_ = now;
     }
 
@@ -67,101 +80,118 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
         validate_one(last_valid, last, server, now);
 }
 
-void JoinRange::validate_step(validate_args& va, int joinpos,
-                              ServerStore::const_iterator* hint) {
-    Table* sourcet = join_->source_table(joinpos);
+void JoinRange::validate_filters(validate_args& va) {
+    int filters = va.filters;
+    Match::state mstate = va.match.save();
+    va.match.restore(va.filtermatch);
 
-    uint8_t kf[128], kl[128];
+    for (int jp = 0; filters; ++jp, filters >>= 1)
+        if (filters & 1) {
+            uint8_t kf[key_capacity], kl[key_capacity];
+            int kflen = join_->expand_first(kf, join_->source(jp),
+                                            va.first, va.last, va.match);
+            int kllen = join_->expand_last(kl, join_->source(jp),
+                                           va.first, va.last, va.match);
+            assert(Str(kf, kflen) <= Str(kl, kllen));
+            Table* sourcet = &va.server->make_table_for(Str(kf, kflen), Str(kl, kllen));
+            va.sourcet[jp] = sourcet;
+            sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+        }
+
+    va.match.restore(mstate);
+}
+
+void JoinRange::validate_step(validate_args& va, int joinpos) {
+    if (!join_->maintained() && join_->source_is_filter(joinpos)) {
+        if (!va.filters)
+            va.filtermatch = va.match.save();
+        int known_at_sink = join_->source_mask(join_->nsource() - 1)
+            | join_->known_mask(va.filtermatch);
+        if ((join_->source_mask(joinpos) & ~known_at_sink) == 0) {
+            va.filters |= 1 << joinpos;
+            validate_step(va, joinpos + 1);
+            va.filters &= ~(1 << joinpos);
+            return;
+        }
+    }
+
+    uint8_t kf[key_capacity], kl[key_capacity];
     int kflen = join_->expand_first(kf, join_->source(joinpos),
                                     va.first, va.last, va.match);
     int kllen = join_->expand_last(kl, join_->source(joinpos),
                                    va.first, va.last, va.match);
     assert(Str(kf, kflen) <= Str(kl, kllen));
-
-    // need to validate the source ranges in case they have not been
-    // expanded yet.
-    // XXX PERFORMANCE this is not always necessary
-    // XXX For now don't do this if the join is recursive
-    if (sourcet->name() != join_->sink().table_name())
-        sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+    Table* sourcet = &va.server->make_table_for(Str(kf, kflen), Str(kl, kllen));
+    va.sourcet[joinpos] = sourcet;
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
         r = join_->make_source(*va.server, va.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
-    if (hint && (*hint)->key() >= Str(kl, kllen))
-        ++sourcet->nvalidate_skipped_;
-
-    else {
-        auto it = sourcet->lower_bound_hint(Str(kf, kflen));
-        auto itend = sourcet->end();
-
+    // need to validate the source ranges in case they have not been
+    // expanded yet.
+    auto it = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
+    auto itend = sourcet->end();
+    if (it != itend) {
         Match::state mstate(va.match.save());
         const Pattern& pat = join_->source(joinpos);
-
-        // figure out whether match is necessary
-        int mopt = pat.check_optimized_match(va.match);
         ++sourcet->nvalidate_;
 
-        if (mopt < 0) {
-            // match not optimizable
+        // match not optimizable
+        if (!r) {
+            for (; it != itend && it->key() < Str(kl, kllen); ++it)
+                if (it->key().length() == pat.key_length()) {
+                    if (pat.match(it->key(), va.match))
+                        validate_step(va, joinpos + 1);
+                    va.match.restore(mstate);
+                }
+        } else if (va.filters) {
+            bool filters_validated = false;
+            uint8_t filterstr[key_capacity];
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     if (pat.match(it->key(), va.match)) {
-                        if (r)
-                            r->notify(it.operator->(), String(), va.notifier);
-                        else
-                            validate_step(va, joinpos + 1, 0);
+                        if (!filters_validated) {
+                            validate_filters(va);
+                            filters_validated = true;
+                        }
+                        int filters = va.filters;
+                        for (int jp = 0; filters; ++jp, filters >>= 1)
+                            if (filters & 1) {
+                                int filterlen = join_->source(jp).expand(filterstr, va.match);
+                                if (!va.sourcet[jp]->count(Str(filterstr, filterlen)))
+                                    goto give_up;
+                            }
+                        r->notify(it.operator->(), String(), va.notifier);
                     }
-                    va.match.restore(mstate);
-                }
-        } else if (join_->check_increasing_match(joinpos, va.match)) {
-            // match optimizable, accesses next table in strictly increasing order
-            assert(!r);
-            ++sourcet->nvalidate_increasing_;
-            ++sourcet->nvalidate_optimized_;
-            ServerStore::const_iterator next_hint = join_->source_table(joinpos + 1)->begin();
-            ServerStore::const_iterator end_next = join_->source_table(joinpos + 1)->end();
-            for (; it != itend && next_hint != end_next &&
-                     it->key() < Str(kl, kllen); ++it)
-                if (it->key().length() == pat.key_length()) {
-                    pat.assign_optimized_match(it->key(), mopt, va.match);
-                    validate_step(va, joinpos + 1, &next_hint);
+                give_up:
                     va.match.restore(mstate);
                 }
         } else {
-            // match optimizable
-            ++sourcet->nvalidate_optimized_;
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
-                    pat.assign_optimized_match(it->key(), mopt, va.match);
-                    if (r)
+                    if (pat.match(it->key(), va.match))
                         r->notify(it.operator->(), String(), va.notifier);
-                    else
-                        validate_step(va, joinpos + 1, 0);
                     va.match.restore(mstate);
                 }
         }
-
-        if (hint)
-            *hint = it;
     }
 
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
         if (r) {
             LocalStr<12> remove_context;
             join_->make_context(remove_context, va.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
-            va.server->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
+            sourcet->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
             delete r;
         }
     } else if (join_->maintained()) {
         if (r)
-            va.server->add_source(r);
+            sourcet->add_source(r);
         else {
             SourceRange::parameters p{*va.server, join_, joinpos, va.match,
                     Str(kf, kflen), Str(kl, kllen), va.sink};
-            va.server->add_source(new InvalidatorRange(p));
+            sourcet->add_source(new InvalidatorRange(p));
         }
     } else if (r)
         delete r;
@@ -210,6 +240,8 @@ SinkRange::SinkRange(JoinRange* jr, Str first, Str last, const Match& m, uint64_
 
     context_mask_ = j->known_mask(m);
     j->make_context(context_, m, context_mask_);
+
+    table_ = &j->server().make_table_for(first, last);
 }
 
 SinkRange::~SinkRange() {
@@ -231,7 +263,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
         (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
     updates_.insert(*iu);
 
-    join()->sink_table()->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
+    table_->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     // std::cerr << *iu << "\n";
 }
 
@@ -246,11 +278,10 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
         last = iu->iend();
 
     Join* join = jr_->join();
-    JoinRange::validate_args va{first, last, Match(), &server, this, now,
-            iu->notifier_};
+    JoinRange::validate_args va(first, last, server, now, this, iu->notifier_);
     join->assign_context(va.match, context_);
     join->assign_context(va.match, iu->context_);
-    jr_->validate_step(va, iu->joinpos_ + 1, 0);
+    jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())
         iu->ibegin_ = last;

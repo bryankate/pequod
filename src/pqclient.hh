@@ -27,7 +27,6 @@ class DirectClient {
     inline void pace(tamer::event<> done);
 
     typedef ServerStore::const_iterator iterator;
-
     class scan_result {
       public:
         scan_result() = default;
@@ -35,6 +34,7 @@ class DirectClient {
         inline iterator begin() const;
         inline iterator end() const;
         inline void flush();
+        inline size_t size() const;
       private:
         iterator first_;
         iterator last_;
@@ -83,7 +83,7 @@ inline DirectClient::DirectClient(Server& server)
 inline void DirectClient::add_join(const String& first, const String& last,
                                    const String& join_text, event<Json> e) {
     ErrorAccumulator errh;
-    Json rj;
+    Json rj = Json().set("range", Json::make_array(first, last));
     Join* j = new Join;
     if (j->assign_parse(join_text, &errh)) {
         server_.add_join(first, last, j);
@@ -95,8 +95,12 @@ inline void DirectClient::add_join(const String& first, const String& last,
 }
 
 inline void DirectClient::get(const String& key, event<String> e) {
-    server_.validate(key);
-    e(server_[key].value());
+    Table& t = server_.table_for(key);
+    auto it = t.validate(key, server_.next_validate_at());
+    if (it != t.end() && it->key() == key)
+        e(it->value());
+    else
+        e(String());
 }
 
 inline void DirectClient::insert(const String& key, const String& value,
@@ -112,14 +116,12 @@ inline void DirectClient::erase(const String& key, event<> e) {
 
 inline void DirectClient::count(const String& first, const String& last,
                                 event<size_t> e) {
-    server_.validate(first, last);
-    e(server_.count(first, last));
+    e(server_.validate_count(first, last));
 }
 
 inline void DirectClient::add_count(const String& first, const String& last,
                                     event<size_t> e) {
-    server_.validate(first, last);
-    e(e.result() + server_.count(first, last));
+    e(e.result() + server_.validate_count(first, last));
 }
 
 inline DirectClient::scan_result::scan_result(iterator first, iterator last)
@@ -137,11 +139,15 @@ inline auto DirectClient::scan_result::end() const -> iterator {
 inline void DirectClient::scan_result::flush() {
 }
 
+inline size_t DirectClient::scan_result::size() const {
+    return std::distance(first_, last_);
+}
+
 inline void DirectClient::scan(const String& first, const String& last,
                                event<scan_result> e) {
-    server_.validate(first, last);
-    e(scan_result(server_.lower_bound(first),
-                  server_.lower_bound(last)));
+    Table& t = server_.table_for(first);
+    auto it = t.validate(first, last, server_.next_validate_at());
+    e(scan_result(it, t.lower_bound(last)));
 }
 
 inline void DirectClient::pace(event<> done) {
@@ -155,8 +161,12 @@ inline void DirectClient::stats(event<Json> e) {
 
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
-    server_.validate(key);
-    e(server_[key].value());
+    Table& t = server_.table_for(key);
+    auto it = t.validate(key, server_.next_validate_at());
+    if (it != t.end() && it->key() == key)
+        e(it->value());
+    else
+        e(String());
 }
 
 template <typename R>
@@ -175,23 +185,21 @@ inline void DirectClient::erase(const String& key, preevent<R> e) {
 template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
                                 preevent<R, size_t> e) {
-    server_.validate(first, last);
-    e(server_.count(first, last));
+    e(server_.validate_count(first, last));
 }
 
 template <typename R>
 inline void DirectClient::add_count(const String& first, const String& last,
                                     preevent<R, size_t> e) {
-    server_.validate(first, last);
-    e(e.result() + server_.count(first, last));
+    e(e.result() + server_.validate_count(first, last));
 }
 
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
-    server_.validate(first, last);
-    e(scan_result(server_.lower_bound(first),
-                  server_.lower_bound(last)));
+    Table& t = server_.table_for(first);
+    auto it = t.validate(first, last, server_.next_validate_at());
+    e(scan_result(it, t.lower_bound(last)));
 }
 
 template <typename R>

@@ -28,6 +28,7 @@ class RedisCommand {
     static String make_getrange(const String& k, int begin, int end);
     static String make_set(const String& k, const String& v);
     static String make_append(const String& k, const String& v);
+    static String make_incr(const String& k);
 };
 
 class RedisSyncClient {
@@ -37,6 +38,7 @@ class RedisSyncClient {
     void getrange(const String& k, int begin, int end, String& v);
     void set(const String& k, const String& v);
     void append(const String& k, const String& v, int& newlen);
+    void incr(const String& k, int& newv);
   private:
     void read_reply(String& v);
     void read_till_cr(String& v);

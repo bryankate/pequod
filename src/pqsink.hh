@@ -88,6 +88,7 @@ class SinkRange : public ServerRangeBase {
     rblinks<SinkRange> rblinks_;
   private:
     JoinRange* jr_;
+    Table* table_;
     int refcount_;
     unsigned context_mask_;
     LocalStr<12> context_;
@@ -120,7 +121,8 @@ class JoinRange : public ServerRangeBase {
 
     inline void validate_one(Str first, Str last, Server& server, uint64_t now);
     struct validate_args;
-    void validate_step(validate_args& va, int joinpos, ServerStore::const_iterator* hint);
+    void validate_step(validate_args& va, int joinpos);
+    void validate_filters(validate_args& va);
 
     friend class SinkRange;
 };
@@ -179,7 +181,7 @@ inline Join* SinkRange::join() const {
 }
 
 inline Table* SinkRange::table() const {
-    return jr_->join()->sink_table();
+    return table_;
 }
 
 inline unsigned SinkRange::context_mask() const {

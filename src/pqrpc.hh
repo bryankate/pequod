@@ -2,13 +2,14 @@
 #define PEQUOD_PQRPC_HH
 
 enum {
-    pq_add_join = 1,
+    pq_get = 1,
     pq_insert = 2,
     pq_erase = 3,
     pq_count = 4,
     pq_scan = 5,
-    pq_stats = 6,
-    pq_get = 7,
+    pq_add_join = 6,
+    // order matters
+    pq_stats = 7,
     pq_control = 8
 };
 

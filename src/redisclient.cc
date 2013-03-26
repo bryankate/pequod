@@ -18,10 +18,11 @@ String RedisCommand::make_getrange(const String& k, int begin, int end) {
     StringAccum sa;
     sa << "*4\r\n$8\r\nGETRANGE\r\n";
     sa << "$" << k.length() << "\r\n" << k << "\r\n";
-    String sb(begin);
-    sa << "$" << sb.length() << "\r\n" << sb << "\r\n";
-    String se(end);
-    sa << "$" << se.length() << "\r\n" << se << "\r\n";
+    static char buf_[128];
+    int n = sprintf(buf_, "%d", begin);
+    sa << "$" << n << "\r\n" << buf_ << "\r\n";
+    n = sprintf(buf_, "%d", end);
+    sa << "$" << n << "\r\n" << buf_ << "\r\n";
     return std::move(sa.take_string());
 }
 
@@ -38,6 +39,13 @@ String RedisCommand::make_append(const String& k, const String& v) {
     sa << "*3\r\n$6\r\nAPPEND\r\n";
     sa << "$" << k.length() << "\r\n" << k << "\r\n";
     sa << "$" << v.length() << "\r\n" << v << "\r\n";
+    return std::move(sa.take_string());
+}
+
+String RedisCommand::make_incr(const String& k) {
+    StringAccum sa;
+    sa << "*2\r\n$4\r\nINCR\r\n";
+    sa << "$" << k.length() << "\r\n" << k << "\r\n";
     return std::move(sa.take_string());
 }
 
@@ -93,6 +101,17 @@ void RedisSyncClient::read_reply(String& v) {
     }
     v = p.value();
 }
+
+void RedisSyncClient::incr(const String& k, int& newv) {
+    String cmd = RedisCommand::make_incr(k);
+    writen(cmd.data(), cmd.length());
+    if (debug)
+        std::cout << cmd << std::endl;
+    String v;
+    read_reply(v);
+    newv = v.to_i();
+}
+
 
 void RedisSyncClient::readn(void* buf, size_t count) {
     CHECK_EQ(read(fd_, buf, count), ssize_t(count));

@@ -71,6 +71,66 @@ void test_simple() {
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
 }
 
+void test_celebrity() {
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+        {"celeb|10001", "1"},
+	{"s|00001|00002", "1"},
+	{"s|00001|10000", "1"},
+	{"p|00002|0000000000", "Should not appear"},
+	{"p|00002|0000000001", "Hello,"},
+	{"p|00002|0000000022", "Which is awesome"},
+	{"p|10000|0000000010", "My name is"},
+	{"p|10000|0000000018", "Jennifer Jones"},
+        {"cp|10001|0000000011", "Not whatever the next thing claims"},
+        {"cp|10001|0000000019", ", Idiot,"}
+    };
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second);
+
+    pq::Join join[4];
+    join[0].assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
+                         "using s|<subscriber>|<poster> "
+                         "copy p|<poster>|<time>");
+    server.add_join("t|", "t}", &join[0]);
+    join[1].assign_parse("t|<u>|<t>|<p> = using filter cs|<u>|<p> pull copy ct|<t>|<p> where u:5, p:5, t:10");
+    server.add_join("t|", "t}", &join[1]);
+    join[2].assign_parse("ct|<t>|<p> = copy cp|<p>|<t> where p:5, t:10");
+    server.add_join("ct|", "ct}", &join[2]);
+    join[3].assign_parse("cs|<u>|<p> = using filter celeb|<p> copy s|<u>|<p> where u:5, p:5");
+    server.add_join("cs|", "cs}", &join[3]);
+
+    server.validate_count("t|00001|0000000001", "t|00001}");
+    //for (auto it = server.begin(); it != server.end(); ++it)
+    //    std::cerr << "  " << *it << "\n";
+    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00001}"), size_t(4));
+
+    server.insert("p|10000|0000000022", "This should appear in t|00001");
+    server.insert("p|00002|0000000023", "As should this");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+
+    server.insert("s|00001|10001", "1");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+
+    server.erase("s|00001|10001");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+    server.insert("cp|10001|0000000050", "Should be removed");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+    server.validate("t|00001|0000000001", "t|00001}");
+    //for (auto it = server.begin(); it != server.end(); ++it)
+    //    std::cerr << "  " << *it << "\n";
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("cp|10001|0000000051", "Should not be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|00002|0000000052", "Should be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+}
+
 void test_expansion() {
     pq::Join j;
     j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
@@ -995,6 +1055,16 @@ void test_redis() {
 
     client.getrange("k2", 1, -1, v);
     CHECK_EQ(v, "bcdef");
+
+    int newv;
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 1);
+
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 2);
+
+    client.incr("k0", newv);
+    CHECK_EQ(newv, 3);
 }
 
 } // namespace
@@ -1018,6 +1088,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
+    ADD_TEST(test_celebrity);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
