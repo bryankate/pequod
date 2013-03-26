@@ -56,6 +56,7 @@ class Table : public pequod_set_base_hook {
 
     uint64_t ninsert_;
     uint64_t nmodify_;
+    uint64_t nmodify_nohint_;
     uint64_t nerase_;
     uint64_t nvalidate_;
     uint64_t nvalidate_optimized_;
@@ -291,9 +292,10 @@ void Table::modify(Str key, const SinkRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink->hint();
-    if (!hint || !hint->valid())
+    if (!hint || !hint->valid()) {
+        ++nmodify_nohint_;
         p = store_.insert_check(key, DatumCompare(), cd);
-    else {
+    } else {
         p.first = store_.iterator_to(*hint);
         if (hint->key() == key)
             p.second = false;

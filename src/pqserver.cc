@@ -13,7 +13,7 @@ const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
 Table Table::empty_table{Str()};
 
 Table::Table(Str name)
-    : ninsert_(0), nmodify_(0), nerase_(0), nvalidate_(0),
+    : ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
       nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
       njoins_(0), flush_at_(0), all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
@@ -160,6 +160,8 @@ Json Server::stats() const {
             pt.set("ninsert", t.ninsert_);
         if (t.nmodify_)
             pt.set("nmodify", t.nmodify_);
+        if (t.nmodify_nohint_)
+            pt.set("nmodify_nohint", t.nmodify_nohint_);
         if (t.nerase_)
             pt.set("nerase", t.nerase_);
         if (t.store_.size())
