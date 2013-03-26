@@ -14,7 +14,6 @@ Table Table::empty_table{Str()};
 
 Table::Table(Str name)
     : ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      nvalidate_optimized_(0), nvalidate_increasing_(0), nvalidate_skipped_(0),
       njoins_(0), flush_at_(0), all_pull_(true), namelen_(name.length()) {
     assert(namelen_ <= (int) sizeof(name_));
     memcpy(name_, name.data(), namelen_);
@@ -172,12 +171,6 @@ Json Server::stats() const {
             pt.set("sink_ranges_size", sink_size);
         if (t.nvalidate_)
             pt.set("nvalidate", t.nvalidate_);
-        if (t.nvalidate_optimized_)
-            pt.set("nvalidate_optimized", t.nvalidate_optimized_);
-        if (t.nvalidate_increasing_)
-            pt.set("nvalidate_increasing", t.nvalidate_increasing_);
-        if (t.nvalidate_skipped_)
-            pt.set("nvalidate_skipped", t.nvalidate_skipped_);
         tables.push_back(pt);
 
         store_size += t.store_.size();
