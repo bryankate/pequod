@@ -97,6 +97,25 @@ void Table::insert(Str key, String value) {
     all_pull_ = false;
 }
 
+std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const SinkRange* sink, ServerStore::insert_commit_data& cd) {
+    assert(name() && sink);
+    std::pair<ServerStore::iterator, bool> p;
+    Datum* hint = sink->hint();
+    if (!hint || !hint->valid()) {
+        ++nmodify_nohint_;
+        p = store_.insert_check(key, DatumCompare(), cd);
+    } else {
+        p.first = store_.iterator_to(*hint);
+        if (hint->key() == key)
+            p.second = false;
+        else {
+            ++p.first;
+            p = store_.insert_check(p.first, key, DatumCompare(), cd);
+        }
+    }
+    return p;
+}
+
 auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
     if (njoins_ != 0) {
         if (njoins_ == 1) {

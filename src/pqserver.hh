@@ -75,6 +75,7 @@ class Table : public pequod_set_base_hook {
   private:
     Server* server_;
 
+    std::pair<store_type::iterator, bool> prepare_modify(Str key, const SinkRange* sink, store_type::insert_commit_data& cd);
     inline void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
     bool hard_flush_for_pull(uint64_t now);
 
@@ -286,42 +287,36 @@ inline void Table::unlink_source(SourceRange* r) {
 
 template <typename F>
 void Table::modify(Str key, const SinkRange* sink, const F& func) {
-    assert(namelen_ && sink);
     store_type::insert_commit_data cd;
-    std::pair<ServerStore::iterator, bool> p;
-    Datum* hint = sink->hint();
-    if (!hint || !hint->valid()) {
-        ++nmodify_nohint_;
-        p = store_.insert_check(key, DatumCompare(), cd);
-    } else {
-        p.first = store_.iterator_to(*hint);
-        if (hint->key() == key)
-            p.second = false;
-        else {
-            ++p.first;
-            p = store_.insert_check(p.first, key, DatumCompare(), cd);
-        }
-    }
+    std::pair<ServerStore::iterator, bool> p = prepare_modify(key, sink, cd);
     Datum* d = p.second ? NULL : p.first.operator->();
+
     String value = func(d);
+
+    SourceRange::notify_type n = SourceRange::notify_update;
     if (is_erase_marker(value)) {
         mandatory_assert(!p.second);
         p.first = store_.erase(p.first);
-        sink->update_hint(store_, p.first);
-        notify(d, String(), SourceRange::notify_erase);
-        d->invalidate();
+        value = String();
+        n = SourceRange::notify_erase;
     } else if (!is_unchanged_marker(value)) {
         if (p.second) {
             d = new Datum(key, sink);
             sink->add_datum(d);
         }
         d->value().swap(value);
-        if (p.second)
+        if (p.second) {
             p.first = store_.insert_commit(*d, cd);
-        if (d != hint)
-            sink->update_hint(store_, p.first);
-        notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
+            n = SourceRange::notify_insert;
+        }
     }
+
+    sink->update_hint(store_, p.first);
+    if (!is_unchanged_marker(value))
+        notify(d, value, n);
+    if (n == SourceRange::notify_erase)
+        d->invalidate();
+
     ++nmodify_;
 }
 
