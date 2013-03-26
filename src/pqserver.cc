@@ -140,6 +140,18 @@ size_t Server::validate_count(Str first, Str last) {
     return n;
 }
 
+void Table::add_stats(Json& j) const {
+    j["ninsert"] += ninsert_;
+    j["nmodify"] += nmodify_;
+    j["nmodify_nohint"] += nmodify_nohint_;
+    j["nerase"] += nerase_;
+    j["store_size"] += store_.size();
+    j["source_ranges_size"] += source_ranges_.size();
+    for (auto& jr : join_ranges_)
+        j["sink_ranges_size"] += jr.valid_ranges_size();
+    j["nvalidate"] += nvalidate_;
+}
+
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
         sink_ranges_size = 0;
@@ -148,35 +160,19 @@ Json Server::stats() const {
 
     Json tables = Json::make_array();
     for (auto& t : tables_by_name_) {
-        size_t source_size = t.source_ranges_.size();
-        size_t join_size = t.join_ranges_.size();
-        size_t sink_size = 0;
-        for (auto& jr : t.join_ranges_)
-            sink_size += jr.valid_ranges_size();
+        Json j = Json().set("name", t.name());
+        t.add_stats(j);
+        for (auto it = j.obegin(); it != j.oend(); )
+            if (it->second.is_i() && !it->second.as_i())
+                it = j.erase(it);
+            else
+                ++it;
+        tables.push_back(j);
 
-        Json pt = Json().set("name", t.name());
-        if (t.ninsert_)
-            pt.set("ninsert", t.ninsert_);
-        if (t.nmodify_)
-            pt.set("nmodify", t.nmodify_);
-        if (t.nmodify_nohint_)
-            pt.set("nmodify_nohint", t.nmodify_nohint_);
-        if (t.nerase_)
-            pt.set("nerase", t.nerase_);
-        if (t.store_.size())
-            pt.set("store_size", t.store_.size());
-        if (source_size)
-            pt.set("source_ranges_size", source_size);
-        if (sink_size)
-            pt.set("sink_ranges_size", sink_size);
-        if (t.nvalidate_)
-            pt.set("nvalidate", t.nvalidate_);
-        tables.push_back(pt);
-
-        store_size += t.store_.size();
-        source_ranges_size += source_size;
-        join_ranges_size += join_size;
-        sink_ranges_size += sink_size;
+        store_size += j["store_size"].to_i();
+        source_ranges_size += j["source_ranges_size"].to_i();
+        join_ranges_size += t.join_ranges_.size();
+        sink_ranges_size += j["sink_ranges_size"].to_i();
     }
 
     Json answer;

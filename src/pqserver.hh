@@ -52,6 +52,7 @@ class Table : public pequod_set_base_hook {
 
     inline bool flush_for_pull(uint64_t now);
 
+    void add_stats(Json& j) const;
     void print_sources(std::ostream& stream) const;
 
     uint64_t ninsert_;
