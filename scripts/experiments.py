@@ -138,3 +138,16 @@ redis_micro.append(
      'cmd' : '%s --client_push --redis ' % cmdbase })
 exps.append({'name': 'redis_micro_16', 'defs': redis_micro, 'xlabel' : 'System'})
 
+cmd = "./obj/pqserver --hn --redis --nops=1000000 --large"
+server = "cd scripts/redis-run; bash start.sh"
+
+# network analytics
+cmdbase = "./obj/pqserver --analytics --popduration=10000 --duration=1000000 --proactive"
+analytics = []
+analytics.append(
+    {'plotgroup': "analytics",
+     'plotkey' : "base",
+     'server' : "./obj/pqserver -kl=7008",
+     'cmd': '%s --client=7008' % cmdbase})
+exps.append({'name': 'analytics', 'defs': analytics, 'xlabel' : ''})
+
