@@ -226,6 +226,8 @@ std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink
         p.first = store_.iterator_to(*hint);
         if (hint->key() == key)
             p.second = false;
+        else if (hint == store_.rbegin().operator->())
+            p = store_.insert_check(store_.end(), key, DatumCompare(), cd);
         else {
             ++p.first;
             p = store_.insert_check(p.first, key, DatumCompare(), cd);
