@@ -66,9 +66,10 @@ static Clp_Option options[] = {
     { "celebrity", 0, 4010, Clp_ValInt, 0 },
     { "celebrity2", 0, 4011, Clp_ValInt, 0 },
     { "celebrity3", 0, 4012, Clp_ValInt, 0 },
-    { "postlimit", 0, 4013, Clp_ValInt, 0 },
-    { "fetch", 0, 4014, 0, Clp_Negate },
-    { "full-scan", 0, 4015, 0, Clp_Negate },
+    { "celebrity4", 0, 4013, Clp_ValInt, 0 },
+    { "postlimit", 0, 4014, Clp_ValInt, 0 },
+    { "fetch", 0, 4015, 0, Clp_Negate },
+    { "full-scan", 0, 4016, 0, Clp_Negate },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -187,6 +188,8 @@ int main(int argc, char** argv) {
             tp_param.set("celebrity", clp->val.i).set("celebrity_type", 2);
         else if (clp->option->long_name == String("celebrity3"))
             tp_param.set("celebrity", clp->val.i).set("celebrity_type", 3);
+        else if (clp->option->long_name == String("celebrity4"))
+            tp_param.set("celebrity", clp->val.i).set("celebrity_type", 4);
         else if (clp->option->long_name == String("postlimit"))
             tp_param.set("postlimit", clp->val.i);
         else if (clp->option->long_name == String("fetch"))
