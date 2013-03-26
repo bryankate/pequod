@@ -298,6 +298,22 @@ if test "$enable_superpage" != no; then
     AC_DEFINE_UNQUOTED([HAVE_SUPERPAGE_ENABLED], [1], [Define if superpage support is enabled.])
 fi
 
+AC_ARG_ENABLE([hint],
+    [AS_HELP_STRING([--disable-hint],
+	    [Disable hint support])],
+    [], [enable_hint=yes])
+if test "$enable_hint" != no; then
+    AC_DEFINE_UNQUOTED([HAVE_HINT_ENABLED], [1], [Define if hint support is enabled.])
+fi
+
+AC_ARG_ENABLE([value_sharing],
+    [AS_HELP_STRING([--disable-value-sharing],
+	    [Disable value sharing support])],
+    [], [enable_value_sharing=yes])
+if test "$enable_value_sharing" != no; then
+    AC_DEFINE_UNQUOTED([HAVE_VALUE_SHARING_ENABLED], [1], [Define if value sharing support is enabled.])
+fi
+
 AC_ARG_ENABLE([glog],
     [AS_HELP_STRING([--enable-glog[[=N]]], [Enable gstore_server logging])],
     [], [enable_glog=0])

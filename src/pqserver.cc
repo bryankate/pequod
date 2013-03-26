@@ -120,10 +120,13 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
     if (njoins_ != 0) {
         if (njoins_ == 1) {
             auto it = store_.lower_bound(first, DatumCompare());
-            if (it != store_.end() && it->key() < last && it->owner()
-                && it->owner()->valid() && !it->owner()->has_expired(now)
-                && it->owner()->ibegin() <= first && last <= it->owner()->iend()
-                && !it->owner()->need_update())
+            auto itx = it;
+            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
+                --itx;
+            if (itx != store_.end() && itx->key() < last && itx->owner()
+                && itx->owner()->valid() && !itx->owner()->has_expired(now)
+                && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
+                && !itx->owner()->need_update())
                 return it;
         }
         for (auto it = join_ranges_.begin_overlaps(first, last);

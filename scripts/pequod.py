@@ -7,6 +7,8 @@ class PequodLoadRunner:
         cmd = ld['cmd']
         if opt.affinity:
             cmd = ['numactl', '-C', '0'] + cmd
+        if ld.has_key('build'):
+            subprocess.Popen(ld['build'], shell = True).communicate()
         for i in range(opt.repeat):
             stdout = os.path.join(resultDir, "trail_%d.json" % i)
             if ld.has_key('server'):
