@@ -67,6 +67,9 @@ struct Str : public String_base<Str> {
         return const_cast<char*>(s);
     }
 
+    Str prefix(int lenx) const {
+        return Str(s, lenx < len ? lenx : len);
+    }
     Str substring(const char *first, const char *last) const {
 	if (first <= last && first >= s && last <= s + len)
 	    return Str(first, last);
