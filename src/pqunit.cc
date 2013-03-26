@@ -189,6 +189,7 @@ void test_celebrity() {
 }
 
 void test_expansion() {
+    using pq::RangeMatch;
     pq::Join j;
     j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
 		   "using f|<subscriber>|<poster> "
@@ -198,21 +199,21 @@ void test_expansion() {
     pq::Match m;
     j.source(0).match("f|11111|22222", m);
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|11111|9999999999",
-                            "t|11111}",
-                            m), "t|11111|9999999999|22222");
+                            RangeMatch("t|11111|9999999999",
+                                       "t|11111}",
+                                       m)), "t|11111|9999999999|22222");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|00000|9999999999",
-                            "t|99999}",
-                            m), "t|11111|");
+                            RangeMatch("t|00000|9999999999",
+                                       "t|99999}",
+                                       m)), "t|11111|");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|11111|9999999999",
-                           "t|11111}",
-                           m), "t|11111}");
+                           RangeMatch("t|11111|9999999999",
+                                      "t|11111}",
+                                      m)), "t|11111}");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|00000|9999999999",
-                           "t|99999}",
-                           m), "t|11111}");
+                           RangeMatch("t|00000|9999999999",
+                                      "t|99999}",
+                                      m)), "t|11111}");
 
     j.clear();
     j.assign_parse("t|<subscriber:5><time:10><poster:5> = "
@@ -221,84 +222,84 @@ void test_expansion() {
 
     j.source(0).match("f|1111122222", m);
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|111119999999999",
-                            "t|11112",
-                            m), "t|11111999999999922222");
+                            RangeMatch("t|111119999999999",
+                                       "t|11112",
+                                       m)), "t|11111999999999922222");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|000009999999999",
-                            "t|99999",
-                            m), "t|11111");
+                            RangeMatch("t|000009999999999",
+                                       "t|99999",
+                                       m)), "t|11111");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|111119999999999",
-                           "t|11112",
-                           m), "t|11112");
+                           RangeMatch("t|111119999999999",
+                                      "t|11112",
+                                      m)), "t|11112");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|000009999999999",
-                           "t|99999",
-                           m), "t|11112");
+                           RangeMatch("t|000009999999999",
+                                      "t|99999",
+                                      m)), "t|11112");
 
     m.clear();
     m.set_slot(j.slot("subscriber"), "11111", 5);
     m.set_slot(j.slot("time"), "2222222222", 10);
     m.set_slot(j.slot("poster"), "fffff", 5);
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|111119999999999",
-                            "t|11112",
-                            m), "t|111119999999999fffff");
+                            RangeMatch("t|111119999999999",
+                                       "t|11112",
+                                       m)), "t|111119999999999fffff");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|000009999999999",
-                            "t|99999",
-                            m), "t|111112222222222fffff");
+                            RangeMatch("t|000009999999999",
+                                       "t|99999",
+                                       m)), "t|111112222222222fffff");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|111119999999999",
-                           "t|11112",
-                           m), "t|111112222222222ffffg");
+                           RangeMatch("t|111119999999999",
+                                      "t|11112",
+                                      m)), "t|111112222222222ffffg");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|000009999999999",
-                           "t|99999",
-                           m), "t|111112222222222ffffg");
+                           RangeMatch("t|000009999999999",
+                                      "t|99999",
+                                      m)), "t|111112222222222ffffg");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|000009999999999",
-                            "t|11111",
-                            m), "t|111112222222222fffff");
+                            RangeMatch("t|000009999999999",
+                                       "t|11111",
+                                       m)), "t|111112222222222fffff");
 
     m.clear();
     m.set_slot(j.slot("time"), "2222222222", 10);
     m.set_slot(j.slot("poster"), "fffff", 5);
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|111119999999999",
-                            "t|11112",
-                            m), "t|111119999999999fffff");
+                            RangeMatch("t|111119999999999",
+                                       "t|11112",
+                                       m)), "t|111119999999999fffff");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|000009999999999",
-                            "t|99999",
-                            m), "t|000009999999999fffff");
+                            RangeMatch("t|000009999999999",
+                                       "t|99999",
+                                       m)), "t|000009999999999fffff");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|111119999999999",
-                           "t|11112",
-                           m), "t|111112222222222ffffg");
+                           RangeMatch("t|111119999999999",
+                                      "t|11112",
+                                      m)), "t|111112222222222ffffg");
     CHECK_EQ(j.expand_last(j.sink(),
-                           "t|000009999999999",
-                           "t|99999",
-                           m), "t|999992222222222ffffg");
+                           RangeMatch("t|000009999999999",
+                                      "t|99999",
+                                      m)), "t|999992222222222ffffg");
     CHECK_EQ(j.expand_first(j.sink(),
-                            "t|000009999999999",
-                            "t|11111",
-                            m), "t|000009999999999fffff");
+                            RangeMatch("t|000009999999999",
+                                       "t|11111",
+                                       m)), "t|000009999999999fffff");
 
     m.clear();
     CHECK_EQ(j.expand_first(j.source(0),
-                            "t|11111",
-                            "t|11112",
-                            m), "s|11111|");
+                            RangeMatch("t|11111",
+                                       "t|11112",
+                                       m)), "s|11111|");
     CHECK_EQ(j.expand_last(j.source(0),
-                           "t|11111",
-                           "t|11112",
-                           m), "s|11111}");
+                           RangeMatch("t|11111",
+                                      "t|11112",
+                                      m)), "s|11111}");
 
-    m.clear();
-    j.source(0).match_range("s|11111", "s|11112", m);
-    CHECK_EQ(m.slot(j.slot("subscriber")), "11111");
+    RangeMatch rm("s|11111", "s|11112");
+    j.source(0).match_range(rm);
+    CHECK_EQ(rm.match.slot(j.slot("subscriber")), "11111");
 }
 
 void test_count() {

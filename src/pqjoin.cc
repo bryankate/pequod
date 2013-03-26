@@ -36,36 +36,37 @@ void Pattern::clear() {
         slotlen_[i] = slotpos_[i] = 0;
 }
 
-void Pattern::match_range(Str first, Str last, Match& m) const {
-    const uint8_t* fs = first.udata(), *ls = last.udata();
-    const uint8_t* efs = fs + std::min(first.length(), last.length());
+void Pattern::match_range(RangeMatch& rm) const {
+    const uint8_t* fs = rm.first.udata(), *ls = rm.last.udata();
+    const uint8_t* efs = fs + std::min(rm.first.length(), rm.last.length());
     for (const uint8_t* p = pat_; p != pat_ + plen_ && fs != efs; ++p)
         if (*p < 128) {
             if (*fs != *p || *ls != *p)
                 return;
             ++fs, ++ls;
         } else {
-            const uint8_t* ms = m.data(*p - 128);
-            int ml = m.known_length(*p - 128);
+            int slot = *p - 128;
+            const uint8_t* ms = rm.match.data(slot);
+            int ml = rm.match.known_length(slot);
             int mp = 0;
             while (mp != ml) {
                 if (fs + mp == efs || fs[mp] != ms[mp] || ls[mp] != ms[mp])
                     return;
                 ++mp;
             }
-            while (mp != slotlen_[*p - 128] && fs + mp != efs
+            while (mp != slotlen_[slot] && fs + mp != efs
                    && fs[mp] == ls[mp])
                 ++mp;
-            if (mp != slotlen_[*p - 128] && fs + slotlen_[*p - 128] == efs
+            if (mp != slotlen_[slot] && fs + slotlen_[slot] == efs
                 && fs[mp] + 1 == ls[mp]) {
-                for (int xp = mp + 1; xp != slotlen_[*p - 128]; ++xp)
+                for (int xp = mp + 1; xp != slotlen_[slot]; ++xp)
                     if (fs[xp] != 255 || ls[xp] != 0)
                         goto do_not_extend;
-                mp = slotlen_[*p - 128];
+                mp = slotlen_[slot];
             do_not_extend: ;
             }
             if (mp != ml)
-                m.set_slot(*p - 128, fs, mp);
+                rm.match.set_slot(slot, fs, mp);
             fs += mp, ls += mp;
         }
 }
@@ -152,11 +153,10 @@ void Join::set_staleness(double s) {
 /** Expand @a pat into the first matching string that matches @a match and
     could affect the sink range [@a sink_first, @a sink_last). */
 int Join::expand_first(uint8_t* buf, const Pattern& pat,
-                       Str sink_first, Str sink_last,
-                       const Match& match) const {
-    (void) sink_last;
+                       const RangeMatch& rm) const {
     const Pattern& sinkpat = sink();
     uint8_t* os = buf;
+    Str sink_first = rm.first;
 
     for (const uint8_t* ps = pat.pat_; ps != pat.pat_ + pat.plen_; ++ps)
         if (*ps < 128) {
@@ -166,7 +166,7 @@ int Join::expand_first(uint8_t* buf, const Pattern& pat,
             int slot = *ps - 128;
 
             // search for slot values in match and range
-            int matchlen = match.known_length(slot);
+            int matchlen = rm.match.known_length(slot);
             int sinkpos = 0, sinklen = 0;
             if (sinkpat.has_slot(slot)) {
                 sinkpos = sinkpat.slot_position(slot);
@@ -176,7 +176,7 @@ int Join::expand_first(uint8_t* buf, const Pattern& pat,
                 break;
 
             if (matchlen > 0 && sinklen > 0) {
-                int cmp = String_generic::compare(match.data(slot), matchlen, sink_first.udata() + sinkpos, sinklen);
+                int cmp = String_generic::compare(rm.match.data(slot), matchlen, sink_first.udata() + sinkpos, sinklen);
                 if (cmp > 0) {
                     // The data contained in the match is greater than the
                     // data from the sink range. Use the match. But because
@@ -192,7 +192,7 @@ int Join::expand_first(uint8_t* buf, const Pattern& pat,
 
             const uint8_t* data;
             if (matchlen >= sinklen)
-                data = match.data(slot);
+                data = rm.match.data(slot);
             else {
                 data = sink_first.udata() + sinkpos;
                 matchlen = sinklen;
@@ -207,17 +207,16 @@ int Join::expand_first(uint8_t* buf, const Pattern& pat,
     return os - buf;
 }
 
-String Join::expand_first(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const {
+String Join::expand_first(const Pattern& pat, const RangeMatch& rm) const {
     StringAccum sa(pat.key_length());
-    sa.adjust_length(expand_first(sa.udata(), pat, sink_first, sink_last, match));
+    sa.adjust_length(expand_first(sa.udata(), pat, rm));
     return sa.take_string();
 }
 
 /** Expand @a pat into an upper bound for strings that match @a match and
     could affect the sink range [@a sink_first, @a sink_last). */
 int Join::expand_last(uint8_t* buf, const Pattern& pat,
-                      Str sink_first, Str sink_last,
-                      const Match& match) const {
+                      const RangeMatch& rm) const {
     const Pattern& sinkpat = sink();
     uint8_t* os = buf;
     int last_position = 0;
@@ -230,11 +229,11 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             int slot = *ps - 128;
 
             // search for slot in match and range
-            int matchlen = match.known_length(slot);
+            int matchlen = rm.match.known_length(slot);
             int sinkpos = 0, sinklen = 0;
             if (sinkpat.has_slot(slot)) {
                 sinkpos = sinkpat.slot_position(slot);
-                sinklen = std::min(std::max(sink_last.length() - sinkpos, 0), sinkpat.slot_length(slot));
+                sinklen = std::min(std::max(rm.last.length() - sinkpos, 0), sinkpat.slot_length(slot));
             }
             if (matchlen == 0 && sinklen == 0)
                 break;
@@ -246,12 +245,12 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             //std::cerr << "SINK " << sinklen << " " << sinkpat.slot_length(slot) << " " << matchlen << " "\n";
             if (sinklen == sinkpat.slot_length(slot)
                 && matchlen < sinklen
-                && sink_first.length() >= sinkpos + sinklen) {
-                if (memcmp(&sink_first[sinkpos], &sink_last[sinkpos], sinklen) == 0)
+                && rm.first.length() >= sinkpos + sinklen) {
+                if (memcmp(&rm.first[sinkpos], &rm.last[sinkpos], sinklen) == 0)
                     use_first = true;
-                else if (sink_last.length() == sinkpos + sinklen) {
-                    const uint8_t* ldata = sink_last.udata() + sinkpos;
-                    const uint8_t* fdata = sink_first.udata() + sinkpos;
+                else if (rm.last.length() == sinkpos + sinklen) {
+                    const uint8_t* ldata = rm.last.udata() + sinkpos;
+                    const uint8_t* fdata = rm.first.udata() + sinkpos;
                     int x = sinklen - 1;
                     while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
                         --x;
@@ -262,12 +261,12 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
 
             const uint8_t* data;
             if (matchlen >= sinklen)
-                data = match.data(slot);
+                data = rm.match.data(slot);
             else if (use_first) {
-                data = sink_first.udata() + sinkpos;
+                data = rm.first.udata() + sinkpos;
                 matchlen = sinklen;
             } else {
-                data = sink_last.udata() + sinkpos;
+                data = rm.last.udata() + sinkpos;
                 matchlen = sinklen;
                 last_position = (os - buf) + sinklen;
             }
@@ -286,9 +285,9 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
     return os - buf;
 }
 
-String Join::expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const {
+String Join::expand_last(const Pattern& pat, const RangeMatch& rm) const {
     StringAccum sa(pat.key_length());
-    sa.adjust_length(expand_last(sa.udata(), pat, sink_first, sink_last, match));
+    sa.adjust_length(expand_last(sa.udata(), pat, rm));
     return sa.take_string();
 }
 

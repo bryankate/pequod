@@ -20,9 +20,7 @@ JoinRange::~JoinRange() {
 }
 
 struct JoinRange::validate_args {
-    Str first;
-    Str last;
-    Match match;
+    RangeMatch rm;
     Server* server;
     SinkRange* sink;
     uint64_t now;
@@ -31,9 +29,9 @@ struct JoinRange::validate_args {
     Match::state filtermatch;
     Table* sourcet[source_capacity];
 
-    validate_args(Str first_, Str last_, Server& server_, uint64_t now_,
+    validate_args(Str first, Str last, Server& server_, uint64_t now_,
                   SinkRange* sink_, int notifier_)
-        : first(first_), last(last_), server(&server_), sink(sink_),
+        : rm(first, last), server(&server_), sink(sink_),
           now(now_), notifier(notifier_), filters(0) {
     }
 };
@@ -41,8 +39,8 @@ struct JoinRange::validate_args {
 inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va(first, last, server, now, nullptr, SourceRange::notify_insert);
-    join_->sink().match_range(first, last, va.match);
-    va.sink = new SinkRange(this, first, last, va.match, now);
+    join_->sink().match_range(va.rm);
+    va.sink = new SinkRange(this, first, last, va.rm.match, now);
     valid_ranges_.insert(*va.sink);
     validate_step(va, 0);
 }
@@ -82,29 +80,27 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
 
 void JoinRange::validate_filters(validate_args& va) {
     int filters = va.filters;
-    Match::state mstate = va.match.save();
-    va.match.restore(va.filtermatch);
+    Match::state mstate = va.rm.match.save();
+    va.rm.match.restore(va.filtermatch);
 
     for (int jp = 0; filters; ++jp, filters >>= 1)
         if (filters & 1) {
             uint8_t kf[key_capacity], kl[key_capacity];
-            int kflen = join_->expand_first(kf, join_->source(jp),
-                                            va.first, va.last, va.match);
-            int kllen = join_->expand_last(kl, join_->source(jp),
-                                           va.first, va.last, va.match);
+            int kflen = join_->expand_first(kf, join_->source(jp), va.rm);
+            int kllen = join_->expand_last(kl, join_->source(jp), va.rm);
             assert(Str(kf, kflen) <= Str(kl, kllen));
             Table* sourcet = &va.server->make_table_for(Str(kf, kflen), Str(kl, kllen));
             va.sourcet[jp] = sourcet;
             sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
         }
 
-    va.match.restore(mstate);
+    va.rm.match.restore(mstate);
 }
 
 void JoinRange::validate_step(validate_args& va, int joinpos) {
     if (!join_->maintained() && join_->source_is_filter(joinpos)) {
         if (!va.filters)
-            va.filtermatch = va.match.save();
+            va.filtermatch = va.rm.match.save();
         int known_at_sink = join_->source_mask(join_->nsource() - 1)
             | join_->known_mask(va.filtermatch);
         if ((join_->source_mask(joinpos) & ~known_at_sink) == 0) {
@@ -116,17 +112,15 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     }
 
     uint8_t kf[key_capacity], kl[key_capacity];
-    int kflen = join_->expand_first(kf, join_->source(joinpos),
-                                    va.first, va.last, va.match);
-    int kllen = join_->expand_last(kl, join_->source(joinpos),
-                                   va.first, va.last, va.match);
+    int kflen = join_->expand_first(kf, join_->source(joinpos), va.rm);
+    int kllen = join_->expand_last(kl, join_->source(joinpos), va.rm);
     assert(Str(kf, kflen) <= Str(kl, kllen));
     Table* sourcet = &va.server->make_table_for(Str(kf, kflen), Str(kl, kllen));
     va.sourcet[joinpos] = sourcet;
 
     SourceRange* r = 0;
     if (joinpos + 1 == join_->nsource())
-        r = join_->make_source(*va.server, va.match,
+        r = join_->make_source(*va.server, va.rm.match,
                                Str(kf, kflen), Str(kl, kllen), va.sink);
 
     // need to validate the source ranges in case they have not been
@@ -134,7 +128,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     auto it = sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now);
     auto itend = sourcet->end();
     if (it != itend) {
-        Match::state mstate(va.match.save());
+        Match::state mstate(va.rm.match.save());
         const Pattern& pat = join_->source(joinpos);
         ++sourcet->nvalidate_;
 
@@ -142,16 +136,16 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         if (!r) {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
-                    if (pat.match(it->key(), va.match))
+                    if (pat.match(it->key(), va.rm.match))
                         validate_step(va, joinpos + 1);
-                    va.match.restore(mstate);
+                    va.rm.match.restore(mstate);
                 }
         } else if (va.filters) {
             bool filters_validated = false;
             uint8_t filterstr[key_capacity];
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
-                    if (pat.match(it->key(), va.match)) {
+                    if (pat.match(it->key(), va.rm.match)) {
                         if (!filters_validated) {
                             validate_filters(va);
                             filters_validated = true;
@@ -159,21 +153,21 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
                         int filters = va.filters;
                         for (int jp = 0; filters; ++jp, filters >>= 1)
                             if (filters & 1) {
-                                int filterlen = join_->source(jp).expand(filterstr, va.match);
+                                int filterlen = join_->source(jp).expand(filterstr, va.rm.match);
                                 if (!va.sourcet[jp]->count(Str(filterstr, filterlen)))
                                     goto give_up;
                             }
                         r->notify(it.operator->(), String(), va.notifier);
                     }
                 give_up:
-                    va.match.restore(mstate);
+                    va.rm.match.restore(mstate);
                 }
         } else {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
-                    if (pat.match(it->key(), va.match))
+                    if (pat.match(it->key(), va.rm.match))
                         r->notify(it.operator->(), String(), va.notifier);
-                    va.match.restore(mstate);
+                    va.rm.match.restore(mstate);
                 }
         }
     }
@@ -181,7 +175,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
     if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
         if (r) {
             LocalStr<12> remove_context;
-            join_->make_context(remove_context, va.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
+            join_->make_context(remove_context, va.rm.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
             sourcet->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
             delete r;
         }
@@ -189,7 +183,7 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         if (r)
             sourcet->add_source(r);
         else {
-            SourceRange::parameters p{*va.server, join_, joinpos, va.match,
+            SourceRange::parameters p{*va.server, join_, joinpos, va.rm.match,
                     Str(kf, kflen), Str(kl, kllen), va.sink};
             sourcet->add_source(new InvalidatorRange(p));
         }
@@ -252,15 +246,15 @@ SinkRange::~SinkRange() {
 }
 
 void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
-    Match m;
-    join()->source(joinpos).match(key, m);
-    join()->assign_context(m, context);
+    RangeMatch rm(ibegin(), iend());
+    join()->source(joinpos).match(key, rm.match);
+    join()->assign_context(rm.match, context);
     uint8_t kf[key_capacity], kl[key_capacity];
-    int kflen = join()->expand_first(kf, join()->sink(), ibegin(), iend(), m);
-    int kllen = join()->expand_last(kl, join()->sink(), ibegin(), iend(), m);
+    int kflen = join()->expand_first(kf, join()->sink(), rm);
+    int kllen = join()->expand_last(kl, join()->sink(), rm);
 
     IntermediateUpdate* iu = new IntermediateUpdate
-        (Str(kf, kflen), Str(kl, kllen), this, joinpos, m, notifier);
+        (Str(kf, kflen), Str(kl, kllen), this, joinpos, rm.match, notifier);
     updates_.insert(*iu);
 
     table_->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
@@ -279,8 +273,8 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,
 
     Join* join = jr_->join();
     JoinRange::validate_args va(first, last, server, now, this, iu->notifier_);
-    join->assign_context(va.match, context_);
-    join->assign_context(va.match, iu->context_);
+    join->assign_context(va.rm.match, context_);
+    join->assign_context(va.rm.match, iu->context_);
     jr_->validate_step(va, iu->joinpos_ + 1);
 
     if (first == iu->ibegin())

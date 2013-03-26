@@ -50,6 +50,14 @@ class Match {
     const uint8_t* slot_[slot_capacity];
 };
 
+struct RangeMatch {
+    Str first;
+    Str last;
+    Match match;
+    inline RangeMatch(Str f, Str l);
+    inline RangeMatch(Str f, Str l, const Match& m);
+};
+
 class Pattern {
   public:
     Pattern();
@@ -64,7 +72,7 @@ class Pattern {
 
     inline bool match(Str str) const;
     inline bool match(Str str, Match& m) const;
-    void match_range(Str first, Str last, Match& m) const;
+    void match_range(RangeMatch& rm) const;
 
     int expand(uint8_t* s, const Match& m) const;
 
@@ -137,12 +145,10 @@ class Join {
 
     bool check_increasing_match(int si, const Match& m) const;
 
-    int expand_first(uint8_t* buf, const Pattern& pat,
-                     Str sink_first, Str sink_last, const Match& match) const;
-    String expand_first(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
-    int expand_last(uint8_t* buf, const Pattern& pat,
-                    Str sink_first, Str sink_last, const Match& match) const;
-    String expand_last(const Pattern& pat, Str sink_first, Str sink_last, const Match& match) const;
+    int expand_first(uint8_t* buf, const Pattern& pat, const RangeMatch& rm) const;
+    String expand_first(const Pattern& pat, const RangeMatch& rm) const;
+    int expand_last(uint8_t* buf, const Pattern& pat, const RangeMatch& rm) const;
+    String expand_last(const Pattern& pat, const RangeMatch& rm) const;
 
     inline bool maintained() const;
     inline uint64_t staleness() const;
@@ -233,6 +239,14 @@ inline const Match::state& Match::save() const {
 
 inline void Match::restore(const state& state) {
     ms_ = state;
+}
+
+inline RangeMatch::RangeMatch(Str f, Str l)
+    : first(f), last(l) {
+}
+
+inline RangeMatch::RangeMatch(Str f, Str l, const Match& m)
+    : first(f), last(l), match(m) {
 }
 
 inline int Pattern::key_length() const {
