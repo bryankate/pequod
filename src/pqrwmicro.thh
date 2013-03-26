@@ -88,6 +88,7 @@ void RwMicro<S>::populate(tamer::event<> e) {
     }
     srandom(1328);
 
+    twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
     b = new bool[nuser_];
     for (u = 0; u < nuser_; ++u) {
         bzero(b, nuser_ * sizeof(*b));
@@ -117,7 +118,6 @@ void RwMicro<S>::populate(tamer::event<> e) {
                 twait { server_.pace(make_event()); }
             }
     twait(gr);
-    twait { server_.initialize(client_push_, !push_, 0, 0, nuser_, !push_, make_event()); }
     if (pprerefresh_) {
         twait {
             for (int i = 0; i < nuser_ * pprerefresh_ / 100; ++i)
