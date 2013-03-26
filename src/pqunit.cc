@@ -71,6 +71,63 @@ void test_simple() {
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
 }
 
+void test_overlap() {
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+	{"s|00001|00002", "1"},
+	{"s|00001|10000", "1"},
+        {"s|00003|00002", "1"},
+        {"s|00003|00004", "1"},
+	{"p|00002|0000000000", "Should not appear"},
+	{"p|00002|0000000001", "Hello,"},
+	{"p|00002|0000000022", "Which is awesome"},
+	{"p|10000|0000000010", "My name is"},
+	{"p|10000|0000000018", "Jennifer Jones"},
+        {"p|10001|0000000011", "Not whatever the next thing claims"},
+        {"p|10001|0000000019", ", Idiot,"}
+    };
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second);
+
+    pq::Join j;
+    j.assign_parse("t|<subscriber:5>|<time:10>|<poster:5> = "
+		   "using s|<subscriber>|<poster> "
+		   "copy p|<poster>|<time>");
+    j.ref();
+    server.add_join("t|", "t}", &j);
+
+    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00003}"), size_t(7));
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(4));
+    CHECK_EQ(server.count("t|00003", "t|00003}"), size_t(3));
+
+    server.insert("p|10000|0000000022", "This should appear in t|00001");
+    server.insert("p|00002|0000000023", "As should this");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    CHECK_EQ(server.count("t|00003", "t|00003}"), size_t(4));
+
+    server.insert("p|00004|0000000000", "This should appear in t|00003");
+    CHECK_EQ(server.count("t|00003", "t|00003}"), size_t(5));
+
+    server.insert("s|00001|10001", "1");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+
+    server.erase("s|00001|10001");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(8));
+    server.insert("p|10001|0000000050", "Should be removed");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(9));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|10001|0000000051", "Should not be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(6));
+    server.insert("p|00002|0000000052", "Should be inserted");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(7));
+}
+
 void test_celebrity() {
     pq::Server server;
 
@@ -1073,6 +1130,7 @@ void unit_tests(const std::set<String> &testcases) {
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
 #define ADD_EXP_TEST(test) exptests_.push_back(std::pair<String, test_func>(#test, test))
     ADD_TEST(test_simple);
+    ADD_TEST(test_overlap);
     ADD_TEST(test_expansion);
     ADD_TEST(test_recursive);
     ADD_TEST(test_count);
