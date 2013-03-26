@@ -9,7 +9,7 @@
 
 namespace {
 
-void process(pq::Server& server, const Json& j, Json& rj) {
+void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
     int command = j[0].as_i();
     if (command >= pq_get && command <= pq_add_join
         && !(j[2].is_s() && pq::table_name(j[2].as_s())))
@@ -57,15 +57,16 @@ void process(pq::Server& server, const Json& j, Json& rj) {
     case pq_scan: {
         rj[2] = pq_ok;
         String first = j[2].as_s(), last = j[3].as_s();
-        Json results = Json::make_array();
         pq::Table& t = server.table_for(first);
         auto it = t.validate(first, last, server.next_validate_at());
         auto itend = t.end();
+        assert(!aj.shared());
+        aj.clear();
         while (it != itend && it->key() < last) {
-            results.push_back(it->key()).push_back(it->value());
+            aj.push_back(it->key()).push_back(it->value());
             ++it;
         }
-        rj[3] = std::move(results);
+        rj[3] = aj;
         break;
     }
     case pq_stats:
@@ -85,7 +86,7 @@ void process(pq::Server& server, const Json& j, Json& rj) {
 
 tamed void connector(tamer::fd cfd, pq::Server& server) {
     tvars {
-        Json j, rj = Json::make_array(0, 0, 0);
+        Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
         msgpack_fd mpfd(cfd);
     }
     while (cfd) {
@@ -96,7 +97,8 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         rj[0] = -j[0].as_i();
         rj[1] = j[1];
         rj[2] = pq_fail;
-        process(server, j, rj);
+        rj[3] = Json();
+        process(server, j, rj, aj);
 
         mpfd.write(rj);
     }

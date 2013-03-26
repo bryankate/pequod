@@ -93,6 +93,7 @@ class Json { public:
 
     inline bool empty() const;
     inline size_type size() const;
+    inline bool shared() const;
 
     void clear();
 
@@ -167,6 +168,7 @@ class Json { public:
     inline std::pair<object_iterator, bool> insert(const object_value_type& x);
     inline object_iterator insert(object_iterator position,
 				  const object_value_type& x);
+    inline object_iterator erase(object_iterator it);
     inline size_type erase(Str key);
 
     inline Json& merge(const Json& x);
@@ -250,11 +252,19 @@ class Json { public:
     inline Json& operator--();
     inline void operator--(int);
     inline Json& operator+=(int x);
+    inline Json& operator+=(unsigned x);
     inline Json& operator+=(long x);
+    inline Json& operator+=(unsigned long x);
+    inline Json& operator+=(long long x);
+    inline Json& operator+=(unsigned long long x);
     inline Json& operator+=(double x);
     inline Json& operator+=(const Json& x);
     inline Json& operator-=(int x);
+    inline Json& operator-=(unsigned x);
     inline Json& operator-=(long x);
+    inline Json& operator-=(unsigned long x);
+    inline Json& operator-=(long long x);
+    inline Json& operator-=(unsigned long long x);
     inline Json& operator-=(double x);
     inline Json& operator-=(const Json& x);
 
@@ -312,6 +322,8 @@ class Json { public:
     bool hard_to_b() const;
     String hard_to_s() const;
     inline void force_number();
+    template <typename T> inline Json& add(T x);
+    template <typename T> inline Json& subtract(T x);
 
     const Json& hard_get(Str key) const;
     const Json& hard_get(size_type x) const;
@@ -371,30 +383,31 @@ struct Json::ObjectJson : public ComplexJson {
     ObjectJson(const ObjectJson& x);
     ~ObjectJson();
     void grow(bool copy);
-    int bucket(const char *s, int len) const {
+    int bucket(const char* s, int len) const {
 	return String::hashcode(s, s + len) & (hash_.size() - 1);
     }
-    ObjectItem &item(int i) const {
-	return os_[i];
+    ObjectItem& item(int p) const {
+	return os_[p];
     }
-    int find(const char *s, int len) const {
+    int find(const char* s, int len) const {
 	if (hash_.size()) {
-	    int i = hash_[bucket(s, len)];
-	    while (i >= 0) {
-		ObjectItem &oi = item(i);
+	    int p = hash_[bucket(s, len)];
+	    while (p >= 0) {
+		ObjectItem &oi = item(p);
 		if (oi.v_.first.equals(s, len))
-		    return i;
-		i = oi.next_;
+		    return p;
+		p = oi.next_;
 	    }
 	}
 	return -1;
     }
-    int find_insert(const String &key, const Json& value);
-    inline Json& get_insert(const String &key) {
-	int i = find_insert(key, make_null());
-	return item(i).v_.second;
+    int find_insert(const String& key, const Json& value);
+    inline Json& get_insert(const String& key) {
+	int p = find_insert(key, make_null());
+	return item(p).v_.second;
     }
     Json& get_insert(Str key);
+    void erase(int p);
     size_type erase(Str key);
     void rehash();
 };
@@ -989,6 +1002,9 @@ class Json_proxy_base {
     Json::object_iterator insert(Json::object_iterator position, const Json::object_value_type &x) {
 	return value().insert(position, x);
     }
+    Json::object_iterator erase(Json::object_iterator it) {
+        return value().erase(it);
+    }
     Json::size_type erase(Str key) {
 	return value().erase(key);
     }
@@ -1069,7 +1085,19 @@ class Json_proxy_base {
     Json& operator+=(int x) {
 	return value() += x;
     }
+    Json& operator+=(unsigned x) {
+	return value() += x;
+    }
     Json& operator+=(long x) {
+	return value() += x;
+    }
+    Json& operator+=(unsigned long x) {
+	return value() += x;
+    }
+    Json& operator+=(long long x) {
+	return value() += x;
+    }
+    Json& operator+=(unsigned long long x) {
 	return value() += x;
     }
     Json& operator+=(double x) {
@@ -1081,7 +1109,19 @@ class Json_proxy_base {
     Json& operator-=(int x) {
 	return value() -= x;
     }
+    Json& operator-=(unsigned x) {
+	return value() -= x;
+    }
     Json& operator-=(long x) {
+	return value() -= x;
+    }
+    Json& operator-=(unsigned long x) {
+	return value() -= x;
+    }
+    Json& operator-=(long long x) {
+	return value() -= x;
+    }
+    Json& operator-=(unsigned long long x) {
 	return value() -= x;
     }
     Json& operator-=(double x) {
@@ -1545,7 +1585,10 @@ inline Json::size_type Json::size() const {
     } else
 	return ajson()->size;
 }
-
+/** @brief Test if this complex Json is shared. */
+inline bool Json::shared() const {
+    return u_.c && (_type == j_array || _type == j_object) && u_.c->refcount > 1;
+}
 
 // Primitive methods
 
@@ -2104,6 +2147,17 @@ inline Json::object_iterator Json::insert(object_iterator position, const object
     return insert(x).first;
 }
 
+/** @brief Remove the value pointed to by @a it from an object Json.
+    @pre is_object()
+    @return Next iterator */
+inline Json::object_iterator Json::erase(Json::object_iterator it) {
+    assert(_type == j_object && it.live() && it.j_ == this);
+    uniqueify_object(false);
+    ojson()->erase(it.i_);
+    ++it;
+    return it;
+}
+
 /** @brief Remove the value of @a key from an object Json.
     @pre is_object()
     @return Number of items removed */
@@ -2538,7 +2592,8 @@ inline Json& Json::operator--() {
 inline void Json::operator--(int) {
     --(*this);
 }
-inline Json& Json::operator+=(int x) {
+template <typename T>
+inline Json& Json::add(T x) {
     force_number();
     if (_type == j_int)
         u_.i += x;
@@ -2546,19 +2601,56 @@ inline Json& Json::operator+=(int x) {
         u_.d += x;
     return *this;
 }
-inline Json& Json::operator+=(long x) {
+template <typename T>
+inline Json& Json::subtract(T x) {
     force_number();
     if (_type == j_int)
-	u_.i += x;
+        u_.i -= x;
     else
-	u_.d += x;
+        u_.d -= x;
     return *this;
 }
+inline Json& Json::operator+=(int x) {
+    return add(x);
+}
+inline Json& Json::operator+=(unsigned x) {
+    return add(x);
+}
+inline Json& Json::operator+=(long x) {
+    return add(x);
+}
+inline Json& Json::operator+=(unsigned long x) {
+    return add(x);
+}
+inline Json& Json::operator+=(long long x) {
+    return add(x);
+}
+inline Json& Json::operator+=(unsigned long long x) {
+    return add(x);
+}
 inline Json& Json::operator+=(double x) {
-    force_number();
-    u_.d = as_d() + x;
-    _type = j_double;
-    return *this;
+    return add(x);
+}
+inline Json& Json::operator-=(int x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(unsigned x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(long x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(unsigned long x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(long long x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(unsigned long long x) {
+    return subtract(x);
+}
+inline Json& Json::operator-=(double x) {
+    return subtract(x);
 }
 inline Json& Json::operator+=(const Json& x) {
     if (x._type != j_null) {
@@ -2568,15 +2660,6 @@ inline Json& Json::operator+=(const Json& x) {
         _type = j_double;
     }
     return *this;
-}
-inline Json& Json::operator-=(int x) {
-    return *this += -x;
-}
-inline Json& Json::operator-=(long x) {
-    return *this += -x;
-}
-inline Json& Json::operator-=(double x) {
-    return *this += -x;
 }
 inline Json& Json::operator-=(const Json& x) {
     if (x._type != j_null) {

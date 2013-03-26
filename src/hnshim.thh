@@ -84,8 +84,8 @@ inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
     (void)check_karmas;
     (void)check;
     twait { 
-        // get h|aid/hv
-        c_.get(String("h|") + String(aid), 0, make_event(hv));
+        // get a|aid/hv
+        c_.get(String("a|") + String(aid), 0, make_event(hv));
         // get ac|aid/clist
         c_.get(String("ac|") + String(aid), 0, make_event(cl)); 
     }
