@@ -162,8 +162,10 @@ void RwMicro<S>::run(tamer::event<> e) {
     while (i < nops_) {
         if (random() % 100 < prefresh_) {
             int u = random() % nuser_;
-            if (u >= nu_active)
+            if (u >= nu_active) {
+                ++i;
                 continue;
+            }
             struct timeval optv[2];
             gettimeofday(&optv[0], NULL);
             ++nrefresh;
