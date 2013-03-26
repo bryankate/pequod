@@ -56,11 +56,36 @@ Table::~Table() {
     }
 }
 
-auto Table::create_table_for(Str key) -> Table::store_type::iterator {
-    assert(triecut_ && triecut_ <= key.length());
+Table* Table::next_table_for(Str key) {
+    if (subtable_hashable()) {
+        if (Table** tp = subtables_.get_pointer(subtable_hash_for(key)))
+            return *tp;
+    } else {
+        auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+        if (it != store_.end() && it->key() == key.prefix(triecut_))
+            return &it->table();
+    }
+    return this;
+}
+
+Table* Table::make_next_table_for(Str key) {
+    bool can_hash = subtable_hashable();
+    if (can_hash) {
+        if (Table* t = subtables_[subtable_hash_for(key)])
+            return t;
+    }
+
+    auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+    if (it != store_.end() && it->key() == key.prefix(triecut_))
+        return &it->table();
+
     Table* t = new Table(key.prefix(triecut_), this, server_);
     t->all_pull_ = false;
-    return store_.insert(*t).first;
+    store_.insert_before(it, *t);
+
+    if (can_hash)
+        subtables_[subtable_hash_for(key)] = t;
+    return t;
 }
 
 auto Table::lower_bound(Str key) -> iterator {

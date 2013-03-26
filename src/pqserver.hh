@@ -73,6 +73,8 @@ class Table : public Datum {
     int triecut_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    enum { subtable_hash_size = 8 };
+    HashTable<uint64_t, Table*> subtables_;
     unsigned njoins_;
     uint64_t flush_at_;
     bool all_pull_;
@@ -87,7 +89,10 @@ class Table : public Datum {
     uint64_t nvalidate_;
 
   private:
-    store_type::iterator create_table_for(Str key);
+    inline bool subtable_hashable() const;
+    inline uint64_t subtable_hash_for(Str key) const;
+    Table* next_table_for(Str key);
+    Table* make_next_table_for(Str key);
     std::pair<store_type::iterator, bool> prepare_modify(Str key, const SinkRange* sink, store_type::insert_commit_data& cd);
     void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const SinkRange* sink, String value);
     void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
@@ -249,51 +254,53 @@ inline auto Table::end() -> iterator {
     return iterator(this, store_.end());
 }
 
+inline bool Table::subtable_hashable() const {
+    return triecut_ - name().length() - 1 <= subtable_hash_size;
+}
+
+inline uint64_t Table::subtable_hash_for(Str key) const {
+    union {
+        uint64_t u;
+        char s[8];
+    } x;
+    x.u = 0;
+    memcpy(&x.s[0], key.data() + name().length() + 1, triecut_ - name().length() - 1);
+    return x.u;
+}
+
 inline Table& Table::table_for(Str key) {
-    Table* t = this;
-    while (t->triecut_ && t->triecut_ <= key.length()) {
-        auto it = t->store_.lower_bound(key.prefix(t->triecut_), DatumCompare());
-        if (it == t->store_.end() || it->key() != key.prefix(t->triecut_))
-            break;
-        t = &it->table();
-    }
+    Table* t = this, *tt;
+    while (t->triecut_ && t->triecut_ <= key.length()
+           && (tt = t->next_table_for(key)) != t)
+        t = tt;
     return *t;
 }
 
 inline Table& Table::table_for(Str first, Str last) {
-    Table* t = this;
+    Table* t = this, *tt;
     while (t->triecut_ && first.length() >= t->triecut_
            && last.length() >= t->triecut_
-           && memcmp(first.data(), last.data(), t->triecut_) == 0) {
-        auto it = t->store_.lower_bound(first.prefix(t->triecut_), DatumCompare());
-        if (it == t->store_.end() || it->key() != first.prefix(t->triecut_))
-            break;
-        t = &it->table();
-    }
+           && memcmp(first.data(), last.data(), t->triecut_) == 0
+           && (tt = t->next_table_for(first)) != t)
+        t = tt;
     return *t;
 }
 
 inline Table& Table::make_table_for(Str key) {
-    Table* t = this;
-    while (t->triecut_ && t->triecut_ <= key.length()) {
-        auto it = t->store_.lower_bound(Str(key.data(), t->triecut_), DatumCompare());
-        if (it == t->store_.end() || it->key() != Str(key.data(), t->triecut_))
-            it = t->create_table_for(key);
-        t = &it->table();
-    }
+    Table* t = this, *tt;
+    while (t->triecut_ && t->triecut_ <= key.length()
+           && (tt = t->make_next_table_for(key)) != t)
+        t = tt;
     return *t;
 }
 
 inline Table& Table::make_table_for(Str first, Str last) {
-    Table* t = this;
+    Table* t = this, *tt;
     while (t->triecut_ && first.length() >= t->triecut_
            && last.length() >= t->triecut_
-           && memcmp(first.data(), last.data(), t->triecut_) == 0) {
-        auto it = t->store_.lower_bound(Str(first.data(), t->triecut_), DatumCompare());
-        if (it == t->store_.end() || it->key() != Str(first.data(), t->triecut_))
-            it = t->create_table_for(first);
-        t = &it->table();
-    }
+           && memcmp(first.data(), last.data(), t->triecut_) == 0
+           && (tt = t->make_next_table_for(first)) != t)
+        t = tt;
     return *t;
 }
 
