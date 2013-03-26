@@ -120,8 +120,20 @@ for m in modes:
 exps.append({'name': "real_twitter", 'defs': real_twitter, 'xlabel': ''})
 
 # redis_hackernews. Document here.
-cmd = "./obj/pqserver --hn --redis --nops=1000000 --large"
+cmdbase = "./obj/pqserver --hn --redis --nops=1000000 --large"
 server = "cd scripts/redis-run; bash start.sh"
+redis_hn = []
+redis_hn.append(
+    {'plotgroup': "remote_push",
+     'plotkey': "Pequod_hn",
+     'server': "./obj/pqserver -kl9901",
+     'cmd' : '%s --client=9901' % cmdbase})
+redis_hn.append(
+    {'plotgroup': "redis",
+     'plotkey': "hn",
+     'server': "cd scripts/redis-run; bash start.sh",
+     'cmd' : '%s' % cmdbase})
+exps.append({'name' : 'redis_hn', 'defs': redis_hn, 'xlabel' : 'System'})
 
 # redis_micro
 cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=50"
@@ -133,7 +145,7 @@ redis_micro.append(
      'cmd': '%s --client=9901' % cmdbase})
 redis_micro.append(
     {'plotgroup': "redis",
-     'plotkey' : "redis_micro",
+     'plotkey' : "micro",
      'server' : "cd scripts/redis-run; bash start.sh",
      'cmd' : '%s --client_push --redis ' % cmdbase })
 exps.append({'name': 'redis_micro_16', 'defs': redis_micro, 'xlabel' : 'System'})
