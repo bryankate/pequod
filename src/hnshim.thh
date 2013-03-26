@@ -180,8 +180,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
         // Materialize karma in a separate table
         printf("Materializing karma table\n");
         join_str = "k|<author:7> = "
-            "using a|<author:7><seqid:7> "
-            "count v|<author><seqid>|<voter:7>";
+            "count v|<author><seqid:7>|<voter:7>";
         start = "k|";
         end = "k}";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
