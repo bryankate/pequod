@@ -171,13 +171,14 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     assert(tname);
     make_table(tname).add_join(first, last, join, errh);
 
-    // handle cuts
-    for (int i = 0; i != join->npattern(); ++i) {
-        Table& t = make_table(join->pattern(i).table_name());
-        int tc = join->pattern_subtable_length(i);
-        if (t.triecut_ == 0 && t.store_.empty() && tc)
-            t.triecut_ = tc;
-    }
+    // handle cuts: push only
+    if (join->maintained())
+        for (int i = 0; i != join->npattern(); ++i) {
+            Table& t = make_table(join->pattern(i).table_name());
+            int tc = join->pattern_subtable_length(i);
+            if (t.triecut_ == 0 && t.store_.empty() && tc)
+                t.triecut_ = tc;
+        }
 }
 
 auto Table::insert(Table& t) -> local_iterator {
