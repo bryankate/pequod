@@ -189,6 +189,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
     if (ma) {
         // Materialize all articles
         printf("Materializing all article pages\n");
+        printf("Articles\n");
         start = "ma|";
         end = "ma}";
         // Materialize articles
@@ -196,11 +197,13 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
             "a|<author><seqid> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
 
+        printf("Votes\n");
         // Materialize votes
         join_str = "ma|<author:7><seqid:7>|v = "
             "count v|<author><seqid>|<voter:7> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[1])); } 
 
+        printf("Comments\n");
         // Materialize comments
         join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> = "
             "c|<author><seqid>|<cid>|<commenter> ";
@@ -208,17 +211,21 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
 
     } 
     if (ma && !mk) {
-        // Materialize karma inline
+        printf("Materialize karma inline\n");
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
             "using c|<aid>|<cid>|<commenter> "
             "count v|<commenter><seq:7>|<voter:7>";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     if (ma && mk) {
-        // Materialize karma inline
+        printf("Materialize karma inline from karma table\n");
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
-            "k|<commenter>";
+            "using c|<aid>|<cid>|<commenter> "
+            "pull copy k|<commenter>";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
+    }
+    for (int i =0; i < 4; i++) {
+        std::cout << j[i] << "\n";
     }
     e();
 }
