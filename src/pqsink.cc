@@ -232,9 +232,9 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
-    : ServerRangeBase(rm.first, rm.last), jr_(jr), refcount_(0),
+    : ServerRangeBase(rm.first, rm.last), hint_{nullptr},
       dangerous_slot_(rm.dangerous_slot),
-      hint_{nullptr}, data_free_(uintptr_t(-1)) {
+      jr_(jr), refcount_(0), data_free_(uintptr_t(-1)) {
     Join* j = jr_->join();
     if (j->maintained())
         expires_at_ = 0;
@@ -344,6 +344,7 @@ void SinkRange::invalidate() {
             }
 
         ibegin_ = Str();
+        table_ = nullptr;
         if (refcount_ == 0)
             delete this;
     }

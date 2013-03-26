@@ -56,8 +56,11 @@ void SourceRange::remove_sink(SinkRange* sink, Str context) {
 void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
     using std::swap;
     result* endit = results_.end();
-    for (result* it = results_.begin(); it != endit; )
+    for (result* it = results_.begin(); it != endit; ) {
+        if (it + 1 != endit)
+            (it + 1)->sink->prefetch();
         if (it->sink->valid()) {
+            it->sink->table()->prefetch();
             unsigned sink_mask = it->sink ? it->sink->context_mask() : 0;
             if (sink_mask)
                 join_->expand_sink_key_context(it->sink->context());
@@ -72,6 +75,7 @@ void SourceRange::notify(const Datum* src, const String& old_value, int notifier
             results_.pop_back();
             --endit;
         }
+    }
     if (results_.empty())
         const_cast<SourceRange*>(this)->kill();
 }

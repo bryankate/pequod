@@ -23,6 +23,7 @@ class Table : public Datum {
     typedef Str key_const_reference;
     inline Str name() const;
     inline Str hashkey() const;
+    inline void prefetch() const;
 
     typedef ServerStore::iterator local_iterator;
     inline local_iterator lbegin();
@@ -223,6 +224,14 @@ inline const Table& Datum::table() const {
 
 inline Table& Datum::table() {
     return static_cast<Table&>(*this);
+}
+
+inline void Table::prefetch() const {
+    ::prefetch(&store_);
+}
+
+inline void SinkRange::prefetch() const {
+    ::prefetch(&table_);
 }
 
 inline auto Table::lbegin() -> local_iterator {
