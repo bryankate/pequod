@@ -34,6 +34,10 @@ Table::Table(Str name, Table* parent, Server* server)
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent},
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
+          if (name == "t" || name == "s" || name == "p")
+              triecut_ = 7;
+          else if (name == "cs")
+              triecut_ = 8;
 }
 
 Table::~Table() {
