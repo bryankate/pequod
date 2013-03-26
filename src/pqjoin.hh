@@ -54,8 +54,9 @@ struct RangeMatch {
     Str first;
     Str last;
     Match match;
+    int dangerous_slot;
     inline RangeMatch(Str f, Str l);
-    inline RangeMatch(Str f, Str l, const Match& m);
+    inline RangeMatch(Str f, Str l, const Match& m, int ds = -1);
 };
 
 class Pattern {
@@ -242,11 +243,11 @@ inline void Match::restore(const state& state) {
 }
 
 inline RangeMatch::RangeMatch(Str f, Str l)
-    : first(f), last(l) {
+    : first(f), last(l), dangerous_slot(-1) {
 }
 
-inline RangeMatch::RangeMatch(Str f, Str l, const Match& m)
-    : first(f), last(l), match(m) {
+inline RangeMatch::RangeMatch(Str f, Str l, const Match& m, int ds)
+    : first(f), last(l), match(m), dangerous_slot(ds) {
 }
 
 inline int Pattern::key_length() const {

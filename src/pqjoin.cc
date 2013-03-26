@@ -42,32 +42,45 @@ void Pattern::match_range(RangeMatch& rm) const {
     for (const uint8_t* p = pat_; p != pat_ + plen_ && fs != efs; ++p)
         if (*p < 128) {
             if (*fs != *p || *ls != *p)
-                return;
+                goto done;
             ++fs, ++ls;
         } else {
             int slot = *p - 128;
+            const uint8_t* fs1 = fs;
             const uint8_t* ms = rm.match.data(slot);
             int ml = rm.match.known_length(slot);
             int mp = 0;
             while (mp != ml) {
-                if (fs + mp == efs || fs[mp] != ms[mp] || ls[mp] != ms[mp])
-                    return;
-                ++mp;
+                if (fs == efs || *fs != ms[mp] || *ls != ms[mp])
+                    goto done;
+                ++mp, ++fs, ++ls;
             }
-            while (mp != slotlen_[slot] && fs + mp != efs
-                   && fs[mp] == ls[mp])
-                ++mp;
-            if (mp != slotlen_[slot] && fs + slotlen_[slot] == efs
-                && fs[mp] + 1 == ls[mp]) {
-                for (int xp = mp + 1; xp != slotlen_[slot]; ++xp)
+            while (mp != slotlen_[slot] && fs != efs && *fs == *ls)
+                ++mp, ++fs, ++ls;
+            if (mp != slotlen_[slot] && fs1 + slotlen_[slot] == efs
+                && *fs + 1 == *ls) {
+                int mpleft = slotlen_[slot] - mp;
+                for (int xp = 1; xp != mpleft; ++xp)
                     if (fs[xp] != 255 || ls[xp] != 0)
                         goto do_not_extend;
-                mp = slotlen_[slot];
-            do_not_extend: ;
+                fs += mpleft, ls += mpleft, mp += mpleft;
             }
+        do_not_extend:
             if (mp != ml)
-                rm.match.set_slot(slot, fs, mp);
-            fs += mp, ls += mp;
+                rm.match.set_slot(slot, fs1, mp);
+        }
+ done:
+    rm.dangerous_slot = -1;
+    int dangerous_slot = -1;
+    for (const uint8_t* p = pat_; p != pat_ + plen_; ++p)
+        if (*p >= 128) {
+            int slot = *p - 128;
+            if (dangerous_slot < 0) {
+                if (rm.match.known_length(slot) != slotlen_[slot])
+                    dangerous_slot = slot;
+            } else if (rm.first.length() > slotpos_[slot]
+                       || rm.last.length() > slotpos_[slot])
+                rm.dangerous_slot = dangerous_slot;
         }
 }
 
@@ -157,6 +170,12 @@ int Join::expand_first(uint8_t* buf, const Pattern& pat,
     const Pattern& sinkpat = sink();
     uint8_t* os = buf;
     Str sink_first = rm.first;
+    if (rm.dangerous_slot >= 0 && rm.match.known_length(rm.dangerous_slot)) {
+        int sp = sinkpat.slotpos_[rm.dangerous_slot];
+        int x = std::min(rm.match.known_length(rm.dangerous_slot), sink_first.length() - sp);
+        if (x > 0 && memcmp(rm.match.data(rm.dangerous_slot), sink_first.data() + sp, x) != 0)
+            sink_first = sink_first.prefix(sp);
+    }
 
     for (const uint8_t* ps = pat.pat_; ps != pat.pat_ + pat.plen_; ++ps)
         if (*ps < 128) {
@@ -220,6 +239,13 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
     const Pattern& sinkpat = sink();
     uint8_t* os = buf;
     int last_position = 0;
+    Str sink_last = rm.last;
+    if (rm.dangerous_slot >= 0 && rm.match.known_length(rm.dangerous_slot)) {
+        int sp = sinkpat.slotpos_[rm.dangerous_slot];
+        int x = std::min(rm.match.known_length(rm.dangerous_slot), sink_last.length() - sp);
+        if (x > 0 && memcmp(rm.match.data(rm.dangerous_slot), sink_last.data() + sp, x) != 0)
+            sink_last = sink_last.prefix(sp);
+    }
 
     for (const uint8_t* ps = pat.pat_; ps != pat.pat_ + pat.plen_; ++ps)
         if (*ps < 128) {
@@ -233,7 +259,7 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             int sinkpos = 0, sinklen = 0;
             if (sinkpat.has_slot(slot)) {
                 sinkpos = sinkpat.slot_position(slot);
-                sinklen = std::min(std::max(rm.last.length() - sinkpos, 0), sinkpat.slot_length(slot));
+                sinklen = std::min(std::max(sink_last.length() - sinkpos, 0), sinkpat.slot_length(slot));
             }
             if (matchlen == 0 && sinklen == 0)
                 break;
@@ -246,10 +272,10 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
             if (sinklen == sinkpat.slot_length(slot)
                 && matchlen < sinklen
                 && rm.first.length() >= sinkpos + sinklen) {
-                if (memcmp(&rm.first[sinkpos], &rm.last[sinkpos], sinklen) == 0)
+                if (memcmp(&rm.first[sinkpos], &sink_last[sinkpos], sinklen) == 0)
                     use_first = true;
-                else if (rm.last.length() == sinkpos + sinklen) {
-                    const uint8_t* ldata = rm.last.udata() + sinkpos;
+                else if (sink_last.length() == sinkpos + sinklen) {
+                    const uint8_t* ldata = sink_last.udata() + sinkpos;
                     const uint8_t* fdata = rm.first.udata() + sinkpos;
                     int x = sinklen - 1;
                     while (x >= 0 && ldata[x] == 0 && fdata[x] == 255)
@@ -266,7 +292,7 @@ int Join::expand_last(uint8_t* buf, const Pattern& pat,
                 data = rm.first.udata() + sinkpos;
                 matchlen = sinklen;
             } else {
-                data = rm.last.udata() + sinkpos;
+                data = sink_last.udata() + sinkpos;
                 matchlen = sinklen;
                 last_position = (os - buf) + sinklen;
             }

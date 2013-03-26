@@ -10,6 +10,7 @@
 namespace pq {
 class Server;
 class Match;
+class RangeMatch;
 class JoinRange;
 
 class ServerRangeBase {
@@ -53,7 +54,7 @@ class IntermediateUpdate : public ServerRangeBase {
 
 class SinkRange : public ServerRangeBase {
   public:
-    SinkRange(JoinRange* jr, Str first, Str last, const Match& m, uint64_t now);
+    SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now);
     ~SinkRange();
 
     inline void ref();
@@ -91,6 +92,7 @@ class SinkRange : public ServerRangeBase {
     Table* table_;
     int refcount_;
     unsigned context_mask_;
+    int dangerous_slot_;
     LocalStr<12> context_;
     mutable Datum* hint_;
     uint64_t expires_at_;

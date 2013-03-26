@@ -40,7 +40,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
                                     uint64_t now) {
     validate_args va(first, last, server, now, nullptr, SourceRange::notify_insert);
     join_->sink().match_range(va.rm);
-    va.sink = new SinkRange(this, first, last, va.rm.match, now);
+    va.sink = new SinkRange(this, va.rm, now);
     valid_ranges_.insert(*va.sink);
     validate_step(va, 0);
 }
@@ -223,19 +223,22 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
     j->make_context(context_, m, context_mask);
 }
 
-SinkRange::SinkRange(JoinRange* jr, Str first, Str last, const Match& m, uint64_t now)
-    : ServerRangeBase(first, last), jr_(jr), refcount_(0), hint_{nullptr},
-      data_free_(uintptr_t(-1)) {
+SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
+    : ServerRangeBase(rm.first, rm.last), jr_(jr), refcount_(0),
+      dangerous_slot_(rm.dangerous_slot),
+      hint_{nullptr}, data_free_(uintptr_t(-1)) {
     Join* j = jr_->join();
     if (j->maintained())
         expires_at_ = 0;
     else
         expires_at_ = now + j->staleness();
 
-    context_mask_ = j->known_mask(m);
-    j->make_context(context_, m, context_mask_);
+    context_mask_ = j->known_mask(rm.match);
+    j->make_context(context_, rm.match, context_mask_);
 
-    table_ = &j->server().make_table_for(first, last);
+    table_ = &j->server().make_table_for(rm.first, rm.last);
+    // if (dangerous_slot_ >= 0)
+    //     std::cerr << rm.first << " " << rm.last <<  " " << dangerous_slot_ << "\n";
 }
 
 SinkRange::~SinkRange() {
@@ -249,6 +252,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
     RangeMatch rm(ibegin(), iend());
     join()->source(joinpos).match(key, rm.match);
     join()->assign_context(rm.match, context);
+    rm.dangerous_slot = dangerous_slot_;
     uint8_t kf[key_capacity], kl[key_capacity];
     int kflen = join()->expand_first(kf, join()->sink(), rm);
     int kllen = join()->expand_last(kl, join()->sink(), rm);
