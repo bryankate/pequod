@@ -218,9 +218,11 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        SinkRange* sink, int joinpos, const Match& m,
                                        int notifier)
     : ServerRangeBase(first, last), joinpos_(joinpos), notifier_(notifier) {
-    Join* j = sink->join();
-    unsigned context_mask = (j->context_mask(joinpos) | j->source_mask(joinpos)) & ~sink->context_mask();
-    j->make_context(context_, m, context_mask);
+    if (joinpos_ >= 0) {
+        Join* j = sink->join();
+        unsigned context_mask = (j->context_mask(joinpos_) | j->source_mask(joinpos_)) & ~sink->context_mask();
+        j->make_context(context_, m, context_mask);
+    }
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
@@ -262,7 +264,23 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
     updates_.insert(*iu);
 
     table_->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
-    // std::cerr << *iu << "\n";
+    //std::cerr << *iu << "\n";
+}
+
+void SinkRange::add_invalidate(Str key) {
+    uint8_t next_key[key_capacity + 1];
+    memcpy(next_key, key.data(), key.length());
+    next_key[key.length()] = 0;
+
+    IntermediateUpdate* iu = new IntermediateUpdate
+        (key, Str(next_key, key.length() + 1), this, -1, Match(), SourceRange::notify_insert);
+    updates_.insert(*iu);
+
+    table_->invalidate_dependents(key, Str(next_key, key.length() + 1));
+    auto endit = table_->lower_bound(Str(next_key, key.length() + 1));
+    for (auto it = table_->lower_bound(key); it != endit; )
+        it = table_->erase_invalid(it);
+    //std::cerr << *iu << "\n";
 }
 
 bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu,

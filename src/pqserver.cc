@@ -134,6 +134,10 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
             n = SourceRange::notify_erase;
         } else
             goto done;
+    } else if (is_invalidate_marker(value)) {
+        invalidate_dependents(d->key());
+        const_cast<SinkRange*>(sink)->add_invalidate(key);
+        goto done;
     } else
         goto done;
 

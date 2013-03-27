@@ -49,6 +49,7 @@ class Table : public pequod_set_base_hook {
     void erase(Str key);
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
+    inline iterator erase_invalid(iterator it);
 
     inline bool flush_for_pull(uint64_t now);
 
@@ -310,6 +311,13 @@ inline void Table::invalidate_erase(Datum* d) {
     store_.erase(store_.iterator_to(*d));
     invalidate_dependents(d->key());
     d->invalidate();
+}
+
+inline auto Table::erase_invalid(iterator it) -> iterator {
+    Datum* d = it.operator->();
+    it = store_.erase(it);
+    d->invalidate();
+    return it;
 }
 
 inline bool Table::flush_for_pull(uint64_t now) {

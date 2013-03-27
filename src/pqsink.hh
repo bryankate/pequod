@@ -74,6 +74,7 @@ class SinkRange : public ServerRangeBase {
     inline void remove_datum(Datum* d) const;
 
     void add_update(int joinpos, Str context, Str key, int notifier);
+    void add_invalidate(Str key);
     inline bool need_update() const;
     void update(Str first, Str last, Server& server, uint64_t now);
 
