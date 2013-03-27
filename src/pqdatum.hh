@@ -1,8 +1,7 @@
 #ifndef PEQUOD_DATUM_HH
 #define PEQUOD_DATUM_HH
 #include <boost/intrusive/set.hpp>
-#include "string.hh"
-#include "str.hh"
+#include "pqbase.hh"
 #include "local_str.hh"
 
 namespace pq {
@@ -97,11 +96,11 @@ inline Datum::Datum(Str key, const String& value)
 }
 
 inline bool Datum::valid() const {
-    return !key_.empty();
+    return !is_invalidate_marker(value_);
 }
 
 inline void Datum::invalidate() {
-    key_ = Str();
+    value_ = invalidate_marker();
     if (refcount_ == 0)
         delete this;
 }
@@ -132,10 +131,7 @@ inline String& Datum::value() {
 }
 
 inline std::ostream& operator<<(std::ostream& stream, const Datum& d) {
-    if (!d.valid())
-        return stream << "[invalid]";
-    else
-        return stream << d.key() << "=" << d.value();
+    return stream << d.key() << "=" << (d.valid() ? d.value() : String("INVALID"));
 }
 
 } // namespace

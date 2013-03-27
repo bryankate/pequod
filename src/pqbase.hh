@@ -49,6 +49,14 @@ inline bool is_erase_marker(const String& str) {
     return str.data() == marker_data + 1;
 }
 
+inline String invalidate_marker() {
+    return String::make_stable(marker_data + 2, 1);
+}
+
+inline bool is_invalidate_marker(const String& str) {
+    return str.data() == marker_data + 2;
+}
+
 inline bool is_marker(const String& str) {
     return reinterpret_cast<uintptr_t>(str.data()) - reinterpret_cast<uintptr_t>(marker_data) < 3;
 }
