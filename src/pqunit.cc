@@ -735,13 +735,13 @@ void test_op_max() {
     CHECK_EQ(server.count(begin, end), size_t(0));
 
     server.insert("v|00000|00001", "v1");
-    server.insert("v|00000|00002", "v2");
+    server.insert("v|00000|00003", "v2");
     CHECK_EQ(server.count(begin, end), size_t(1));
     auto k0 = server.find("k|00000");
     mandatory_assert(k0);
     CHECK_EQ(k0->value(), "v2");
 
-    server.insert("v|00000|00003", "v5");
+    server.insert("v|00000|00002", "v5");
     CHECK_EQ(k0->value(), "v5");
     CHECK_EQ(server.count(begin, end), size_t(1));
 
@@ -752,6 +752,16 @@ void test_op_max() {
     server.insert("v|00001|00005", "v6");
     CHECK_EQ(k0->value(), "v6");
     CHECK_EQ(server.count(begin, end), size_t(1));
+
+    server.erase("v|00001|00004");
+    CHECK_EQ(k0->value(), "v6");
+
+    server.erase("v|00001|00005");
+    CHECK_EQ(k0->value(), pq::invalidate_marker());
+    server.validate(begin, end);
+    k0 = server.find("k|00000");
+    CHECK_EQ(!k0, 0);
+    CHECK_EQ(k0->value(), "v5");
 }
 
 void test_op_sum() {
