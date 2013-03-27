@@ -248,17 +248,6 @@ void PQHackerNewsShim<S>::post_populate(event<> e) {
             std::cout << ": end print validated [" << start << "," << end << ")\n";
             std::cout << "Finished validate.\n";
         }
-    } else if (!push_ && ma_) {
-        start = "ma|";
-        end = "ma}";
-        twait { server_.scan(start, end, make_event(scan_result)); }
-        if (log_) {
-            std::cout << ": print validated ma range [" << start << "," << end << ")\n";
-            for (bit = scan_result.begin(); bit != scan_result.end(); ++bit)
-                std::cout << "  " << bit->key() << ": " << bit->value() << "\n";
-            std::cout << ": end print validated [" << start << "," << end << ")\n";
-            std::cout << "Finished validate.\n";
-        }
     }
     e();
 }
