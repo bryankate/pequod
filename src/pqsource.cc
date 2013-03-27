@@ -133,7 +133,7 @@ void MinSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
                  return src->value();
             else if (old_value == dst->value()
                      && (notifier < 0 || src->value() != old_value))
-                assert(0 && "removing old min");
+                return invalidate_marker();
             else
                 return unchanged_marker();
         });
@@ -145,7 +145,7 @@ void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
                 return src->value();
             else if (old_value == dst->value()
                      && (notifier < 0 || src->value() != old_value))
-               assert(0 && "removing old max");
+                return invalidate_marker();
             else
                 return unchanged_marker();
         });
