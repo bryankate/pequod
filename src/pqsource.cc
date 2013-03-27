@@ -151,12 +151,8 @@ void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
         });
 }
 
-void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const {
-    long diff = (notifier == notify_update) ?
-        src->value().to_i() - old_value.to_i() :
-        src->value().to_i();
-    if (notifier == notify_erase)
-        diff *= -1;
+void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int) const {
+    long diff = src->value().to_i() - old_value.to_i();
     sink->table()->modify(sink_key, sink, [&](Datum* dst) {
             if (!dst)
                 return src->value();

@@ -128,23 +128,22 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
             p.first = store_.insert_commit(*d, cd);
             n = SourceRange::notify_insert;
         }
-        d->value().swap(value);
-
     } else if (is_erase_marker(value)) {
         if (!p.second) {
             p.first = store_.erase(p.first);
-            value = String();
             n = SourceRange::notify_erase;
         } else
-            value = unchanged_marker();
-    }
+            goto done;
+    } else
+        goto done;
 
-    sink->update_hint(store_, p.first);
-    if (!is_unchanged_marker(value))
-        notify(d, value, n);
+    d->value().swap(value);
+    notify(d, value, n);
     if (n == SourceRange::notify_erase)
         d->invalidate();
 
+ done:
+    sink->update_hint(store_, p.first);
     ++nmodify_;
 }
 

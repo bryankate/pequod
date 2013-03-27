@@ -299,7 +299,9 @@ inline auto Table::erase(iterator it) -> iterator {
     it = store_.erase(it);
     if (d->owner())
         d->owner()->remove_datum(d);
-    notify(d, String(), SourceRange::notify_erase);
+    String old_value = erase_marker();
+    std::swap(d->value(), old_value);
+    notify(d, old_value, SourceRange::notify_erase);
     d->invalidate();
     return it;
 }
