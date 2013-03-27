@@ -178,7 +178,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
 
     if (mk) {
         // Materialize karma in a separate table
-        printf("Materializing karma table\n");
+        std::cerr << "Materializing karma table\n";
         join_str = "k|<author:7> = "
             "count v|<author><seqid:7>|<voter:7>";
         start = "k|";
@@ -187,22 +187,17 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
     }
     if (ma) {
         // Materialize all articles
-        printf("Materializing all article pages\n");
-        printf("Articles\n");
+        std::cerr << "Materializing all article pages\n";
         start = "ma|";
         end = "ma}";
         // Materialize articles
         join_str = "ma|<author:7><seqid:7>|a = "
             "a|<author><seqid> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
-
-        printf("Votes\n");
         // Materialize votes
         join_str = "ma|<author:7><seqid:7>|v = "
             "count v|<author><seqid>|<voter:7> ";
         twait { this->server_.add_join(start, end, join_str, make_event(j[1])); } 
-
-        printf("Comments\n");
         // Materialize comments
         join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> = "
             "c|<author><seqid>|<cid>|<commenter> ";
@@ -210,7 +205,7 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
 
     } 
     if (ma && !mk) {
-        printf("Materialize karma inline\n");
+        std::cerr << "Materialize karma inline\n";
         mandatory_assert(false && "This is producing irregular counts");
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
             "using c|<aid>|<cid>|<commenter> "
@@ -218,14 +213,16 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     if (ma && mk) {
-        printf("Materialize karma inline from karma table\n");
+        std::cerr << "Materialize karma inline from karma table\n";
         join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
             "using c|<aid>|<cid>|<commenter> "
             "copy k|<commenter>";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
-    for (int i =0; i < 4; i++) {
-        std::cout << j[i] << "\n";
+    if (log) {
+        for (int i =0; i < 4; i++) {
+            std::cerr << j[i] << "\n";
+        }
     }
     e();
 }

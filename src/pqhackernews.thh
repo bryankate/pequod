@@ -78,7 +78,7 @@ void HackernewsRunner<S>::populate(event<> e) {
     twait { server_.initialize(hp_.log(), hp_.mk(), hp_.ma(), hp_.push(), tamer::event<>()); }
 
     if (hp_.run_only()) {
-        printf("Not populating datastore\n");
+        std::cerr << "Not populating datastore\n";
         hp_.set_defaults();
     } else {
         // Populate datastore
@@ -121,7 +121,7 @@ void HackernewsRunner<S>::populate(event<> e) {
     }
 
     twait { server_.post_populate(make_event()); }
-    std::cout << "Running with " << hp_.nusers() << " users, " << hp_.narticles() 
+    std::cerr << "Running with " << hp_.nusers() << " users, " << hp_.narticles() 
               << " articles, " << hp_.nvotes << " votes, " << hp_.ncomments << " comments." << std::endl;
     e();
 }
@@ -147,7 +147,7 @@ void HackernewsRunner<S>::run(event<> e) {
     gettimeofday(&tv[0], NULL);
 
     if (hp_.populate_only()) {
-        printf("Not running experiment\n");
+        std::cerr << "Not running experiment\n";
     } else {
         for (i = 0; i < nops; ++i) {
             p = rng(100);
@@ -187,7 +187,7 @@ void HackernewsRunner<S>::run(event<> e) {
 	.set("real_time", real_time)
         .merge(stats);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
-    std::cout << nops << " done, " << real_time << " seconds, " 
+    std::cerr << nops << " done, " << real_time << " seconds, " 
               << nops / real_time << " qps\n";
     e();
 }

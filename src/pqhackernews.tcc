@@ -25,12 +25,10 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port) {
 
     start = tstamp();
     twait { hr->populate(make_event()); }
-    printf("DONE POPULATE\n");
     midway = tstamp();
     twait { hr->run(make_event()); }
-    printf("DONE RUN\n");
     end = tstamp();
-    std::cout << "Populate took " << (midway-start)/1000000 << " Run took " << (end-midway)/1000000 << "\n";
+    std::cerr << "Populate took " << (midway-start)/1000000 << " Run took " << (end-midway)/1000000 << "\n";
     delete hr;
     delete shim;
     delete rc;
