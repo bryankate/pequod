@@ -135,6 +135,23 @@ redis_hn.append(
      'cmd' : '%s' % cmdbase})
 exps.append({'name' : 'redis_hn', 'defs': redis_hn, 'xlabel' : 'System'})
 
+
+# hackernews changing vote rate.
+cmdbase = "./obj/pqserver --hn --nops=4000000 --large"
+vote_hn = []
+vote_rate = [0, 5, 10, 20, 50]
+for vr in vote_rate:
+    vote_hn.append(
+        {'plotgroup': "karma",
+         'plotkey': vr,
+         'cmd' : '%s --vote_rate=%d' % (cmdbase, vr)})
+    vote_hn.append(
+        {'plotgroup': "ma",
+         'plotkey': vr,
+         'cmd' : '%s --vote_rate=%d --super_materialize' % (cmdbase, vr)})
+exps.append({'name' : 'vote_hn', 'defs': vote_hn, 'xlabel' : 'Vote Rate'})
+
+
 # redis_micro
 cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=50"
 redis_micro = []

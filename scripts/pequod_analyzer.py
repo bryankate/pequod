@@ -48,6 +48,9 @@ class ResultAnalyzer:
         elif self.ename.startswith == "real_twitter":
             graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime (s)", 
                                   "real_time", xcolumnName = "real_time"))
+        elif self.ename.startswith == "vote_hn":
+            graphs.append(GNUPlot(fname, "runtime", self.xlabel, "Runtime (s)", 
+                                  "real_time", xcolumnName = "real_time"))
        
         print >> f, "#", header
         plotgroups = sorted(self.exp.keys())
