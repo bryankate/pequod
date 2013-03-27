@@ -29,23 +29,28 @@ inline T table_name(const String_base<T>& key, const String_base<T>& key2) {
         return static_cast<const T&>(key).fast_substring(key.data(), key.data());
 }
 
-extern const char unchanged_marker_data[];
+extern const char marker_data[];
 extern const char erase_marker_data[];
+extern const char invalid_marker_data[];
 
 inline String unchanged_marker() {
-    return String::make_stable(unchanged_marker_data, 1);
+    return String::make_stable(marker_data, 1);
 }
 
 inline bool is_unchanged_marker(const String& str) {
-    return str.data() == unchanged_marker_data;
+    return str.data() == marker_data;
 }
 
 inline String erase_marker() {
-    return String::make_stable(erase_marker_data, 1);
+    return String::make_stable(marker_data + 1, 1);
 }
 
 inline bool is_erase_marker(const String& str) {
-    return str.data() == erase_marker_data;
+    return str.data() == marker_data + 1;
+}
+
+inline bool is_marker(const String& str) {
+    return reinterpret_cast<uintptr_t>(str.data()) - reinterpret_cast<uintptr_t>(marker_data) < 3;
 }
 
 } // namespace

@@ -45,7 +45,7 @@ class Table : public pequod_set_base_hook {
 
     void insert(Str key, String value);
     template <typename F>
-    void modify(Str key, const SinkRange* sink, const F& func);
+    inline void modify(Str key, const SinkRange* sink, const F& func);
     void erase(Str key);
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
@@ -76,6 +76,7 @@ class Table : public pequod_set_base_hook {
     Server* server_;
 
     std::pair<store_type::iterator, bool> prepare_modify(Str key, const SinkRange* sink, store_type::insert_commit_data& cd);
+    void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const SinkRange* sink, String value);
     inline void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
     bool hard_flush_for_pull(uint64_t now);
 
@@ -286,38 +287,11 @@ inline void Table::unlink_source(SourceRange* r) {
 }
 
 template <typename F>
-void Table::modify(Str key, const SinkRange* sink, const F& func) {
+inline void Table::modify(Str key, const SinkRange* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p = prepare_modify(key, sink, cd);
     Datum* d = p.second ? NULL : p.first.operator->();
-
-    String value = func(d);
-
-    SourceRange::notify_type n = SourceRange::notify_update;
-    if (is_erase_marker(value)) {
-        mandatory_assert(!p.second);
-        p.first = store_.erase(p.first);
-        value = String();
-        n = SourceRange::notify_erase;
-    } else if (!is_unchanged_marker(value)) {
-        if (p.second) {
-            d = new Datum(key, sink);
-            sink->add_datum(d);
-        }
-        d->value().swap(value);
-        if (p.second) {
-            p.first = store_.insert_commit(*d, cd);
-            n = SourceRange::notify_insert;
-        }
-    }
-
-    sink->update_hint(store_, p.first);
-    if (!is_unchanged_marker(value))
-        notify(d, value, n);
-    if (n == SourceRange::notify_erase)
-        d->invalidate();
-
-    ++nmodify_;
+    finish_modify(p, cd, d, key, sink, func(d));
 }
 
 inline auto Table::erase(iterator it) -> iterator {
