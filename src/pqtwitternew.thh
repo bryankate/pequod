@@ -192,7 +192,7 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                              "copy p|<poster>|<time> " +
                              String((pull) ? "pull " : "") +
                              "using s|<user>|<poster> "
-                             "where user:4n, time:4n, poster:4n",
+                             "where user:4nt, time:4n, poster:4nt",
                              make_event(j[0]));
 
             if (pull_celeb) {

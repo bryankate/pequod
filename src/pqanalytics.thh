@@ -146,7 +146,7 @@ AnalyticsRunner<S>::AnalyticsRunner(S& server, const Json& param)
       push_(param["push"].as_b(false)),
       proactive_(param["proactive"].as_b(false)),
       buffer_(param["buffer"].as_b(false)),
-      popduration_(param["popduration"].as_i(7200)),
+      popduration_(param["popduration"].as_i(86400)),
       duration_(param["duration"].as_i(1728000)),
       pread_(param["pread"].as_i(1)), bytes_(0) {
 }
@@ -224,9 +224,9 @@ void AnalyticsRunner<S>::run(tamer::event<> done) {
     for (time = popduration_; time != popduration_ + duration_; ++time) {
         record_bps(time, gen() % 1048576, gr.make_event());
 
-        if (gen() % 100 < pread_) {
+        if (gen() % 100000 < pread_) {
             ++nquery;
-            server_.bpm_add_count(time - 1200, time, gr.make_event(nread));
+            server_.bpm_add_count(time - 86400, time, gr.make_event(nread));
         }
 
         twait { server_.pace(make_event()); }
