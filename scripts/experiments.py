@@ -212,13 +212,42 @@ cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 
 bar = []
 bar.append(
     {'plotgroup' : 'Pequod',
-     'plotkey' : pr,
+     'plotkey' : 45,
      'server' : './obj/pqserver -kl=7277',
      'cmd': '%s --client=7277' % cmdbase })
 bar.append(
     {'plotgroup' : 'Client_push',
-     'plotkey' : pr,
+     'plotkey' : 45,
      'server' : './obj/pqserver -kl=7277',
      'cmd': '%s --client=7277 --client_push' % cmdbase })
 exps.append({'name' : 'remote_client_push_16_bar', 'defs' : bar, 'xlabel' : "System"})
+
+# breakdown_bar
+cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=45"
+breakdown_bar = []
+breakdown_bar.append(
+    {'plotgroup' : 'Base',
+     'plotkey' : 45,
+     'build' : './configure --disable-hint --disable-value-sharing; make -j8',
+     'server' : './obj/pqserver -kl=7277',
+     'cmd': '%s --client=7277' % cmdbase })
+breakdown_bar.append(
+    {'plotgroup' : 'Hint',
+     'plotkey' : 45,
+     'build' : './configure --disable-value-sharing; make -j8',
+     'server' : './obj/pqserver -kl=7277',
+     'cmd': '%s --client=7277' % cmdbase })
+breakdown_bar.append(
+    {'plotgroup' : 'Hint_Value_Sharing',
+     'plotkey' : 45,
+     'build' : './configure ; make -j8',
+     'server' : './obj/pqserver -kl=7277',
+     'cmd': '%s --client=7277' % cmdbase })
+breakdown_bar.append(
+    {'plotgroup' : 'Hint_Value_Sharing_no_RPC',
+     'plotkey' : 45,
+     'build' : './configure ; make -j8',
+     'cmd': '%s' % cmdbase })
+
+exps.append({'name': 'breakdown_bar', 'defs': breakdown_bar, 'xlabel' : 'Configuration'})
 
