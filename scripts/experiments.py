@@ -205,3 +205,20 @@ for pr in prefresh:
          'cmd': '%s --prefresh=%d' % (cmdbase, pr) })
 
 exps.append({'name': 'breakdown', 'defs': breakdown, 'xlabel' : 'Configuration'})
+
+# bar graph for remote_client_push v.s Pequod.
+# Each refresh returns 20 tweets (i.e. with 45% refresh ratio)
+cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro --nfollower=16 --prefresh=45"
+bar = []
+bar.append(
+    {'plotgroup' : 'Pequod',
+     'plotkey' : pr,
+     'server' : './obj/pqserver -kl=7277',
+     'cmd': '%s --client=7277' % cmdbase })
+bar.append(
+    {'plotgroup' : 'Client_push',
+     'plotkey' : pr,
+     'server' : './obj/pqserver -kl=7277',
+     'cmd': '%s --client=7277 --client_push' % cmdbase })
+exps.append({'name' : 'remote_client_push_16_bar', 'defs' : bar, 'xlabel' : "System"})
+
