@@ -54,6 +54,22 @@ for nfollower in [1, 16, 32]:
     ename = "ehash_%d" % nfollower
     exps.append({'name': ename, 'defs': ehash, 'xlabel' : 'refresh ratio (%)'})
 
+# hash_user
+cmdbase = "./obj/pqserver --nops=2000000 --rwmicro --popduration=100000 "
+nusers = [2000, 4000, 8000, 16000, 32000, 64000]
+ehash_user = []
+for nuser in nusers:
+    ehash_user.append(
+        {'plotgroup': "Hash",
+         'plotkey' : nuser,
+         'cmd': "%s --prefresh=80 --nusers=%d --client_push -b" % (cmdbase, nuser)})
+    ehash_user.append(
+        {'plotgroup': "Pequod",
+         'plotkey' : nuser,
+         'cmd': "%s --prefresh=80 --nusers=%d" % (cmdbase, nuser)})
+
+exps.append({'name': 'ehash_user', 'defs': ehash_user, 'xlabel' : 'Number of users'})
+
 # client_push
 cmdbase = "./obj/pqserver --nusers=2000 --nops=2000000 --rwmicro "
 prefresh = [0, 5, 10, 20, 40, 60, 80, 90, 95, 100]
