@@ -224,7 +224,7 @@ void AnalyticsRunner<S>::run(tamer::event<> done) {
     for (time = popduration_; time != popduration_ + duration_; ++time) {
         record_bps(time, gen() % 1048576, gr.make_event());
 
-        if (gen() % 100 < pread_) {
+        if (gen() % 100000 < pread_) {
             ++nquery;
             server_.bpm_add_count(time - 86400, time, gr.make_event(nread));
         }
