@@ -10,13 +10,30 @@ namespace pq {
 
 const Datum Datum::empty_datum{Str()};
 const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
-Table Table::empty_table{Str()};
+Table Table::empty_table{Str(), nullptr, nullptr};
+const char Datum::table_marker[] = "TABLE MARKER";
 
-Table::Table(Str name)
-    : ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      njoins_(0), flush_at_(0), all_pull_(true), namelen_(name.length()) {
-    assert(namelen_ <= (int) sizeof(name_));
-    memcpy(name_, name.data(), namelen_);
+void Table::iterator::fix() {
+ retry:
+    if (it_ == table_->store_.end()) {
+        if (table_->parent_) {
+            it_ = table_->parent_->store_.iterator_to(*table_);
+            table_ = table_->parent_;
+            ++it_;
+            goto retry;
+        }
+    } else if (it_->is_table()) {
+        table_ = &it_->table();
+        it_ = table_->store_.begin();
+        goto retry;
+    }
+}
+
+Table::Table(Str name, Table* parent, Server* server)
+    : Datum(name, String::make_stable(Datum::table_marker)),
+      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
+      server_{server}, parent_{parent},
+      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
 }
 
 Table::~Table() {
@@ -27,8 +44,84 @@ Table::~Table() {
     while (JoinRange* r = join_ranges_.unlink_leftmost_without_rebalance())
         delete r;
     // delete store last since join_ranges_ have refs to Datums
-    while (Datum* d = store_.unlink_leftmost_without_rebalance())
-        delete d;
+    while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
+        if (d->is_table())
+            delete &d->table();
+        else
+            delete d;
+    }
+}
+
+Table* Table::next_table_for(Str key) {
+    if (subtable_hashable()) {
+        if (Table** tp = subtables_.get_pointer(subtable_hash_for(key)))
+            return *tp;
+    } else {
+        auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+        if (it != store_.end() && it->key() == key.prefix(triecut_))
+            return &it->table();
+    }
+    return this;
+}
+
+Table* Table::make_next_table_for(Str key) {
+    bool can_hash = subtable_hashable();
+    if (can_hash) {
+        if (Table* t = subtables_[subtable_hash_for(key)])
+            return t;
+    }
+
+    auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+    if (it != store_.end() && it->key() == key.prefix(triecut_))
+        return &it->table();
+
+    Table* t = new Table(key.prefix(triecut_), this, server_);
+    t->all_pull_ = false;
+    store_.insert_before(it, *t);
+
+    if (can_hash)
+        subtables_[subtable_hash_for(key)] = t;
+    return t;
+}
+
+auto Table::lower_bound(Str key) -> iterator {
+    Table* tbl = this;
+    int len;
+ retry:
+    len = tbl->triecut_ ? tbl->triecut_ : key.length();
+    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    if (len == tbl->triecut_ && it != tbl->store_.end() && it->key() == key.prefix(len)) {
+        assert(it->is_table());
+        tbl = static_cast<Table*>(it.operator->());
+        goto retry;
+    }
+    return iterator(tbl, it);
+}
+
+size_t Table::count(Str key) const {
+    const Table* tbl = this;
+    int len;
+ retry:
+    len = tbl->triecut_ ? tbl->triecut_ : key.length();
+    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    if (it != tbl->store_.end() && it->key() == key.prefix(len)) {
+        if (len == tbl->triecut_) {
+            assert(it->is_table());
+            tbl = static_cast<const Table*>(it.operator->());
+            goto retry;
+        } else
+            return 1;
+    }
+    return 0;
+}
+
+size_t Table::size() const {
+    size_t x = store_.size();
+    if (triecut_)
+        for (auto& d : store_)
+            if (d.is_table())
+                x += static_cast<const Table&>(d).size();
+    return x;
 }
 
 void Table::add_source(SourceRange* r) {
@@ -77,10 +170,27 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     Str tname = table_name(first, last);
     assert(tname);
     make_table(tname).add_join(first, last, join, errh);
+
+    // handle cuts: push only
+    if (join->maintained())
+        for (int i = 0; i != join->npattern(); ++i) {
+            Table& t = make_table(join->pattern(i).table_name());
+            int tc = join->pattern_subtable_length(i);
+            if (t.triecut_ == 0 && t.store_.empty() && tc)
+                t.triecut_ = tc;
+        }
+}
+
+auto Table::insert(Table& t) -> local_iterator {
+    assert(!triecut_ || t.name().length() < triecut_);
+    store_type::insert_commit_data cd;
+    auto p = store_.insert_check(t.name(), DatumCompare(), cd);
+    assert(p.second);
+    return store_.insert_commit(t, cd);
 }
 
 void Table::insert(Str key, String value) {
-    assert(namelen_);
+    assert(!triecut_ || key.length() < triecut_);
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -97,8 +207,17 @@ void Table::insert(Str key, String value) {
     all_pull_ = false;
 }
 
+void Table::erase(Str key) {
+    assert(!triecut_ || key.length() < triecut_);
+    auto it = store_.find(key, DatumCompare());
+    if (it != store_.end())
+        erase(iterator(this, it));
+    ++nerase_;
+}
+
 std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const SinkRange* sink, ServerStore::insert_commit_data& cd) {
     assert(name() && sink);
+    assert(!triecut_ || key.length() < triecut_);
     std::pair<ServerStore::iterator, bool> p;
     Datum* hint = sink->hint();
     if (!hint || !hint->valid()) {
@@ -108,6 +227,8 @@ std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink
         p.first = store_.iterator_to(*hint);
         if (hint->key() == key)
             p.second = false;
+        else if (hint == store_.rbegin().operator->())
+            p = store_.insert_check(store_.end(), key, DatumCompare(), cd);
         else {
             ++p.first;
             p = store_.insert_check(p.first, key, DatumCompare(), cd);
@@ -152,8 +273,12 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
 }
 
 auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
-    if (njoins_ != 0) {
-        if (njoins_ == 1) {
+    Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
+    if (t->njoins_ != 0) {
+        if (t->njoins_ == 1) {
             auto it = store_.lower_bound(first, DatumCompare());
             auto itx = it;
             if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
@@ -162,17 +287,79 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
                 && itx->owner()->valid() && !itx->owner()->has_expired(now)
                 && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
                 && !itx->owner()->need_update())
-                return it;
+                return iterator(this, it);
         }
-        for (auto it = join_ranges_.begin_overlaps(first, last);
-             it != join_ranges_.end(); ++it)
+        for (auto it = t->join_ranges_.begin_overlaps(first, last);
+             it != t->join_ranges_.end(); ++it)
             it->validate(first, last, *server_, now);
     }
-    return store_.lower_bound(first, DatumCompare());
+    return lower_bound(first);
+}
+
+void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
+    Str key(d->key());
+    Table* t = &table_for(key);
+ retry:
+    for (auto it = t->source_ranges_.begin_contains(key);
+         it != t->source_ranges_.end(); ) {
+        // SourceRange::notify() might remove the SourceRange from the tree
+        SourceRange* source = it.operator->();
+        ++it;
+        if (source->check_match(key))
+            source->notify(d, old_value, notifier);
+    }
+    if ((t = t->parent_) && t->triecut_)
+        goto retry;
+}
+
+void Table::invalidate_dependents(Str key) {
+    Table* t = &table_for(key);
+ retry:
+    for (auto it = t->source_ranges_.begin_contains(key);
+         it != t->source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+    if ((t = t->parent_) && t->triecut_)
+        goto retry;
+}
+
+inline void Table::invalidate_dependents_local(Str first, Str last) {
+    for (auto it = source_ranges_.begin_overlaps(first, last);
+         it != source_ranges_.end(); ) {
+        // simple, but obviously we could do better
+        SourceRange* source = it.operator->();
+        ++it;
+        source->invalidate();
+    }
+}
+
+void Table::invalidate_dependents_down(Str first, Str last) {
+    for (auto it = store_.lower_bound(first.prefix(triecut_), DatumCompare());
+         it != store_.end() && it->key() < last;
+         ++it)
+        if (it->is_table()) {
+            it->table().invalidate_dependents_local(first, last);
+            if (it->table().triecut_)
+                it->table().invalidate_dependents_down(first, last);
+        }
+}
+
+void Table::invalidate_dependents(Str first, Str last) {
+    Table* t = &table_for(first, last);
+    if (triecut_)
+        t->invalidate_dependents_down(first, last);
+ retry:
+    t->invalidate_dependents_local(first, last);
+    if ((t = t->parent_) && t->triecut_)
+        goto retry;
 }
 
 bool Table::hard_flush_for_pull(uint64_t now) {
     while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
+        assert(!d->is_table());
         invalidate_dependents(d->key());
         d->invalidate();
     }
@@ -180,20 +367,29 @@ bool Table::hard_flush_for_pull(uint64_t now) {
     return true;
 }
 
-void Table::erase(Str key) {
-    auto it = store_.find(key, DatumCompare());
-    if (it != store_.end())
-        erase(it);
-    ++nerase_;
+Server::Server()
+    : supertable_(Str(), nullptr, this), last_validate_at_(0), validate_time_(0), insert_time_(0) {
+}
+
+auto Server::create_table(Str tname) -> Table::local_iterator {
+    assert(tname);
+    Table* t = new Table(tname, &supertable_, this);
+    return supertable_.insert(*t);
 }
 
 size_t Server::validate_count(Str first, Str last) {
-    Table& t = make_table(table_name(first));
-    auto it = validate(first, last);
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
+    Table& t = make_table_for(first, last);
+    auto it = t.validate(first, last, next_validate_at());
     auto itend = t.end();
     size_t n = 0;
     for (; it != itend && it->key() < last; ++it)
         ++n;
+
+    gettimeofday(&tv[1], NULL);
+    validate_time_ += to_real(tv[1] - tv[0]);
     return n;
 }
 
@@ -207,6 +403,14 @@ void Table::add_stats(Json& j) const {
     for (auto& jr : join_ranges_)
         j["sink_ranges_size"] += jr.valid_ranges_size();
     j["nvalidate"] += nvalidate_;
+
+    if (triecut_)
+        for (auto& d : store_)
+            if (d.is_table()) {
+                j["nsubtables"]++;
+                j["store_size"]--;
+                d.table().add_stats(j);
+            }
 }
 
 Json Server::stats() const {
@@ -216,7 +420,9 @@ Json Server::stats() const {
     getrusage(RUSAGE_SELF, &ru);
 
     Json tables = Json::make_array();
-    for (auto& t : tables_by_name_) {
+    for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
+        assert(it->is_table());
+        Table& t = it->table();
         Json j = Json().set("name", t.name());
         t.add_stats(j);
         for (auto it = j.obegin(); it != j.oend(); )
@@ -239,6 +445,9 @@ Json Server::stats() const {
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
+        .set("server_validate_time", validate_time_)
+        .set("server_insert_time", insert_time_)
+        .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)
         .set("server_max_rss_mb", ru.ru_maxrss / 1024);
     if (SourceRange::allocated_key_bytes)
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
@@ -258,11 +467,14 @@ void Table::print_sources(std::ostream& stream) const {
 void Server::print(std::ostream& stream) {
     stream << "sources:" << std::endl;
     bool any = false;
-    for (auto& t : tables_by_name_)
+    for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
+        assert(it->is_table());
+        Table& t = it->table();
         if (!t.source_ranges_.empty()) {
             stream << t.source_ranges_;
             any = true;
         }
+    }
     if (!any)
         stream << "<empty>\n";
 }

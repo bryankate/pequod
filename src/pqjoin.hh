@@ -116,6 +116,10 @@ class Join {
     void clear();
     void attach(Server& server);
 
+    inline int npattern() const;
+    inline const Pattern& pattern(int i) const;
+    int pattern_subtable_length(int i) const;
+
     inline int nsource() const;
     inline int completion_source() const;
     inline const Pattern& sink() const;
@@ -167,6 +171,8 @@ class Join {
 
     bool same_structure(const Join& x) const;
 
+    static bool allow_subtables;
+
   private:
     enum { pcap = source_capacity + 1 };
     int npat_;
@@ -183,7 +189,11 @@ class Join {
     uint8_t context_length_[1 << slot_capacity];
     mutable LocalStr<24> sink_key_;
 
-    enum { stype_unknown = 0, stype_text, stype_decimal, stype_binary_number };
+    enum {
+        stype_unknown = 0, stype_text = 1, stype_decimal = 2,
+        stype_binary_number = 3, stype_type_mask = 3,
+        stype_subtables = 4
+    };
     String slotname_[slot_capacity];
     uint8_t slottype_[slot_capacity];
     int refcount_;
@@ -339,6 +349,15 @@ inline void Join::ref() {
 inline void Join::deref() {
     if (--refcount_ == 0)
 	delete this;
+}
+
+inline int Join::npattern() const {
+    return npat_;
+}
+
+inline const Pattern& Join::pattern(int i) const {
+    assert((unsigned) i < (unsigned) npat_);
+    return pat_[i];
 }
 
 inline int Join::nsource() const {

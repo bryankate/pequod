@@ -58,7 +58,7 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
         rj[2] = pq_ok;
         String first = j[2].as_s(), last = j[3].as_s();
         pq::Table& t = server.table_for(first);
-        auto it = t.validate(first, last, server.next_validate_at());
+        auto it = server.validate(first, last);
         auto itend = t.end();
         assert(!aj.shared());
         aj.clear();

@@ -148,18 +148,37 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                 int celebrity_type, uint32_t nusers, bool pure_server_pull,
                                 tamer::event<> done) {
     tvars { Json j[4]; }
-    if (client_push)
-        done();
-    else {
-        twait {
+    twait {
+        if (client_push) {
+            // The purpose of this join is to install triecuts for fairness
+            server_.add_join("xxx|", "xxx}",
+                             "xxx|<user>|<time>|<poster> = "
+                             "copy p|<poster>|<time> "
+                             "using s|<user>|<poster>, "
+                             "t|<user>|<time>|<poster> pull "
+                             "where user:5t, time:10, poster:5t",
+                             make_event(j[0]));
+        } else {
             server_.add_join("t|", "t}",
                              "t|<user>|<time>|<poster> = "
                              "copy p|<poster>|<time> "
                              "using s|<user>|<poster> "
                              + String(server_pull ? "pull " : "") +
-                             "where user:5, time:10, poster:5",
+                             "where user:5t, time:10, poster:5t",
                              make_event(j[0]));
-            if (celebrity && celebrity_type == 3) {
+            if (celebrity && celebrity_type == 4) {
+                celeb_.assign(nusers, false);
+                server_.add_join("ct|", "ct}",
+                                 "ct|<time>|<poster> = copy cp|<poster>|<time> "
+                                 "where poster:5, time:10",
+                                 make_event(j[3]));
+                server_.add_join("t|", "t}",
+                                 "t|<user>|<time>|<poster> = "
+                                 "pull copy ct|<time>|<poster> "
+                                 "using filter s|<user>|<poster> "
+                                 "where user:5, time:10, poster:5",
+                                 make_event(j[1]));
+            } else if (celebrity && celebrity_type == 3) {
                 celeb_.assign(nusers, false);
                 server_.add_join("ct|", "ct}",
                                  "ct|<time>|<poster> = copy cp|<poster>|<time> "
@@ -169,7 +188,7 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  "cs|<user>|<poster> = "
                                  "copy celeb|<poster> "
                                  "using s|<user>|<poster> "
-                                 "where user:5, poster:5",
+                                 "where user:5t, poster:5",
                                  make_event(j[2]));
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
@@ -183,7 +202,7 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  "cs|<user>|<poster> = "
                                  "copy celeb|<poster> "
                                  "using s|<user>|<poster> "
-                                 "where user:5, poster:5",
+                                 "where user:5t, poster:5",
                                  make_event(j[2]));
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
@@ -202,11 +221,11 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  make_event(j[1]));
             }
         }
-        for (int i = 0; i < 4; ++i)
-            if (j[i] && !j[i]["ok"])
-                std::cerr << "join error: " << j[i] << "\n";
-        done();
     }
+    for (int i = 0; i < 4; ++i)
+        if (j[i] && !j[i]["ok"])
+            std::cerr << "join error: " << j[i] << "\n";
+    done();
 }
 
 template <typename S> template <typename R>
@@ -398,6 +417,9 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
     gen.seed(0);
     tp_.create_subscriptions(gen);
 
+    twait { server_.initialize(tp_.push(), tp_.pull(), tp_.celebrity(),
+                               tp_.celebrity_type(), tp_.nusers(), false, make_event()); }
+
     twait {
         for (auto& x : tp_.subscriptions()) {
             server_.subscribe(x.first, x.second, make_event());
@@ -406,9 +428,6 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
                 printf("subscribe s|%05d|%05d\n", x.first, x.second);
         }
     }
-
-    twait { server_.initialize(tp_.push(), tp_.pull(), tp_.celebrity(),
-                               tp_.celebrity_type(), tp_.nusers(), false, make_event()); }
 
     if (tp_.celebrity())
         twait {

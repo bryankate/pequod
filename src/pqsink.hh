@@ -62,9 +62,11 @@ class SinkRange : public ServerRangeBase {
 
     inline bool valid() const;
     void invalidate();
+    inline void prefetch() const;
 
     inline Join* join() const;
     inline Table* table() const;
+    inline Table& make_table_for(Str key) const;
     inline unsigned context_mask() const;
     inline Str context() const;
 
@@ -86,20 +88,20 @@ class SinkRange : public ServerRangeBase {
     static uint64_t invalidate_hit_keys;
     static uint64_t invalidate_miss_keys;
 
-  public:
-    rblinks<SinkRange> rblinks_;
   private:
-    JoinRange* jr_;
     Table* table_;
-    int refcount_;
+    mutable Datum* hint_;
     unsigned context_mask_;
     int dangerous_slot_;
     LocalStr<12> context_;
-    mutable Datum* hint_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
+    JoinRange* jr_;
+    int refcount_;
     mutable uintptr_t data_free_;
     mutable local_vector<Datum*, 12> data_;
+  public:
+    rblinks<SinkRange> rblinks_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server,
                    uint64_t now);
@@ -176,7 +178,7 @@ inline void SinkRange::deref() {
 }
 
 inline bool SinkRange::valid() const {
-    return !ibegin_.empty();
+    return table_;
 }
 
 inline Join* SinkRange::join() const {
