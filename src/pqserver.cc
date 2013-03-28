@@ -368,7 +368,7 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 }
 
 Server::Server()
-    : supertable_(Str(), nullptr, this), last_validate_at_(0) {
+    : supertable_(Str(), nullptr, this), last_validate_at_(0), validate_time_(0), insert_time_(0) {
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {
@@ -378,12 +378,18 @@ auto Server::create_table(Str tname) -> Table::local_iterator {
 }
 
 size_t Server::validate_count(Str first, Str last) {
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
     Table& t = make_table_for(first, last);
     auto it = t.validate(first, last, next_validate_at());
     auto itend = t.end();
     size_t n = 0;
     for (; it != itend && it->key() < last; ++it)
         ++n;
+
+    gettimeofday(&tv[1], NULL);
+    validate_time_ += to_real(tv[1] - tv[0]);
     return n;
 }
 
@@ -439,6 +445,9 @@ Json Server::stats() const {
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
+        .set("server_validate_time", validate_time_)
+        .set("server_insert_time", insert_time_)
+        .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)
         .set("server_max_rss_mb", ru.ru_maxrss / 1024);
     if (SourceRange::allocated_key_bytes)
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);

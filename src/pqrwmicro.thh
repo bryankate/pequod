@@ -188,6 +188,9 @@ void RwMicro<S>::run(tamer::event<> e) {
     if (stats.get("server_user_time")) {
         stats["server_user_time"] -= old_stats["server_user_time"];
         stats["server_system_time"] -= old_stats["server_system_time"];
+        stats["server_validate_time"] -= old_stats["server_validate_time"];
+        stats["server_insert_time"] -= old_stats["server_insert_time"];
+        stats["server_other_time"] -= old_stats["server_other_time"];
     }
     stats = Json().set("inactive", 100 - pactive_)
         //.set("actual_post_read", nread * 100.0 / (std::max(npost, 1) * nfollower_))

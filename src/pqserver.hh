@@ -164,6 +164,8 @@ class Server {
   private:
     mutable Table supertable_;
     uint64_t last_validate_at_;
+    double validate_time_;
+    double insert_time_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -413,7 +415,13 @@ inline bool Table::flush_for_pull(uint64_t now) {
 }
 
 inline void Server::insert(Str key, const String& value) {
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
     make_table_for(key).insert(key, value);
+
+    gettimeofday(&tv[1], NULL);
+    insert_time_ += to_real(tv[1] - tv[0]);
 }
 
 inline void Server::erase(Str key) {
@@ -427,13 +435,27 @@ inline uint64_t Server::next_validate_at() {
 }
 
 inline Table::iterator Server::validate(Str first, Str last) {
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
     Str tname = table_name(first, last);
     assert(tname);
-    return make_table(tname).validate(first, last, next_validate_at());
+    Table::iterator it = make_table(tname).validate(first, last, next_validate_at());
+
+    gettimeofday(&tv[1], NULL);
+    validate_time_ += to_real(tv[1] - tv[0]);
+    return it;
 }
 
 inline Table::iterator Server::validate(Str key) {
-    return make_table_for(key).validate(key, next_validate_at());
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
+    Table::iterator it = make_table_for(key).validate(key, next_validate_at());
+
+    gettimeofday(&tv[1], NULL);
+    validate_time_ += to_real(tv[1] - tv[0]);
+    return it;
 }
 
 inline Table::iterator Server::begin() {
