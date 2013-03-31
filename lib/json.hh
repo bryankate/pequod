@@ -16,7 +16,8 @@ class Json_get_proxy;
 class Json { public:
 
     enum json_type { // order matters
-	j_null = 0, j_array, j_object, j_int, j_double, j_bool, j_string
+	j_array = -2, j_object = -1, j_null = 0,
+        j_int = 1, j_double = 2, j_bool = 3, j_string = 4
     };
 
     static const Json null_json;
@@ -70,6 +71,7 @@ class Json { public:
     static inline Json make_string(const char* s, int len);
 
     // Type information
+    inline bool truthy() const;
     inline operator unspecified_bool_type() const;
     inline bool operator!() const;
 
@@ -791,6 +793,9 @@ class Json_proxy_base {
     operator Json&() {
 	return value();
     }
+    bool truthy() const {
+        return cvalue().truthy();
+    }
     operator Json::unspecified_bool_type() const {
 	return cvalue();
     }
@@ -1503,14 +1508,19 @@ inline Json Json::make_string(const char *s, int len) {
     return Json(String(s, len));
 }
 
-/** @brief Return true if this Json is not null.
+/** @brief Test if this Json is truthy. */
+inline bool Json::truthy() const {
+    return type_ < 0
+        || (u_.c && (type_ != j_string || u_.str.length));
+}
+/** @brief Test if this Json is truthy.
     @sa empty() */
 inline Json::operator unspecified_bool_type() const {
-    return type_ == j_null ? 0 : &Json::is_null;
+    return truthy() ? &Json::is_null : 0;
 }
 /** @brief Return true if this Json is null. */
 inline bool Json::operator!() const {
-    return type_ == j_null;
+    return !truthy();
 }
 
 /** @brief Return this Json's type. */
@@ -1565,13 +1575,13 @@ inline bool Json::is_o() const {
 }
 /** @brief Test if this Json is a primitive value, not including null. */
 inline bool Json::is_primitive() const {
-    return type_ >= j_int && type_ <= j_string;
+    return type_ > 0;
 }
 
 /** @brief Return true if this Json is null, an empty array, or an empty
     object. */
 inline bool Json::empty() const {
-    return (type_ <= j_object && size() == 0);
+    return (type_ <= 0 && size() == 0);
 }
 /** @brief Return the number of elements in this complex Json.
     @pre is_array() || is_object() || is_null() */
