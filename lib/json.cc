@@ -518,7 +518,9 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
         upx = expanded ? upx_expanded : (m.space_separator() ? upx_separated : upx_normal);
     }
 
-    if (type_ == j_object) {
+    if (type_ == j_object && !u_.c)
+        sa << "{}";
+    else if (type_ == j_object) {
         sa << '{';
 	bool rest = false;
 	ObjectJson *oj = ojson();
@@ -536,7 +538,9 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
         if (expanded)
             unparse_indent(sa, m, depth);
 	sa << '}';
-    } else if (type_ == j_array) {
+    } else if (type_ == j_array && !u_.c)
+        sa << "[]";
+    else if (type_ == j_array) {
         sa << '[';
         bool rest = false;
 	ArrayJson* aj = ajson();
