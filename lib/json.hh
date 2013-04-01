@@ -284,12 +284,11 @@ class Json {
 
     struct ComplexJson {
 	int refcount;
+        int size;
 	ComplexJson()
 	    : refcount(1) {
 	}
-	void ref() {
-	    ++refcount;
-	}
+	inline void ref();
 	inline void deref(json_type j);
       private:
 	ComplexJson(const ComplexJson& x); // does not exist
@@ -353,12 +352,12 @@ class Json {
 
 
 struct Json::ArrayJson : public ComplexJson {
-    int size;
     int capacity;
     Json a[0];
 
     inline ArrayJson(int cap)
-        : size(0), capacity(cap) {
+        : capacity(cap) {
+        size = 0;
     }
     static ArrayJson* make(int n);
     static void destroy(ArrayJson* a);
@@ -377,9 +376,9 @@ struct Json::ObjectJson : public ComplexJson {
     int n_;
     int capacity_;
     std::vector<int> hash_;
-    int nremoved_;
     ObjectJson()
-	: os_(), n_(0), capacity_(0), nremoved_(0) {
+	: os_(), n_(0), capacity_(0) {
+        size = 0;
     }
     ObjectJson(const ObjectJson& x);
     ~ObjectJson();
@@ -417,8 +416,13 @@ inline const Json& Json::make_null() {
     return null_json;
 }
 
+inline void Json::ComplexJson::ref() {
+    if (refcount >= 0)
+        ++refcount;
+}
+
 inline void Json::ComplexJson::deref(json_type j) {
-    if (--refcount <= 0) {
+    if (refcount >= 1 && --refcount == 0) {
 	if (j == j_object)
 	    delete static_cast<ObjectJson*>(this);
 	else
@@ -437,14 +441,14 @@ inline Json::ObjectJson* Json::ojson() const {
 }
 
 inline void Json::uniqueify_array(bool convert, int ncap) {
-    if (type_ != j_array || !u_.a.a || u_.a.a->refcount > 1
+    if (type_ != j_array || !u_.a.a || u_.a.a->refcount != 1
         || (ncap > 0 && ncap > u_.a.a->capacity))
 	hard_uniqueify_array(convert, ncap);
     assert(type_ == j_array);
 }
 
 inline void Json::uniqueify_object(bool convert) {
-    if (type_ != j_object || !u_.o.o || u_.o.o->refcount > 1)
+    if (type_ != j_object || !u_.o.o || u_.o.o->refcount != 1)
 	hard_uniqueify_object(convert);
     assert(type_ == j_object);
 }
@@ -744,7 +748,7 @@ class Json::iterator : public const_iterator { public:
     iterator() {
     }
     value_type& operator*() const {
-	if (j_->u_.c->refcount > 1)
+	if (j_->u_.c->refcount != 1)
             uniqueify();
 	return const_cast<value_type&>(const_iterator::operator*());
     }
@@ -1573,25 +1577,17 @@ inline bool Json::is_primitive() const {
 /** @brief Return true if this Json is null, an empty array, or an empty
     object. */
 inline bool Json::empty() const {
-    return type_ == j_null
-        || (type_ == j_array && (!u_.c || ajson()->size == 0))
-        || (type_ == j_object && (!u_.c || ojson()->n_ == ojson()->nremoved_));
+    return unsigned(type_) < unsigned(j_int) && (!u_.c || u_.c->size == 0);
 }
 /** @brief Return the number of elements in this complex Json.
     @pre is_array() || is_object() || is_null() */
 inline Json::size_type Json::size() const {
     assert(type_ == j_null || type_ == j_array || type_ == j_object);
-    if (!u_.c)
-	return 0;
-    else if (type_ == j_object) {
-	ObjectJson *oj = ojson();
-	return oj->n_ - oj->nremoved_;
-    } else
-	return ajson()->size;
+    return u_.c ? u_.c->size : 0;
 }
 /** @brief Test if this complex Json is shared. */
 inline bool Json::shared() const {
-    return u_.c && (type_ == j_array || type_ == j_object) && u_.c->refcount > 1;
+    return u_.c && (type_ == j_array || type_ == j_object) && u_.c->refcount != 1;
 }
 
 // Primitive methods

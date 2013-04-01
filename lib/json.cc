@@ -63,8 +63,9 @@ void Json::ArrayJson::destroy(ArrayJson* aj) {
 
 Json::ObjectJson::ObjectJson(const ObjectJson &x)
     : ComplexJson(), os_(x.os_), n_(x.n_), capacity_(x.capacity_),
-      hash_(x.hash_), nremoved_(x.nremoved_)
+      hash_(x.hash_)
 {
+    size = x.size;
     grow(true);
 }
 
@@ -135,6 +136,7 @@ int Json::ObjectJson::find_insert(const String &key, const Json &value)
 	// NB 'b' is invalid now
 	new ((void *) &os_[n_]) ObjectItem(key, value, -1);
 	++n_;
+        ++size;
 	if (chain > 4)
 	    rehash();
 	return n_ - 1;
@@ -159,6 +161,7 @@ Json &Json::ObjectJson::get_insert(Str key)
 	// NB 'b' is invalid now
 	new ((void *) &os_[n_]) ObjectItem(String(key.data(), key.length()), null_json, -1);
 	++n_;
+        ++size;
 	if (chain > 4)
 	    rehash();
 	return os_[n_ - 1].v_.second;
@@ -174,7 +177,7 @@ void Json::ObjectJson::erase(int p) {
     *b = os_[p].next_;
     os_[p].~ObjectItem();
     os_[p].next_ = -2;
-    ++nremoved_;
+    --size;
 }
 
 Json::size_type Json::ObjectJson::erase(Str key) {
@@ -186,7 +189,7 @@ Json::size_type Json::ObjectJson::erase(Str key) {
 	*b = os_[p].next_;
 	os_[p].~ObjectItem();
 	os_[p].next_ = -2;
-	++nremoved_;
+	--size;
 	return 1;
     } else
 	return 0;
@@ -294,7 +297,7 @@ void Json::clear() {
             for (ObjectItem* it = u_.o.o->os_; it != last; ++it)
                 if (it->next_ != -2)
                     it->~ObjectItem();
-            u_.o.o->n_ = u_.o.o->nremoved_ = 0;
+            u_.o.o->n_ = u_.o.o->size = 0;
             u_.o.o->hash_.assign(u_.o.o->hash_.size(), -1);
         } else if (u_.o.o) {
             u_.o.o->deref(j_object);
@@ -477,7 +480,7 @@ bool Json::unparse_is_complex() const
 {
     if (type_ == j_object) {
 	if (ObjectJson *oj = ojson()) {
-	    if (oj->n_ - oj->nremoved_ > 5)
+	    if (oj->size > 5)
 		return true;
 	    ObjectItem *ob = oj->os_, *oe = ob + oj->n_;
 	    for (; ob != oe; ++ob)
