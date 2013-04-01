@@ -15,8 +15,8 @@ class Json_get_proxy;
 
 class Json {
     enum json_type { // order matters
-	j_array = -2, j_object = -1, j_null = 0,
-        j_int = 1, j_double = 2, j_bool = 3, j_string = 4
+        j_string = -1, j_null = 0,
+        j_array = 1, j_object = 2, j_int = 3, j_double = 4, j_bool = 5
     };
 
   public:
@@ -1506,8 +1506,8 @@ inline Json Json::make_string(const char *s, int len) {
 
 /** @brief Test if this Json is truthy. */
 inline bool Json::truthy() const {
-    return type_ < 0
-        || (u_.c && (type_ != j_string || u_.str.length));
+    return (u_.c ? type_ >= 0 || u_.str.length
+            : (unsigned) (type_ - 1) < (unsigned) (j_int - 1));
 }
 /** @brief Test if this Json is truthy.
     @sa empty() */
@@ -1567,13 +1567,15 @@ inline bool Json::is_o() const {
 }
 /** @brief Test if this Json is a primitive value, not including null. */
 inline bool Json::is_primitive() const {
-    return type_ > 0;
+    return type_ >= j_int || type_ < 0;
 }
 
 /** @brief Return true if this Json is null, an empty array, or an empty
     object. */
 inline bool Json::empty() const {
-    return (type_ <= 0 && size() == 0);
+    return type_ == j_null
+        || (type_ == j_array && (!u_.c || ajson()->size == 0))
+        || (type_ == j_object && (!u_.c || ojson()->n_ == ojson()->nremoved_));
 }
 /** @brief Return the number of elements in this complex Json.
     @pre is_array() || is_object() || is_null() */
