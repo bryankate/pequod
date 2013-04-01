@@ -14,6 +14,8 @@ class String : public String_base<String> {
   public:
     struct rep_type;
 
+    enum { max_length = 0x7FFFFE0 };
+
     typedef String substring_type;
     typedef const String& argument_type;
 
@@ -149,36 +151,46 @@ class String : public String_base<String> {
 
     /** @cond never */
     struct rep_type {
-	memo_type* memo_pointer;
 	const char* data;
 	int length;
+        int memo_offset;
 
         inline void ref() const {
-            if (memo_pointer)
-                ++memo_pointer->refcount;
+            if (memo_offset)
+                ++xmemo()->refcount;
         }
         inline void deref() const {
-            if (memo_pointer && --memo_pointer->refcount == 0)
-                String::delete_memo(memo_pointer);
+            if (memo_offset && --xmemo()->refcount == 0)
+                String::delete_memo(xmemo());
         }
         inline void reset_ref() {
-            memo_pointer = 0;
+            memo_offset = 0;
         }
 
       private:
+        inline memo_type* xmemo() const {
+            return reinterpret_cast<memo_type*>
+                (const_cast<char*>(data + memo_offset));
+        }
         inline memo_type* memo() const {
-            return memo_pointer;
+            return memo_offset ? xmemo() : nullptr;
         }
         inline void assign(const char* d, int l, memo_type* m) {
-            if ((memo_pointer = m))
-                ++m->refcount;
             data = d;
             length = l;
+            if (m) {
+                ++m->refcount;
+                memo_offset = static_cast<int>(reinterpret_cast<char*>(m) - d);
+            } else
+                memo_offset = 0;
         }
         inline void assign_noref(const char* d, int l, memo_type* m) {
-            memo_pointer = m;
             data = d;
             length = l;
+            if (m)
+                memo_offset = static_cast<int>(reinterpret_cast<char*>(m) - d);
+            else
+                memo_offset = 0;
         }
         friend class String;
     };
@@ -263,8 +275,8 @@ class String : public String_base<String> {
     inline String(const char* data, int length, memo_type* memo) {
 	_r.assign_noref(data, length, memo);
     }
-    inline STRING_CONSTEXPR String(const char *data, int length, const null_memo &)
-	: _r{0, data, length} {
+    inline STRING_CONSTEXPR String(const char* data, int length, const null_memo&)
+	: _r{data, length, 0} {
     }
 
     inline void deref() const {
@@ -300,7 +312,7 @@ class String : public String_base<String> {
 
 /** @brief Construct an empty String (with length 0). */
 inline STRING_CONSTEXPR String::String()
-    : _r{0, String_generic::empty_data, 0} {
+    : _r{String_generic::empty_data, 0, 0} {
 }
 
 /** @brief Construct a copy of the String @a x. */
@@ -374,7 +386,7 @@ inline String::String(const std::string &str) {
 /** @brief Construct a String equal to "true" or "false" depending on the
     value of @a x. */
 inline STRING_CONSTEXPR String::String(bool x)
-    : _r{0, String_generic::bool_data + (-x & 6), 5 - x} {
+    : _r{String_generic::bool_data + (-x & 6), 5 - x, 0} {
     // bool_data equals "false\0true\0"
 }
 

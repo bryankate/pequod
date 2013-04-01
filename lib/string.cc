@@ -80,13 +80,13 @@ const char String::int_data[] = "0\0001\0002\0003\0004\0005\0006\0007\0008\0009"
 #endif
 
 const String::rep_type String::null_string_rep = {
-    nullptr, String_generic::empty_data, 0
+    String_generic::empty_data, 0, 0
 };
 const String::rep_type String::oom_string_rep = {
-    nullptr, String_generic::out_of_memory_data, String_generic::out_of_memory_length
+    String_generic::out_of_memory_data, String_generic::out_of_memory_length, 0
 };
 const String::rep_type String::zero_string_rep = {
-    nullptr, &int_data[0], 0
+    &int_data[0], 0, 0
 };
 
 #if HAVE_STRING_PROFILING
