@@ -1418,13 +1418,13 @@ inline Json::Json(const String& x)
 }
 inline Json::Json(Str x)
     : type_(j_string) {
-    u_.str.memo = 0;
+    u_.str.reset_ref();
     String str(x);
     str.swap(u_.str);
 }
 inline Json::Json(const char* x)
     : type_(j_string) {
-    u_.str.memo = 0;
+    u_.str.reset_ref();
     String str(x);
     str.swap(u_.str);
 }
