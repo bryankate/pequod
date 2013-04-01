@@ -235,6 +235,7 @@ void Json::hard_uniqueify_array(bool convert, int ncap_in) {
         Json* last = u_.a.a->a + u_.a.a->size;
         for (Json* it = u_.a.a->a, *oit = old_u.a.a->a; it != last; ++it, ++oit)
             new((void*) it) Json(*oit);
+        old_u.a.a->deref(j_array);
     } else if (old_type == j_object && old_u.o.o) {
         ObjectItem *ob = old_u.o.o->os_, *oe = ob + old_u.o.o->n_;
         unsigned i;
