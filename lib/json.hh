@@ -13,13 +13,13 @@ template <typename T> class Json_object_str_proxy;
 template <typename T> class Json_array_proxy;
 class Json_get_proxy;
 
-class Json { public:
-
+class Json {
     enum json_type { // order matters
 	j_array = -2, j_object = -1, j_null = 0,
         j_int = 1, j_double = 2, j_bool = 3, j_string = 4
     };
 
+  public:
     static const Json null_json;
 
     typedef int size_type;
@@ -75,7 +75,6 @@ class Json { public:
     inline operator unspecified_bool_type() const;
     inline bool operator!() const;
 
-    inline json_type type() const;
     inline bool is_null() const;
     inline bool is_int() const;
     inline bool is_i() const;
@@ -802,9 +801,6 @@ class Json_proxy_base {
     bool operator!() const {
 	return !cvalue();
     }
-    Json::json_type type() const {
-	return cvalue().type();
-    }
     bool is_null() const {
 	return cvalue().is_null();
     }
@@ -1523,10 +1519,6 @@ inline bool Json::operator!() const {
     return !truthy();
 }
 
-/** @brief Return this Json's type. */
-inline Json::json_type Json::type() const {
-    return type_;
-}
 /** @brief Test this Json's type. */
 inline bool Json::is_null() const {
     return type_ == j_null;
