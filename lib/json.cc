@@ -457,15 +457,15 @@ Json& Json::hard_get_insert(size_type x) {
 }
 
 bool operator==(const Json& a, const Json& b) {
-    if (a.type() != b.type())
+    if (a.type_ != b.type_)
         return false;
-    if (a.type() == Json::j_string)
+    if (a.type_ == Json::j_string)
         return a.as_s() == b.as_s();
-    if (a.type() == Json::j_int || a.type() == Json::j_bool)
+    if (a.type_ == Json::j_int || a.type_ == Json::j_bool)
         return a.u_.u == b.u_.u;
-    if (a.type() == Json::j_array || a.type() == Json::j_object)
-        return a.u_.c == b.u_.c;
-    return true;
+    if (a.type_ == Json::j_double)
+        return a.u_.d == b.u_.d;
+    return a.u_.c == b.u_.c;
 }
 
 
