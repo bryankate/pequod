@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4 -*-
 #ifndef JSON_HH
-#define JSON_HH 1
+#define JSON_HH
 #include "straccum.hh"
 #include "str.hh"
 #include "hashtable.hh"

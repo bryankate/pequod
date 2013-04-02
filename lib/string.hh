@@ -3,11 +3,6 @@
 #include "string_base.hh"
 #include <string>
 #include <utility>
-#if HAVE_CXX_CONSTEXPR
-# define STRING_CONSTEXPR constexpr
-#else
-# define STRING_CONSTEXPR
-#endif
 
 class String : public String_base<String> {
     struct memo_type;
@@ -19,7 +14,7 @@ class String : public String_base<String> {
     typedef String substring_type;
     typedef const String& argument_type;
 
-    inline STRING_CONSTEXPR String();
+    inline String();
     inline String(const String &x);
 #if HAVE_CXX_RVALUE_REFERENCES
     inline String(String &&x);
@@ -32,7 +27,7 @@ class String : public String_base<String> {
     inline String(const unsigned char* s, int len);
     inline String(const char* first, const char* last);
     inline String(const unsigned char* first, const unsigned char* last);
-    explicit inline STRING_CONSTEXPR String(bool x);
+    explicit inline String(bool x);
     explicit inline String(char c);
     explicit inline String(unsigned char c);
     explicit String(int x);
@@ -275,7 +270,7 @@ class String : public String_base<String> {
     inline String(const char* data, int length, memo_type* memo) {
 	_r.assign_noref(data, length, memo);
     }
-    inline STRING_CONSTEXPR String(const char* data, int length, const null_memo&)
+    inline String(const char* data, int length, const null_memo&)
 	: _r{data, length, 0} {
     }
 
@@ -311,7 +306,7 @@ class String : public String_base<String> {
 
 
 /** @brief Construct an empty String (with length 0). */
-inline STRING_CONSTEXPR String::String()
+inline String::String()
     : _r{String_generic::empty_data, 0, 0} {
 }
 
@@ -385,7 +380,7 @@ inline String::String(const std::string &str) {
 
 /** @brief Construct a String equal to "true" or "false" depending on the
     value of @a x. */
-inline STRING_CONSTEXPR String::String(bool x)
+inline String::String(bool x)
     : _r{String_generic::bool_data + (-x & 6), 5 - x, 0} {
     // bool_data equals "false\0true\0"
 }
@@ -801,5 +796,4 @@ inline void swap(String& a, String& b) {
     a.swap(b);
 }
 
-#undef STRING_CONSTEXPR
 #endif
