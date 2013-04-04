@@ -1,5 +1,7 @@
+// -*- mode: c++ -*-
 #ifndef PEQUOD_SERVER_HH
 #define PEQUOD_SERVER_HH
+#include <tamer/tamer.hh>
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqsource.hh"
@@ -49,6 +51,8 @@ class Table : public Datum {
     inline iterator validate(Str key, uint64_t now);
     void invalidate_dependents(Str key);
     void invalidate_dependents(Str first, Str last);
+    tamed void prepare_validate(Str key, uint64_t now, tamer::event<> done);
+    tamed void prepare_validate(Str first, Str last, uint64_t now, tamer::event<> done);
 
     void add_source(SourceRange* r);
     inline void unlink_source(SourceRange* r);
@@ -157,6 +161,8 @@ class Server {
     inline Table::iterator validate(Str key);
     inline Table::iterator validate(Str first, Str last);
     size_t validate_count(Str first, Str last);
+    tamed void prepare_validate(Str key, tamer::event<> done);
+    tamed void prepare_validate(Str first, Str last, tamer::event<> done);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -164,6 +170,7 @@ class Server {
   private:
     mutable Table supertable_;
     uint64_t last_validate_at_;
+    double prevalidate_time_;
     double validate_time_;
     double insert_time_;
 

@@ -81,6 +81,8 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 # make sure tamed versions get built first
 $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
+$(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
+$(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
@@ -143,7 +145,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqrwmicro.o \
 	$(OBJDIR)/pqmain.o
 
-$(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
+$(OBJDIR)/pqserver: $(OBJDIR)/pqserver.hh $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o

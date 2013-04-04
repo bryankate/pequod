@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #include <unistd.h>
 #include <set>
 #include "pqserver.hh"
@@ -296,6 +297,19 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
     return lower_bound(first);
 }
 
+tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
+    LocalStr<24> next_key;
+    next_key.assign_uninitialized(key.length() + 1);
+    memcpy(next_key.mutable_data(), key.data(), key.length());
+    next_key.mutable_data()[key.length()] = 0;
+    prepare_validate(key, next_key, now, done);
+}
+
+tamed void Table::prepare_validate(Str first, Str last, uint64_t now,
+                                   tamer::event<> done) {
+    done();
+}
+
 void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
     Str key(d->key());
     Table* t = &table_for(key);
@@ -393,6 +407,40 @@ size_t Server::validate_count(Str first, Str last) {
     return n;
 }
 
+tamed void Server::prepare_validate(Str key, tamer::event<> done) {
+    tvars {
+        struct timeval tv[2];
+    }
+
+    gettimeofday(&tv[0], NULL);
+    twait {
+        make_table_for(key).prepare_validate(key,
+                                             next_validate_at(),
+                                             make_event());
+    }
+
+    gettimeofday(&tv[1], NULL);
+    prevalidate_time_ += to_real(tv[1] - tv[0]);
+    done();
+}
+
+tamed void Server::prepare_validate(Str first, Str last, tamer::event<> done) {
+    tvars {
+        struct timeval tv[2];
+    }
+
+    gettimeofday(&tv[0], NULL);
+    twait {
+        make_table_for(first, last).prepare_validate(first, last,
+                                                     next_validate_at(),
+                                                     make_event());
+    }
+
+    gettimeofday(&tv[1], NULL);
+    prevalidate_time_ += to_real(tv[1] - tv[0]);
+    done();
+}
+
 void Table::add_stats(Json& j) const {
     j["ninsert"] += ninsert_;
     j["nmodify"] += nmodify_;
@@ -445,6 +493,7 @@ Json Server::stats() const {
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
+        .set("server_prevalidate_time", prevalidate_time_)
         .set("server_validate_time", validate_time_)
         .set("server_insert_time", insert_time_)
         .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)

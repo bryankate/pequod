@@ -9,8 +9,14 @@
 
 namespace {
 
-void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
-    int command = j[0].as_i();
+tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer::event<> done) {
+    tvars {
+        int command;
+        String key, first, last;
+        pq::Table* t;
+    }
+
+    command = j[0].as_i();
     if (command >= pq_get && command <= pq_add_join
         && !(j[2].is_s() && pq::table_name(j[2].as_s())))
         return;
@@ -33,10 +39,11 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
         break;
     case pq_get: {
         rj[2] = pq_ok;
-        String key = j[2].as_s();
-        pq::Table& t = server.table_for(key);
-        auto it = t.validate(key, server.next_validate_at());
-        if (it != t.end() && it->key() == key)
+        key = j[2].as_s();
+        t = &server.table_for(key);
+        twait { t->prepare_validate(key, server.next_validate_at(), make_event()); }
+        auto it = t->validate(key, server.next_validate_at());
+        if (it != t->end() && it->key() == key)
             rj[3] = it->value();
         else
             rj[3] = String();
@@ -52,14 +59,16 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
         break;
     case pq_count:
         rj[2] = pq_ok;
-        rj[3] = server.validate_count(j[2].as_s(), j[3].as_s());
+        first = j[2].as_s(), last = j[3].as_s();
+        twait { server.prepare_validate(first, last, make_event()); }
+        rj[3] = server.validate_count(first, last);
         break;
     case pq_scan: {
         rj[2] = pq_ok;
-        String first = j[2].as_s(), last = j[3].as_s();
-        pq::Table& t = server.table_for(first);
+        first = j[2].as_s(), last = j[3].as_s();
+        twait { server.prepare_validate(first, last, make_event()); }
         auto it = server.validate(first, last);
-        auto itend = t.end();
+        auto itend = server.table_for(first).end();
         assert(!aj.shared());
         aj.clear();
         while (it != itend && it->key() < last) {
@@ -82,6 +91,8 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
         }
         break;
     }
+
+    done();
 }
 
 tamed void connector(tamer::fd cfd, pq::Server& server) {
@@ -98,8 +109,8 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         rj[1] = j[1];
         rj[2] = pq_fail;
         rj[3] = Json();
-        process(server, j, rj, aj);
 
+        twait { process(server, j, rj, aj, make_event()); }
         mpfd.write(rj);
     }
     cfd.close();
@@ -108,10 +119,10 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
 tamed void acceptor(tamer::fd listenfd, pq::Server& server) {
     tvars { tamer::fd cfd; };
     if (!listenfd)
-	fprintf(stderr, "listen: %s\n", strerror(-listenfd.error()));
+        fprintf(stderr, "listen: %s\n", strerror(-listenfd.error()));
     while (listenfd) {
-	twait { listenfd.accept(make_event(cfd)); }
-	connector(cfd, server);
+        twait { listenfd.accept(make_event(cfd)); }
+        connector(cfd, server);
     }
 }
 
