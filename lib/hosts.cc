@@ -28,7 +28,8 @@ Hosts::Hosts(const String &hostFile) {
     string line;
     uint32_t seq = 0;
 
-    while(infile) {
+    mandatory_assert(infile && "Host file cannot be opened.");
+    while(infile.good()) {
 
         if (!getline(infile, line)) {
             break;
