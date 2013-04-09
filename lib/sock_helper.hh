@@ -71,7 +71,6 @@ class sock_helper {
         make_sockaddr(host, port, sin);
         return((uint64_t)(sin.sin_addr.s_addr) << 32) | port;
     }
-  private:
     static void make_sockaddr(const char *host, int port, struct sockaddr_in &sin) {
         bzero(&sin, sizeof(sin));
         sin.sin_family = AF_INET;
