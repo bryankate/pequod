@@ -455,38 +455,25 @@ UnitTestPartitioner::UnitTestPartitioner(uint32_t nservers, int default_owner)
 class TwitterPartitioner : public Partitioner {
   public:
     TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
-                       uint32_t default_owner, bool partComputed,
-                       bool partCachedBase);
+                       uint32_t default_owner, bool binary);
 };
 
 TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
-                                       uint32_t default_owner, bool partComputed,
-                                       bool partCachedBase)
+                                       uint32_t default_owner, bool binary)
     : Partitioner(default_owner, nbacking) {
 
-    if (partCachedBase) {
-        // partition base data amongst caching servers
-        ps_.add(partition1("p|", partition1::decimal, 5, nbacking, nservers - nbacking));
-        ps_.add(partition1("s|", partition1::decimal, 5, nbacking, nservers - nbacking));
+    ps_.add(partition1("c|", partition1::text, 0, 0, 1));
+
+    if (binary) {
+        ps_.add(partition1("p|", partition1::binary, 14, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("s|", partition1::binary, 14, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("t|", partition1::binary, 14, nbacking, nservers - nbacking));
     }
     else {
-        // all base data on backing servers
-        ps_.add(partition1("p|", partition1::decimal, 5, 0, nbacking));
-        ps_.add(partition1("s|", partition1::decimal, 5, 0, nbacking));
+        ps_.add(partition1("p|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("s|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("t|", partition1::decimal, 5, nbacking, nservers - nbacking));
     }
-
-    if (partComputed) {
-        uint32_t s = nbacking;
-        uint32_t e = nservers - nbacking;
-        if (nbacking == nservers) {
-            s = 0;
-            e = nservers;
-        }
-        ps_.add(partition1("t|", partition1::decimal, 5, s, e));
-    }
-
-    // partition user ids amongst cache servers
-    ps_.add(partition1("u|", partition1::decimal, 5, nbacking, nservers - nbacking));
 }
 
 }
@@ -494,7 +481,7 @@ TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
 
 Partitioner *Partitioner::make(const String &name, uint32_t nservers,
                                uint32_t default_owner) {
-    return Partitioner::make(name, nservers, nservers, default_owner);
+    return Partitioner::make(name, 0, nservers, default_owner);
 }
 
 Partitioner *Partitioner::make(const String &name, uint32_t nbacking,
@@ -504,7 +491,9 @@ Partitioner *Partitioner::make(const String &name, uint32_t nbacking,
     else if (name == "unit")
         return new UnitTestPartitioner(nservers, default_owner);
     else if (name == "twitter")
-        return new TwitterPartitioner(nservers, nbacking, default_owner, false, false);
+        return new TwitterPartitioner(nservers, nbacking, default_owner, false);
+    else if (name == "twitternew")
+        return new TwitterPartitioner(nservers, nbacking, default_owner, true);
     else
         assert(0 && "Unknown partition name");
     return 0;
