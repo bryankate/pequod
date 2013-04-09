@@ -147,10 +147,10 @@ int main(int argc, char** argv) {
                 listen_port = clp->val.i;
         } else if (clp->option->long_name == String("kill"))
             kill_old_server = !clp->negated;
-        else if (clp->option->long_name == String("hosts"))
-             tp_param.set("hosts", clp->val.s);
+        else if (clp->option->long_name == String("hostfile"))
+             hostfile = clp->val.s;
         else if (clp->option->long_name == String("partfunc"))
-             tp_param.set("partfunc", clp->val.s);
+             partfunc = clp->val.s;
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
     } else if (mode == mode_listen) {
-        if (part)
+        if (hosts)
             server.set_cluster_info(hosts, part,
                                     hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port)));
 
