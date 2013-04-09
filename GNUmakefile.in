@@ -86,6 +86,7 @@ $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
+$(OBJDIR)/pqmulticlient.hh: $(top_srcdir)/src/pqmulticlient.thh
 $(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
 $(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
 $(OBJDIR)/pqtwitter.hh: $(top_srcdir)/src/pqtwitter.thh
@@ -103,7 +104,7 @@ $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
@@ -122,6 +123,8 @@ COMMON_OBJS = \
 	$(OBJDIR)/encoding.o \
 	$(OBJDIR)/hashallocator.o \
 	$(OBJDIR)/sp_key.o \
+	$(OBJDIR)/partitions.o \
+	$(OBJDIR)/hosts.o \
 	$(OBJDIR)/clp.o
 
 PQSERVER_OBJS = $(COMMON_OBJS) \

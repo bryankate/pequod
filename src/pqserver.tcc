@@ -1,6 +1,7 @@
 // -*- mode: c++ -*-
 #include <unistd.h>
 #include <set>
+#include <vector>
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "json.hh"
@@ -164,6 +165,20 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     if (join->maintained() || join->staleness())
         all_pull_ = false;
     ++njoins_;
+
+    // if this is a distributed deployment, make invalid sink ranges
+    // for all remote partitions
+    if (server_->partitioner()) {
+        std::vector<keyrange> parts;
+        server_->partitioner()->analyze(first, last, 0, parts);
+        parts.push_back(keyrange(last, 0));
+
+        for (auto& r : parts) {
+            if (server_->is_remote(r.owner)) {
+                std::cerr << "remote keyrange " << r.key << std::endl;
+            }
+        }
+    }
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -382,7 +397,9 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 }
 
 Server::Server()
-    : supertable_(Str(), nullptr, this), last_validate_at_(0), validate_time_(0), insert_time_(0) {
+    : supertable_(Str(), nullptr, this),
+      last_validate_at_(0), validate_time_(0), insert_time_(0),
+      part_(nullptr), hosts_(nullptr), me_(nullptr) {
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {

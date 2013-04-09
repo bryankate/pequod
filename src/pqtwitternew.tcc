@@ -2,7 +2,7 @@
 #include "pqtwitternew.hh"
 #include "json.hh"
 #include "pqjoin.hh"
-#include "pqremoteclient.hh"
+#include "pqmulticlient.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -284,28 +284,19 @@ void TwitterNewPopulator::print_visualization() {
     // of the application execution.
 }
 
-tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port) {
+tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
+                                  const Hosts* hosts, const Partitioner* part) {
     tvars {
-        tamer::fd fd;
-        RemoteClient* rc;
-        TwitterNewShim<RemoteClient>* shim;
-        TwitterNewRunner<TwitterNewShim<RemoteClient> >* tr;
+        MultiClient* mc = new MultiClient(hosts, part, client_port);
+        TwitterNewShim<MultiClient>* shim = new TwitterNewShim<MultiClient>(*mc);
+        TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
     }
-    std::cerr << "connecting to port " << client_port << "\n";
-    twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, client_port, make_event(fd)); }
-    if (!fd) {
-        std::cerr << "port " << client_port << ": "
-                  << strerror(-fd.error()) << "\n";
-        exit(1);
-    }
-    rc = new RemoteClient(fd);
-    shim = new TwitterNewShim<RemoteClient>(*rc);
-    tr = new TwitterNewRunner<TwitterNewShim<RemoteClient> >(*shim, tp);
+    twait { mc->connect(make_event()); }
     twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;
     delete shim;
-    delete rc;
+    delete mc;
 }
 
 } // namespace pq

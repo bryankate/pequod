@@ -14,6 +14,9 @@
 #include "hashclient.hh"
 #include "hnshim.hh"
 #include "pqrwmicro.hh"
+#include "hosts.hh"
+#include "partitions.hh"
+#include "sock_helper.hh"
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
@@ -40,6 +43,8 @@ static Clp_Option options[] = {
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
     { "listen", 'l', 2001, Clp_ValInt, Clp_Optional },
     { "kill", 'k', 2002, 0, Clp_Negate },
+    { "hostfile", 'H', 2003, Clp_ValStringNotOption, 0 },
+    { "partfunc", 'P', 2004, Clp_ValStringNotOption, 0 },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -106,6 +111,7 @@ int main(int argc, char** argv) {
 
     int mode = mode_unknown, listen_port = 8000, client_port = -1;
     bool kill_old_server = false;
+    String hostfile, partfunc("default");
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -141,6 +147,10 @@ int main(int argc, char** argv) {
                 listen_port = clp->val.i;
         } else if (clp->option->long_name == String("kill"))
             kill_old_server = !clp->negated;
+        else if (clp->option->long_name == String("hosts"))
+             tp_param.set("hosts", clp->val.s);
+        else if (clp->option->long_name == String("partfunc"))
+             tp_param.set("partfunc", clp->val.s);
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -246,10 +256,22 @@ int main(int argc, char** argv) {
     }
 
     pq::Server server;
+    const pq::Hosts* hosts = nullptr;
+    const pq::Partitioner* part = nullptr;
+
+    if (hostfile) {
+        hosts = pq::Hosts::get_instance(hostfile);
+        part = pq::Partitioner::make(partfunc, 1, hosts->count(), -1);
+    }
+
     if (mode == mode_tests || !testcases.empty()) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
     } else if (mode == mode_listen) {
+        if (part)
+            server.set_cluster_info(hosts, part,
+                                    hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port)));
+
         extern void server_loop(int port, bool kill, pq::Server& server);
         server_loop(listen_port, kill_old_server, server);
     } else if (mode == mode_twitter || mode == mode_unknown) {
@@ -288,8 +310,8 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterNewPopulator *tp = new pq::TwitterNewPopulator(tp_param);
 
-        if (client_port >= 0)
-            run_twitter_new_remote(*tp, client_port);
+        if (client_port >= 0 || (hosts && part))
+            run_twitter_new_remote(*tp, client_port, hosts, part);
         else {
             pq::DirectClient client(server);
             pq::TwitterNewShim<pq::DirectClient> shim(client);

@@ -7,7 +7,10 @@
 #include "pqsource.hh"
 #include "pqsink.hh"
 #include "time.hh"
+#include "hosts.hh"
+#include "partitions.hh"
 #include <iterator>
+
 class Json;
 
 namespace pq {
@@ -164,6 +167,14 @@ class Server {
     tamed void prepare_validate(Str key, tamer::event<> done);
     tamed void prepare_validate(Str first, Str last, tamer::event<> done);
 
+    inline const Host* me() const;
+    inline const Partitioner* partitioner() const;
+//    inline async_interconnect* interconnect(int32_t seqid) const;
+    inline bool is_remote(int32_t owner) const;
+    inline bool is_owned_public(int32_t owner) const;
+    inline void set_cluster_info(const Hosts* hosts, const Partitioner* part,
+                                 const Host* me);
+
     Json stats() const;
     void print(std::ostream& stream);
 
@@ -173,6 +184,9 @@ class Server {
     double prevalidate_time_;
     double validate_time_;
     double insert_time_;
+    const Partitioner* part_;
+    const Hosts* hosts_;
+    const Host* me_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -471,6 +485,33 @@ inline Table::iterator Server::begin() {
 
 inline Table::iterator Server::end() {
     return supertable_.end();
+}
+
+inline void Server::set_cluster_info(const Hosts* hosts, const Partitioner* part,
+                                     const Host* me) {
+    hosts_ = hosts;
+    part_ = part;
+    me_ = me;
+}
+
+inline const Host* Server::me() const {
+    return me_;
+}
+
+inline const Partitioner* Server::partitioner() const {
+    return part_;
+}
+
+//inline async_interconnect* Server::interconnect(int32_t seqid) const {
+//    return interconnect_[seqid];
+//}
+
+inline bool Server::is_remote(int32_t owner) const {
+    return owner >= 0 && owner != me_->seqid();
+}
+
+inline bool Server::is_owned_public(int32_t owner) const {
+    return owner == me_->seqid();
 }
 
 } // namespace

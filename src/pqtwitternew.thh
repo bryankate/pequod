@@ -699,7 +699,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     done();
 }
 
-tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port);
+tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
+                                  const Hosts* hosts, const Partitioner* part);
 
 } // namespace pq
 #endif
