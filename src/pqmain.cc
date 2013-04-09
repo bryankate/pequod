@@ -45,6 +45,7 @@ static Clp_Option options[] = {
     { "kill", 'k', 2002, 0, Clp_Negate },
     { "hostfile", 'H', 2003, Clp_ValStringNotOption, 0 },
     { "partfunc", 'P', 2004, Clp_ValStringNotOption, 0 },
+    { "nbacking", 'B', 2005, Clp_ValInt, 0 },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -109,9 +110,9 @@ int main(int argc, char** argv) {
     putenv(envstr);
     tamer::initialize();
 
-    int mode = mode_unknown, listen_port = 8000, client_port = -1;
+    int mode = mode_unknown, listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
-    String hostfile, partfunc("default");
+    String hostfile, partfunc;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -151,6 +152,8 @@ int main(int argc, char** argv) {
              hostfile = clp->val.s;
         else if (clp->option->long_name == String("partfunc"))
              partfunc = clp->val.s;
+        else if (clp->option->long_name == String("nbacking"))
+            nbacking = clp->val.i;
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -259,18 +262,19 @@ int main(int argc, char** argv) {
     const pq::Hosts* hosts = nullptr;
     const pq::Partitioner* part = nullptr;
 
-    if (hostfile) {
+    if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);
-        part = pq::Partitioner::make(partfunc, 1, hosts->count(), -1);
-    }
 
     if (mode == mode_tests || !testcases.empty()) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
     } else if (mode == mode_listen) {
-        if (hosts)
-            server.set_cluster_info(hosts, part,
+        if (hosts) {
+            mandatory_assert(partfunc && "Need to specify a partition function!");
+            server.set_cluster_info(hosts,
+                                    pq::Partitioner::make(partfunc, nbacking, hosts->count(), -1),
                                     hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port)));
+        }
 
         extern void server_loop(int port, bool kill, pq::Server& server);
         server_loop(listen_port, kill_old_server, server);
@@ -310,8 +314,11 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterNewPopulator *tp = new pq::TwitterNewPopulator(tp_param);
 
-        if (client_port >= 0 || (hosts && part))
+        if (client_port >= 0 || hosts) {
+            if (hosts)
+                part = pq::Partitioner::make("twitternew", nbacking, hosts->count(), -1);
             run_twitter_new_remote(*tp, client_port, hosts, part);
+        }
         else {
             pq::DirectClient client(server);
             pq::TwitterNewShim<pq::DirectClient> shim(client);
