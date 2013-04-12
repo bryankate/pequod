@@ -358,6 +358,11 @@ void SinkRange::invalidate() {
     }
 }
 
+
+RemoteRange::RemoteRange(Str first, Str last, int32_t owner)
+    : ServerRangeBase(first, last), owner_(owner) {
+}
+
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {
     stream << "UPDATE{" << iu.interval() << " "
            << (iu.notifier() > 0 ? "+" : "-")

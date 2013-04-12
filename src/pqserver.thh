@@ -81,11 +81,13 @@ class Table : public Datum {
     int triecut_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    interval_tree<RemoteRange> remote_ranges_;
     enum { subtable_hash_size = 8 };
     HashTable<uint64_t, Table*> subtables_;
     unsigned njoins_;
     uint64_t flush_at_;
     bool all_pull_;
+    bool remote_;
     Server* server_;
     Table* parent_;
 

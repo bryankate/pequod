@@ -135,6 +135,18 @@ class JoinRange : public ServerRangeBase {
     friend class SinkRange;
 };
 
+class RemoteRange : public ServerRangeBase {
+  public:
+    RemoteRange(Str first, Str last, int32_t owner);
+
+    inline int32_t owner() const;
+
+  public:
+    rblinks<RemoteRange> rblinks_;
+  private:
+    int32_t owner_;
+};
+
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
     : ibegin_(first), iend_(last) {
     if (!ibegin_.is_local())
@@ -252,6 +264,10 @@ inline Str IntermediateUpdate::context() const {
 
 inline int IntermediateUpdate::notifier() const {
     return notifier_;
+}
+
+inline int32_t RemoteRange::owner() const {
+    return owner_;
 }
 
 } // namespace pq

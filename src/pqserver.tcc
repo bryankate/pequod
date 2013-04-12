@@ -33,7 +33,7 @@ void Table::iterator::fix() {
 
 Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
-      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
+      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true), remote_(false),
       server_{server}, parent_{parent},
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
 }
@@ -83,6 +83,10 @@ Table* Table::make_next_table_for(Str key) {
 
     if (can_hash)
         subtables_[subtable_hash_for(key)] = t;
+
+    // check if this table represents a remote range
+    t->remote_ = server_->is_remote(server_->partitioner()->owner(key.prefix(triecut_)));
+
     return t;
 }
 
@@ -312,16 +316,46 @@ tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
 tamed void Table::prepare_validate(Str first, Str last, uint64_t now,
                                    tamer::event<> done) {
     tvars {
-        Table* t = this;
         tamer::gather_rendezvous gr;
     }
 
-    while (t->parent_->triecut_)
-        t = t->parent_;
+    // this table may hold remote data. make sure it has a subscription
+    // for the entire range
+    if (remote_) {
+        Str have = first;
+        auto r = remote_ranges_.begin_overlaps(first, last);
 
-    for (auto r = t->join_ranges_.begin_overlaps(first, last);
-         r != t->join_ranges_.end(); ++r) {
-        r->prepare_validate(first, last, *server_, now, gr.make_event());
+        if (r != remote_ranges_.end()) {
+            while(r != remote_ranges_.end()) {
+                if (r->ibegin() > have) {
+                    if (last < r->ibegin())
+                        break;
+                    else
+                        std::cerr << "missing remote range [" << have << ", " << r->ibegin() << ")" << std::endl;
+                }
+
+                have = r->iend();
+                if (have >= last)
+                    break;
+
+                ++r;
+            }
+        }
+
+        if (have < last)
+            std::cerr << "missing remote range [" << have << ", " << last << ")" << std::endl;
+    }
+    else {
+        // this table could hold data that is the result of one or more joins.
+        // make sure that these joins have all the data they need
+        Table* t = this;
+        while (t->parent_->triecut_)
+            t = t->parent_;
+
+        if (t->njoins_)
+            for (auto r = t->join_ranges_.begin_overlaps(first, last);
+                 r != t->join_ranges_.end(); ++r)
+                r->prepare_validate(first, last, *server_, now, gr.make_event());
     }
 
     twait(gr);
