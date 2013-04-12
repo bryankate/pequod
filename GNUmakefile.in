@@ -83,6 +83,8 @@ $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
 $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
+$(OBJDIR)/pqsink.cc: $(top_srcdir)/src/pqsink.tcc
+$(OBJDIR)/pqsink.hh: $(top_srcdir)/src/pqsink.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
@@ -102,7 +104,8 @@ $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
 $(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqserver.hh: $(OBJDIR)/pqsink.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
@@ -111,6 +114,7 @@ $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteserver.o: $(OBJDIR)/pqremoteserver.cc $(OBJDIR)/pqremoteserver.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -148,7 +152,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqrwmicro.o \
 	$(OBJDIR)/pqmain.o
 
-$(OBJDIR)/pqserver: $(OBJDIR)/pqserver.hh $(PQSERVER_OBJS) $(LIBTAMER)
+$(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o

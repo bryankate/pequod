@@ -165,20 +165,6 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
     if (join->maintained() || join->staleness())
         all_pull_ = false;
     ++njoins_;
-
-    // if this is a distributed deployment, make invalid sink ranges
-    // for all remote partitions
-    if (server_->partitioner()) {
-        std::vector<keyrange> parts;
-        server_->partitioner()->analyze(first, last, 0, parts);
-        parts.push_back(keyrange(last, 0));
-
-        for (auto& r : parts) {
-            if (server_->is_remote(r.owner)) {
-                std::cerr << "remote keyrange " << r.key << std::endl;
-            }
-        }
-    }
 }
 
 void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
@@ -313,6 +299,9 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
 }
 
 tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
+    // todo: fix this - will return if nested prepare_validate blocks and
+    // destroy next_key?
+    // tamer does not seem to like the template params in tvars
     LocalStr<24> next_key;
     next_key.assign_uninitialized(key.length() + 1);
     memcpy(next_key.mutable_data(), key.data(), key.length());
@@ -322,6 +311,20 @@ tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
 
 tamed void Table::prepare_validate(Str first, Str last, uint64_t now,
                                    tamer::event<> done) {
+    tvars {
+        Table* t = this;
+        tamer::gather_rendezvous gr;
+    }
+
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
+    for (auto r = t->join_ranges_.begin_overlaps(first, last);
+         r != t->join_ranges_.end(); ++r) {
+        r->prepare_validate(first, last, *server_, now, gr.make_event());
+    }
+
+    twait(gr);
     done();
 }
 
@@ -431,9 +434,7 @@ tamed void Server::prepare_validate(Str key, tamer::event<> done) {
 
     gettimeofday(&tv[0], NULL);
     twait {
-        make_table_for(key).prepare_validate(key,
-                                             next_validate_at(),
-                                             make_event());
+        make_table_for(key).prepare_validate(key, next_validate_at(), make_event());
     }
 
     gettimeofday(&tv[1], NULL);
@@ -448,9 +449,7 @@ tamed void Server::prepare_validate(Str first, Str last, tamer::event<> done) {
 
     gettimeofday(&tv[0], NULL);
     twait {
-        make_table_for(first, last).prepare_validate(first, last,
-                                                     next_validate_at(),
-                                                     make_event());
+        make_table_for(first, last).prepare_validate(first, last, next_validate_at(), make_event());
     }
 
     gettimeofday(&tv[1], NULL);
