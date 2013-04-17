@@ -41,7 +41,6 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         rj[2] = pq_ok;
         key = j[2].as_s();
         t = &server.table_for(key);
-        twait { t->prepare_validate(key, server.next_validate_at(), make_event()); }
         auto it = t->validate(key, server.next_validate_at());
         if (it != t->end() && it->key() == key)
             rj[3] = it->value();
@@ -60,13 +59,11 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
     case pq_count:
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
-        twait { server.prepare_validate(first, last, make_event()); }
         rj[3] = server.validate_count(first, last);
         break;
     case pq_scan: {
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
-        twait { server.prepare_validate(first, last, make_event()); }
         auto it = server.validate(first, last);
         auto itend = server.table_for(first).end();
         assert(!aj.shared());

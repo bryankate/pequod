@@ -279,49 +279,7 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
 }
 
 auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
-    Table* t = this;
-    while (t->parent_->triecut_)
-        t = t->parent_;
-
-    if (t->njoins_ != 0) {
-        if (t->njoins_ == 1) {
-            auto it = store_.lower_bound(first, DatumCompare());
-            auto itx = it;
-            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
-                --itx;
-            if (itx != store_.end() && itx->key() < last && itx->owner()
-                && itx->owner()->valid() && !itx->owner()->has_expired(now)
-                && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
-                && !itx->owner()->need_update())
-                return iterator(this, it);
-        }
-        for (auto it = t->join_ranges_.begin_overlaps(first, last);
-             it != t->join_ranges_.end(); ++it)
-            it->validate(first, last, *server_, now);
-    }
-    return lower_bound(first);
-}
-
-tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
-    // todo: fix this - will return if nested prepare_validate blocks and
-    // destroy next_key?
-    // tamer does not seem to like the template params in tvars
-    tvars { LocalStr<24> next_key; }
-    next_key.assign_uninitialized(key.length() + 1);
-    memcpy(next_key.mutable_data(), key.data(), key.length());
-    next_key.mutable_data()[key.length()] = 0;
-    prepare_validate(key, next_key, now, done);
-}
-
-tamed void Table::prepare_validate(Str first, Str last, uint64_t now,
-                                   tamer::event<> done) {
-    tvars {
-        tamer::gather_rendezvous gr;
-    }
-
-    // this table may hold remote data. make sure it has a subscription
-    // for the entire range
-    if (remote_) {
+    /*
         Str have = first;
         auto r = remote_ranges_.begin_overlaps(first, last);
 
@@ -344,22 +302,29 @@ tamed void Table::prepare_validate(Str first, Str last, uint64_t now,
 
         if (have < last)
             std::cerr << "missing remote range [" << have << ", " << last << ")" << std::endl;
-    }
-    else {
-        // this table could hold data that is the result of one or more joins.
-        // make sure that these joins have all the data they need
-        Table* t = this;
-        while (t->parent_->triecut_)
-            t = t->parent_;
+     */
 
-        if (t->njoins_)
-            for (auto r = t->join_ranges_.begin_overlaps(first, last);
-                 r != t->join_ranges_.end(); ++r)
-                r->prepare_validate(first, last, *server_, now, gr.make_event());
-    }
+    Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
 
-    twait(gr);
-    done();
+    if (t->njoins_ != 0) {
+        if (t->njoins_ == 1) {
+            auto it = store_.lower_bound(first, DatumCompare());
+            auto itx = it;
+            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
+                --itx;
+            if (itx != store_.end() && itx->key() < last && itx->owner()
+                && itx->owner()->valid() && !itx->owner()->has_expired(now)
+                && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
+                && !itx->owner()->need_update())
+                return iterator(this, it);
+        }
+        for (auto it = t->join_ranges_.begin_overlaps(first, last);
+             it != t->join_ranges_.end(); ++it)
+            it->validate(first, last, *server_, now);
+    }
+    return lower_bound(first);
 }
 
 void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
@@ -461,36 +426,6 @@ size_t Server::validate_count(Str first, Str last) {
     return n;
 }
 
-tamed void Server::prepare_validate(Str key, tamer::event<> done) {
-    tvars {
-        struct timeval tv[2];
-    }
-
-    gettimeofday(&tv[0], NULL);
-    twait {
-        make_table_for(key).prepare_validate(key, next_validate_at(), make_event());
-    }
-
-    gettimeofday(&tv[1], NULL);
-    prevalidate_time_ += to_real(tv[1] - tv[0]);
-    done();
-}
-
-tamed void Server::prepare_validate(Str first, Str last, tamer::event<> done) {
-    tvars {
-        struct timeval tv[2];
-    }
-
-    gettimeofday(&tv[0], NULL);
-    twait {
-        make_table_for(first, last).prepare_validate(first, last, next_validate_at(), make_event());
-    }
-
-    gettimeofday(&tv[1], NULL);
-    prevalidate_time_ += to_real(tv[1] - tv[0]);
-    done();
-}
-
 void Table::add_stats(Json& j) const {
     j["ninsert"] += ninsert_;
     j["nmodify"] += nmodify_;
@@ -500,6 +435,7 @@ void Table::add_stats(Json& j) const {
     j["source_ranges_size"] += source_ranges_.size();
     for (auto& jr : join_ranges_)
         j["sink_ranges_size"] += jr.valid_ranges_size();
+    j["remote_ranges_size"] += remote_ranges_.size();
     j["nvalidate"] += nvalidate_;
 
     if (triecut_)
@@ -513,7 +449,7 @@ void Table::add_stats(Json& j) const {
 
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
-        sink_ranges_size = 0;
+           sink_ranges_size = 0, remote_ranges_size = 0;
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
 
@@ -534,6 +470,7 @@ Json Server::stats() const {
         source_ranges_size += j["source_ranges_size"].to_i();
         join_ranges_size += t.join_ranges_.size();
         sink_ranges_size += j["sink_ranges_size"].to_i();
+        remote_ranges_size += j["remote_ranges_size"].to_i();
     }
 
     Json answer;
@@ -543,7 +480,6 @@ Json Server::stats() const {
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("server_prevalidate_time", prevalidate_time_)
         .set("server_validate_time", validate_time_)
         .set("server_insert_time", insert_time_)
         .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)

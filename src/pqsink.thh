@@ -117,8 +117,6 @@ class JoinRange : public ServerRangeBase {
     inline size_t valid_ranges_size() const;
 
     void validate(Str first, Str last, Server& server, uint64_t now);
-    tamed void prepare_validate(Str first, Str last, Server& server,
-                                uint64_t now, tamer::event<> done);
 
   public:
     rblinks<JoinRange> rblinks_;

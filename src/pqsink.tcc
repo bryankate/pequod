@@ -197,14 +197,6 @@ void JoinRange::validate_step(validate_args& va, int joinpos) {
         delete r;
 }
 
-tamed void JoinRange::prepare_validate(Str first, Str last, Server& server,
-                                       uint64_t now, tamer::event<> done) {
-
-    std::cout << "preparing join range " << this->interval()
-              << " for the range [" << first << ", " << last << ")" << std::endl;
-    done();
-}
-
 #if 0
 std::ostream& operator<<(std::ostream& stream, const ServerRange& r) {
     stream << "{" << "[" << r.ibegin() << ", " << r.iend() << ")";
