@@ -1063,10 +1063,6 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["k|b"].value(), "2");
 
 #if 0
-    // XXXX
-    // this overlapping validate causes problems later
-    // because a notify is sent twice for the same key!
-    // server.validate("bb|a|i");
     for (auto it = server.table("bb").begin(); it != server.table("bb").end(); ++it)
         std::cerr << *it << "\n";
 #endif
