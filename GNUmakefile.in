@@ -83,12 +83,12 @@ $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
 $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
-$(OBJDIR)/pqsink.cc: $(top_srcdir)/src/pqsink.tcc
-$(OBJDIR)/pqsink.hh: $(top_srcdir)/src/pqsink.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
+$(OBJDIR)/pqremoteclient.cc: $(top_srcdir)/src/pqremoteclient.tcc
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
 $(OBJDIR)/pqmulticlient.hh: $(top_srcdir)/src/pqmulticlient.thh
+$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 $(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
 $(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
 $(OBJDIR)/pqtwitter.hh: $(top_srcdir)/src/pqtwitter.thh
@@ -96,15 +96,12 @@ $(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/src/pqtwitternew.tcc
 $(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/src/pqtwitternew.thh
 $(OBJDIR)/pqanalytics.cc: $(top_srcdir)/src/pqanalytics.tcc
 $(OBJDIR)/pqanalytics.hh: $(top_srcdir)/src/pqanalytics.thh
-$(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/hnshim.hh: $(top_srcdir)/src/hnshim.thh
+$(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
 $(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
 $(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
 $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
-$(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
-$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 
-$(OBJDIR)/pqserver.hh: $(OBJDIR)/pqsink.hh
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh

@@ -6,7 +6,6 @@
 #include "local_str.hh"
 #include "interval_tree.hh"
 #include "pqdatum.hh"
-#include <tamer/tamer.hh>
 
 namespace pq {
 class Server;
