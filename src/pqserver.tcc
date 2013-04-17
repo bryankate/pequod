@@ -306,7 +306,7 @@ tamed void Table::prepare_validate(Str key, uint64_t now, tamer::event<> done) {
     // todo: fix this - will return if nested prepare_validate blocks and
     // destroy next_key?
     // tamer does not seem to like the template params in tvars
-    LocalStr<24> next_key;
+    tvars { LocalStr<24> next_key; }
     next_key.assign_uninitialized(key.length() + 1);
     memcpy(next_key.mutable_data(), key.data(), key.length());
     next_key.mutable_data()[key.length()] = 0;
