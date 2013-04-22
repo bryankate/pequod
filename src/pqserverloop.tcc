@@ -14,6 +14,8 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         int command;
         String key, first, last;
         pq::Table* t;
+        pq::Table::iterator it;
+        size_t count;
     }
 
     command = j[0].as_i();
@@ -40,9 +42,9 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
     case pq_get: {
         rj[2] = pq_ok;
         key = j[2].as_s();
-        t = &server.table_for(key);
-        auto it = t->validate(key, server.next_validate_at());
-        if (it != t->end() && it->key() == key)
+        twait { server.validate(key, make_event(it)); }
+        auto itend = server.table_for(key).end();
+        if (it != itend && it->key() == key)
             rj[3] = it->value();
         else
             rj[3] = String();
@@ -59,12 +61,13 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
     case pq_count:
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
-        rj[3] = server.validate_count(first, last);
+        twait { server.validate_count(first, last, make_event(count)); }
+        rj[3] = count;
         break;
     case pq_scan: {
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
-        auto it = server.validate(first, last);
+        twait { server.validate(first, last, make_event(it)); }
         auto itend = server.table_for(first).end();
         assert(!aj.shared());
         aj.clear();

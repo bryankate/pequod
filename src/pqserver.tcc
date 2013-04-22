@@ -278,8 +278,12 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
     ++nmodify_;
 }
 
-auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
-    /*
+std::pair<bool, Table::iterator> Table::validate(Str first, Str last,
+                                                 uint64_t now, tamer::gather_rendezvous& gr) {
+    bool completed = true;
+
+    if (remote_) {
+        /*
         Str have = first;
         auto r = remote_ranges_.begin_overlaps(first, last);
 
@@ -302,29 +306,35 @@ auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
 
         if (have < last)
             std::cerr << "missing remote range [" << have << ", " << last << ")" << std::endl;
-     */
-
-    Table* t = this;
-    while (t->parent_->triecut_)
-        t = t->parent_;
-
-    if (t->njoins_ != 0) {
-        if (t->njoins_ == 1) {
-            auto it = store_.lower_bound(first, DatumCompare());
-            auto itx = it;
-            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
-                --itx;
-            if (itx != store_.end() && itx->key() < last && itx->owner()
-                && itx->owner()->valid() && !itx->owner()->has_expired(now)
-                && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
-                && !itx->owner()->need_update())
-                return iterator(this, it);
-        }
-        for (auto it = t->join_ranges_.begin_overlaps(first, last);
-             it != t->join_ranges_.end(); ++it)
-            it->validate(first, last, *server_, now);
+         */
+        completed = false;
+        return std::make_pair(false, end());
     }
-    return lower_bound(first);
+    else {
+
+        Table* t = this;
+        while (t->parent_->triecut_)
+            t = t->parent_;
+
+        if (t->njoins_ != 0) {
+            if (t->njoins_ == 1) {
+                auto it = store_.lower_bound(first, DatumCompare());
+                auto itx = it;
+                if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
+                    --itx;
+                if (itx != store_.end() && itx->key() < last && itx->owner()
+                    && itx->owner()->valid() && !itx->owner()->has_expired(now)
+                    && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
+                    && !itx->owner()->need_update())
+                    return std::make_pair(true, iterator(this, it));
+            }
+            for (auto it = t->join_ranges_.begin_overlaps(first, last);
+                 it != t->join_ranges_.end(); ++it)
+                completed &= it->validate(first, last, *server_, now, gr);
+        }
+    }
+
+    return std::make_pair(completed, lower_bound(first));
 }
 
 void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type notifier) {
@@ -410,20 +420,65 @@ auto Server::create_table(Str tname) -> Table::local_iterator {
     return supertable_.insert(*t);
 }
 
-size_t Server::validate_count(Str first, Str last) {
-    struct timeval tv[2];
+tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
+    tvars {
+        struct timeval tv[2];
+        std::pair<bool, Table::iterator> it;
+        tamer::gather_rendezvous gr;
+        Table* t = &this->make_table_for(key);
+    }
+
     gettimeofday(&tv[0], NULL);
 
-    Table& t = make_table_for(first, last);
-    auto it = t.validate(first, last, next_validate_at());
-    auto itend = t.end();
-    size_t n = 0;
-    for (; it != itend && it->key() < last; ++it)
-        ++n;
+    do {
+        it = t->validate(key, next_validate_at(), gr);
+        twait(gr);
+        mandatory_assert(it.first && "missing data!");
+    } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
     validate_time_ += to_real(tv[1] - tv[0]);
-    return n;
+
+    done(it.second);
+}
+
+tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> done) {
+    tvars {
+        struct timeval tv[2];
+        std::pair<bool, Table::iterator> it;
+        tamer::gather_rendezvous gr;
+        Table* t = &this->make_table_for(first, last);
+    }
+
+    gettimeofday(&tv[0], NULL);
+
+    do {
+        it = t->validate(first, last, next_validate_at(), gr);
+        twait(gr);
+        mandatory_assert(it.first && "missing data!");
+    } while(!it.first);
+
+    gettimeofday(&tv[1], NULL);
+    validate_time_ += to_real(tv[1] - tv[0]);
+
+    done(it.second);
+}
+
+tamed void Server::validate_count(Str first, Str last, tamer::event<size_t> done) {
+    tvars {
+        struct timeval tv[2];
+        Table* t = &this->make_table_for(first, last);
+        Table::iterator it;
+    }
+
+    twait { validate(first, last, make_event(it)); }
+    auto itend = t->end();
+    size_t n = 0;
+
+    for (; it != itend && it->key() < last; ++it)
+        ++n;
+
+    done(n);
 }
 
 void Table::add_stats(Json& j) const {

@@ -6,6 +6,7 @@
 #include "local_str.hh"
 #include "interval_tree.hh"
 #include "pqdatum.hh"
+#include <tamer/tamer.hh>
 
 namespace pq {
 class Server;
@@ -78,7 +79,8 @@ class SinkRange : public ServerRangeBase {
     void add_update(int joinpos, Str context, Str key, int notifier);
     void add_invalidate(Str key);
     inline bool need_update() const;
-    void update(Str first, Str last, Server& server, uint64_t now);
+    bool update(Str first, Str last, Server& server,
+                uint64_t now, tamer::gather_rendezvous& gr);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
@@ -103,8 +105,8 @@ class SinkRange : public ServerRangeBase {
   public:
     rblinks<SinkRange> rblinks_;
 
-    bool update_iu(Str first, Str last, IntermediateUpdate* iu, Server& server,
-                   uint64_t now);
+    bool update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
+                   Server& server, uint64_t now, tamer::gather_rendezvous& gr);
 };
 
 class JoinRange : public ServerRangeBase {
@@ -115,7 +117,8 @@ class JoinRange : public ServerRangeBase {
     inline Join* join() const;
     inline size_t valid_ranges_size() const;
 
-    void validate(Str first, Str last, Server& server, uint64_t now);
+    bool validate(Str first, Str last, Server& server,
+                  uint64_t now, tamer::gather_rendezvous& gr);
 
   public:
     rblinks<JoinRange> rblinks_;
@@ -124,10 +127,11 @@ class JoinRange : public ServerRangeBase {
     interval_tree<SinkRange> valid_ranges_;
     uint64_t flush_at_;
 
-    inline void validate_one(Str first, Str last, Server& server, uint64_t now);
+    inline bool validate_one(Str first, Str last, Server& server,
+                             uint64_t now, tamer::gather_rendezvous& gr);
     struct validate_args;
-    void validate_step(validate_args& va, int joinpos);
-    void validate_filters(validate_args& va);
+    bool validate_step(validate_args& va, int joinpos);
+    bool validate_filters(validate_args& va);
 
     friend class SinkRange;
 };

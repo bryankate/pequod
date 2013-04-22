@@ -14,15 +14,15 @@ class DirectClient {
     inline void add_join(const String& first, const String& last,
                          const String& join_text, tamer::event<Json> e);
 
-    inline void get(const String& key, tamer::event<String> e);
+    tamed void get(const String& key, tamer::event<String> e);
 
     inline void insert(const String& key, const String& value, tamer::event<> e);
     inline void erase(const String& key, tamer::event<> e);
 
-    inline void count(const String& first, const String& last,
-                      tamer::event<size_t> e);
-    inline void add_count(const String& first, const String& last,
-                          tamer::event<size_t> e);
+    tamed void count(const String& first, const String& last,
+                     tamer::event<size_t> e);
+    tamed void add_count(const String& first, const String& last,
+                         tamer::event<size_t> e);
 
     inline void pace(tamer::event<> done);
 
@@ -39,8 +39,9 @@ class DirectClient {
         iterator first_;
         iterator last_;
     };
-    inline void scan(const String& first, const String& last,
-                     tamer::event<scan_result> e);
+
+    tamed void scan(const String& first, const String& last,
+                    tamer::event<scan_result> e);
 
     inline void stats(tamer::event<Json> e);
 
@@ -94,15 +95,6 @@ inline void DirectClient::add_join(const String& first, const String& last,
     e(rj);
 }
 
-inline void DirectClient::get(const String& key, event<String> e) {
-    Table& t = server_.table_for(key);
-    auto it = t.validate(key, server_.next_validate_at());
-    if (it != t.end() && it->key() == key)
-        e(it->value());
-    else
-        e(String());
-}
-
 inline void DirectClient::insert(const String& key, const String& value,
                                  event<> e) {
     server_.insert(key, value);
@@ -112,16 +104,6 @@ inline void DirectClient::insert(const String& key, const String& value,
 inline void DirectClient::erase(const String& key, event<> e) {
     server_.erase(key);
     e();
-}
-
-inline void DirectClient::count(const String& first, const String& last,
-                                event<size_t> e) {
-    e(server_.validate_count(first, last));
-}
-
-inline void DirectClient::add_count(const String& first, const String& last,
-                                    event<size_t> e) {
-    e(e.result() + server_.validate_count(first, last));
 }
 
 inline DirectClient::scan_result::scan_result(iterator first, iterator last)
@@ -143,13 +125,6 @@ inline size_t DirectClient::scan_result::size() const {
     return std::distance(first_, last_);
 }
 
-inline void DirectClient::scan(const String& first, const String& last,
-                               event<scan_result> e) {
-    Table& t = server_.table_for(first);
-    auto it = t.validate(first, last, server_.next_validate_at());
-    e(scan_result(it, t.lower_bound(last)));
-}
-
 inline void DirectClient::pace(event<> done) {
     done();
 }
@@ -161,9 +136,9 @@ inline void DirectClient::stats(event<Json> e) {
 
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
-    Table& t = server_.table_for(key);
-    auto it = t.validate(key, server_.next_validate_at());
-    if (it != t.end() && it->key() == key)
+    auto it = server_.validate(key);
+    auto itend = server_.table_for(key).end();
+    if (it != itend && it->key() == key)
         e(it->value());
     else
         e(String());
@@ -197,9 +172,8 @@ inline void DirectClient::add_count(const String& first, const String& last,
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
-    Table& t = server_.table_for(first);
-    auto it = t.validate(first, last, server_.next_validate_at());
-    e(scan_result(it, t.lower_bound(last)));
+    auto it = server_.validate(first, last);
+    e(scan_result(it, server_.table_for(first).lower_bound(last)));
 }
 
 template <typename R>
