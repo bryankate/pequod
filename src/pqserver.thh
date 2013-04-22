@@ -168,6 +168,7 @@ class Server {
     inline const Host* me() const;
     inline const Partitioner* partitioner() const;
 //    inline async_interconnect* interconnect(int32_t seqid) const;
+    inline bool is_remote(const Str& key) const;
     inline bool is_remote(int32_t owner) const;
     inline bool is_owned_public(int32_t owner) const;
     inline void set_cluster_info(const Hosts* hosts, const Partitioner* part,
@@ -502,6 +503,12 @@ inline const Partitioner* Server::partitioner() const {
 //inline async_interconnect* Server::interconnect(int32_t seqid) const {
 //    return interconnect_[seqid];
 //}
+
+inline bool Server::is_remote(const Str& key) const {
+    if (!part_)
+        return false;
+    return is_remote(part_->owner(key));
+}
 
 inline bool Server::is_remote(int32_t owner) const {
     return owner >= 0 && owner != me_->seqid();

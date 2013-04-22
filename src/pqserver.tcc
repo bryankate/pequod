@@ -85,7 +85,7 @@ Table* Table::make_next_table_for(Str key) {
         subtables_[subtable_hash_for(key)] = t;
 
     // check if this table represents a remote range
-    t->remote_ = server_->is_remote(server_->partitioner()->owner(key.prefix(triecut_)));
+    t->remote_ = server_->is_remote(key.prefix(triecut_));
 
     return t;
 }
