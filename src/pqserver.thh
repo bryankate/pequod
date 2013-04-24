@@ -10,6 +10,7 @@
 #include "hosts.hh"
 #include "partitions.hh"
 #include <iterator>
+#include <set>
 
 class Json;
 

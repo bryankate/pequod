@@ -73,6 +73,8 @@ bool JoinRange::validate(Str first, Str last, Server& server,
         } else {
             if (last_valid < sink->ibegin())
                 complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
+            if (sink->need_restart())
+                complete &= sink->restart(first, last, server, now, gr);
             if (sink->need_update())
                 complete &= sink->update(first, last, server, now, gr);
             last_valid = sink->iend();
@@ -139,6 +141,7 @@ bool JoinRange::validate_step(validate_args& va, int joinpos) {
             sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now, va.pending);
 
     if (!srcval.first) {
+        va.sink->add_restart(joinpos, va.rm.match);
         return false;
     }
 
@@ -251,6 +254,12 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
     }
 }
 
+Restart::Restart(SinkRange* sink, int joinpos, const Match& m)
+    : joinpos_(joinpos) {
+    sink->join()->write_context(context_.mutable_udata(), m,
+                                sink->join()->known_mask(m));
+}
+
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
     : ServerRangeBase(rm.first, rm.last), hint_{nullptr},
       dangerous_slot_(rm.dangerous_slot),
@@ -291,6 +300,12 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
 
     table_->invalidate_dependents(Str(kf, kflen), Str(kl, kllen));
     //std::cerr << *iu << "\n";
+}
+
+void SinkRange::add_restart(int joinpos, const Match& m) {
+    std::cout << "adding restart with match " << m << std::endl;
+    Restart* r = new Restart(this, joinpos, m);
+    restarts_.push_back(r);
 }
 
 void SinkRange::add_invalidate(Str key) {
@@ -353,6 +368,29 @@ bool SinkRange::update(Str first, Str last, Server& server,
             delete iu;
     }
     return true;
+}
+
+bool SinkRange::restart(Str first, Str last, Server& server,
+                        uint64_t now, tamer::gather_rendezvous& gr) {
+
+    bool complete = true;
+    int32_t nrestart = restarts_.size();
+    Join* join = jr_->join();
+
+    for (int32_t i = 0; i < nrestart; ++i) {
+        Restart* r = restarts_.front();
+        JoinRange::validate_args va(first, last, server, now, this,
+                                    SourceRange::notify_insert, gr);
+        join->assign_context(va.rm.match, context_);
+        join->assign_context(va.rm.match, r->context_);
+
+        std::cout << "restarting validation " << va.rm.first << " " << va.rm.last << " " << va.rm.match << std::endl;
+        complete &= jr_->validate_step(va, r->joinpos_);
+        restarts_.pop_front();
+        delete r;
+    }
+
+    return complete;
 }
 
 void SinkRange::invalidate() {

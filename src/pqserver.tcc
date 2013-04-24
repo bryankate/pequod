@@ -433,7 +433,6 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     do {
         it = t->validate(key, next_validate_at(), gr);
         twait(gr);
-        mandatory_assert(it.first && "missing data!");
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
@@ -455,7 +454,6 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     do {
         it = t->validate(first, last, next_validate_at(), gr);
         twait(gr);
-        mandatory_assert(it.first && "missing data!");
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);

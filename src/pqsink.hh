@@ -7,6 +7,7 @@
 #include "interval_tree.hh"
 #include "pqdatum.hh"
 #include <tamer/tamer.hh>
+#include <list>
 
 namespace pq {
 class Server;
@@ -53,6 +54,18 @@ class IntermediateUpdate : public ServerRangeBase {
     friend class SinkRange;
 };
 
+class Restart {
+  public:
+    Restart(SinkRange* sink, int joinpos, const Match& match);
+    inline Str context() const;
+
+  private:
+    LocalStr<12> context_;
+    int joinpos_;
+
+    friend class SinkRange;
+};
+
 class SinkRange : public ServerRangeBase {
   public:
     SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now);
@@ -78,9 +91,13 @@ class SinkRange : public ServerRangeBase {
 
     void add_update(int joinpos, Str context, Str key, int notifier);
     void add_invalidate(Str key);
+    void add_restart(int joinpos, const Match& match);
     inline bool need_update() const;
+    inline bool need_restart() const;
     bool update(Str first, Str last, Server& server,
                 uint64_t now, tamer::gather_rendezvous& gr);
+    bool restart(Str first, Str last, Server& server,
+                 uint64_t now, tamer::gather_rendezvous& gr);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
@@ -98,6 +115,7 @@ class SinkRange : public ServerRangeBase {
     LocalStr<12> context_;
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
+    std::list<Restart*> restarts_;
     JoinRange* jr_;
     int refcount_;
     mutable uintptr_t data_free_;
@@ -241,6 +259,10 @@ inline bool SinkRange::need_update() const {
     return !updates_.empty();
 }
 
+inline bool SinkRange::need_restart() const {
+    return !restarts_.empty();
+}
+
 inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
 #if HAVE_HINT_ENABLED
     Datum* hd = hint == store.end() ? 0 : hint.operator->();
@@ -265,6 +287,10 @@ inline Str IntermediateUpdate::context() const {
 
 inline int IntermediateUpdate::notifier() const {
     return notifier_;
+}
+
+inline Str Restart::context() const {
+    return context_;
 }
 
 inline int32_t RemoteRange::owner() const {
