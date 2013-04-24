@@ -33,7 +33,7 @@ void Table::iterator::fix() {
 
 Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
-      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true), remote_(false),
+      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent},
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
 }
@@ -83,9 +83,6 @@ Table* Table::make_next_table_for(Str key) {
 
     if (can_hash)
         subtables_[subtable_hash_for(key)] = t;
-
-    // check if this table represents a remote range
-    t->remote_ = server_->is_remote(key.prefix(triecut_));
 
     return t;
 }
@@ -278,60 +275,56 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
     ++nmodify_;
 }
 
-std::pair<bool, Table::iterator> Table::validate(Str first, Str last,
-                                                 uint64_t now, tamer::gather_rendezvous& gr) {
+std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t now,
+                                                 tamer::gather_rendezvous& gr) {
+    Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
     bool completed = true;
+    int32_t owner = server_->owner_for(first);
 
-    if (remote_) {
-        /*
+    if (server_->is_remote(owner)) {
         Str have = first;
-        auto r = remote_ranges_.begin_overlaps(first, last);
+        auto r = t->remote_ranges_.begin_overlaps(first, last);
 
-        if (r != remote_ranges_.end()) {
-            while(r != remote_ranges_.end()) {
-                if (r->ibegin() > have) {
-                    if (last < r->ibegin())
-                        break;
-                    else
-                        std::cerr << "missing remote range [" << have << ", " << r->ibegin() << ")" << std::endl;
-                }
-
-                have = r->iend();
-                if (have >= last)
+        while(r != t->remote_ranges_.end()) {
+            if (r->ibegin() > have) {
+                if (last < r->ibegin())
                     break;
-
-                ++r;
+                else {
+                    t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
+                    completed = false;
+                }
             }
+
+            have = r->iend();
+            if (have >= last)
+                break;
+
+            ++r;
         }
 
-        if (have < last)
-            std::cerr << "missing remote range [" << have << ", " << last << ")" << std::endl;
-         */
-        completed = false;
-        return std::make_pair(false, end());
+        if (have < last) {
+            t->fetch_remote(have, last, owner, gr.make_event());
+            completed = false;
+        }
     }
-    else {
-
-        Table* t = this;
-        while (t->parent_->triecut_)
-            t = t->parent_;
-
-        if (t->njoins_ != 0) {
-            if (t->njoins_ == 1) {
-                auto it = store_.lower_bound(first, DatumCompare());
-                auto itx = it;
-                if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
-                    --itx;
-                if (itx != store_.end() && itx->key() < last && itx->owner()
+    else if (t->njoins_ != 0) {
+        if (t->njoins_ == 1) {
+            auto it = store_.lower_bound(first, DatumCompare());
+            auto itx = it;
+            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
+                --itx;
+            if (itx != store_.end() && itx->key() < last && itx->owner()
                     && itx->owner()->valid() && !itx->owner()->has_expired(now)
                     && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
                     && !itx->owner()->need_update())
-                    return std::make_pair(true, iterator(this, it));
-            }
-            for (auto it = t->join_ranges_.begin_overlaps(first, last);
-                 it != t->join_ranges_.end(); ++it)
-                completed &= it->validate(first, last, *server_, now, gr);
+                return std::make_pair(true, iterator(this, it));
         }
+        for (auto it = t->join_ranges_.begin_overlaps(first, last);
+                it != t->join_ranges_.end(); ++it)
+            completed &= it->validate(first, last, *server_, now, gr);
     }
 
     return std::make_pair(completed, lower_bound(first));
@@ -407,6 +400,18 @@ bool Table::hard_flush_for_pull(uint64_t now) {
     flush_at_ = now;
     return true;
 }
+
+tamed void Table::fetch_remote(Str first, Str last, int32_t owner,
+                               tamer::event<> done) {
+
+    RemoteRange* rr = new RemoteRange(first, last, owner);
+    remote_ranges_.insert(*rr);
+
+    //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
+
+    done();
+}
+
 
 Server::Server()
     : supertable_(Str(), nullptr, this),

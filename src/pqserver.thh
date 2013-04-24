@@ -88,7 +88,6 @@ class Table : public Datum {
     unsigned njoins_;
     uint64_t flush_at_;
     bool all_pull_;
-    bool remote_;
     Server* server_;
     Table* parent_;
 
@@ -110,6 +109,9 @@ class Table : public Datum {
     bool hard_flush_for_pull(uint64_t now);
     inline void invalidate_dependents_local(Str first, Str last);
     void invalidate_dependents_down(Str first, Str last);
+
+    tamed void fetch_remote(Str first, Str last, int32_t owner,
+                            tamer::event<> done);
 
     friend class Server;
     friend class iterator;
@@ -175,7 +177,7 @@ class Server {
     inline const Host* me() const;
     inline const Partitioner* partitioner() const;
 //    inline async_interconnect* interconnect(int32_t seqid) const;
-    inline bool is_remote(const Str& key) const;
+    inline int32_t owner_for(const Str& key) const;
     inline bool is_remote(int32_t owner) const;
     inline bool is_owned_public(int32_t owner) const;
     inline void set_cluster_info(const Hosts* hosts, const Partitioner* part,
@@ -518,10 +520,10 @@ inline const Partitioner* Server::partitioner() const {
 //    return interconnect_[seqid];
 //}
 
-inline bool Server::is_remote(const Str& key) const {
+inline int32_t Server::owner_for(const Str& key) const {
     if (!part_)
-        return false;
-    return is_remote(part_->owner(key));
+        return -1;
+    return part_->owner(key);
 }
 
 inline bool Server::is_remote(int32_t owner) const {

@@ -384,7 +384,7 @@ bool SinkRange::restart(Str first, Str last, Server& server,
         join->assign_context(va.rm.match, context_);
         join->assign_context(va.rm.match, r->context_);
 
-        std::cout << "restarting validation " << va.rm.first << " " << va.rm.last << " " << va.rm.match << std::endl;
+        //std::cerr << "restarting validation " << va.rm.first << " " << va.rm.last << " " << va.rm.match << std::endl;
         complete &= jr_->validate_step(va, r->joinpos_);
         restarts_.pop_front();
         delete r;
