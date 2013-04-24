@@ -284,6 +284,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
     bool completed = true;
     int32_t owner = server_->owner_for(first);
 
+    // todo: if we guarantee that a subtable is all remote, we can
+    // do this check once when we create the subtable.
     if (server_->is_remote(owner)) {
         Str have = first;
         auto r = t->remote_ranges_.begin_overlaps(first, last);
@@ -302,6 +304,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             if (have >= last)
                 break;
 
+            if (r->pending())
+                r->add_waiting(gr.make_event());
             ++r;
         }
 
@@ -403,13 +407,19 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 
 tamed void Table::fetch_remote(Str first, Str last, int32_t owner,
                                tamer::event<> done) {
+    tvars {
+        RemoteRange* rr = new RemoteRange(first, last, owner);
+    }
 
-    RemoteRange* rr = new RemoteRange(first, last, owner);
+    rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
     //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
+//    twait {
+//
+//    }
 
-    done();
+    rr->notify_waiting();
 }
 
 

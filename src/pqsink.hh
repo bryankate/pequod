@@ -159,11 +159,15 @@ class RemoteRange : public ServerRangeBase {
     RemoteRange(Str first, Str last, int32_t owner);
 
     inline int32_t owner() const;
+    inline bool pending() const;
+    inline void add_waiting(tamer::event<> w);
+    inline void notify_waiting();
 
   public:
     rblinks<RemoteRange> rblinks_;
   private:
     int32_t owner_;
+    std::list<tamer::event<>> waiting_;
 };
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
@@ -295,6 +299,21 @@ inline Str Restart::context() const {
 
 inline int32_t RemoteRange::owner() const {
     return owner_;
+}
+
+inline bool RemoteRange::pending() const {
+    return !waiting_.empty();
+}
+
+inline void RemoteRange::add_waiting(tamer::event<> w) {
+    waiting_.push_back(w);
+}
+
+inline void RemoteRange::notify_waiting() {
+    while(!waiting_.empty()) {
+        waiting_.front().operator()();
+        waiting_.pop_front();
+    }
 }
 
 } // namespace pq
