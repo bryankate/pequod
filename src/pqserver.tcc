@@ -304,8 +304,11 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             if (have >= last)
                 break;
 
-            if (r->pending())
+            if (r->pending()) {
                 r->add_waiting(gr.make_event());
+                completed = false;
+            }
+
             ++r;
         }
 
