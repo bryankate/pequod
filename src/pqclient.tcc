@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #include "pqclient.hh"
 
 namespace pq {

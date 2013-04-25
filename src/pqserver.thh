@@ -10,12 +10,13 @@
 #include "hosts.hh"
 #include "partitions.hh"
 #include <iterator>
-#include <set>
+#include <vector>
 
 class Json;
 
 namespace pq {
 namespace bi = boost::intrusive;
+class RemoteClient;
 
 class Table : public Datum {
   public:
@@ -174,14 +175,13 @@ class Server {
     tamed void validate(Str first, Str last, tamer::event<Table::iterator> done);
     tamed void validate_count(Str first, Str last, tamer::event<size_t> done);
 
-    inline const Host* me() const;
-    inline const Partitioner* partitioner() const;
-//    inline async_interconnect* interconnect(int32_t seqid) const;
+    inline RemoteClient* interconnect(int32_t seqid) const;
     inline int32_t owner_for(const Str& key) const;
     inline bool is_remote(int32_t owner) const;
     inline bool is_owned_public(int32_t owner) const;
-    inline void set_cluster_info(const Hosts* hosts, const Partitioner* part,
-                                 const Host* me);
+    inline void set_cluster_details(int32_t me,
+                                    const std::vector<RemoteClient*>& interconnect,
+                                    const Partitioner* part);
 
     Json stats() const;
     void print(std::ostream& stream);
@@ -192,8 +192,8 @@ class Server {
     double validate_time_;
     double insert_time_;
     const Partitioner* part_;
-    const Hosts* hosts_;
-    const Host* me_;
+    int32_t me_;
+    std::vector<RemoteClient*> interconnect_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -501,24 +501,19 @@ inline Table::iterator Server::end() {
     return supertable_.end();
 }
 
-inline void Server::set_cluster_info(const Hosts* hosts, const Partitioner* part,
-                                     const Host* me) {
-    hosts_ = hosts;
-    part_ = part;
+inline void Server::set_cluster_details(int32_t me,
+                                        const std::vector<RemoteClient*>& interconnect,
+                                        const Partitioner* part) {
     me_ = me;
+    interconnect_ = interconnect;
+    part_ = part;
 }
 
-inline const Host* Server::me() const {
-    return me_;
+inline RemoteClient* Server::interconnect(int32_t seqid) const {
+    assert(seqid != me_);
+    assert(seqid >= 0 && seqid < (int32_t)interconnect_.size());
+    return interconnect_[seqid];
 }
-
-inline const Partitioner* Server::partitioner() const {
-    return part_;
-}
-
-//inline async_interconnect* Server::interconnect(int32_t seqid) const {
-//    return interconnect_[seqid];
-//}
 
 inline int32_t Server::owner_for(const Str& key) const {
     if (!part_)
@@ -527,11 +522,11 @@ inline int32_t Server::owner_for(const Str& key) const {
 }
 
 inline bool Server::is_remote(int32_t owner) const {
-    return owner >= 0 && owner != me_->seqid();
+    return owner >= 0 && owner != me_;
 }
 
 inline bool Server::is_owned_public(int32_t owner) const {
-    return owner == me_->seqid();
+    return owner == me_;
 }
 
 } // namespace

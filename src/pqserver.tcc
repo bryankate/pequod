@@ -429,7 +429,7 @@ tamed void Table::fetch_remote(Str first, Str last, int32_t owner,
 Server::Server()
     : supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
-      part_(nullptr), hosts_(nullptr), me_(nullptr) {
+      part_(nullptr), me_(-1) {
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {

@@ -6,6 +6,11 @@
 #include "mpfd.hh"
 #include "pqrpc.hh"
 #include "error.hh"
+#include "pqremoteclient.hh"
+#include "sock_helper.hh"
+#include <vector>
+
+std::vector<pq::RemoteClient*> interconnect_;
 
 namespace {
 
@@ -110,6 +115,14 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         rj[2] = pq_fail;
         rj[3] = Json();
 
+        // handle interconnect control message here so that the
+        // fd can be turned into a remote interconnect client
+        if (unlikely((j[0].as_i() == pq_control) && j[2].is_o() && j[2]["interconnect"])) {
+            int32_t peer = j[2]["interconnect"].as_i();
+            assert(peer >= 0 && peer < (int32_t)interconnect_.size());
+            interconnect_[peer] = new pq::RemoteClient(cfd);
+        }
+
         twait { process(server, j, rj, aj, make_event()); }
         mpfd.write(rj);
     }
@@ -145,10 +158,56 @@ tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
     }
 }
 
+tamed void initialize_interconnect(const pq::Hosts* hosts, const pq::Host* me,
+                                   const pq::Partitioner* part,
+                                   tamer::event<bool> done) {
+    tvars {
+        tamer::fd fd;
+        struct sockaddr_in sin;
+        bool connected = true;
+        int32_t i;
+    }
+
+    for (i = 0; i < hosts->size(); ++i) {
+        if (!interconnect_[i] && i < me->seqid()) {
+            twait {
+                auto h = hosts->get_by_seqid(i);
+                pq::sock_helper::make_sockaddr(h->name().c_str(), h->port(), sin);
+                tamer::tcp_connect(sin.sin_addr, h->port(), make_event(fd));
+            }
+
+            if (!fd) {
+                connected = false;
+                break;
+            }
+
+            interconnect_[i] = new pq::RemoteClient(fd);
+            twait {
+                interconnect_[i]->control(Json().set("interconnect", me->seqid()),
+                                          make_event());
+            }
+        }
+        else if (!interconnect_[i] && i != me->seqid()) {
+            connected = false;
+            break;
+        }
+    }
+
+    done(connected);
+}
+
 } // namespace
 
-tamed void server_loop(int port, bool kill, pq::Server& server) {
-    tvars { tamer::fd killer; };
+tamed void server_loop(int port, bool kill, pq::Server& server,
+                       const pq::Hosts* hosts, const pq::Host* me,
+                       const pq::Partitioner* part) {
+
+    tvars {
+        tamer::fd killer;
+        bool connected = false;
+        double delay = 0.005;
+    }
+
     if (kill) {
         twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(killer)); }
         if (killer) {
@@ -156,7 +215,21 @@ tamed void server_loop(int port, bool kill, pq::Server& server) {
             twait { kill_server(killer, port, make_event()); }
         }
     }
+
     std::cerr << "listening on port " << port << "\n";
     acceptor(tamer::tcp_listen(port), server);
+
+    // if this is a cluster deployment, make connections to each server
+    if (hosts) {
+        interconnect_.assign(hosts->size(), nullptr);
+
+        do {
+            twait { tamer::at_delay(delay, make_event()); }
+            twait { initialize_interconnect(hosts, me, part, make_event(connected)); }
+        } while(!connected);
+
+        server.set_cluster_details(me->seqid(), interconnect_, part);
+    }
+
     interrupt_catcher();
 }

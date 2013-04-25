@@ -269,15 +269,17 @@ int main(int argc, char** argv) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
     } else if (mode == mode_listen) {
+        const pq::Host* me = nullptr;
         if (hosts) {
             mandatory_assert(partfunc && "Need to specify a partition function!");
-            server.set_cluster_info(hosts,
-                                    pq::Partitioner::make(partfunc, nbacking, hosts->count(), -1),
-                                    hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port)));
+            part = pq::Partitioner::make(partfunc, nbacking, hosts->count(), -1);
+            me = hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port));
         }
 
-        extern void server_loop(int port, bool kill, pq::Server& server);
-        server_loop(listen_port, kill_old_server, server);
+        extern void server_loop(int port, bool kill, pq::Server& server,
+                                const pq::Hosts* hosts, const pq::Host* me,
+                                const pq::Partitioner* part);
+        server_loop(listen_port, kill_old_server, server, hosts, me, part);
     } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);

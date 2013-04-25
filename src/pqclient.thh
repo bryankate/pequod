@@ -1,3 +1,4 @@
+// -*- mode: c++ -*-
 #ifndef PEQUOD_CLIENT_HH
 #define PEQUOD_CLIENT_HH
 #include "pqserver.hh"
