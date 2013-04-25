@@ -165,8 +165,7 @@ void Join::set_staleness(double s) {
     maintained_ = false;
 }
 
-/** Expand @a pat into the first matching string that matches @a match and
-    could affect the sink range [@a sink_first, @a sink_last). */
+/** Expand @a pat into the first matching string that matches @a rm. */
 int Join::expand_first(uint8_t* buf, const Pattern& pat,
                        const RangeMatch& rm) const {
     const Pattern& sinkpat = sink();

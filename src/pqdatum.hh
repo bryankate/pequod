@@ -14,7 +14,14 @@ typedef boost::intrusive::set_member_hook<
     boost::intrusive::link_mode<boost::intrusive::normal_link>,
     boost::intrusive::optimize_size<true> > pequod_set_member_hook;
 
-class Datum : public pequod_set_base_hook {
+template <typename T> class KeyHook {
+  public:
+    inline const T& key_holder() const {
+        return *static_cast<const T*>(this);
+    }
+};
+
+class Datum : public pequod_set_base_hook, public KeyHook<Datum> {
   public:
     static const char table_marker[];
 
@@ -34,7 +41,8 @@ class Datum : public pequod_set_base_hook {
     inline void ref();
     inline void deref();
 
-    inline Str key() const;
+    typedef Str key_type;
+    inline key_type key() const;
     inline const String& value() const;
     inline String& value();
 
@@ -53,20 +61,22 @@ class Datum : public pequod_set_base_hook {
     friend class SinkRange;
 };
 
-struct DatumCompare {
-    template <typename T>
-    inline bool operator()(const Datum& a, const String_base<T>& b) const {
-	return a.key() < b;
+struct KeyCompare {
+    template <typename K, typename T>
+    inline bool operator()(const KeyHook<K>& a, const String_base<T>& b) const {
+	return a.key_holder().key() < b;
     }
-    inline bool operator()(const Datum& a, Str b) const {
-	return a.key() < b;
+    template <typename K>
+    inline bool operator()(const KeyHook<K>& a, Str b) const {
+	return a.key_holder().key() < b;
     }
-    template <typename T>
-    inline bool operator()(const String_base<T>& a, const Datum& b) const {
-	return a < b.key();
+    template <typename K, typename T>
+    inline bool operator()(const String_base<T>& a, const KeyHook<K>& b) const {
+	return a < b.key_holder().key();
     }
-    inline bool operator()(Str a, const Datum& b) const {
-	return a < b.key();
+    template <typename K>
+    inline bool operator()(Str a, const KeyHook<K>& b) const {
+	return a < b.key_holder().key();
     }
 };
 

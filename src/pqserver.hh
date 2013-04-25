@@ -245,15 +245,15 @@ inline auto Table::lend() -> local_iterator {
 }
 
 inline auto Table::lfind(Str key) -> local_iterator {
-    return store_.find(key, DatumCompare());
+    return store_.find(key, KeyCompare());
 }
 
 inline size_t Table::lcount(Str key) const {
-    return store_.count(key, DatumCompare());
+    return store_.count(key, KeyCompare());
 }
 
 inline const Datum& Table::ldatum(Str key) const {
-    auto it = store_.find(key, DatumCompare());
+    auto it = store_.find(key, KeyCompare());
     return it == store_.end() ? Datum::empty_datum : *it;
 }
 
