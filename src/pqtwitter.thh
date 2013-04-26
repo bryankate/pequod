@@ -556,7 +556,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     done();
 }
 
-tamed void run_twitter_remote(TwitterPopulator& tp, int client_port);
+tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
+                              const Hosts* hosts, const Partitioner* part);
 
 } // namespace pq
 #endif

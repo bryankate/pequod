@@ -302,8 +302,10 @@ int main(int argc, char** argv) {
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
-        } else if (client_port >= 0) {
-            run_twitter_remote(tp, client_port);
+        } else if (client_port >= 0 || hosts) {
+            if (hosts)
+                part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
+            run_twitter_remote(tp, client_port, hosts, part);
         } else {
             pq::DirectClient dc(server);
             pq::TwitterShim<pq::DirectClient> shim(dc);
