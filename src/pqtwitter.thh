@@ -539,10 +539,19 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
     twait { server_.stats(make_event(stats)); }
-    if (stats.get("server_user_time")) {
-        stats["server_user_time"] -= old_stats["server_user_time"];
-        stats["server_system_time"] -= old_stats["server_system_time"];
+    if (!stats.is_array()) {
+        old_stats = Json::make_array(old_stats);
+        stats = Json::make_array(stats);
     }
+
+    uint32_t s = 0;
+    for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s)
+        if (it->get("server_user_time")) {
+            (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
+            (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
+        }
+    stats = Json().set("servers", stats);
+
     stats = Json().set("nposts", npost)
         .set("nsubscribe", nsubscribe).set("nfull", nfull)
 	.set("nupdate", nupdate).set("nposts_read", nread)
