@@ -59,7 +59,29 @@ tamed void MultiClient::restart(tamer::event<> done) {
 
 tamed void MultiClient::add_join(const String& first, const String& last,
                                  const String& joinspec, event<Json> e) {
-    cache_for(first)->add_join(first, last, joinspec, e);
+    tvars {
+        Json rj;
+    }
+
+    if (localNode_)
+        localNode_->add_join(first, last, joinspec, e);
+    else {
+        rj = Json::make_array_reserve(clients_.size());
+        twait {
+            for (uint32_t i = 0; i < clients_.size(); ++i)
+                if (!part_->is_backend(i))
+                    clients_[i]->add_join(first, last, joinspec,
+                                          make_event(rj[i].value()));
+        }
+
+        Json ret;
+        for (auto it = rj.abegin(); it != rj.aend(); ++it)
+            if ((*it)["message"]) {
+                ret.set("message", rj);
+                break;
+            }
+        e(ret);
+    }
 }
 
 tamed void MultiClient::get(const String& key, event<String> e) {
