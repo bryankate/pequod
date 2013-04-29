@@ -59,14 +59,19 @@ inline void MultiClient::clear() {
 }
 
 inline RemoteClient* MultiClient::backend_for(const String &key) const {
-    return clients_[part_->owner(key)];
+    int32_t owner = part_->owner(key);
+    assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
+    return clients_[owner];
 }
 
 inline RemoteClient* MultiClient::cache_for(const String &key) const {
     if (colocateCacheServer_ >= 0)
         return localNode_;
-    else
-        return clients_[part_->owner(key)];
+    else {
+        int owner = part_->owner(key);
+        assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
+        return clients_[owner];
+    }
 }
 
 }

@@ -90,10 +90,20 @@ tamed void MultiClient::scan(const String& first, const String& last,
 }
 
 tamed void MultiClient::stats(event<Json> e) {
+    tvars {
+        Json j;
+    }
+
     if (localNode_)
         localNode_->stats(e);
-    else
-        e(Json()); // todo: fix this
+    else {
+        j = Json::make_array_reserve(clients_.size());
+        twait {
+            for (uint32_t i = 0; i < clients_.size(); ++i)
+                clients_[i]->stats(make_event(j[i].value()));
+        }
+        e(j);
+    }
 }
 
 tamed void MultiClient::pace(tamer::event<> done) {
