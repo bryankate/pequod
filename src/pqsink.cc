@@ -256,8 +256,7 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
 
 Restart::Restart(SinkRange* sink, int joinpos, const Match& m)
     : joinpos_(joinpos) {
-    sink->join()->write_context(context_.mutable_udata(), m,
-                                sink->join()->known_mask(m));
+    sink->join()->make_context(context_, m, sink->join()->known_mask(m));
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
@@ -303,9 +302,8 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
 }
 
 void SinkRange::add_restart(int joinpos, const Match& m) {
-    std::cout << "adding restart with match " << m << std::endl;
-    Restart* r = new Restart(this, joinpos, m);
-    restarts_.push_back(r);
+    //std::cout << "adding restart with match " << m << std::endl;
+    restarts_.push_back(new Restart(this, joinpos, m));
 }
 
 void SinkRange::add_invalidate(Str key) {
@@ -381,8 +379,8 @@ bool SinkRange::restart(Str first, Str last, Server& server,
         Restart* r = restarts_.front();
         JoinRange::validate_args va(first, last, server, now, this,
                                     SourceRange::notify_insert, gr);
-        join->assign_context(va.rm.match, context_);
         join->assign_context(va.rm.match, r->context_);
+        va.rm.dangerous_slot = dangerous_slot_;
 
         //std::cerr << "restarting validation " << va.rm.first << " " << va.rm.last << " " << va.rm.match << std::endl;
         complete &= jr_->validate_step(va, r->joinpos_);
