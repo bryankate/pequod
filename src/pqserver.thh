@@ -111,7 +111,7 @@ class Table : public Datum {
     inline void invalidate_dependents_local(Str first, Str last);
     void invalidate_dependents_down(Str first, Str last);
 
-    tamed void fetch_remote(Str first, Str last, int32_t owner,
+    tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
 
     friend class Server;
@@ -175,6 +175,7 @@ class Server {
     tamed void validate(Str first, Str last, tamer::event<Table::iterator> done);
     tamed void validate_count(Str first, Str last, tamer::event<size_t> done);
 
+    inline int32_t me() const;
     inline RemoteClient* interconnect(int32_t seqid) const;
     inline int32_t owner_for(const Str& key) const;
     inline bool is_remote(int32_t owner) const;
@@ -507,6 +508,10 @@ inline void Server::set_cluster_details(int32_t me,
     me_ = me;
     interconnect_ = interconnect;
     part_ = part;
+}
+
+inline int32_t Server::me() const {
+    return me_;
 }
 
 inline RemoteClient* Server::interconnect(int32_t seqid) const {

@@ -4,6 +4,7 @@
 #include <vector>
 #include "pqserver.hh"
 #include "pqjoin.hh"
+#include "pqremoteclient.hh"
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
@@ -282,42 +283,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         t = t->parent_;
 
     bool completed = true;
-    int32_t owner = server_->owner_for(first);
 
-    // todo: if we guarantee that a subtable is all remote, we can
-    // do this check once when we create the subtable.
-    if (server_->is_remote(owner)) {
-        Str have = first;
-        auto r = t->remote_ranges_.begin_overlaps(first, last);
-
-        while(r != t->remote_ranges_.end()) {
-            if (r->ibegin() > have) {
-                if (last < r->ibegin())
-                    break;
-                else {
-                    t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
-                    completed = false;
-                }
-            }
-
-            have = r->iend();
-            if (have >= last)
-                break;
-
-            if (r->pending()) {
-                r->add_waiting(gr.make_event());
-                completed = false;
-            }
-
-            ++r;
-        }
-
-        if (have < last) {
-            t->fetch_remote(have, last, owner, gr.make_event());
-            completed = false;
-        }
-    }
-    else if (t->njoins_ != 0) {
+    if (t->njoins_ != 0) {
         if (t->njoins_ == 1) {
             auto it = store_.lower_bound(first, DatumCompare());
             auto itx = it;
@@ -326,12 +293,50 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             if (itx != store_.end() && itx->key() < last && itx->owner()
                     && itx->owner()->valid() && !itx->owner()->has_expired(now)
                     && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
+                    && !itx->owner()->need_restart()
                     && !itx->owner()->need_update())
                 return std::make_pair(true, iterator(this, it));
         }
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
+    }
+    else {
+        int32_t owner = server_->owner_for(first);
+
+        // todo: if we guarantee that a subtable is all remote, we can
+        // do this check once when we create the subtable.
+        if (server_->is_remote(owner)) {
+            Str have = first;
+            auto r = t->remote_ranges_.begin_overlaps(first, last);
+
+            while(r != t->remote_ranges_.end()) {
+                if (r->ibegin() > have) {
+                    if (last < r->ibegin())
+                        break;
+                    else {
+                        t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
+                        completed = false;
+                    }
+                }
+
+                have = r->iend();
+                if (have >= last)
+                    break;
+
+                if (r->pending()) {
+                    r->add_waiting(gr.make_event());
+                    completed = false;
+                }
+
+                ++r;
+            }
+
+            if (have < last) {
+                t->fetch_remote(have, last, owner, gr.make_event());
+                completed = false;
+            }
+        }
     }
 
     return std::make_pair(completed, lower_bound(first));
@@ -408,19 +413,24 @@ bool Table::hard_flush_for_pull(uint64_t now) {
     return true;
 }
 
-tamed void Table::fetch_remote(Str first, Str last, int32_t owner,
+tamed void Table::fetch_remote(String first, String last, int32_t owner,
                                tamer::event<> done) {
     tvars {
         RemoteRange* rr = new RemoteRange(first, last, owner);
+        RemoteClient::scan_result res;
     }
 
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
+    // todo: subscribe to get future updates
     //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
-//    twait {
-//
-//    }
+    twait { server_->interconnect(owner)->scan(first, last, make_event(res)); }
+
+    // XXX: not sure if this is correct. what if the range goes outside this triecut?
+    Table& sourcet = server_->make_table_for(first);
+    for (auto it = res.begin(); it != res.end(); ++it)
+        sourcet.insert(it->key(), it->value());
 
     rr->notify_waiting();
 }
