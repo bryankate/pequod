@@ -283,8 +283,42 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         t = t->parent_;
 
     bool completed = true;
+    int32_t owner = server_->owner_for(first);
 
-    if (t->njoins_ != 0) {
+    // todo: if we guarantee that a subtable is all remote, we can
+    // do this check once when we create the subtable.
+    if (server_->is_remote(owner)) {
+        Str have = first;
+        auto r = t->remote_ranges_.begin_overlaps(first, last);
+
+        while(r != t->remote_ranges_.end()) {
+            if (r->ibegin() > have) {
+                if (last < r->ibegin())
+                    break;
+                else {
+                    t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
+                    completed = false;
+                }
+            }
+
+            have = r->iend();
+            if (have >= last)
+                break;
+
+            if (r->pending()) {
+                r->add_waiting(gr.make_event());
+                completed = false;
+            }
+
+            ++r;
+        }
+
+        if (have < last) {
+            t->fetch_remote(have, last, owner, gr.make_event());
+            completed = false;
+        }
+    }
+    else if (t->njoins_ != 0) {
         if (t->njoins_ == 1) {
             auto it = store_.lower_bound(first, DatumCompare());
             auto itx = it;
@@ -300,43 +334,6 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
-    }
-    else {
-        int32_t owner = server_->owner_for(first);
-
-        // todo: if we guarantee that a subtable is all remote, we can
-        // do this check once when we create the subtable.
-        if (server_->is_remote(owner)) {
-            Str have = first;
-            auto r = t->remote_ranges_.begin_overlaps(first, last);
-
-            while(r != t->remote_ranges_.end()) {
-                if (r->ibegin() > have) {
-                    if (last < r->ibegin())
-                        break;
-                    else {
-                        t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
-                        completed = false;
-                    }
-                }
-
-                have = r->iend();
-                if (have >= last)
-                    break;
-
-                if (r->pending()) {
-                    r->add_waiting(gr.make_event());
-                    completed = false;
-                }
-
-                ++r;
-            }
-
-            if (have < last) {
-                t->fetch_remote(have, last, owner, gr.make_event());
-                completed = false;
-            }
-        }
     }
 
     return std::make_pair(completed, lower_bound(first));
