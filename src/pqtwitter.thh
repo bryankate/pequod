@@ -186,7 +186,7 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  make_event(j[3]));
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
-                                 "copy celeb|<poster> "
+                                 "copy c|<poster> "
                                  "using s|<user>|<poster> "
                                  "where user:5t, poster:5",
                                  make_event(j[2]));
@@ -200,7 +200,7 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                 celeb_.assign(nusers, false);
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
-                                 "copy celeb|<poster> "
+                                 "copy c|<poster> "
                                  "using s|<user>|<poster> "
                                  "where user:5t, poster:5",
                                  make_event(j[2]));
@@ -216,7 +216,7 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
                                  "t|<user>|<time>|<poster> = "
                                  "pull copy cp|<poster>|<time> "
                                  "using s|<user>|<poster> "
-                                 "and celeb|<poster> "
+                                 "and c|<poster> "
                                  "where user:5, time:10, poster:5",
                                  make_event(j[1]));
             }
@@ -237,8 +237,8 @@ inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tame
 template <typename S> template <typename R>
 inline void TwitterShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
     celeb_[poster] = true;
-    sprintf(buf_, "celeb|%05u", poster);
-    server_.insert(Str(buf_, 11), Str("1", 1), done);
+    sprintf(buf_, "c|%05u", poster);
+    server_.insert(Str(buf_, 7), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
