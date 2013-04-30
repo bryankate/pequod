@@ -183,8 +183,18 @@ tamed template <typename S>
 void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                                    tamer::event<> done) {
     tvars { Json j[4]; }
-    if (push)
-        done();
+    if (push) {
+        twait {
+            // The purpose of this join is to install triecuts for fairness
+            server_.add_join("xxx|", "xxx}",
+                             "xxx|<user>|<time>|<poster> = "
+                             "copy p|<poster>|<time> "
+                             "using s|<user>|<poster>, "
+                             "t|<user>|<time>|<poster> pull "
+                             "where user:4nt, time:4n, poster:4nt",
+                             make_event(j[0]));
+        }
+    }
     else {
         twait {
             server_.add_join("t|", "t}",
@@ -219,8 +229,9 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
         for (uint32_t i = 0; i < 4; ++i)
             if (j[i]["message"])
                 std::cerr << "installing join: " << j[i] << "\n";
-        done();
     }
+
+    done();
 }
 
 template <typename S> template <typename R>
