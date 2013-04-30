@@ -1,0 +1,29 @@
+// -*- mode: c++ -*-
+#ifndef PEQUOD_INTERCONNECT_HH
+#define PEQUOD_INTERCONNECT_HH
+#include <tamer/tamer.hh>
+#include <iterator>
+#include "mpfd.hh"
+#include "pqrpc.hh"
+#include "pqremoteclient.hh"
+
+namespace pq {
+using tamer::event;
+
+class Interconnect : public RemoteClient {
+  public:
+    typedef typename RemoteClient::scan_result scan_result;
+
+    inline Interconnect(tamer::fd fd);
+
+    tamed void subscribe(const String& first, const String& last,
+                         int32_t subscriber, event<scan_result> e);
+};
+
+
+inline Interconnect::Interconnect(tamer::fd fd)
+    : RemoteClient(fd) {
+}
+
+} // namespace pq
+#endif

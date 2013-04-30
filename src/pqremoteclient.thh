@@ -104,7 +104,7 @@ class RemoteClient {
     tamed void stats(event<Json> e);
     tamed void control(const Json& cmd, event<> e);
 
-  private:
+  protected:
     msgpack_fd fd_;
     unsigned long seq_;
 };

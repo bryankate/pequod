@@ -91,6 +91,8 @@ $(OBJDIR)/pqremoteclient.cc: $(top_srcdir)/src/pqremoteclient.tcc
 $(OBJDIR)/pqremoteclient.hh: $(top_srcdir)/src/pqremoteclient.thh
 $(OBJDIR)/pqmulticlient.cc: $(top_srcdir)/src/pqmulticlient.tcc
 $(OBJDIR)/pqmulticlient.hh: $(top_srcdir)/src/pqmulticlient.thh
+$(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
+$(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 $(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
 $(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
@@ -105,7 +107,7 @@ $(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
 $(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
 $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
@@ -114,6 +116,7 @@ $(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
+$(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 
@@ -149,6 +152,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqclient.o \
 	$(OBJDIR)/pqmulticlient.o \
 	$(OBJDIR)/pqremoteclient.o \
+	$(OBJDIR)/pqinterconnect.o \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
 	$(OBJDIR)/hashclient.o \

@@ -7,10 +7,11 @@ enum {
     pq_erase = 3,
     pq_count = 4,
     pq_scan = 5,
-    pq_add_join = 6,
+    pq_subscribe = 6,
+    pq_add_join = 7,
     // order matters
-    pq_stats = 7,
-    pq_control = 8
+    pq_stats = 8,
+    pq_control = 9
 };
 
 enum {

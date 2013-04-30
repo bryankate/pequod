@@ -4,7 +4,7 @@
 #include <vector>
 #include "pqserver.hh"
 #include "pqjoin.hh"
-#include "pqremoteclient.hh"
+#include "pqinterconnect.hh"
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
@@ -414,7 +414,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
                                tamer::event<> done) {
     tvars {
         RemoteRange* rr = new RemoteRange(first, last, owner);
-        RemoteClient::scan_result res;
+        Interconnect::scan_result res;
     }
 
     rr->add_waiting(done);
@@ -422,7 +422,10 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
 
     // todo: subscribe to get future updates
     //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
-    twait { server_->interconnect(owner)->scan(first, last, make_event(res)); }
+    twait {
+        server_->interconnect(owner)->subscribe(first, last, server_->me(),
+                                                make_event(res));
+    }
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -430,6 +433,11 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
         sourcet.insert(it->key(), it->value());
 
     rr->notify_waiting();
+}
+
+bool Table::subscribe(Str first, Str last, int32_t peer) {
+    std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
+    return true;
 }
 
 

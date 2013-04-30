@@ -6,11 +6,11 @@
 #include "mpfd.hh"
 #include "pqrpc.hh"
 #include "error.hh"
-#include "pqremoteclient.hh"
+#include "pqinterconnect.hh"
 #include "sock_helper.hh"
 #include <vector>
 
-std::vector<pq::RemoteClient*> interconnect_;
+std::vector<pq::Interconnect*> interconnect_;
 
 namespace {
 
@@ -21,6 +21,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         pq::Table* t;
         pq::Table::iterator it;
         size_t count;
+        int32_t peer = -1;
     }
 
     command = j[0].as_i();
@@ -69,10 +70,24 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         twait { server.validate_count(first, last, make_event(count)); }
         rj[3] = count;
         break;
+    case pq_subscribe:
+        if (j[4] && j[4].is_o() && j[4]["subscribe"].is_i())
+            peer = j[4]["subscribe"].as_i();
+        if (unlikely(peer < 0)) {
+            rj[2] = pq_fail;
+            break;
+        }
     case pq_scan: {
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
         twait { server.validate(first, last, make_event(it)); }
+
+        if (unlikely(peer >= 0))
+            if (!server.subscribe(first, last, peer)) {
+                rj[2] = pq_fail;
+                break;
+            }
+
         auto itend = server.table_for(first).end();
         assert(!aj.shared());
         aj.clear();
@@ -120,7 +135,7 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         if (unlikely((j[0].as_i() == pq_control) && j[2].is_o() && j[2]["interconnect"])) {
             int32_t peer = j[2]["interconnect"].as_i();
             assert(peer >= 0 && peer < (int32_t)interconnect_.size());
-            interconnect_[peer] = new pq::RemoteClient(cfd);
+            interconnect_[peer] = new pq::Interconnect(cfd);
         }
 
         twait { process(server, j, rj, aj, make_event()); }
@@ -181,7 +196,7 @@ tamed void initialize_interconnect(const pq::Hosts* hosts, const pq::Host* me,
                 break;
             }
 
-            interconnect_[i] = new pq::RemoteClient(fd);
+            interconnect_[i] = new pq::Interconnect(fd);
             twait {
                 interconnect_[i]->control(Json().set("interconnect", me->seqid()),
                                           make_event());
