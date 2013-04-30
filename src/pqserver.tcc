@@ -436,7 +436,13 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
 }
 
 bool Table::subscribe(Str first, Str last, int32_t peer) {
+    assert(peer != server_->me());
     std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
+
+    // check for gaps in known subscriptions for this peer
+
+    // for each gap add a source range that will forward the notifications
+
     return true;
 }
 
