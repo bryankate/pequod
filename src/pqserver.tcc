@@ -438,31 +438,13 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
 void Table::add_subscription(Str first, Str last, int32_t peer) {
     assert(peer != server_->me());
 
-//    std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
+    //std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
     SourceRange::parameters p {*server_, nullptr, -1, Match(),
                                first, last, server_->remote_sink(peer)};
-    add_source(new SubscribedRange(p));
 
-//    Str have = first;
-//    auto s = subs.begin_overlaps(first, last);
-//
-//    while(s != subs.end()) {
-//        if (s.ibegin() > have) {
-//            if (last < s.ibegin())
-//                break;
-//            else
-//                subs.insert(Subscription(have, s.ibegin()));
-//        }
-//
-//        have = s.iend();
-//        if (have >= last)
-//            break;
-//
-//        ++s;
-//    }
-//
-//    if (have < last)
-//        subs.insert(Subscription(have, last));
+    // todo: look at current subscription sources and only add new
+    // source ranges for the gaps.
+    add_source(new SubscribedRange(p));
 }
 
 
