@@ -112,13 +112,19 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
     done();
 }
 
-tamed void connector(tamer::fd cfd, pq::Server& server) {
+tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
     tvars {
         Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
-        msgpack_fd mpfd(cfd);
+        msgpack_fd* mpfd_;
     }
+
+    if (mpfd)
+        mpfd_ = mpfd;
+    else
+        mpfd_ = new msgpack_fd(cfd);
+
     while (cfd) {
-        twait { mpfd.read_request(make_event(j)); }
+        twait { mpfd_->read_request(make_event(j)); }
         if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
             break;
 
@@ -132,13 +138,16 @@ tamed void connector(tamer::fd cfd, pq::Server& server) {
         if (unlikely((j[0].as_i() == pq_control) && j[2].is_o() && j[2]["interconnect"])) {
             int32_t peer = j[2]["interconnect"].as_i();
             assert(peer >= 0 && peer < (int32_t)interconnect_.size());
-            interconnect_[peer] = new pq::Interconnect(cfd);
+            interconnect_[peer] = new pq::Interconnect(mpfd_);
         }
 
         twait { process(server, j, rj, aj, make_event()); }
-        mpfd.write(rj);
+        mpfd_->write(rj);
     }
+
     cfd.close();
+    if (!mpfd)
+        delete mpfd_;
 }
 
 tamed void acceptor(tamer::fd listenfd, pq::Server& server) {
@@ -147,7 +156,7 @@ tamed void acceptor(tamer::fd listenfd, pq::Server& server) {
         fprintf(stderr, "listen: %s\n", strerror(-listenfd.error()));
     while (listenfd) {
         twait { listenfd.accept(make_event(cfd)); }
-        connector(cfd, server);
+        connector(cfd, nullptr, server);
     }
 }
 
@@ -170,7 +179,8 @@ tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
     }
 }
 
-tamed void initialize_interconnect(const pq::Hosts* hosts, const pq::Host* me,
+tamed void initialize_interconnect(pq::Server& server,
+                                   const pq::Hosts* hosts, const pq::Host* me,
                                    const pq::Partitioner* part,
                                    tamer::event<bool> done) {
     tvars {
@@ -198,6 +208,8 @@ tamed void initialize_interconnect(const pq::Hosts* hosts, const pq::Host* me,
                 interconnect_[i]->control(Json().set("interconnect", me->seqid()),
                                           make_event());
             }
+
+            connector(fd, interconnect_[i]->fd(), server);
         }
         else if (!interconnect_[i] && i != me->seqid()) {
             connected = false;
@@ -237,7 +249,8 @@ tamed void server_loop(int port, bool kill, pq::Server& server,
 
         do {
             twait { tamer::at_delay(delay, make_event()); }
-            twait { initialize_interconnect(hosts, me, part, make_event(connected)); }
+            twait { initialize_interconnect(server, hosts, me, part,
+                                            make_event(connected)); }
         } while(!connected);
 
         server.set_cluster_details(me->seqid(), interconnect_, part);

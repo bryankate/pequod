@@ -11,6 +11,8 @@ using tamer::event;
 class RemoteClient {
   public:
     inline RemoteClient(tamer::fd fd);
+    inline RemoteClient(msgpack_fd* mpfd);
+    inline ~RemoteClient();
 
     tamed void add_join(const String& first, const String& last,
                         const String& joinspec, event<Json> e);
@@ -104,19 +106,35 @@ class RemoteClient {
     tamed void stats(event<Json> e);
     tamed void control(const Json& cmd, event<> e);
 
+    inline msgpack_fd* fd() const;
+
   protected:
-    msgpack_fd fd_;
+    msgpack_fd* fd_;
     unsigned long seq_;
+    bool alloc_;
 };
 
 
 inline RemoteClient::RemoteClient(tamer::fd fd)
-    : fd_(fd), seq_(0) {
+    : fd_(new msgpack_fd(fd)), seq_(0), alloc_(true) {
+}
+
+inline RemoteClient::RemoteClient(msgpack_fd* fd)
+    : fd_(fd), seq_(0), alloc_(false) {
+}
+
+inline RemoteClient::~RemoteClient() {
+    if (alloc_)
+        delete fd_;
+}
+
+inline msgpack_fd* RemoteClient::fd() const {
+    return fd_;
 }
 
 template <typename R>
 inline void RemoteClient::pace(tamer::preevent<R> done) {
-    fd_.pace(done);
+    fd_->pace(done);
 }
 
 } // namespace pq
