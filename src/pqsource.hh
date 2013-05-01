@@ -10,6 +10,7 @@
 #include "local_vector.hh"
 #include "local_str.hh"
 #include <iostream>
+
 namespace pq {
 class Server;
 class Match;
@@ -48,10 +49,11 @@ class SourceRange {
     void take_results(SourceRange& r);
     void remove_sink(SinkRange* sink, Str context);
 
-    inline bool check_match(Str key) const;
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
     };
+
+    virtual bool check_match(Str key) const;
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
@@ -82,6 +84,16 @@ class SourceRange {
 class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(const parameters& p);
+    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+  protected:
+    virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
+};
+
+
+class SubscribedRange : public SourceRange {
+  public:
+    inline SubscribedRange(const parameters& p);
+    virtual bool check_match(Str key) const;
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
     virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
@@ -179,10 +191,6 @@ inline bool SourceRange::empty() const {
     return results_.empty();
 }
 
-inline bool SourceRange::check_match(Str key) const {
-    return join_->source(joinpos_).match(key);
-}
-
 inline void SourceRange::clear_without_deref() {
     results_.clear();
 }
@@ -200,6 +208,10 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
 }
 
 inline InvalidatorRange::InvalidatorRange(const parameters& p)
+    : SourceRange(p) {
+}
+
+inline SubscribedRange::SubscribedRange(const parameters& p)
     : SourceRange(p) {
 }
 

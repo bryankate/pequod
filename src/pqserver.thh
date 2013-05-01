@@ -111,7 +111,7 @@ class Table : public Datum {
     inline void invalidate_dependents_local(Str first, Str last);
     void invalidate_dependents_down(Str first, Str last);
 
-    bool subscribe(Str first, Str last, int32_t peer);
+    void add_subscription(Str first, Str last, int32_t peer);
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
 
@@ -146,6 +146,7 @@ class Server {
     typedef ServerStore store_type;
 
     Server();
+    ~Server();
 
     typedef Table::iterator iterator;
     inline iterator begin();
@@ -176,10 +177,11 @@ class Server {
     tamed void validate(Str first, Str last, tamer::event<Table::iterator> done);
     tamed void validate_count(Str first, Str last, tamer::event<size_t> done);
 
-    inline bool subscribe(Str first, Str last, int32_t peer);
+    inline void subscribe(Str first, Str last, int32_t peer);
 
     inline int32_t me() const;
     inline Interconnect* interconnect(int32_t seqid) const;
+    inline RemoteSink* remote_sink(int32_t seqid) const;  // ugh
     inline int32_t owner_for(const Str& key) const;
     inline bool is_remote(int32_t owner) const;
     inline bool is_owned_public(int32_t owner) const;
@@ -198,6 +200,7 @@ class Server {
     const Partitioner* part_;
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
+    std::vector<RemoteSink*> remote_sinks_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -505,8 +508,8 @@ inline Table::iterator Server::end() {
     return supertable_.end();
 }
 
-inline bool Server::subscribe(Str first, Str last, int32_t peer) {
-    return table(table_name(first)).subscribe(first, last, peer);
+inline void Server::subscribe(Str first, Str last, int32_t peer) {
+    table(table_name(first)).add_subscription(first, last, peer);
 }
 
 inline void Server::set_cluster_details(int32_t me,
@@ -515,6 +518,9 @@ inline void Server::set_cluster_details(int32_t me,
     me_ = me;
     interconnect_ = interconnect;
     part_ = part;
+
+    for (auto& i : interconnect_)
+        remote_sinks_.push_back(new RemoteSink(i));
 }
 
 inline int32_t Server::me() const {
@@ -525,6 +531,12 @@ inline Interconnect* Server::interconnect(int32_t seqid) const {
     assert(seqid != me_);
     assert(seqid >= 0 && seqid < (int32_t)interconnect_.size());
     return interconnect_[seqid];
+}
+
+inline RemoteSink* Server::remote_sink(int32_t seqid) const {
+    assert(seqid != me_);
+    assert(seqid >= 0 && seqid < (int32_t)remote_sinks_.size());
+    return remote_sinks_[seqid];
 }
 
 inline int32_t Server::owner_for(const Str& key) const {

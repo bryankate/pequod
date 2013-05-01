@@ -1,5 +1,6 @@
 #include "pqsource.hh"
 #include "pqserver.hh"
+#include "pqinterconnect.hh"
 #include <typeinfo>
 
 namespace pq {
@@ -16,11 +17,14 @@ SourceRange::SourceRange(const parameters& p)
     if (!iend_.is_local())
         allocated_key_bytes += iend_.length();
 
-    unsigned sink_mask = (p.sink ? p.sink->context_mask() : 0);
-    unsigned context = p.join->context_mask(p.joinpos) & ~sink_mask;
     results_.push_back(result{Str(), p.sink});
-    p.join->make_context(results_.back().context, p.match, context);
     p.sink->ref();
+
+    if (p.join) {
+        unsigned sink_mask = (p.sink ? p.sink->context_mask() : 0);
+        unsigned context = p.join->context_mask(p.joinpos) & ~sink_mask;
+        p.join->make_context(results_.back().context, p.match, context);
+    }
 }
 
 SourceRange::~SourceRange() {
@@ -51,6 +55,10 @@ void SourceRange::remove_sink(SinkRange* sink, Str context) {
             ++i;
     if (results_.empty())
         kill();
+}
+
+bool SourceRange::check_match(Str key) const {
+    return join_->source(joinpos_).match(key);
 }
 
 void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
@@ -110,6 +118,25 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
     if (notifier)
         for (auto& res : results_)
             res.sink->add_update(joinpos_, res.context, d->key(), notifier);
+}
+
+bool SubscribedRange::check_match(Str) const {
+    return true;
+}
+
+void SubscribedRange::notify(const Datum* src, const String&, int notifier) const {
+    for (result* it = results_.begin(); it != results_.end(); ++it) {
+        RemoteSink* sink = reinterpret_cast<RemoteSink*>(it->sink);
+        switch(notifier) {
+            case SourceRange::notify_erase:
+                sink->conn()->erase(src->key(), tamer::event<>());
+                break;
+            case SourceRange::notify_insert:
+            case SourceRange::notify_update:
+                sink->conn()->insert(src->key(), src->value(), tamer::event<>());
+                break;
+        }
+    }
 }
 
 void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {

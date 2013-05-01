@@ -260,21 +260,23 @@ Restart::Restart(SinkRange* sink, int joinpos, const Match& m)
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
-    : ServerRangeBase(rm.first, rm.last), hint_{nullptr},
-      dangerous_slot_(rm.dangerous_slot),
-      jr_(jr), refcount_(0), data_free_(uintptr_t(-1)) {
+    : ServerRangeBase(rm.first, rm.last), table_(nullptr), hint_{nullptr},
+      dangerous_slot_(rm.dangerous_slot), expires_at_(0),
+      refcount_(0), data_free_(uintptr_t(-1)), jr_(jr) {
+
     Join* j = jr_->join();
-    if (j->maintained())
-        expires_at_ = 0;
-    else
-        expires_at_ = now + j->staleness();
 
-    context_mask_ = j->known_mask(rm.match);
-    j->make_context(context_, rm.match, context_mask_);
+    if (j) {
+        if (!j->maintained())
+            expires_at_ = now + j->staleness();
 
-    table_ = &j->server().make_table_for(rm.first, rm.last);
-    // if (dangerous_slot_ >= 0)
-    //     std::cerr << rm.first << " " << rm.last <<  " " << dangerous_slot_ << "\n";
+        context_mask_ = j->known_mask(rm.match);
+        j->make_context(context_, rm.match, context_mask_);
+
+        table_ = &j->server().make_table_for(rm.first, rm.last);
+        // if (dangerous_slot_ >= 0)
+        //     std::cerr << rm.first << " " << rm.last <<  " " << dangerous_slot_ << "\n";
+    }
 }
 
 SinkRange::~SinkRange() {
@@ -418,6 +420,17 @@ void SinkRange::invalidate() {
 
 RemoteRange::RemoteRange(Str first, Str last, int32_t owner)
     : ServerRangeBase(first, last), owner_(owner) {
+}
+
+RemoteSink::RemoteSink(Interconnect* conn)
+    : SinkRange(new JoinRange("", "}", nullptr), RangeMatch("", "}"), 0),
+      conn_(conn) {
+
+    ref(); // avoid auto destruction
+}
+
+RemoteSink::~RemoteSink() {
+    delete jr_;
 }
 
 std::ostream& operator<<(std::ostream& stream, const IntermediateUpdate& iu) {

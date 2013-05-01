@@ -420,12 +420,12 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
-    // todo: subscribe to get future updates
     //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
+    twait { server_->interconnect(owner)->pace(make_event()); }
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -435,15 +435,34 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->notify_waiting();
 }
 
-bool Table::subscribe(Str first, Str last, int32_t peer) {
+void Table::add_subscription(Str first, Str last, int32_t peer) {
     assert(peer != server_->me());
-    std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
 
-    // check for gaps in known subscriptions for this peer
+//    std::cerr << "subscribing " << peer << " to range [" << first << ", " << last << ")" << std::endl;
+    SourceRange::parameters p {*server_, nullptr, -1, Match(),
+                               first, last, server_->remote_sink(peer)};
+    add_source(new SubscribedRange(p));
 
-    // for each gap add a source range that will forward the notifications
-
-    return true;
+//    Str have = first;
+//    auto s = subs.begin_overlaps(first, last);
+//
+//    while(s != subs.end()) {
+//        if (s.ibegin() > have) {
+//            if (last < s.ibegin())
+//                break;
+//            else
+//                subs.insert(Subscription(have, s.ibegin()));
+//        }
+//
+//        have = s.iend();
+//        if (have >= last)
+//            break;
+//
+//        ++s;
+//    }
+//
+//    if (have < last)
+//        subs.insert(Subscription(have, last));
 }
 
 
@@ -451,6 +470,11 @@ Server::Server()
     : supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
       part_(nullptr), me_(-1) {
+}
+
+Server::~Server() {
+    for (auto& s : remote_sinks_)
+        s->deref();
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {

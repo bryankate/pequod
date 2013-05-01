@@ -14,6 +14,7 @@ class Server;
 class Match;
 class RangeMatch;
 class JoinRange;
+class Interconnect;
 
 class ServerRangeBase {
   public:
@@ -116,10 +117,11 @@ class SinkRange : public ServerRangeBase {
     uint64_t expires_at_;
     interval_tree<IntermediateUpdate> updates_;
     std::list<Restart*> restarts_;
-    JoinRange* jr_;
     int refcount_;
     mutable uintptr_t data_free_;
     mutable local_vector<Datum*, 12> data_;
+  protected:
+    JoinRange* jr_;
   public:
     rblinks<SinkRange> rblinks_;
 
@@ -168,6 +170,22 @@ class RemoteRange : public ServerRangeBase {
   private:
     int32_t owner_;
     std::list<tamer::event<>> waiting_;
+};
+
+/*
+ * A fake sink that represents a remote server. This way the existing
+ * source/sink architecture can be used to notify remote servers of
+ * changes to data. It has no connection to an actual table or join.
+ */
+class RemoteSink : public SinkRange {
+  public:
+    RemoteSink(Interconnect* conn);
+    ~RemoteSink();
+
+    inline Interconnect* conn() const;
+
+  private:
+    Interconnect* conn_;
 };
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
@@ -314,6 +332,10 @@ inline void RemoteRange::notify_waiting() {
         waiting_.front().operator()();
         waiting_.pop_front();
     }
+}
+
+inline Interconnect* RemoteSink::conn() const {
+    return conn_;
 }
 
 } // namespace pq

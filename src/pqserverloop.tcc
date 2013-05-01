@@ -57,6 +57,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         break;
     }
     case pq_insert:
+        std::cerr << "got insert with seq " << j[1].as_i() << std::endl;
         server.insert(j[2].as_s(), j[3].as_s());
         rj[2] = pq_ok;
         break;
@@ -81,12 +82,8 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
         twait { server.validate(first, last, make_event(it)); }
-
         if (unlikely(peer >= 0))
-            if (!server.subscribe(first, last, peer)) {
-                rj[2] = pq_fail;
-                break;
-            }
+            server.subscribe(first, last, peer);
 
         auto itend = server.table_for(first).end();
         assert(!aj.shared());
