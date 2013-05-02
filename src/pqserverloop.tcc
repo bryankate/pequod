@@ -57,7 +57,6 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         break;
     }
     case pq_insert:
-        std::cerr << "got insert with seq " << j[1].as_i() << std::endl;
         server.insert(j[2].as_s(), j[3].as_s());
         rj[2] = pq_ok;
         break;
