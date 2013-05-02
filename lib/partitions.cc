@@ -465,10 +465,10 @@ TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
     ps_.add(partition1("c|", partition1::text, 0, 0, 1));
 
     if (newtwitter) {
-        ps_.add(partition1("cp|", partition1::binary, 14, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("p|", partition1::binary, 14, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("s|", partition1::binary, 14, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("t|", partition1::binary, 14, nbacking, nservers - nbacking));
+        ps_.add(partition1("cp|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("p|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("s|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+        ps_.add(partition1("t|", partition1::binary, 24, nbacking, nservers - nbacking));
     }
     else {
         ps_.add(partition1("f|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
