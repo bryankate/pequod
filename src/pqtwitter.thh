@@ -481,6 +481,17 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     }
     gen.seed(13918);
 
+    // separate populate phase
+    while (time < post_end_time) {
+        u = rng(nusers);
+        if (tp_.log())
+            printf("%d: post p|%05d|%010d\n", time, u, time);
+        post(u, time, String(TwitterPopulator::tweet_data, 5), gr.make_event());
+        ++npost;
+        ++time;
+    }
+    twait(gr);
+
     for (uint32_t i = 0; i != nusers; ++i)
         load_times[i] = 0;
     twait { server_.stats(make_event(old_stats)); }
@@ -490,7 +501,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     while (time != end_time) {
         u = rng(nusers);
         a = rng(100);
-        if (time < post_end_time || a < tp_.ppost()) {
+        if (a < tp_.ppost()) {
             if (tp_.log())
                 printf("%d: post p|%05d|%010d\n", time, u, time);
             post(u, time, String(TwitterPopulator::tweet_data, 5), gr.make_event());
