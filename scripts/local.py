@@ -110,7 +110,7 @@ for x in exps:
                 pin = "numactl -C " + str(startcpu + nprocesses + c) + " "
 
             full_cmd = pin + clientcmd + \
-                " > " + outfile + str(c) + ".txt" + \
+                " > " + outfile + str(c) + ".json" + \
                 " 2> " + fartfile + str(c) + ".txt"
 
             print full_cmd
