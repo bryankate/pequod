@@ -190,6 +190,8 @@ class Server {
                                     const Partitioner* part);
 
     Json stats() const;
+    void control(const Json& cmd);
+
     void print(std::ostream& stream);
 
   private:

@@ -100,8 +100,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         break;
     case pq_control:
         if (j[2].is_o()) {
-            if (j[2]["quit"])
-                exit(0);
+            server.control(j[2]);
             rj[2] = pq_ok;
             rj[3] = Json::make_object();
         }

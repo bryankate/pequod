@@ -593,6 +593,20 @@ Json Server::stats() const {
     return answer.set("tables", tables);
 }
 
+void Server::control(const Json& cmd) {
+    if (cmd["quit"])
+        exit(0);
+    else if (cmd["print"])
+        print(std::cerr);
+    else if (cmd["print_table_keys"]) {
+        String tname = table_name(cmd["print_table_keys"].as_s());
+        assert(tname);
+        Table& t = table(tname);
+        for (auto it = t.begin(); it != t.end(); ++it)
+            std::cerr << it->key() << std::endl;
+    }
+}
+
 void Table::print_sources(std::ostream& stream) const {
     stream << source_ranges_;
 }

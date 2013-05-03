@@ -45,6 +45,7 @@ class DirectClient {
                     tamer::event<scan_result> e);
 
     inline void stats(tamer::event<Json> e);
+    inline void control(const Json& cmd, tamer::event<> e);
 
 
     // preevent versions
@@ -72,6 +73,9 @@ class DirectClient {
 
     template <typename R>
     inline void stats(preevent<R, Json> e);
+
+    template <typename R>
+    inline void control(const Json& cmd, preevent<R> e);
 
   private:
     Server& server_;
@@ -134,6 +138,11 @@ inline void DirectClient::stats(event<Json> e) {
     e(server_.stats());
 }
 
+inline void DirectClient::control(const Json& cmd, event<> e) {
+    server_.control(cmd);
+    e();
+}
+
 
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
@@ -185,6 +194,12 @@ inline void DirectClient::pace(preevent<R> done) {
 template <typename R>
 inline void DirectClient::stats(preevent<R, Json> e) {
     e(server_.stats());
+}
+
+template <typename R>
+inline void DirectClient::control(const Json& cmd, preevent<R> e) {
+    server_.control(cmd);
+    e();
 }
 
 } // namespace pq
