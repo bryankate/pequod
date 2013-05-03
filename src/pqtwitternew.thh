@@ -369,7 +369,7 @@ template <typename S> template <typename R>
 void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
                                     uint32_t time, preevent<R> e) {
     if (tp_.log())
-        printf("%d: subscribe s|%08d|%08d\n", time, subscriber, poster);
+        fprintf(stderr, "%d: subscribe s|%08d|%08d\n", time, subscriber, poster);
 
     // in client push mode we reverse the subscriber key to make followers list
     server_.subscribe((tp_.push()) ? poster : subscriber,
@@ -386,7 +386,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) 
     }
 
     if (tp_.log())
-        printf("%d: post p|%08d|%010d\n", time, u, time);
+        fprintf(stderr, "%d: post p|%08d|%010d\n", time, u, time);
 
     user = &tp_.mutable_user(u);
     user->add_post(time);
@@ -448,7 +448,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 
     if (tp_.verbose()) { std::cerr << "Creating social graph." << std::endl; }
     tp_.make_subscriptions(gen);
-    tp_.print_subscription_statistics(std::cout);
+    tp_.print_subscription_statistics(std::cerr);
 
     // need to assign this here because make_subscriptions
     // can update tp_.nusers_ (when loaded from a file)
@@ -529,7 +529,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     twait { server_.stats(make_event(old_stats)); }
 
-    if (tp_.verbose()) { std::cout << "Starting workload." << std::endl; }
+    if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
@@ -571,7 +571,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 user = &tp_.mutable_user(loggedin[slot]);
 
                 if (tp_.log())
-                    printf("%d: logout %08d\n", currtime_, user->uid());
+                    fprintf(stderr, "%d: logout %08d\n", currtime_, user->uid());
 
                 active.push_back(user->uid());
                 loggedin.erase(loggedin.begin() + slot);
@@ -588,7 +588,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     active.erase(active.begin() + slot);
 
                     if (tp_.log())
-                        printf("%d: login %08d\n", currtime_, user->uid());
+                        fprintf(stderr, "%d: login %08d\n", currtime_, user->uid());
 
                     loggedin.push_back(user->uid());
                     user->loggedin_ = true;
@@ -613,8 +613,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 }
 
                 if (tp_.log()) {
-                    printf("%d: scan [t|%08u|%010u, t|%08u})\n", currtime_,
-                           user->uid(), horizon, user->uid());
+                    fprintf(stderr, "%d: scan [t|%08u|%010u, t|%08u})\n", currtime_,
+                            user->uid(), horizon, user->uid());
 
                     twait {
                         server_.timeline_scan(user->uid(), horizon,
@@ -625,7 +625,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                             ++it, ++user->nread_) {
                         assert(it->key().length() == 16);
                         assert(it->key()[0] == 't');
-                        std::cout << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
+                        std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
                                   << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
                                   << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
                                   << ": " << it->value() << "\n";
