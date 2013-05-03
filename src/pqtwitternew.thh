@@ -78,6 +78,7 @@ class TwitterNewPopulator {
 
     inline uint32_t nusers() const { return nusers_; }
     inline uint32_t duration() const { return duration_; }
+    inline uint32_t popduration() const { return popduration_; }
     inline uint32_t postlimit() const { return postlimit_; }
     inline double pct_active() const { return pct_active_; }
     inline bool push() const { return push_; }
@@ -104,6 +105,7 @@ class TwitterNewPopulator {
   private:
     uint32_t nusers_;
     uint32_t duration_;
+    uint32_t popduration_;
     uint32_t postlimit_;
     bool push_;
     bool pull_;
@@ -455,7 +457,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (tp_.overhead())
         post_end_time = this->currtime_;
     else
-        post_end_time = this->currtime_ + ((nusers * 5) > 1000000 ? 1000000 : nusers * 5);
+        post_end_time = this->currtime_ + tp_.popduration();
 
     twait {
         if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }

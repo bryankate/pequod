@@ -67,6 +67,7 @@ bool TwitterUser::Compare::operator() (const uint32_t& a, const TwitterUser& b) 
 TwitterNewPopulator::TwitterNewPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
       duration_(param["duration"].as_i(100000)),
+      popduration_(param["popduration"].as_i(duration_ / 10)),
       postlimit_(param["postlimit"].as_i(0)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
