@@ -684,6 +684,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait(gr);
     }
 
+    //twait { server_.control(Json().set("print_table_keys", "p|"), make_event()); }
+
     uint32_t nbackpost = 0, npost = 0, nsubscribe = 0,
              nlogout = 0, nlogin = 0, ncheck = 0, nread = 0;
 
