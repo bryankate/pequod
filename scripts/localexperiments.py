@@ -12,8 +12,10 @@ exps[0]['defs'].append(
      'servercmd': serverCmd,
      'clientcmd': "%s" % (clientCmd)})
 
+'''
 exps[0]['defs'].append(
     {'name': "push",
      'def_part': "twitternew",
      'servercmd': serverCmd,
      'clientcmd': "%s --push" % (clientCmd)})
+'''
