@@ -57,12 +57,14 @@ class IntermediateUpdate : public ServerRangeBase {
 
 class Restart {
   public:
-    Restart(SinkRange* sink, int joinpos, const Match& match);
+    Restart(SinkRange* sink, int joinpos, const Match& match, int notifier);
     inline Str context() const;
+    inline int notifier() const;
 
   private:
     LocalStr<12> context_;
     int joinpos_;
+    int notifier_;
 
     friend class SinkRange;
 };
@@ -92,7 +94,7 @@ class SinkRange : public ServerRangeBase {
 
     void add_update(int joinpos, Str context, Str key, int notifier);
     void add_invalidate(Str key);
-    void add_restart(int joinpos, const Match& match);
+    void add_restart(int joinpos, const Match& match, int notifier);
     inline bool need_update() const;
     inline bool need_restart() const;
     bool update(Str first, Str last, Server& server,
@@ -313,6 +315,10 @@ inline int IntermediateUpdate::notifier() const {
 
 inline Str Restart::context() const {
     return context_;
+}
+
+inline int Restart::notifier() const {
+    return notifier_;
 }
 
 inline int32_t RemoteRange::owner() const {

@@ -29,11 +29,13 @@ struct JoinRange::validate_args {
     Match::state filtermatch;
     Table* sourcet[source_capacity];
     tamer::gather_rendezvous& pending;
+    bool complete;
 
     validate_args(Str first, Str last, Server& server_, uint64_t now_,
                   SinkRange* sink_, int notifier_, tamer::gather_rendezvous& gr_)
         : rm(first, last), server(&server_), sink(sink_),
-          now(now_), notifier(notifier_), filters(0), pending(gr_) {
+          now(now_), notifier(notifier_), filters(0),
+          pending(gr_), complete(true) {
     }
 };
 
@@ -75,7 +77,7 @@ bool JoinRange::validate(Str first, Str last, Server& server,
                 complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
             if (sink->need_restart())
                 complete &= sink->restart(first, last, server, now, gr);
-            if (sink->need_update())
+            if (!sink->need_restart() && sink->need_update())
                 complete &= sink->update(first, last, server, now, gr);
             last_valid = sink->iend();
             ++it;
@@ -130,20 +132,20 @@ bool JoinRange::validate_step(validate_args& va, int joinpos) {
     va.sourcet[joinpos] = sourcet;
     //std::cerr << "examine " << Str(kf, kflen) << ", " << Str(kl, kllen) << "\n";
 
-    SourceRange* r = 0;
-    if (joinpos + 1 == join_->nsource())
-        r = join_->make_source(*va.server, va.rm.match,
-                               Str(kf, kflen), Str(kl, kllen), va.sink);
-
     // need to validate the source ranges in case they have not been
     // expanded yet or they are missing.
     std::pair<bool, Table::iterator> srcval =
             sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now, va.pending);
 
     if (!srcval.first) {
-        va.sink->add_restart(joinpos, va.rm.match);
+        va.sink->add_restart(joinpos, va.rm.match, va.notifier);
         return false;
     }
+
+    SourceRange* r = 0;
+    if (joinpos + 1 == join_->nsource())
+        r = join_->make_source(*va.server, va.rm.match,
+                               Str(kf, kflen), Str(kl, kllen), va.sink);
 
     bool complete = true;
     auto it = srcval.second;
@@ -188,7 +190,7 @@ bool JoinRange::validate_step(validate_args& va, int joinpos) {
                 give_up:
                     va.rm.match.restore(mstate);
                 }
-        } else {
+        } else if (join_->maintained() || (!join_->maintained() && va.complete)) {
             for (; it != itend && it->key() < Str(kl, kllen); ++it)
                 if (it->key().length() == pat.key_length()) {
                     //std::cerr << "consider " << *it << "\n";
@@ -197,19 +199,24 @@ bool JoinRange::validate_step(validate_args& va, int joinpos) {
                     va.rm.match.restore(mstate);
                 }
         }
+
+        // track completion outside of each step to avoid work in pull
+        // mode when data is already known to be missing
+        va.complete &= complete;
     }
 
-    if (complete && join_->maintained() && va.notifier == SourceRange::notify_erase) {
+    if (join_->maintained() && va.notifier == SourceRange::notify_erase) {
+        assert(complete);
         if (r) {
             LocalStr<12> remove_context;
             join_->make_context(remove_context, va.rm.match, join_->context_mask(joinpos) & ~va.sink->context_mask());
             sourcet->remove_source(r->ibegin(), r->iend(), va.sink, remove_context);
             delete r;
         }
-    } else if (complete && join_->maintained()) {
-        if (r)
+    } else if (join_->maintained()) {
+        if (r && complete)
             sourcet->add_source(r);
-        else {
+        else if (!r) {
             SourceRange::parameters p{*va.server, join_, joinpos, va.rm.match,
                     Str(kf, kflen), Str(kl, kllen), va.sink};
             sourcet->add_source(new InvalidatorRange(p));
@@ -254,8 +261,8 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
     }
 }
 
-Restart::Restart(SinkRange* sink, int joinpos, const Match& m)
-    : joinpos_(joinpos) {
+Restart::Restart(SinkRange* sink, int joinpos, const Match& m, int notifier)
+    : joinpos_(joinpos), notifier_(notifier) {
     sink->join()->make_context(context_, m, sink->join()->known_mask(m));
 }
 
@@ -303,9 +310,9 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
     //std::cerr << *iu << "\n";
 }
 
-void SinkRange::add_restart(int joinpos, const Match& m) {
+void SinkRange::add_restart(int joinpos, const Match& m, int notifier) {
     //std::cout << "adding restart with match " << m << std::endl;
-    restarts_.push_back(new Restart(this, joinpos, m));
+    restarts_.push_back(new Restart(this, joinpos, m, notifier));
 }
 
 void SinkRange::add_invalidate(Str key) {
@@ -380,7 +387,7 @@ bool SinkRange::restart(Str first, Str last, Server& server,
     for (int32_t i = 0; i < nrestart; ++i) {
         Restart* r = restarts_.front();
         JoinRange::validate_args va(first, last, server, now, this,
-                                    SourceRange::notify_insert, gr);
+                                    r->notifier_, gr);
         join->assign_context(va.rm.match, r->context_);
         va.rm.dangerous_slot = dangerous_slot_;
 
