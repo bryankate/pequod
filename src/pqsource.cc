@@ -120,6 +120,18 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
             res.sink->add_update(joinpos_, res.context, d->key(), notifier);
 }
 
+void SubscribedRange::invalidate() {
+    result* endit = results_.end();
+    for (result* it = results_.begin(); it != endit; ++it) {
+        RemoteSink* sink = reinterpret_cast<RemoteSink*>(it->sink);
+        //std::cerr << "sending invalidation of [" << ibegin() << ", " << iend() << ") to " << sink->peer() << std::endl;
+        sink->conn()->invalidate(ibegin(), iend(), tamer::event<>());
+    }
+
+    server_.table_for(ibegin(), iend()).unlink_source(this);
+    delete this;
+}
+
 bool SubscribedRange::check_match(Str) const {
     return true;
 }

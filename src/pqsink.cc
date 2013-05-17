@@ -429,9 +429,9 @@ RemoteRange::RemoteRange(Str first, Str last, int32_t owner)
     : ServerRangeBase(first, last), owner_(owner) {
 }
 
-RemoteSink::RemoteSink(Interconnect* conn)
+RemoteSink::RemoteSink(Interconnect* conn, uint32_t peer)
     : SinkRange(new JoinRange("", "}", nullptr), RangeMatch("", "}"), 0),
-      conn_(conn) {
+      conn_(conn), peer_(peer) {
 
     ref(); // avoid auto destruction
 }

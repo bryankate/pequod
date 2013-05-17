@@ -8,10 +8,11 @@ enum {
     pq_count = 4,
     pq_scan = 5,
     pq_subscribe = 6,
-    pq_add_join = 7,
+    pq_invalidate = 7,
+    pq_add_join = 8,
     // order matters
-    pq_stats = 8,
-    pq_control = 9
+    pq_stats = 9,
+    pq_control = 10
 };
 
 enum {

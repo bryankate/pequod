@@ -19,6 +19,9 @@ class Interconnect : public RemoteClient {
 
     tamed void subscribe(const String& first, const String& last,
                          int32_t subscriber, event<scan_result> e);
+
+    tamed void invalidate(const String& first, const String& last,
+                          event<> e);
 };
 
 

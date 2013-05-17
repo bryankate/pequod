@@ -41,7 +41,7 @@ class SourceRange {
 
     inline bool empty() const;
 
-    void invalidate();
+    virtual void invalidate();
     inline void clear_without_deref();
 
     inline Join* join() const;
@@ -93,10 +93,14 @@ class InvalidatorRange : public SourceRange {
 class SubscribedRange : public SourceRange {
   public:
     inline SubscribedRange(const parameters& p);
+
+    virtual void invalidate();
     virtual bool check_match(Str key) const;
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
     virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
+  private:
+    Server& server_;
 };
 
 
@@ -212,7 +216,7 @@ inline InvalidatorRange::InvalidatorRange(const parameters& p)
 }
 
 inline SubscribedRange::SubscribedRange(const parameters& p)
-    : SourceRange(p) {
+    : SourceRange(p), server_(p.server) {
 }
 
 inline CopySourceRange::CopySourceRange(const parameters& p)

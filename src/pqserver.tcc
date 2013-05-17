@@ -447,6 +447,34 @@ void Table::add_subscription(Str first, Str last, int32_t peer) {
     add_source(new SubscribedRange(p));
 }
 
+void Table::invalidate_remote(Str first, Str last) {
+    Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
+    // todo: truncate range instead of invalidating whole range?
+    //std::cerr << "invalidating remote range [" << first << ", " << last << ")" << std::endl;
+    auto r = t->remote_ranges_.begin_overlaps(first, last);
+    while(r != t->remote_ranges_.end()) {
+        RemoteRange* rrange = r.operator->();
+        ++r;
+
+        t->remote_ranges_.erase(*rrange);
+        t->invalidate_dependents(rrange->ibegin(), rrange->iend());
+
+        auto it = t->lower_bound(rrange->ibegin());
+        auto itend = t->lower_bound(rrange->iend());
+        while(it != itend) {
+            Datum* d = it.operator->();
+            it.it_ = it.table_->store_.erase(it.it_);
+            it.maybe_fix();
+            d->invalidate();
+        }
+
+        delete rrange;
+    }
+}
+
 
 Server::Server()
     : supertable_(Str(), nullptr, this),

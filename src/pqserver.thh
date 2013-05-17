@@ -58,6 +58,7 @@ class Table : public Datum {
                                               tamer::gather_rendezvous& gr);
     void invalidate_dependents(Str key);
     void invalidate_dependents(Str first, Str last);
+    void invalidate_remote(Str first, Str last);
 
     void add_source(SourceRange* r);
     inline void unlink_source(SourceRange* r);
@@ -511,7 +512,7 @@ inline Table::iterator Server::end() {
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {
-    table(table_name(first)).add_subscription(first, last, peer);
+    table_for(first, last).add_subscription(first, last, peer);
 }
 
 inline void Server::set_cluster_details(int32_t me,
@@ -521,8 +522,8 @@ inline void Server::set_cluster_details(int32_t me,
     interconnect_ = interconnect;
     part_ = part;
 
-    for (auto& i : interconnect_)
-        remote_sinks_.push_back(new RemoteSink(i));
+    for (uint32_t i = 0; i < interconnect_.size(); ++i)
+        remote_sinks_.push_back(new RemoteSink(interconnect_[i], i));
 }
 
 inline int32_t Server::me() const {

@@ -181,13 +181,15 @@ class RemoteRange : public ServerRangeBase {
  */
 class RemoteSink : public SinkRange {
   public:
-    RemoteSink(Interconnect* conn);
+    RemoteSink(Interconnect* conn, uint32_t peer);
     ~RemoteSink();
 
     inline Interconnect* conn() const;
+    inline uint32_t peer() const;
 
   private:
     Interconnect* conn_;
+    uint32_t peer_;
 };
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
@@ -342,6 +344,10 @@ inline void RemoteRange::notify_waiting() {
 
 inline Interconnect* RemoteSink::conn() const {
     return conn_;
+}
+
+inline uint32_t RemoteSink::peer() const {
+    return peer_;
 }
 
 } // namespace pq
