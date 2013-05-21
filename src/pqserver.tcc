@@ -537,13 +537,11 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
 
 tamed void Server::validate_count(Str first, Str last, tamer::event<size_t> done) {
     tvars {
-        struct timeval tv[2];
-        Table* t = &this->make_table_for(first, last);
         Table::iterator it;
     }
 
     twait { validate(first, last, make_event(it)); }
-    auto itend = t->end();
+    auto itend = make_table_for(first, last).end();
     size_t n = 0;
 
     for (; it != itend && it->key() < last; ++it)
