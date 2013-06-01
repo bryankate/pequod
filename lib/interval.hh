@@ -48,7 +48,7 @@ class interval {
 
 template <typename T>
 struct default_comparator<interval<T> > {
-    inline int operator()(const interval<T> &a, const interval<T> &b) const;
+    inline int operator()(const interval<T>& a, const interval<T>& b) const;
 };
 
 
@@ -84,12 +84,12 @@ inline interval<T> make_interval(const T& ibegin, const T& iend) {
 }
 
 template <typename T>
-inline const T &interval<T>::ibegin() const {
+inline const T& interval<T>::ibegin() const {
     return ibegin_;
 }
 
 template <typename T>
-inline const T &interval<T>::iend() const {
+inline const T& interval<T>::iend() const {
     return iend_;
 }
 
@@ -126,90 +126,90 @@ inline bool interval<T>::overlaps(const T& ibegin, const T& iend,
 }
 
 template <typename T>
-inline bool interval<T>::contains(const T &x) const {
+inline bool interval<T>::contains(const T& x) const {
     return contains(ibegin(), iend(), x);
 }
 
 template <typename T>
-inline bool interval<T>::contains(const interval<T> &x) const {
+inline bool interval<T>::contains(const interval<T>& x) const {
     return contains(ibegin(), iend(), x.ibegin(), x.iend());
 }
 
 template <typename T> template <typename X>
-inline bool interval<T>::contains(const interval<X> &x) const {
+inline bool interval<T>::contains(const interval<X>& x) const {
     return contains(ibegin(), iend(), x.ibegin(), x.iend());
 }
 
 template <typename T>
-inline bool interval<T>::overlaps(const interval<T> &x) const {
+inline bool interval<T>::overlaps(const interval<T>& x) const {
     return overlaps(ibegin(), iend(), x.ibegin(), x.iend());
 }
 
 template <typename T> template <typename X>
-inline bool interval<T>::overlaps(const interval<X> &x) const {
+inline bool interval<T>::overlaps(const interval<X>& x) const {
     return overlaps(ibegin(), iend(), x.ibegin(), x.iend());
 }
 
 template <typename T>
-inline bool operator==(const interval<T> &a, const interval<T> &b) {
+inline bool operator==(const interval<T>& a, const interval<T>& b) {
     return a.ibegin() == b.ibegin() && a.iend() == b.iend();
 }
 
 template <typename T>
-inline bool operator!=(const interval<T> &a, const interval<T> &b) {
+inline bool operator!=(const interval<T>& a, const interval<T>& b) {
     return !(a.ibegin() == b.ibegin()) || !(a.iend() == b.iend());
 }
 
 template <typename T>
-inline bool operator<(const interval<T> &a, const interval<T> &b) {
+inline bool operator<(const interval<T>& a, const interval<T>& b) {
     int cmp = default_comparator<T>()(a.ibegin(), b.ibegin());
     return cmp < 0 || (cmp == 0 && a.iend() < b.iend());
 }
 
 template <typename T>
-inline bool operator<=(const interval<T> &a, const interval<T> &b) {
+inline bool operator<=(const interval<T>& a, const interval<T>& b) {
     int cmp = default_comparator<T>()(a.ibegin(), b.ibegin());
     return cmp < 0 || (cmp == 0 && !(b.iend() < a.iend()));
 }
 
 template <typename T>
-inline bool operator>=(const interval<T> &a, const interval<T> &b) {
+inline bool operator>=(const interval<T>& a, const interval<T>& b) {
     int cmp = default_comparator<T>()(a.ibegin(), b.ibegin());
     return cmp > 0 || (cmp == 0 && !(a.iend() < b.iend()));
 }
 
 template <typename T>
-inline bool operator>(const interval<T> &a, const interval<T> &b) {
+inline bool operator>(const interval<T>& a, const interval<T>& b) {
     int cmp = default_comparator<T>()(a.ibegin(), b.ibegin());
     return cmp > 0 || (cmp == 0 && b.iend() < a.iend());
 }
 
 template <typename T>
-inline interval<T> operator&(const interval<T> &a, const interval<T> &b) {
+inline interval<T> operator&(const interval<T>& a, const interval<T>& b) {
     return interval<T>(a.ibegin() > b.ibegin() ? a.ibegin() : b.ibegin(),
 		       a.iend() < b.iend() ? a.iend() : b.iend());
 }
 
 template <typename T>
-inline interval<T> operator|(const interval<T> &a, const interval<T> &b) {
+inline interval<T> operator|(const interval<T>& a, const interval<T>& b) {
     return interval<T>(a.ibegin() < b.ibegin() ? a.ibegin() : b.ibegin(),
 		       a.iend() > b.iend() ? a.iend() : b.iend());
 }
 
 template <typename T>
-inline int default_comparator<interval<T> >::operator()(const interval<T> &a,
-							const interval<T> &b) const {
+inline int default_comparator<interval<T> >::operator()(const interval<T>& a,
+							const interval<T>& b) const {
     int cmp = default_comparator<T>()(a.ibegin(), b.ibegin());
     return cmp ? cmp : default_comparator<T>()(a.iend(), b.iend());
 };
 
 template <typename T>
-std::ostream &operator<<(std::ostream &s, const interval<T> &x) {
+std::ostream& operator<<(std::ostream& s, const interval<T>& x) {
     return (s << '[' << x.ibegin() << ", " << x.iend() << ')');
 }
 
 template <typename T>
-StringAccum &operator<<(StringAccum &sa, const interval<T> &x) {
+StringAccum& operator<<(StringAccum& sa, const interval<T>& x) {
     return (sa << '[' << x.ibegin() << ", " << x.iend() << ')');
 }
 
