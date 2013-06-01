@@ -41,7 +41,7 @@ inline void JoinRange::validate_one(Str first, Str last, Server& server,
     validate_args va(first, last, server, now, nullptr, SourceRange::notify_insert);
     join_->sink().match_range(va.rm);
     va.sink = new SinkRange(this, va.rm, now);
-    //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
+    //std::cerr << "validate_one " << first << ", " << last << "\n";
     valid_ranges_.insert(*va.sink);
     validate_step(va, 0);
 }
@@ -60,15 +60,23 @@ void JoinRange::validate(Str first, Str last, Server& server, uint64_t now) {
     }
 
     Str last_valid = first;
-    for (auto it = valid_ranges_.begin_overlaps(first, last);
-         it != valid_ranges_.end(); ) {
+    auto it = valid_ranges_.lower_bound(first, KeyCompare());
+    if (it != valid_ranges_.begin()) {
+        auto itx = it;
+        --itx;
+        if (itx->iend() > first)
+            it = itx;
+    }
+    while (it != valid_ranges_.end() && it->key() < last) {
         SinkRange* sink = it.operator->();
         if (sink->has_expired(now)) {
+            //std::cerr << "validate_skip " << sink->ibegin() << ", " << sink->iend() << " [" << first << "," << last << ")\n";
             ++it;
             sink->invalidate();
         } else {
             if (last_valid < sink->ibegin())
                 validate_one(last_valid, sink->ibegin(), server, now);
+            //std::cerr << "validate_ok " << sink->ibegin() << ", " << sink->iend() << " [" << first << "," << last << ")\n";
             if (sink->need_update())
                 sink->update(first, last, server, now);
             last_valid = sink->iend();
@@ -232,9 +240,14 @@ IntermediateUpdate::IntermediateUpdate(Str first, Str last,
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
-    : ServerRangeBase(rm.first, rm.last), hint_{nullptr},
+    : ibegin_(rm.first), iend_(rm.last), hint_{nullptr},
       dangerous_slot_(rm.dangerous_slot),
       jr_(jr), refcount_(0), data_free_(uintptr_t(-1)) {
+    if (!ibegin_.is_local())
+        ServerRangeBase::allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        ServerRangeBase::allocated_key_bytes += iend_.length();
+
     Join* j = jr_->join();
     if (j->maintained())
         expires_at_ = 0;
