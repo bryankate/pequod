@@ -273,7 +273,9 @@ int main(int argc, char** argv) {
         if (hosts) {
             mandatory_assert(partfunc && "Need to specify a partition function!");
             part = pq::Partitioner::make(partfunc, nbacking, hosts->count(), -1);
-            me = hosts->get_by_uid(pq::sock_helper::get_uid("localhost", listen_port));
+            char hostname[100];
+            gethostname(hostname, sizeof(hostname));
+            me = hosts->get_by_uid(pq::sock_helper::get_uid(hostname, listen_port));
         }
 
         extern void server_loop(int port, bool kill, pq::Server& server,
