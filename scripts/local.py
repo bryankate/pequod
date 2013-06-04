@@ -7,6 +7,7 @@ import time
 from time import sleep
 from optparse import OptionParser
 import json, fnmatch, re
+import socket
 
 parser = OptionParser()
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
@@ -51,7 +52,7 @@ def prepare_experiment(xname, ename):
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
         for h in range(nprocesses):
-            hfile.write("localhost\t" + str(startport + h) + "\n");
+            hfile.write(socket.gethostname() + "\t" + str(startport + h) + "\n");
         hfile.close()
 
     resdir = os.path.join(uniquedir, xname, ename)
