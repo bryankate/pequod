@@ -147,6 +147,7 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
 
         twait { process(server, j, rj, aj, make_event()); }
         mpfd_->write(rj);
+        twait { tamer::at_asap(make_event()); }
     }
 
     cfd.close();
