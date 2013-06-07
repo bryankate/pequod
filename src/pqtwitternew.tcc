@@ -74,7 +74,6 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       fetch_(param["fetch"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
-      overhead_(param["overhead"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       verbose_(param["verbose"].as_b(false)),
       celebthresh_(param["celebrity"].as_i(0)),
@@ -89,23 +88,17 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
 
     vector<double> op_weight(n_op, 0);
 
-    if (overhead_) {
-        op_weight[op_post] = 100;
-        pct_active_ = 100;
-    }
-    else {
-        // these are not percentages, but weights, so it is
-        // possible for them to sum != 100. the important thing
-        // is to get the right ratio of weights for your experiment.
-        // for example, the real twitter sees (according to the video i watched)
-        // a check:post ratio between 50:1 and 100:1 on a normal day.
-        // they also see 10x more social graph changes than posts
-        op_weight[op_post] = param["ppost"].as_d(1);
-        op_weight[op_subscribe] = param["psubscribe"].as_d(10);
-        op_weight[op_login] = param["plogin"].as_d(5);
-        op_weight[op_logout] = param["plogout"].as_d(5);
-        op_weight[op_check] = param["pread"].as_d(60);
-    }
+    // these are not percentages, but weights, so it is
+    // possible for them to sum != 100. the important thing
+    // is to get the right ratio of weights for your experiment.
+    // for example, the real twitter sees (according to the video i watched)
+    // a check:post ratio between 50:1 and 100:1 on a normal day.
+    // they also see 10x more social graph changes than posts
+    op_weight[op_post] = param["ppost"].as_d(1);
+    op_weight[op_subscribe] = param["psubscribe"].as_d(10);
+    op_weight[op_login] = param["plogin"].as_d(5);
+    op_weight[op_logout] = param["plogout"].as_d(5);
+    op_weight[op_check] = param["pread"].as_d(60);
 
     op_dist_ = op_dist_type(op_weight.begin(), op_weight.end());
 }
