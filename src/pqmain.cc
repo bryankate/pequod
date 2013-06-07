@@ -69,7 +69,6 @@ static Clp_Option options[] = {
     { "plogout", 0, 4006, Clp_ValDouble, 0 },
     { "graph", 0, 4007, Clp_ValStringNotOption, 0 },
     { "visualize", 0, 4008, 0, Clp_Negate },
-    { "overhead", 0, 4009, 0, Clp_Negate },
     { "celebrity", 0, 4010, Clp_ValInt, 0 },
     { "celebrity2", 0, 4011, Clp_ValInt, 0 },
     { "celebrity3", 0, 4012, Clp_ValInt, 0 },
@@ -196,8 +195,6 @@ int main(int argc, char** argv) {
             tp_param.set("graph", clp->val.s);
         else if (clp->option->long_name == String("visualize"))
             tp_param.set("visualize", !clp->negated);
-        else if (clp->option->long_name == String("overhead"))
-            tp_param.set("overhead", !clp->negated);
         else if (clp->option->long_name == String("celebrity"))
             tp_param.set("celebrity", clp->val.i);
         else if (clp->option->long_name == String("celebrity2"))
