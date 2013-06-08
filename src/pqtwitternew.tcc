@@ -26,8 +26,8 @@ const char TwitterNewPopulator::tweet_data[] = "................................
 
 TwitterUser::TwitterUser(uint32_t uid)
     : nbackpost_(0), npost_(0), nsubscribe_(0), nlogout_(0),
-      nlogin_(0), ncheck_(0), nread_(0), load_time_(0), loggedin_(false),
-      uid_(uid), celeb_(false) {
+      nlogin_(0), ncheck_(0), nread_(0), last_read_(0),
+      loggedin_(false), pending_(false), uid_(uid), celeb_(false) {
 }
 
 TwitterUser::Compare::Compare(CompareField field) : field_(field) {

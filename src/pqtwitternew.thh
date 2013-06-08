@@ -21,8 +21,9 @@ class TwitterNewPopulator;
 
 #define END_TIME        ((uint32_t)-1)
 #define BASE_TIME       1000000000
-#define LOGIN_WINDOW    1000000
-#define SKEW            10000
+#define LOGIN_WINDOW    100000
+#define SKEW            1000
+#define OVERLAP         0
 
 struct TwitterUser {
   public:
@@ -38,8 +39,9 @@ struct TwitterUser {
     uint32_t nlogin_;
     uint32_t ncheck_;
     size_t nread_;
-    uint32_t load_time_;
+    uint32_t last_read_;
     bool loggedin_;
+    bool pending_;
 
     inline uint32_t uid() const { return uid_; }
     inline uint32_t celeb() const { return celeb_; }
@@ -159,15 +161,15 @@ class TwitterNewShim {
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
     typedef typename S::scan_result scan_result;
-    template <typename R>
-    inline void timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, scan_result> e);
-    tamed inline void timeline_scan_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::event<size_t> e);
-    template <typename R>
-    inline void timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t now, tamer::preevent<R, size_t> e);
+    tamed void timeline_scan(TwitterUser* user,
+                             uint32_t start_time, uint32_t end_time,
+                             uint32_t& npending, tamer::event<>& trigger, bool log,
+                             tamer::event<> e);
     template <typename R>
     inline void follower_scan(uint32_t poster, tamer::preevent<R, scan_result> e);
     template <typename R>
-    inline void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan, tamer::preevent<R, scan_result> e);
+    inline void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan,
+                          tamer::preevent<R, scan_result> e);
     template <typename R>
     inline void pace(tamer::preevent<R> done);
     template <typename R>
@@ -280,55 +282,53 @@ inline void TwitterNewShim<S>::push_post(uint32_t subscriber, tamer::preevent<R>
     server_.insert(Str(buf_, 16), value_, done);
 }
 
-template <typename S> template <typename R>
-inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber,
-                                             uint32_t start_time, uint32_t end_time,
-                                             tamer::preevent<R, scan_result> done) {
-    memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
-    write_in_net_order(buf_ + 2, subscriber);
-    write_in_net_order(buf_ + 7, start_time);
-    write_in_net_order(buf_ + 14, subscriber);
-    write_in_net_order(buf_ + 19, end_time);
-    server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
-}
-
 tamed template <typename S>
-inline void TwitterNewShim<S>::timeline_scan_add_count(uint32_t subscriber,
-                                                       uint32_t start_time, uint32_t end_time,
-                                                       tamer::event<size_t> done) {
+void TwitterNewShim<S>::timeline_scan(TwitterUser* user,
+                                            uint32_t start_time, uint32_t end_time,
+                                            uint32_t& npending, tamer::event<>& trigger,
+                                            bool log, tamer::event<> done) {
     tvars {
         typename S::scan_result sr;
     }
+
     memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
-    write_in_net_order(buf_ + 2, subscriber);
+    write_in_net_order(buf_ + 2, user->uid());
     write_in_net_order(buf_ + 7, start_time);
-    write_in_net_order(buf_ + 14, subscriber);
+    write_in_net_order(buf_ + 14, user->uid());
     write_in_net_order(buf_ + 19, end_time);
 
-    twait {
-        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), make_event(sr));
+    twait { server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), make_event(sr)); }
+
+    if (log) {
+        fprintf(stderr, "scan [t|%08u|%010u, t|%08u|%010u)\n",
+                user->uid(), start_time, user->uid(), end_time);
+
+        for (auto it = sr.begin(); it != sr.end(); ++it) {
+            assert(it->key().length() == 16);
+            assert(it->key()[0] == 't');
+            std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
+                      << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
+                      << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
+                      << ": " << it->value() << "\n";
+        }
     }
 
-    std::cerr << "scan " << subscriber << " " << start_time << " " << end_time << std::endl;
-    for (auto it = sr.begin(); it != sr.end(); ++it)
-        std::cerr << "t|"
-                  << read_in_net_order<uint32_t>(it->key().data() + 2) << "|"
-                  << read_in_net_order<uint32_t>(it->key().data() + 7) << "|"
-                  << read_in_net_order<uint32_t>(it->key().data() + 12) << std::endl;
+    // extract timestamp of last post read
+    if (sr.size()) {
+        typename S::iterator it = sr.begin();
+        for (uint32_t i = 0; i < sr.size() - 1; ++i)
+            ++it;
+        uint32_t last = read_in_net_order<uint32_t>(it->key().data() + 7);
+        if (last > user->last_read_)
+            user->last_read_ = last;
+    }
 
-    done(done.result() + sr.size());
-}
+    --npending;
+    user->pending_ = false;
+    user->nread_ += sr.size();
 
-template <typename S> template <typename R>
-inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber,
-                                                  uint32_t start_time, uint32_t end_time,
-                                                  tamer::preevent<R, size_t> done) {
-    memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
-    write_in_net_order(buf_ + 2, subscriber);
-    write_in_net_order(buf_ + 7, start_time);
-    write_in_net_order(buf_ + 14, subscriber);
-    write_in_net_order(buf_ + 19, end_time);
-    server_.add_count(Str(buf_, 11), Str(buf_ + 12, 11), done);
+    trigger.trigger();
+    done();
 }
 
 template <typename S> template <typename R>
@@ -379,6 +379,8 @@ class TwitterNewRunner {
     S& server_;
     TwitterNewPopulator& tp_;
     uint32_t currtime_;
+    uint32_t pending_;
+    tamer::event<> trigger_;
 
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
@@ -388,7 +390,7 @@ class TwitterNewRunner {
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
-    : server_(server), tp_(tp), currtime_(BASE_TIME) {
+    : server_(server), tp_(tp), currtime_(BASE_TIME), pending_(0) {
 }
 
 template <typename S> template <typename R>
@@ -535,14 +537,18 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         if (active_rng(gen) >= tp_.pct_active())
             continue;
 
-        server_.timeline_add_count(u, 0, END_TIME, gr.make_event(dummy));
+        user = &tp_.mutable_user(u);
+        ++pending_;
+
+        server_.timeline_scan(user, 0, END_TIME, pending_, trigger_, tp_.log(), gr.make_event());
         twait{ server_.pace(make_event()); }
 
-        user = &tp_.mutable_user(u);
+        user->nread_ = 0;
         user->loggedin_ = true;
         loggedin.push_back(u);
     }
     twait(gr);
+    assert(!pending_);
 
     if (loggedin.empty() && tp_.pct_active() > 0)
         assert(false && "There were no active users selected.");
@@ -584,18 +590,20 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 break;
 
             case op_logout:
-                if (loggedin.empty())
+                if (loggedin.empty() || (pending_ == loggedin.size()))
                     break;
 
-                slot = gen() % loggedin.size();
-                user = &tp_.mutable_user(loggedin[slot]);
+                do {
+                    slot = gen() % loggedin.size();
+                    user = &tp_.mutable_user(loggedin[slot]);
+                } while(user->pending_);
 
                 if (tp_.log())
                     fprintf(stderr, "%d: logout %08d\n", currtime_, user->uid());
 
                 active.push_back(user->uid());
                 loggedin.erase(loggedin.begin() + slot);
-                user->load_time_ = 0;
+                user->last_read_ = 0;
                 user->loggedin_ = false;
                 ++user->nlogout_;
                 break;
@@ -618,54 +626,44 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
             case op_check:
                 if (!user) {
-                    if (!loggedin.empty())
-                        user = &tp_.mutable_user(loggedin[gen() % loggedin.size()]);
+                    do_check:
+                    if (!loggedin.empty() && (pending_ < loggedin.size())) {
+                        do {
+                            user = &tp_.mutable_user(loggedin[gen() % loggedin.size()]);
+                        } while (user->pending_);
+                    }
                     else if (!active.empty())
                         goto do_login;
-                    else
-                        mandatory_assert(false && "Timeline check but no active users!");
+                    else {
+                        // wait until there is a loggedin user that is not
+                        // already refreshing its timeline
+                        twait { trigger_ = make_event(); }
+                        goto do_check;
+                    }
                 }
 
-                beg_scan = user->load_time_;
+                beg_scan = user->last_read_;
                 end_scan = currtime_ - SKEW;
 
                 if (!beg_scan) {
                     beg_scan = currtime_ - LOGIN_WINDOW;
                     ++nfull;
                 }
-
-                if (tp_.log()) {
-                    fprintf(stderr, "%d: scan [t|%08u|%010u, t|%08u|%010u)\n", currtime_,
-                            user->uid(), beg_scan, user->uid(), end_scan);
-
-                    twait {
-                        server_.timeline_scan(user->uid(), beg_scan, end_scan,
-                                              make_event(scan_result));
-                    }
-
-                    for (auto it = scan_result.begin(); it != scan_result.end();
-                            ++it, ++user->nread_) {
-                        assert(it->key().length() == 16);
-                        assert(it->key()[0] == 't');
-                        std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
-                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
-                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
-                                  << ": " << it->value() << "\n";
-                    }
-                }
-                else if (tp_.fetch())
-                    server_.timeline_scan_add_count(user->uid(), beg_scan, end_scan,
-                                                    gr.make_event(user->nread_));
                 else
-                    server_.timeline_add_count(user->uid(), beg_scan, end_scan,
-                                               gr.make_event(user->nread_));
+                    beg_scan -= OVERLAP;
+
+                user->pending_ = true;
+                ++pending_;
+
+                server_.timeline_scan(user, beg_scan, end_scan,
+                                      pending_, trigger_, tp_.log(),
+                                      gr.make_event());
 
                 if (tp_.synchronous())
                     twait(gr);
                 else
                     twait { server_.pace(make_event()); }
 
-                user->load_time_ = currtime_;
                 ++user->ncheck_;
                 break;
 
@@ -689,15 +687,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
     for (uint32_t u : loggedin) {
         user = &tp_.mutable_user(u);
-
-        if (tp_.fetch())
-            server_.timeline_scan_add_count(user->uid(),
-                                            user->load_time_, END_TIME,
-                                            gr.make_event(user->nread_));
-        else
-            server_.timeline_add_count(user->uid(),
-                                       user->load_time_, END_TIME,
-                                       gr.make_event(user->nread_));
+        server_.timeline_scan(user, user->last_read_, END_TIME,
+                              pending_, trigger_, tp_.log(), gr.make_event());
     }
     twait(gr);
 
