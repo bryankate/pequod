@@ -21,6 +21,7 @@ class MultiClient {
     tamed void restart(tamer::event<> done);
     inline void clear();
 
+    typedef RemoteClient::iterator iterator;
     typedef RemoteClient::scan_result scan_result;
 
     tamed void add_join(const String& first, const String& last,
