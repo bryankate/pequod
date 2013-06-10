@@ -175,7 +175,7 @@ class TwitterNewShim {
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
     template <typename R>
-    inline void control(const Json& cmd, tamer::preevent<R> e);
+    inline void control(const Json& cmd, tamer::preevent<R, Json> e);
 
   private:
     S& server_;
@@ -363,7 +363,7 @@ inline void TwitterNewShim<S>::stats(tamer::preevent<R, Json> done) {
 }
 
 template <typename S> template <typename R>
-inline void TwitterNewShim<S>::control(const Json& cmd, tamer::preevent<R> done) {
+inline void TwitterNewShim<S>::control(const Json& cmd, tamer::preevent<R, Json> done) {
     server_.control(cmd, done);
 }
 
@@ -527,7 +527,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         std::vector<uint32_t> loggedin;
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
-        Json old_stats, stats;
+        Json old_stats, stats, logs;
         tamer::gather_rendezvous gr;
     }
     gen.seed(13918);
@@ -696,7 +696,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     gettimeofday(&tv[1], 0);
 
     twait { server_.stats(make_event(stats)); }
-    //twait { server_.control(Json().set("print_table_keys", "p|"), make_event()); }
+    twait { server_.control(Json().set("get_log", true), make_event(logs)); }
 
     uint32_t nbackpost = 0, npost = 0, nsubscribe = 0,
              nlogout = 0, nlogin = 0, ncheck = 0, nread = 0;
@@ -722,7 +722,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
             (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
         }
-    stats = Json().set("servers", stats);
+
+    stats = Json().set("logs", logs).set("servers", stats);
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
