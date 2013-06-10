@@ -128,16 +128,21 @@ tamed void MultiClient::stats(event<Json> e) {
     }
 }
 
-tamed void MultiClient::control(const Json& cmd, tamer::event<> done) {
+tamed void MultiClient::control(const Json& cmd, tamer::event<Json> done) {
     tvars {
-        tamer::gather_rendezvous gr;
+        Json j;
     }
 
-    for (auto& r : clients_)
-        r->control(cmd, gr.make_event());
-
-    twait(gr);
-    done();
+    if (localNode_)
+        localNode_->control(cmd, done);
+    else  {
+        j = Json::make_array_reserve(clients_.size());
+        twait {
+            for (uint32_t i = 0; i < clients_.size(); ++i)
+                clients_[i]->control(cmd, make_event(j[i].value()));
+        }
+        done(j);
+    }
 }
 
 tamed void MultiClient::pace(tamer::event<> done) {

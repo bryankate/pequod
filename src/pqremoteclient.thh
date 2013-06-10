@@ -104,7 +104,7 @@ class RemoteClient {
                     event<scan_result> e);
 
     tamed void stats(event<Json> e);
-    tamed void control(const Json& cmd, event<> e);
+    tamed void control(const Json& cmd, event<Json> e);
 
     inline msgpack_fd* fd() const;
 

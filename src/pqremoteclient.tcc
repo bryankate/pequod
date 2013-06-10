@@ -94,15 +94,15 @@ tamed void RemoteClient::stats(event<Json> e) {
     e(j && j[2].to_i() == pq_ok ? j[3] : Json::make_object());
 }
 
-tamed void RemoteClient::control(const Json& cmd, event<> e) {
-    tvars { Json j; unsigned long seq = this->seq_; }
+tamed void RemoteClient::control(const Json& cmd, event<Json> e) {
+    tvars { Json j; }
     twait {
         fd_->call(Json::make_array(pq_control, seq_, cmd), make_event(j));
         ++seq_;
     }
 
     assert(j && j[2].to_i() == pq_ok);
-    e();
+    e(j[3]);
 }
 
 }
