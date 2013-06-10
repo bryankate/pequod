@@ -13,6 +13,7 @@
 #include "json.hh"
 #include "pqjoin.hh"
 #include "pqserver.hh"
+#include "pqlog.hh"
 
 namespace pq {
 using tamer::event;
@@ -381,16 +382,18 @@ class TwitterNewRunner {
     uint32_t currtime_;
     uint32_t pending_;
     tamer::event<> trigger_;
+    Log log_;
 
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
     tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
     tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<> e);
+    tamed void periodic_logger(tamer::event<> done);
 };
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
-    : server_(server), tp_(tp), currtime_(BASE_TIME), pending_(0) {
+    : server_(server), tp_(tp), currtime_(BASE_TIME), pending_(0), log_(tstamp()) {
 }
 
 template <typename S> template <typename R>
@@ -511,6 +514,27 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 }
 
 tamed template <typename S>
+void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
+    tvars {
+        struct rusage u, lu;
+        uint64_t now;
+    }
+    memset(&lu, 0, sizeof(struct rusage));
+
+    while(done) {
+        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
+        now = tstamp();
+
+        log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
+        log_.record_at("utime_us", now, tv2us(u.ru_utime) - tv2us(lu.ru_utime));
+        log_.record_at("stime_us", now, tv2us(u.ru_stime) - tv2us(lu.ru_stime));
+
+        lu = u;
+        twait volatile { tamer::at_delay_sec(1, make_event()); }
+    }
+}
+
+tamed template <typename S>
 void TwitterNewRunner<S>::run(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
@@ -531,6 +555,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         tamer::gather_rendezvous gr;
     }
     gen.seed(13918);
+    periodic_logger(done);
 
     // create a working set of already logged in users
     for (u = 0; u < nusers; ++u) {
@@ -723,7 +748,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
         }
 
-    stats = Json().set("logs", logs).set("servers", stats);
+    stats = Json().set("log", log_.as_json())
+                  .set("server_logs", logs)
+                  .set("server_stats", stats);
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
