@@ -13,10 +13,16 @@
 #include <sys/resource.h>
 
 std::vector<pq::Interconnect*> interconnect_;
+
 pq::Log log_(tstamp());
-pq::LogDiff diff_({"utime_us", "stime_us", "rss_mb",
-                   "ninsert", "ncount", "nsubscribe",
-                   "nscan", "ninvalidate"});
+typedef struct {
+    uint32_t ninsert;
+    uint32_t ncount;
+    uint32_t nsubscribe;
+    uint32_t nscan;
+    uint32_t ninvalidate;
+} nrpc;
+nrpc diff_;
 
 namespace {
 
@@ -65,7 +71,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
     case pq_insert:
         server.insert(j[2].as_s(), j[3].as_s());
         rj[2] = pq_ok;
-        diff_.add("ninsert", 1);
+        ++diff_.ninsert;
         break;
     case pq_erase:
         server.erase(j[2].as_s());
@@ -76,7 +82,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         first = j[2].as_s(), last = j[3].as_s();
         twait { server.validate_count(first, last, make_event(count)); }
         rj[3] = count;
-        diff_.add("ncount", 1);
+        ++diff_.ncount;
         break;
     case pq_subscribe:
         if (j[4] && j[4].is_o() && j[4]["subscribe"].is_i())
@@ -85,7 +91,7 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
             rj[2] = pq_fail;
             break;
         }
-        diff_.add("nsubscribe", 1);
+        ++diff_.nsubscribe;
         // fall through to return scanned range
     case pq_scan: {
         rj[2] = pq_ok;
@@ -102,14 +108,14 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
             ++it;
         }
         rj[3] = aj;
-        diff_.add("nscan", 1);
+        ++diff_.nscan;
         break;
     }
     case pq_invalidate:
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
         server.table_for(first, last).invalidate_remote(first, last);
-        diff_.add("ninvalidate", 1);
+        ++diff_.ninvalidate;
         break;
     case pq_stats:
         rj[2] = pq_ok;
@@ -246,20 +252,28 @@ tamed void initialize_interconnect(pq::Server& server,
     done(connected);
 }
 
-tamed void periodic_logger(pq::Log& log, pq::LogDiff& diff) {
+tamed void periodic_logger() {
     tvars {
         struct rusage u, lu;
+        uint64_t now;
     }
     memset(&lu, 0, sizeof(struct rusage));
 
     while(true) {
         mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
-        diff.add("rss_mb", u.ru_maxrss / 1024);
-        diff.add("utime_us", tv2us(u.ru_utime) - tv2us(lu.ru_utime));
-        diff.add("stime_us", tv2us(u.ru_stime) - tv2us(lu.ru_stime));
-        diff.checkpoint(log);
+        now = tstamp();
+
+        log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
+        log_.record_at("utime_us", now, tv2us(u.ru_utime) - tv2us(lu.ru_utime));
+        log_.record_at("stime_us", now, tv2us(u.ru_stime) - tv2us(lu.ru_stime));
+        log_.record_at("ninsert", now, diff_.ninsert);
+        log_.record_at("ncount", now, diff_.ncount);
+        log_.record_at("nsubscribe", now, diff_.nsubscribe);
+        log_.record_at("nscan", now, diff_.nscan);
+        log_.record_at("ninvalidate", now, diff_.ninvalidate);
 
         lu = u;
+        memset(&diff_, 0, sizeof(nrpc));
         twait volatile { tamer::at_delay_sec(1, make_event()); }
     }
 }
@@ -275,6 +289,9 @@ tamed void server_loop(int port, bool kill, pq::Server& server,
         bool connected = false;
         double delay = 0.005;
     }
+
+    memset(&diff_, 0, sizeof(nrpc));
+    periodic_logger();
 
     if (kill) {
         twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(killer)); }
@@ -300,6 +317,5 @@ tamed void server_loop(int port, bool kill, pq::Server& server,
         server.set_cluster_details(me->seqid(), interconnect_, part);
     }
 
-    periodic_logger(log_, diff_);
     interrupt_catcher();
 }

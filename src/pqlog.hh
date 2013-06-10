@@ -5,9 +5,6 @@
 #include "json.hh"
 #include "time.hh"
 #include <iostream>
-#include <map>
-#include <set>
-#include <initializer_list>
 
 namespace pq {
 
@@ -27,19 +24,6 @@ class Log {
     Json log_;
     uint64_t epoch_;
 };
-
-class LogDiff {
-  public:
-    inline LogDiff(std::initializer_list<String> keys);
-
-    inline void add(Str key, int32_t value);
-    inline void checkpoint(Log& log);
-
-  private:
-    std::set<String> keys_;
-    std::map<String, int32_t> diff_;
-};
-
 
 inline Log::Log(uint64_t epoch) : epoch_(epoch) {
 }
@@ -65,22 +49,6 @@ inline const Json& Log::as_json() const {
 
 inline void Log::write_json(std::ostream& s) const {
     s << log_ << std::endl;
-}
-
-inline LogDiff::LogDiff(std::initializer_list<String> keys)
-    : keys_(keys) {
-}
-
-inline void LogDiff::add(Str key, int32_t value) {
-    assert(keys_.find(key) != keys_.end());
-    diff_[key] += value;
-}
-
-inline void LogDiff::checkpoint(Log& log) {
-    uint64_t time = tstamp();
-    for (String k : keys_)
-        log.record_at(k, time, diff_[k]);
-    diff_.clear();
 }
 
 }
