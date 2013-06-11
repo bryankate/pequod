@@ -58,6 +58,10 @@ static Clp_Option options[] = {
     { "nops", 'o', 3007, Clp_ValInt, 0 },
     { "verbose", 0, 3008, 0, Clp_Negate },
     { "subtables", 0, 3009, 0, Clp_Negate },
+    { "ngroups", 0, 3010, Clp_ValInt, 0 },
+    { "groupid", 0, 3011, Clp_ValInt, 0 },
+    { "populate", 0, 3012, 0, Clp_Negate },
+    { "execute", 0, 3013, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -175,6 +179,14 @@ int main(int argc, char** argv) {
             tp_param.set("verbose", !clp->negated);
         else if (clp->option->long_name == String("subtables"))
             pq::Join::allow_subtables = !clp->negated;
+        else if (clp->option->long_name == String("ngroups"))
+            tp_param.set("ngroups", clp->val.i);
+        else if (clp->option->long_name == String("groupid"))
+            tp_param.set("groupid", clp->val.i);
+        else if (clp->option->long_name == String("populate"))
+            tp_param.set("populate", !clp->negated);
+        else if (clp->option->long_name == String("execute"))
+            tp_param.set("execute", !clp->negated);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
