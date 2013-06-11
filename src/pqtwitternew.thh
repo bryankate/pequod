@@ -57,13 +57,7 @@ struct TwitterUser : public TwitterGraphNode {
   public:
     TwitterUser(uint32_t uid);
 
-    uint32_t nsubscribe_;
-    uint32_t nlogout_;
-    uint32_t nlogin_;
-    uint32_t ncheck_;
-    size_t nread_;
     uint32_t last_read_;
-    bool loggedin_;
     bool pending_;
 };
 
@@ -371,9 +365,9 @@ class TwitterNewRunner {
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
     tamed void check(TwitterUser* user, uint32_t time,
-                     uint32_t beg_scan, uint32_t end_scan, event<> e);
+                     uint32_t beg_scan, uint32_t end_scan, event<uint32_t> e);
     tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
-    tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<size_t> e);
+    tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<uint32_t> e);
     tamed void periodic_logger(tamer::event<> done);
 };
 
@@ -397,7 +391,7 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
 tamed template <typename S>
 void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                                 uint32_t beg_scan, uint32_t end_scan,
-                                event<> done) {
+                                event<uint32_t> done) {
     tvars {
         typename S::scan_result sr;
     }
@@ -431,11 +425,10 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     }
 
     user->pending_ = false;
-    user->nread_ += sr.size();
     --pending_;
     trigger_.trigger();
 
-    done();
+    done(done.result() +  sr.size());
 }
 
 tamed template <typename S>
@@ -468,7 +461,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) 
 }
 
 tamed template <typename S>
-void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<size_t> e) {
+void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<uint32_t> e) {
     assert(tp_.push());
 
     tvars {
@@ -567,9 +560,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         struct timeval tv[2];
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
-        uint32_t u, beg_scan, end_scan, slot;
         uint32_t postlimit = this->tp_.postlimit();
-        size_t nfull = 0, npost = 0, nbackpost = 0;
+        uint32_t u, beg_scan, end_scan, slot;
+        uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
+                 nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
         std::vector<uint32_t> active;
         std::vector<uint32_t> loggedin;
         TwitterUser* user = NULL;
@@ -595,11 +589,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         user = tp_.managed_user(u);
         ++pending_;
 
-        check(user, currtime_, 0, END_TIME, gr.make_event());
+        check(user, currtime_, 0, END_TIME, gr.make_event(nread));
         twait{ server_.pace(make_event()); }
 
-        user->nread_ = 0;
-        user->loggedin_ = true;
         loggedin.push_back(u);
     }
     twait(gr);
@@ -635,7 +627,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 } while (following == user->uid());
 
                 subscribe(user->uid(), following, currtime_, gr.make_event());
-                ++user->nsubscribe_;
+                ++nsubscribe;
 
                 if (tp_.push())
                     backfill(u, following, currtime_, gr.make_event(nbackpost));
@@ -656,8 +648,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 active.push_back(user->uid());
                 loggedin.erase(loggedin.begin() + slot);
                 user->last_read_ = 0;
-                user->loggedin_ = false;
-                ++user->nlogout_;
+                ++nlogout;
                 break;
 
             case op_login:
@@ -671,8 +662,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                         fprintf(stderr, "%d: login %08d\n", currtime_, user->uid());
 
                     loggedin.push_back(user->uid());
-                    user->loggedin_ = true;
-                    ++user->nlogin_;
+                    ++nlogin;
                 }
                 // fall through to check timeline after login
 
@@ -707,14 +697,14 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 user->pending_ = true;
                 ++pending_;
 
-                check(user, currtime_, beg_scan, end_scan, gr.make_event());
+                check(user, currtime_, beg_scan, end_scan, gr.make_event(nread));
 
                 if (tp_.synchronous())
                     twait(gr);
                 else
                     twait { server_.pace(make_event()); }
 
-                ++user->ncheck_;
+                ++ncheck;
                 break;
 
             default:
@@ -737,7 +727,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
     for (uint32_t u : loggedin)
         check(tp_.managed_user(u), currtime_,
-              user->last_read_, END_TIME, gr.make_event());
+              user->last_read_, END_TIME, gr.make_event(nread));
     twait(gr);
 
     getrusage(RUSAGE_SELF, &ru[1]);
@@ -745,17 +735,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     twait { server_.stats(make_event(stats)); }
     twait { server_.control(Json().set("get_log", true), make_event(logs)); }
-
-    uint32_t nsubscribe = 0, nlogout = 0, nlogin = 0, ncheck = 0, nread = 0;
-
-    for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u) {
-        user = tp_.managed_user(u);
-        nsubscribe += user->nsubscribe_;
-        nlogout += user->nlogout_;
-        nlogin += user->nlogin_;
-        ncheck += user->ncheck_;
-        nread += user->nread_;
-    }
 
     if (!stats.is_array()) {
         old_stats = Json::make_array(old_stats);
