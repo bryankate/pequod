@@ -487,7 +487,7 @@ tamed template <typename S>
 void TwitterNewRunner<S>::populate(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
-        uint32_t u;
+        uint32_t u, s;
         uint32_t post_end_time = this->currtime_ + this->tp_.popduration();
         std::vector<std::pair<uint32_t, uint32_t>> subs;
         tamer::gather_rendezvous gr;
@@ -504,8 +504,10 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         goto finish;
 
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
-    for (auto& s : subs)
-        subscribe(s.first, s.second, currtime_, gr.make_event());
+    for (s = 0; s != subs.size(); ++s) {
+        subscribe(subs[s].first, subs[s].second, currtime_, gr.make_event());
+        twait { server_.pace(make_event()); }
+    }
 
     for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
         if (tp_.is_celebrity(u))
