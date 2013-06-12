@@ -215,7 +215,7 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                              "copy p|<poster>|<time> "
                              "using s|<user>|<poster>, "
                              "t|<user>|<time>|<poster> pull "
-                             "where user:4nt, time:4n, poster:4nt",
+                             "where user:4n, time:4n, poster:4n",
                              make_event(j[0]));
         }
     }
@@ -226,7 +226,7 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
                              "copy p|<poster>|<time> " +
                              String((pull) ? "pull " : "") +
                              "using s|<user>|<poster> "
-                             "where user:4nt, time:4n, poster:4nt",
+                             "where user:4n, time:4n, poster:4n",
                              make_event(j[0]));
 
             if (pull_celeb) {
@@ -503,6 +503,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (!tp_.populate())
         goto finish;
 
+    if (!tp_.groupid())
+        twait { server_.initialize(tp_.push(), tp_.pull(), tp_.pull_celeb(), make_event()); }
+
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
     for (s = 0; s != subs.size(); ++s) {
         subscribe(subs[s].first, subs[s].second, currtime_, gr.make_event());
@@ -523,9 +526,6 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         twait{ server_.pace(make_event()); }
     }
     twait(gr);
-
-    if (!tp_.groupid())
-        twait { server_.initialize(tp_.push(), tp_.pull(), tp_.pull_celeb(), make_event()); }
 
     finish:
     currtime_ = post_end_time;
