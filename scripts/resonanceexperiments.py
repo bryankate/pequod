@@ -2,11 +2,11 @@
 import copy
 
 exps = [{'name': "twitter", 'defs': []}]
-graphfile = "twitter_graph_22M.dat"
+graphfile = "twitter_graph_1.8M.dat"
 
 serverCmd   = "./obj/pqserver"
-populateCmd = "./obj/pqserver --twitternew --no-execute --graph=%s" % (graphfile)
-clientCmd   = "./obj/pqserver --twitternew --plogout=0 --psubscribe=0 --duration=10000000 --popduration=0 --graph=%s" % (graphfile)
+populateCmd = "./obj/pqserver --verbose --twitternew --no-execute --graph=%s" % (graphfile)
+clientCmd   = "./obj/pqserver --verbose --twitternew --no-populate --plogout=0 --psubscribe=0 --duration=1000000 --popduration=0 --graph=%s" % (graphfile)
 
 
 exps[0]['defs'].append(

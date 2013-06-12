@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import localexperiments
+import resonanceexperiments
 import os
 from os import system
 #import subprocess
@@ -12,10 +12,47 @@ import json, fnmatch, re
 import socket
 import stat
 
+nodes = {
+  'resonance':[
+      'cuda-1-1.local',
+      'cuda-1-2.local',
+      'cuda-1-3.local',
+      'cuda-1-4.local',
+      'cuda-1-5.local',
+      'cuda-1-6.local',
+      'cuda-1-7.local',
+      'cuda-1-8.local',
+      'cuda-1-9.local',
+      'cuda-1-10.local',
+      'cuda-1-11.local',
+      'cuda-1-12.local',
+      'cuda-1-13.local',
+      'cuda-1-14.local',
+      'cuda-1-15.local',
+      'cuda-1-16.local'],
+  'hpc':[
+      'compute-3-0.local',
+#      'compute-3-1.local',
+      'compute-3-2.local',
+#      'compute-3-3.local',
+      'compute-4-1.local',
+      'compute-4-2.local',
+      'compute-4-3.local',
+      'compute-4-4.local',
+      'compute-4-5.local',
+      'compute-4-6.local',
+      'compute-4-7.local',
+      'compute-4-8.local'] #,
+#      'compute-5-0.local']
+}
+
+
+
 parser = OptionParser()
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
-parser.add_option("-C", "--clients", action="store", type="int", dest="nclients", default=5)
+parser.add_option("-C", "--cluster", action="store", type="string", dest="cluster", default='resonance')
+parser.add_option("-g", "--cgroups", action="store", type="int", dest="cgroups", default=1)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
@@ -25,7 +62,8 @@ parser.add_option("-f", "--part", action="store", type="string", dest="part", de
 
 nbacking = options.nbacking
 ncaching = options.ncaching
-nclients = options.ncaching
+poolname = options.cluster
+groupcount = options.cgroups
 startport = options.startport
 affinity = options.affinity
 startcpu = options.startcpu
@@ -33,7 +71,7 @@ perfserver = options.perfserver
 count = 0
 
 nprocesses = nbacking + ncaching
-hosts = []
+hosts = nodes['resonance'] if poolname == 'resonance' else nodes['hpc'] 
 pin = ""
 
 topdir = None
@@ -57,14 +95,14 @@ def prepare_experiment(xname, ename):
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
         for h in range(nprocesses):
-            hfile.write('cuda-1-' + str(h+1) + "\t" + str(startport) + "\n");
+            hfile.write(hosts[h] + "\t" + str(startport) + "\n");
         hfile.close()
 
     resdir = os.path.join(uniquedir, xname, ename)
     os.makedirs(resdir)
     return resdir
 
-exps = localexperiments.exps
+exps = resonanceexperiments.exps
 homedir = os.path.expanduser("~")
 
 for x in exps:
@@ -106,15 +144,26 @@ for x in exps:
             srvfile.close()
             st = os.stat(sname)
             os.chmod(sname, st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH )
-            ssh_cmd = 'ssh cuda-1-%d "./start_pequod_srv%d.sh"' % (s+1, s)
+            ssh_cmd = 'ssh %s "./start_pequod_srv%d.sh"' % (hosts[s], s)
+            print ssh_cmd
             call([ssh_cmd], shell=True)
 
         sleep(3)
 
+        print "Populating store..."
+        clientcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking) # + " --ngroups=" + str(groupcount) + " --groupid=" str(1)
+         
+        fartfile = os.path.join(resdir, "fart_pop.txt")
+        pop_cmd = clientcmd + " > " + fartfile + " 2>&1"
+
+        print pop_cmd
+        pop_pid = Popen(pop_cmd, shell=True);
+
+        pop_pid.wait()
+
         print "Starting app clients."
         procs = []
-        clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
-        print clientcmd
+        clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking) + " --ngroups=" + str(groupcount) + " --groupid=" + str(0)
         
         for c in range(1):
             outfile = os.path.join(resdir, "output_app_")
@@ -136,8 +185,8 @@ for x in exps:
     
         print "Cleaning up..."
         call(["rm -f " + homedir + "/start_pequod_srv*"], shell=True)
-        for s in range(nprocesses):
-            ssh_cmd = 'ssh cuda-1-%d "killall pqserver"' % (s+1)
-            call([ssh_cmd], shell=True)
+#for s in range(nprocesses):
+#            ssh_cmd = 'ssh %s "killall pqserver"' % (hosts[s])
+#            call([ssh_cmd], shell=True)
 
         print "Experiment complete. Results are stored at", resdir
