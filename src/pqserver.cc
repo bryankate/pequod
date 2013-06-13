@@ -272,7 +272,14 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
     ++nmodify_;
 }
 
+static bool cross_table_warning = false;
+
 auto Table::validate(Str first, Str last, uint64_t now) -> iterator {
+    if (triecut_ && !cross_table_warning) {
+        std::cerr << "warning: [" << first << "," << last << ") crosses subtable boundary\n";
+        cross_table_warning = true;
+    }
+
     Table* t = this;
     while (t->parent_->triecut_)
         t = t->parent_;
