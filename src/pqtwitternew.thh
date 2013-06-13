@@ -499,6 +499,13 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (!tp_.groupid())
         tp_.print_subscription_statistics(std::cerr);
 
+    if (!tp_.groupid()) {
+        twait {
+            Json j;
+            server_.control(Json().set("clear_log", true), make_event(j));
+        }
+    }
+
     // in some experiments we pre-populate the servers using another process
     if (!tp_.populate())
         goto finish;
