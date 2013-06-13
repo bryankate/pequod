@@ -41,6 +41,8 @@ inline void Log::record_at(Str key, uint64_t time, const T& value) {
 
 inline void Log::clear() {
     log_ = Json();
+    if (epoch_)
+        epoch_ = tstamp();
 }
 
 inline const Json& Log::as_json() const {
