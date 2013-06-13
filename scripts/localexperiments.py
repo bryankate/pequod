@@ -4,7 +4,7 @@ import copy
 exps = [{'name': "twitter", 'defs': []}]
 
 serverCmd = "./obj/pqserver"
-clientCmd = "./obj/pqserver --twitternew --plogout=0 --psubscribe=0 --duration=1000000 --popduration=0"
+clientCmd = "./obj/pqserver --twitternew --verbose --plogout=0 --psubscribe=0 --duration=1000000 --popduration=0"
 
 exps[0]['defs'].append(
     {'name': "autopush",
