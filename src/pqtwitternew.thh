@@ -491,6 +491,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         uint32_t post_end_time = this->currtime_ + this->tp_.popduration();
         std::vector<std::pair<uint32_t, uint32_t>> subs;
         tamer::gather_rendezvous gr;
+        Json j;
     }
     gen.seed(112181 + tp_.groupid());
 
@@ -499,12 +500,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (!tp_.groupid())
         tp_.print_subscription_statistics(std::cerr);
 
-    if (!tp_.groupid()) {
-        twait {
-            Json j;
-            server_.control(Json().set("clear_log", true), make_event(j));
-        }
-    }
+    if (!tp_.groupid())
+        twait { server_.control(Json().set("clear_log", true), make_event(j)); }
 
     // in some experiments we pre-populate the servers using another process
     if (!tp_.populate())
