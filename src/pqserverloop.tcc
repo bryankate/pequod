@@ -255,17 +255,21 @@ tamed void initialize_interconnect(pq::Server& server,
 tamed void periodic_logger() {
     tvars {
         struct rusage u, lu;
-        uint64_t now;
+        uint64_t now, utime, stime;
+        double scale = 1.0 / 10000;
     }
     memset(&lu, 0, sizeof(struct rusage));
 
     while(true) {
         mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
         now = tstamp();
+        utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
+        stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
 
+        log_.record_at("utime_us", now, utime);
+        log_.record_at("stime_us", now, stime);
+        log_.record_at("cpu_pct", now, (utime + stime) * scale);
         log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
-        log_.record_at("utime_us", now, tv2us(u.ru_utime) - tv2us(lu.ru_utime));
-        log_.record_at("stime_us", now, tv2us(u.ru_stime) - tv2us(lu.ru_stime));
         log_.record_at("ninsert", now, diff_.ninsert);
         log_.record_at("ncount", now, diff_.ncount);
         log_.record_at("nsubscribe", now, diff_.nsubscribe);

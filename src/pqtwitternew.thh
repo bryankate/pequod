@@ -491,6 +491,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         uint32_t post_end_time = this->currtime_ + this->tp_.popduration();
         std::vector<std::pair<uint32_t, uint32_t>> subs;
         tamer::gather_rendezvous gr;
+        Json j;
     }
     gen.seed(112181 + tp_.groupid());
 
@@ -498,6 +499,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     tp_.make_subscriptions(gen, subs);
     if (!tp_.groupid())
         tp_.print_subscription_statistics(std::cerr);
+
+    if (!tp_.groupid())
+        twait { server_.control(Json().set("clear_log", true), make_event(j)); }
 
     // in some experiments we pre-populate the servers using another process
     if (!tp_.populate())
@@ -536,17 +540,21 @@ tamed template <typename S>
 void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
     tvars {
         struct rusage u, lu;
-        uint64_t now;
+        uint64_t now, utime, stime;
+        double scale = 1.0 / 10000;
     }
     memset(&lu, 0, sizeof(struct rusage));
 
     while(done) {
         mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
         now = tstamp();
+        utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
+        stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
 
         log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
-        log_.record_at("utime_us", now, tv2us(u.ru_utime) - tv2us(lu.ru_utime));
-        log_.record_at("stime_us", now, tv2us(u.ru_stime) - tv2us(lu.ru_stime));
+        log_.record_at("utime_us", now, utime);
+        log_.record_at("stime_us", now, stime);
+        log_.record_at("cpu_pct", now, (utime + stime) * scale);
 
         lu = u;
         twait volatile { tamer::at_delay_sec(1, make_event()); }
