@@ -26,9 +26,11 @@ nrpc diff_;
 
 namespace {
 
-tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer::event<> done) {
+tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
+                                tamer::event<bool> done) {
     tvars {
-        int command;
+        Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
+        int32_t command;
         String key, first, last;
         pq::Table* t;
         pq::Table::iterator it;
@@ -36,13 +38,28 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         int32_t peer = -1;
     }
 
+    twait { mpfd->read_request(make_event(j)); }
+
+    if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
+        done(false);
+    else
+        // allow the server to read and start processing another
+        // rpc while this one is being handled
+        done(true);
+
     command = j[0].as_i();
+
+    rj[0] = -command;
+    rj[1] = j[1];
+    rj[2] = pq_fail;
+    rj[3] = Json();
+
     if (command >= pq_get && command <= pq_add_join
         && !(j[2].is_s() && pq::table_name(j[2].as_s())))
-        return;
+        goto finish;
     if (command >= pq_count && command <= pq_add_join
         && !(j[3].is_s() && pq::table_name(j[2].as_s(), j[3].as_s())))
-        return;
+        goto finish;
 
     switch (command) {
     case pq_add_join:
@@ -125,27 +142,33 @@ tamed void process(pq::Server& server, const Json& j, Json& rj, Json& aj, tamer:
         rj[2] = pq_ok;
         rj[3] = Json::make_object();
 
+        // stuff the server does not know about
         if (j[2].is_o()) {
-            // server does not know about logs
             if (j[2]["get_log"])
                 rj[3] = log_.as_json();
             else if (j[2]["write_log"])
                 log_.write_json(std::cerr);
             else if (j[2]["clear_log"])
                 log_.clear();
+            else if (j[2]["interconnect"]) {
+                peer = j[2]["interconnect"].as_i();
+                assert(peer >= 0 && peer < (int32_t)interconnect_.size());
+                interconnect_[peer] = new pq::Interconnect(mpfd);
+            }
         }
 
         server.control(j[2]);
         break;
     }
 
-    done();
+    finish:
+    mpfd->write(rj);
 }
 
 tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
     tvars {
-        Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
         msgpack_fd* mpfd_;
+        bool ok;
     }
 
     if (mpfd)
@@ -154,26 +177,12 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
         mpfd_ = new msgpack_fd(cfd);
 
     while (cfd) {
-        twait { mpfd_->read_request(make_event(j)); }
-        if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
+        twait { read_and_process_one(mpfd_, server, make_event(ok)); }
+        if (!ok)
             break;
 
-        rj[0] = -j[0].as_i();
-        rj[1] = j[1];
-        rj[2] = pq_fail;
-        rj[3] = Json();
-
-        // handle interconnect control message here so that the
-        // fd can be turned into a remote interconnect client
-        if (unlikely((j[0].as_i() == pq_control) && j[2].is_o() && j[2]["interconnect"])) {
-            int32_t peer = j[2]["interconnect"].as_i();
-            assert(peer >= 0 && peer < (int32_t)interconnect_.size());
-            interconnect_[peer] = new pq::Interconnect(mpfd_);
-        }
-
-        twait { process(server, j, rj, aj, make_event()); }
-        mpfd_->write(rj);
-//        twait { tamer::at_asap(make_event()); }
+        // round robin connections with data to read
+        twait { tamer::at_asap(make_event()); }
     }
 
     cfd.close();
