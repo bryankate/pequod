@@ -49,7 +49,7 @@ TAMERFLAGS = @TAMERFLAGS@
 LIBTAMER = tamer/tamer/.libs/libtamer.a
 
 
-all:    $(OBJDIR)/pqserver $(OBJDIR)/pqforker
+all:    $(OBJDIR)/pqserver $(OBJDIR)/pqforker $(OBJDIR)/hashtimer
 
 $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h: $(PROTOSRCDIR)/%.proto \
 		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp
@@ -122,6 +122,7 @@ $(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqforker.o: $(OBJDIR)/pqforker.cc $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
 
 
 COMMON_OBJS = \
@@ -146,7 +147,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsink.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
-        $(OBJDIR)/pqtwitternew.o \
+	$(OBJDIR)/pqtwitternew.o \
 	$(OBJDIR)/pqhackernews.o \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
@@ -160,17 +161,21 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
 	$(OBJDIR)/hashclient.o \
-	$(OBJDIR)/pqrwmicro.o \
+	$(OBJDIR)/pqrwmicro.o 
+
+PQMAIN_OBJS = $(PQSERVER_OBJS) \
 	$(OBJDIR)/pqmain.o
 
 PQFORKER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqremoteclient.o \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqforker.o
-	
 
-$(OBJDIR)/pqserver: $(PQSERVER_OBJS) $(LIBTAMER)
-	$(CXXLINK) -o $@ $(PQSERVER_OBJS) $(LDFLAGS) $(LIBTAMER) $(LIBS)
+HASHTIMER_OBJS = $(PQSERVER_OBJS) \
+	$(OBJDIR)/hashtimer.o
+
+$(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
@@ -185,6 +190,9 @@ $(OBJDIR)/pgbench: $(COMMON_OBJS) $(OBJDIR)/pgbench.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/pqforker: $(PQFORKER_OBJS) $(LIBTAMER)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+
+$(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 tamer/compiler/tamer $(LIBTAMER): tamer-update

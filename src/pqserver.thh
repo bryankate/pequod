@@ -2,6 +2,8 @@
 #ifndef PEQUOD_SERVER_HH
 #define PEQUOD_SERVER_HH
 #include <tamer/tamer.hh>
+#include <boost/intrusive/rbtree.hpp>
+#include <boost/intrusive/set.hpp>
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqsource.hh"
