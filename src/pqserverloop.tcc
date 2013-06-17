@@ -40,8 +40,10 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
 
     twait { mpfd->read_request(make_event(j)); }
 
-    if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i())
+    if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i()) {
         done(false);
+        return;
+    }
     else
         // allow the server to read and start processing another
         // rpc while this one is being handled
