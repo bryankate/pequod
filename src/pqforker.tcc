@@ -81,6 +81,7 @@ int main(int argc, char** argv) {
             assert(false && "Not a parsable option.");
     }
 
+    tamer::initialize();
     forkit( dhosts, nhosts, outpath, errpath, part);
     tamer::loop();
     tamer::cleanup();
