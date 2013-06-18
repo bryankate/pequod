@@ -2,8 +2,8 @@ var ngraphs = 0;
 var graphs;
 var lines;
 var raw;
-var colors = ["#444444", "#0060ad", "#dd181f","#628243", "#ff3366", "#cc9966"];
-var symbols = ["circle", "square", "triangle", "diamond", "cross"];
+var colors = {client: "#444444", backend: "#0060ad", cache: "#dd181f"};
+var symbols = {client: "circle", backend: "square", cache: "triangle"};
 
 function clearGraphs() {
   graphs = document.getElementById('graphs');
@@ -17,26 +17,19 @@ function redraw(rawjson) {
   clearGraphs();
   raw = rawjson;
   
+  if (rawjson.hasOwnProperty('log'))
+     processLog(rawjson['log'], 'client_0', colors['client'], symbols['client']);
+  else if (rawjson.hasOwnProperty('client_logs'))
+    for (var l = 0; l < rawjson['client_logs'].length; ++l)
+      processLog(rawjson['client_logs'][l], 'client_' + l, colors['client'], symbols['client']);
+  
+  var b = 0;
   var c = 0;
-  var s = 0;
-  for (var l = 0; l < rawjson['client_logs'].length; ++l, ++c) {
-    if (c == colors.length) {
-      c = 0;
-      ++s;
-      if (s == symbols.length)
-        s = 0;
-    }
-    processLog(rawjson['client_logs'][l], 'client_' + l, c, s);
-  }
-  for (var l = 0; l < rawjson['server_logs'].length; ++l, ++c) {
-    if (c == colors.length) {
-      c = 0;
-      ++s;
-      if (s == symbols.length)
-        s = 0;
-    }
-    processLog(rawjson['server_logs'][l], 'server_' + l, c, s);
-  }
+  for (var l = 0; l < rawjson['server_logs'].length; ++l)
+    if (rawjson['server_logs'][l]['backend'])
+      processLog(rawjson['server_logs'][l].data, 'backend_' + b++, colors['backend'], symbols['backend']);
+    else
+      processLog(rawjson['server_logs'][l].data, 'cache_' + c++, colors['cache'], symbols['cache']);
 
   for (g in lines) {
     var plotid = createGraph(g);
@@ -46,8 +39,8 @@ function redraw(rawjson) {
     for (l in lines[g])
       alldata.push({data: lines[g][l].data, 
                     label : l, 
-                    color : colors[lines[g][l].color], 
-                    points: { symbol: symbols[lines[g][l].symbol] }});
+                    color : lines[g][l].color, 
+                    points: { symbol: lines[g][l].symbol }});
     
     var options = { series: { lines: { show: true },
                               points: { show: true }},
@@ -71,8 +64,8 @@ function processLog(logjson, pname, clr, sym) {
       lines[key] = {};
     
     line = {data: [], color: clr, symbol: sym};
-    for (i in logjson[key])
-      line.data.push([i / 1000000.0, logjson[key][i]]);
+    for (var i = 0; i < logjson[key].length; ++i)
+      line.data.push([logjson[key][i][0] / 1000000.0, logjson[key][i][1]]);
     
     lines[key][pname] = line;
   }
