@@ -22,9 +22,9 @@ class TwitterNewPopulator;
 
 #define END_TIME        ((uint32_t)-1)
 #define BASE_TIME       1000000000
-#define LOGIN_WINDOW    10000
-#define OVERLAP         0          // subtracted from last seen post to define beg_scan
-#define SKEW            0          // subtracted from now to define end_scan
+#define LOGIN_WINDOW    1000000
+#define OVERLAP         0          // subtracted from last check time to define beg_scan
+#define SKEW            5000       // subtracted from now to define end_scan
 
 // Keep barebones info on each user.
 struct TwitterGraphNode {
@@ -475,22 +475,6 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         }
     }
 
-    // extract timestamp of last post read
-    if (sr.size()) {
-        typename S::iterator it = sr.begin();
-        for (uint32_t i = 0; i < sr.size() - 1; ++i)
-            ++it;
-
-        uint32_t last = 0;
-        if (tp_.binary())
-            last = read_in_net_order<uint32_t>(it->key().data() + 7);
-        else
-            last = Str(it->key().data() + 11, 10).to_i();
-
-        if (last > user->last_read_)
-            user->last_read_ = last;
-    }
-
     user->pending_ = false;
     --pending_;
     trigger_.trigger();
@@ -774,11 +758,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     beg_scan = currtime_ - LOGIN_WINDOW;
                     ++nfull;
                 }
-                else if (!OVERLAP)
-                    ++beg_scan; // don't fetch the last post read again
                 else
                     beg_scan -= OVERLAP;
 
+                user->last_read_ = end_scan;
                 user->pending_ = true;
                 ++pending_;
 
@@ -812,7 +795,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
     for (uint32_t u : loggedin) {
         user = tp_.managed_user(u);
-        check(user, currtime_, user->last_read_ + 1, END_TIME, gr.make_event(nread));
+        check(user, currtime_, user->last_read_, END_TIME, gr.make_event(nread));
     }
     twait(gr);
 
