@@ -334,7 +334,8 @@ int main(int argc, char** argv) {
 
         if (client_port >= 0 || hosts) {
             if (hosts)
-                part = pq::Partitioner::make("twitternew", nbacking, hosts->count(), -1);
+                part = pq::Partitioner::make((tp->binary()) ? "twitternew" : "twitternew-text",
+                                             nbacking, hosts->count(), -1);
             run_twitter_new_remote(*tp, client_port, hosts, part);
         }
         else {

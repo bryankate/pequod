@@ -455,20 +455,29 @@ UnitTestPartitioner::UnitTestPartitioner(uint32_t nservers, int default_owner)
 class TwitterPartitioner : public Partitioner {
   public:
     TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
-                       uint32_t default_owner, bool binary);
+                       uint32_t default_owner, bool newtwitter, bool binary);
 };
 
 TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
-                                       uint32_t default_owner, bool newtwitter)
+                                       uint32_t default_owner,
+                                       bool newtwitter, bool binary)
     : Partitioner(default_owner, nbacking) {
 
     ps_.add(partition1("c|", partition1::text, 0, 0, 1));
 
     if (newtwitter) {
-        ps_.add(partition1("cp|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("p|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("s|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
-        ps_.add(partition1("t|", partition1::binary, 24, nbacking, nservers - nbacking));
+        if (binary) {
+            ps_.add(partition1("cp|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("p|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("s|", partition1::binary, 24, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("t|", partition1::binary, 24, nbacking, nservers - nbacking));
+        }
+        else {
+            ps_.add(partition1("cp|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("p|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("s|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+            ps_.add(partition1("t|", partition1::decimal, 5, nbacking, nservers - nbacking));
+        }
     }
     else {
         ps_.add(partition1("f|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
@@ -493,9 +502,11 @@ Partitioner *Partitioner::make(const String &name, uint32_t nbacking,
     else if (name == "unit")
         return new UnitTestPartitioner(nservers, default_owner);
     else if (name == "twitter")
-        return new TwitterPartitioner(nservers, nbacking, default_owner, false);
+        return new TwitterPartitioner(nservers, nbacking, default_owner, false, false);
     else if (name == "twitternew")
-        return new TwitterPartitioner(nservers, nbacking, default_owner, true);
+        return new TwitterPartitioner(nservers, nbacking, default_owner, true, true);
+    else if (name == "twitternew-text")
+        return new TwitterPartitioner(nservers, nbacking, default_owner, true, false);
     else
         assert(0 && "Unknown partition name");
     return 0;
