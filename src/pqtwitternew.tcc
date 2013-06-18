@@ -77,6 +77,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
+      binary_(param["binary"].as_b(true)),
       verbose_(param["verbose"].as_b(false)),
       celebthresh_(param["celebrity"].as_i(0)),
       pct_active_(param["pactive"].as_d(70)),
@@ -280,7 +281,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Partitioner* part) {
     tvars {
         MultiClient* mc = new MultiClient(hosts, part, client_port);
-        TwitterNewShim<MultiClient>* shim = new TwitterNewShim<MultiClient>(*mc);
+        TwitterNewShim<MultiClient>* shim = new TwitterNewShim<MultiClient>(*mc, tp);
         TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
     }
     twait { mc->connect(make_event()); }

@@ -80,6 +80,7 @@ static Clp_Option options[] = {
     { "postlimit", 0, 4014, Clp_ValInt, 0 },
     { "fetch", 0, 4015, 0, Clp_Negate },
     { "full-scan", 0, 4016, 0, Clp_Negate },
+    { "binary", 0, 4017, 0, Clp_Negate },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -221,6 +222,8 @@ int main(int argc, char** argv) {
             tp_param.set("fetch", !clp->negated);
         else if (clp->option->long_name == String("full-scan"))
             tp_param.set("full_scan", !clp->negated);
+        else if (clp->option->long_name == String("binary"))
+            tp_param.set("binary", !clp->negated);
 
         // hn
 	else if (clp->option->long_name == String("narticles"))
@@ -336,7 +339,7 @@ int main(int argc, char** argv) {
         }
         else {
             pq::DirectClient client(server);
-            pq::TwitterNewShim<pq::DirectClient> shim(client);
+            pq::TwitterNewShim<pq::DirectClient> shim(client, *tp);
             pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());

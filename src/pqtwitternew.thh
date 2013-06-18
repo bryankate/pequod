@@ -86,6 +86,7 @@ class TwitterNewPopulator {
     inline bool fetch() const { return fetch_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
+    inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
 
     inline uint32_t begin_managed() const { return groupbegin_; }
@@ -121,6 +122,7 @@ class TwitterNewPopulator {
     bool log_;
     bool synchronous_;
     bool visualize_;
+    bool binary_;
     bool verbose_;
     uint32_t celebthresh_;
     double pct_active_;
@@ -161,10 +163,12 @@ inline bool TwitterNewPopulator::is_celebrity(uint32_t user) const {
 template <typename S>
 class TwitterNewShim {
   public:
-    TwitterNewShim(S& server);
+    TwitterNewShim(S& server, TwitterNewPopulator& tp);
 
     typedef typename S::iterator iterator;
     typedef typename S::scan_result scan_result;
+
+    tamed void initialize(tamer::event<> e);
 
     template <typename R>
     inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
@@ -172,7 +176,6 @@ class TwitterNewShim {
     inline void mark_celebrity(uint32_t poster, tamer::preevent<R> done);
     template <typename R>
     inline void post(uint32_t poster, uint32_t time, const String& value, bool celeb, tamer::preevent<R> e);
-    tamed void initialize(bool push, bool pull, bool pull_celeb, tamer::event<> e);
     inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
     template <typename R>
     inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
@@ -194,28 +197,29 @@ class TwitterNewShim {
 
   private:
     S& server_;
+    TwitterNewPopulator& tp_;
     char buf_[key_capacity];
     String value_;
 };
 
 template <typename S>
-TwitterNewShim<S>::TwitterNewShim(S& server)
-    : server_(server) {
+TwitterNewShim<S>::TwitterNewShim(S& server, TwitterNewPopulator& tp)
+    : server_(server), tp_(tp) {
 }
 
 tamed template <typename S>
-void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
-                                   tamer::event<> done) {
+void TwitterNewShim<S>::initialize(tamer::event<> done) {
     tvars { Json j[4]; }
-    if (push) {
+    if (tp_.push()) {
         twait {
             // The purpose of this join is to install triecuts for fairness
             server_.add_join("xxx|", "xxx}",
                              "xxx|<user>|<time>|<poster> = "
                              "copy p|<poster>|<time> "
                              "using s|<user>|<poster>, "
-                             "t|<user>|<time>|<poster> pull "
-                             "where user:4n, time:4n, poster:4n",
+                             "t|<user>|<time>|<poster> pull " +
+                             String((tp_.binary()) ? "where user:4n, time:4n, poster:4n"
+                                                   : "where user:8, time:10, poster:8"),
                              make_event(j[0]));
         }
     }
@@ -224,28 +228,32 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
             server_.add_join("t|", "t}",
                              "t|<user>|<time>|<poster> = "
                              "copy p|<poster>|<time> " +
-                             String((pull) ? "pull " : "") +
-                             "using s|<user>|<poster> "
-                             "where user:4n, time:4n, poster:4n",
+                             String((tp_.pull()) ? "pull " : "") +
+                             "using s|<user>|<poster> " +
+                             String((tp_.binary()) ? "where user:4n, time:4n, poster:4n"
+                                                   : "where user:8, time:10, poster:8"),
                              make_event(j[0]));
 
-            if (pull_celeb) {
+            if (tp_.pull_celeb()) {
                 server_.add_join("ct|", "ct}",
                                  "ct|<time>|<poster> = "
-                                 "copy cp|<poster>|<time> "
-                                 "where poster:4n, time:4n",
+                                 "copy cp|<poster>|<time> " +
+                                 String((tp_.binary()) ? "where poster:4n, time:4n"
+                                                       : "where poster:8, time:10"),
                                  make_event(j[3]));
                 server_.add_join("cs|", "cs}",
                                  "cs|<user>|<poster> = "
                                  "copy c|<poster> "
-                                 "using s|<user>|<poster> "
-                                 "where user:4n, poster:4n",
+                                 "using s|<user>|<poster> " +
+                                 String((tp_.binary()) ? "where user:4n, poster:4n"
+                                                       : "where user:8, poster:10"),
                                  make_event(j[2]));
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
                                  "pull copy ct|<time>|<poster> "
-                                 "using filter cs|<user>|<poster> "
-                                 "where user:4n, time:4n, poster:4n",
+                                 "using filter cs|<user>|<poster> " +
+                                 String((tp_.binary()) ? "where user:4n, time:4n, poster:4n"
+                                                       : "where user:8, time:10, poster:8"),
                                  make_event(j[1]));
             }
         }
@@ -260,41 +268,71 @@ void TwitterNewShim<S>::initialize(bool push, bool pull, bool pull_celeb,
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
-    memcpy(buf_, "s|XXXX|XXXX", 11);
-    write_in_net_order(buf_ + 2, subscriber);
-    write_in_net_order(buf_ + 7, poster);
-    server_.insert(Str(buf_, 11), Str("1", 1), done);
+    if (tp_.binary()) {
+        memcpy(buf_, "s|XXXX|XXXX", 11);
+        write_in_net_order(buf_ + 2, subscriber);
+        write_in_net_order(buf_ + 7, poster);
+        server_.insert(Str(buf_, 11), Str("1", 1), done);
+    }
+    else {
+        sprintf(buf_, "s|%08u|%08u", subscriber, poster);
+        server_.insert(Str(buf_, 19), Str("1", 1), done);
+    }
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
-    memcpy(buf_, "c|XXXX", 6);
-    write_in_net_order(buf_ + 2, poster);
-    server_.insert(Str(buf_, 6), Str("1", 1), done);
+    if (tp_.binary()) {
+        memcpy(buf_, "c|XXXX", 6);
+        write_in_net_order(buf_ + 2, poster);
+        server_.insert(Str(buf_, 6), Str("1", 1), done);
+    }
+    else {
+        sprintf(buf_, "c|%08u", poster);
+        server_.insert(Str(buf_, 10), Str("1", 1), done);
+    }
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::post(uint32_t poster, uint32_t time, const String& value,
                                     bool celeb, tamer::preevent<R> done) {
-    memcpy(buf_, "cp|XXXX|XXXX", 11);
-    write_in_net_order(buf_ + 3, poster);
-    write_in_net_order(buf_ + 8, time);
-    server_.insert(Str(buf_ + !celeb, 11 + celeb), value, done);
+    if (tp_.binary()) {
+        memcpy(buf_, "cp|XXXX|XXXX", 11);
+        write_in_net_order(buf_ + 3, poster);
+        write_in_net_order(buf_ + 8, time);
+        server_.insert(Str(buf_ + !celeb, 11 + celeb), value, done);
+    }
+    else {
+        sprintf(buf_, "cp|%08u|%010u", poster, time);
+        server_.insert(Str(buf_ + !celeb, 21 + celeb), value, done);
+    }
 }
 
 template <typename S>
 inline void TwitterNewShim<S>::prepare_push_post(uint32_t poster, uint32_t time,
                                               const String& value) {
-    memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
-    write_in_net_order(buf_ + 7, time);
-    write_in_net_order(buf_ + 12, poster);
+    if (tp_.binary()) {
+        memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
+        write_in_net_order(buf_ + 7, time);
+        write_in_net_order(buf_ + 12, poster);
+    }
+    else
+        sprintf(buf_, "t|%08u|%010u|%08u", 0, time, poster);
+
     value_ = value;
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
-    write_in_net_order(buf_ + 2, subscriber);
-    server_.insert(Str(buf_, 16), value_, done);
+    if (tp_.binary()) {
+        write_in_net_order(buf_ + 2, subscriber);
+        server_.insert(Str(buf_, 16), value_, done);
+    }
+    else {
+        sprintf(buf_ + 2, "%08u", subscriber);
+        buf_[10] = '|'; // replace terminating null
+        server_.insert(Str(buf_, 30), value_, done);
+    }
 }
 
 template <typename S> template <typename R>
@@ -302,33 +340,54 @@ inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber,
                                              uint32_t start_time, uint32_t end_time,
                                              tamer::preevent<R, scan_result> done) {
 
-    memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
-    write_in_net_order(buf_ + 2, subscriber);
-    write_in_net_order(buf_ + 7, start_time);
-    write_in_net_order(buf_ + 14, subscriber);
-    write_in_net_order(buf_ + 19, end_time);
-    server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+    if (tp_.binary()) {
+        memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
+        write_in_net_order(buf_ + 2, subscriber);
+        write_in_net_order(buf_ + 7, start_time);
+        write_in_net_order(buf_ + 14, subscriber);
+        write_in_net_order(buf_ + 19, end_time);
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+    }
+    else {
+        sprintf(buf_, "t|%08u|%010u t|%08u|%010u",
+                subscriber, start_time, subscriber, end_time);
+        server_.scan(Str(buf_, 21), Str(buf_ + 22, 21), done);
+    }
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::follower_scan(uint32_t poster,
                                              tamer::preevent<R, scan_result> done) {
-    memcpy(buf_, "s|XXXX s|XXXX}", 14);
-    write_in_net_order(buf_ + 2, poster);
-    write_in_net_order(buf_ + 9, poster);
-    server_.scan(Str(buf_, 6), Str(buf_ + 7, 7), done);
+
+    if (tp_.binary()) {
+        memcpy(buf_, "s|XXXX s|XXXX}", 14);
+        write_in_net_order(buf_ + 2, poster);
+        write_in_net_order(buf_ + 9, poster);
+        server_.scan(Str(buf_, 6), Str(buf_ + 7, 7), done);
+    }
+    else {
+        sprintf(buf_, "s|%08u s|%08u}", poster, poster);
+        server_.scan(Str(buf_, 10), Str(buf_ + 11, 11), done);
+    }
 }
 
 template <typename S> template <typename R>
 inline void TwitterNewShim<S>::post_scan(uint32_t poster,
                                          uint32_t start_time, uint32_t end_time,
                                          tamer::preevent<R, scan_result> done) {
-    memcpy(buf_, "p|XXXX|XXXX p|XXXX|XXXX", 23);
-    write_in_net_order(buf_ + 2, poster);
-    write_in_net_order(buf_ + 7, start_time);
-    write_in_net_order(buf_ + 14, poster);
-    write_in_net_order(buf_ + 19, end_time);
-    server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+    if (tp_.binary()) {
+        memcpy(buf_, "p|XXXX|XXXX p|XXXX|XXXX", 23);
+        write_in_net_order(buf_ + 2, poster);
+        write_in_net_order(buf_ + 7, start_time);
+        write_in_net_order(buf_ + 14, poster);
+        write_in_net_order(buf_ + 19, end_time);
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+    }
+    else {
+        sprintf(buf_, "p|%08u|%010u p|%08u|%010u",
+                poster, start_time, poster, end_time);
+        server_.scan(Str(buf_, 21), Str(buf_ + 22, 21), done);
+    }
 }
 
 template <typename S> template <typename R>
@@ -405,12 +464,14 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                 time, user->uid(), beg_scan, user->uid(), end_scan);
 
         for (auto it = sr.begin(); it != sr.end(); ++it) {
-            assert(it->key().length() == 16);
-            assert(it->key()[0] == 't');
-            std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
-                      << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
-                      << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
-                      << ": " << it->value() << "\n";
+            if (tp_.binary()) {
+                std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
+                          << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
+                          << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
+                          << ": " << it->value() << "\n";
+            }
+            else
+                std::cerr << it->key() << ": " << it->value() << "\n";
         }
     }
 
@@ -419,7 +480,13 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         typename S::iterator it = sr.begin();
         for (uint32_t i = 0; i < sr.size() - 1; ++i)
             ++it;
-        uint32_t last = read_in_net_order<uint32_t>(it->key().data() + 7);
+
+        uint32_t last = 0;
+        if (tp_.binary())
+            last = read_in_net_order<uint32_t>(it->key().data() + 7);
+        else
+            last = Str(it->key().data() + 11, 10).to_i();
+
         if (last > user->last_read_)
             user->last_read_ = last;
     }
@@ -451,7 +518,10 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) 
         server_.prepare_push_post(u, time, value);
 
         for (auto it = sr.begin(); it != sr.end(); ++it) {
-            s = read_in_net_order<uint32_t>(it->key().data() + 7);
+            if (tp_.binary())
+                s = read_in_net_order<uint32_t>(it->key().data() + 7);
+            else
+                s = Str(it->key().data() + 11, 8).to_i();
             server_.push_post(s, gr.make_event());
         }
     }
@@ -474,7 +544,10 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
     twait(gr);
 
     for (auto it = sr.begin(); it != sr.end(); ++it) {
-        ptime = read_in_net_order<uint32_t>(it->key().data() + 7);
+        if (tp_.binary())
+            ptime = read_in_net_order<uint32_t>(it->key().data() + 7);
+        else
+            ptime = Str(it->key().data() + 11, 10).to_i();
         server_.prepare_push_post(f, ptime, it->value());
         server_.push_post(u, gr.make_event());
     }
@@ -508,7 +581,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         goto finish;
 
     if (!tp_.groupid())
-        twait { server_.initialize(tp_.push(), tp_.pull(), tp_.pull_celeb(), make_event()); }
+        twait { server_.initialize(make_event()); }
 
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
     for (s = 0; s != subs.size(); ++s) {
