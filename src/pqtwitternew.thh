@@ -471,7 +471,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                           << ": " << it->value() << "\n";
             }
             else
-                std::cerr << it->key() << ": " << it->value() << "\n";
+                std::cerr << "  " << it->key() << ": " << it->value() << "\n";
         }
     }
 
@@ -774,6 +774,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     beg_scan = currtime_ - LOGIN_WINDOW;
                     ++nfull;
                 }
+                else if (!OVERLAP)
+                    ++beg_scan; // don't fetch the last post read again
                 else
                     beg_scan -= OVERLAP;
 
@@ -808,9 +810,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     // each distributed experiment does roughly the same amount of work
     // despite differences in rpc ordering
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
-    for (uint32_t u : loggedin)
-        check(tp_.managed_user(u), currtime_,
-              user->last_read_, END_TIME, gr.make_event(nread));
+    for (uint32_t u : loggedin) {
+        user = tp_.managed_user(u);
+        check(user, currtime_, user->last_read_ + 1, END_TIME, gr.make_event(nread));
+    }
     twait(gr);
 
     getrusage(RUSAGE_SELF, &ru[1]);
