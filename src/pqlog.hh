@@ -36,7 +36,7 @@ inline void Log::record(Str key, const T& value) {
 template <typename T>
 inline void Log::record_at(Str key, uint64_t time, const T& value) {
     assert(time > epoch_);
-    log_.get_insert(key).set(String(time - epoch_), value);
+    log_.get_insert(key).push_back(Json::make_array(time - epoch_, value));
 }
 
 inline void Log::clear() {
