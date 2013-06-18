@@ -19,7 +19,15 @@ function redraw(rawjson) {
   
   var c = 0;
   var s = 0;
-  processLog(rawjson['log'], 'client', c++, s);
+  for (var l = 0; l < rawjson['client_logs'].length; ++l, ++c) {
+    if (c == colors.length) {
+      c = 0;
+      ++s;
+      if (s == symbols.length)
+        s = 0;
+    }
+    processLog(rawjson['client_logs'][l], 'client_' + l, c, s);
+  }
   for (var l = 0; l < rawjson['server_logs'].length; ++l, ++c) {
     if (c == colors.length) {
       c = 0;
