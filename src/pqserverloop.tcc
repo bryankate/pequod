@@ -13,6 +13,7 @@
 #include <sys/resource.h>
 
 std::vector<pq::Interconnect*> interconnect_;
+bool backend_ = true;
 
 pq::Log log_(tstamp());
 typedef struct {
@@ -147,7 +148,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         // stuff the server does not know about
         if (j[2].is_o()) {
             if (j[2]["get_log"])
-                rj[3] = log_.as_json();
+                rj[3] = Json().set("backend", backend_).set("data", log_.as_json());
             else if (j[2]["write_log"])
                 log_.write_json(std::cerr);
             else if (j[2]["clear_log"])
@@ -321,6 +322,7 @@ tamed void server_loop(int port, bool kill, pq::Server& server,
 
     // if this is a cluster deployment, make connections to each server
     if (hosts) {
+        backend_ = part->is_backend(me->seqid());
         interconnect_.assign(hosts->size(), nullptr);
 
         do {
