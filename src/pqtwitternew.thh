@@ -593,9 +593,10 @@ tamed template <typename S>
 void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
     tvars {
         struct rusage u, lu;
-        uint64_t now, utime, stime;
+        uint64_t now, before, utime, stime;
         double scale = 1.0 / 10000;
     }
+    before = 0;
     memset(&lu, 0, sizeof(struct rusage));
 
     while(done) {
@@ -607,9 +608,10 @@ void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
         log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
         log_.record_at("utime_us", now, utime);
         log_.record_at("stime_us", now, stime);
-        log_.record_at("cpu_pct", now, (utime + stime) * scale);
+        log_.record_at("cpu_pct", now, (before) ? ((utime + stime) * scale / fromus(now - before)) : 0);
 
         lu = u;
+        before = now;
         twait volatile { tamer::at_delay_sec(1, make_event()); }
     }
 }
