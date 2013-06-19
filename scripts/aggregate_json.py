@@ -49,16 +49,18 @@ def aggregate(*file_names):
 	output["real_time"] /= float(len(file_names)) 
 	return output
 
+def aggregate_dir(dir):
+	if dir[-1] != '/':
+		dir += '/'
+	files = glob.glob(dir + "output_app_*")
+	files = [os.path.abspath(x) for x in files]
+	combined_json = aggregate(*files)
+	fdout = open(dir + "aggrgate_output_app.json", 'w')
+	json.dump(combined_json, fdout, indent=4, separators=(',', ': '))	
+
 if __name__ == "__main__":
 	if len(sys.argv) != 2:
 		usage()
 		exit()
 	base_path = sys.argv[1]
-	if base_path[-1] != '/':
-		base_path += '/'
-	files = glob.glob(base_path + "output_app_*")
-	files = [os.path.abspath(x) for x in files]
-	combined_json = aggregate(*files)
-	fdout = open(base_path + "aggrgate_output_app.json", 'w')
-	json.dump(combined_json, fdout, indent=4, separators=(',', ': '))
-
+	aggregate_dir(base_path)
