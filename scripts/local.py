@@ -1,4 +1,6 @@
 import localexperiments
+import aggregate_json
+from aggregate_json import aggregate_dir
 import os
 from os import system
 import subprocess
@@ -139,6 +141,9 @@ for x in exps:
         # wait for clients to finish
         for p in procs:
             p.wait()
+    
+        if ngroups > 1:
+            aggregate_dir(resdir)
     
         print "Done experiment. Results are stored at", resdir
         system("killall pqserver")
