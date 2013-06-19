@@ -40,6 +40,11 @@ class HashHackerNewsShim {
         e(Json());
     }
     
+    template <typename R>
+    void control(const Json&, preevent<R, Json> e) {
+        e(Json());
+    }
+
     void pace(event<> e) { e(); }
 
   private:
@@ -136,6 +141,11 @@ class PQHackerNewsShim {
     template <typename R>
     void stats(preevent<R, Json> e) {
         server_.stats(e);
+    }
+
+    template <typename R>
+    void control(const Json& cmd, preevent<R, Json> e) {
+        server_.control(cmd, e);
     }
 
     template <typename R>
@@ -563,6 +573,10 @@ class SQLHackernewsShim {
     }
     template <typename R>
     void stats(preevent<R, Json> e) {
+        e(Json());
+    }
+    template <typename R>
+    void control(const Json&, preevent<R, Json> e) {
         e(Json());
     }
 

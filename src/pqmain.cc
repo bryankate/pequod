@@ -380,15 +380,18 @@ int main(int argc, char** argv) {
         } else if (tp_param["redis"])
             run_hn_remote_redis(*hp);
 	else {
-            if (client_port >= 0)
-                run_hn_remote(*hp, client_port);
-            else {
-                pq::DirectClient dc(server);
-                pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
-                pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
-                hr.populate(tamer::event<>());
-                hr.run(tamer::event<>());
-            }
+	    if (client_port >= 0 || hosts) {
+	        if (hosts)
+	            part = pq::Partitioner::make("hackernews", nbacking, hosts->count(), -1);
+	        run_hn_remote(*hp, client_port, hosts, part);
+	    }
+	    else {
+	        pq::DirectClient dc(server);
+	        pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
+	        pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
+	        hr.populate(tamer::event<>());
+	        hr.run(tamer::event<>());
+	    }
         }
     } else if (mode == mode_facebook) {
         if (!tp_param.count("shape"))

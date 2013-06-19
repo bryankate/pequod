@@ -487,6 +487,22 @@ TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
     }
 }
 
+class HackerNewsPartitioner : public Partitioner {
+  public:
+    HackerNewsPartitioner(uint32_t nservers, uint32_t nbacking, uint32_t default_owner);
+};
+
+HackerNewsPartitioner::HackerNewsPartitioner(uint32_t nservers, uint32_t nbacking,
+                                             uint32_t default_owner)
+    : Partitioner(default_owner, nbacking) {
+
+    ps_.add(partition1("a|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+    ps_.add(partition1("c|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+    ps_.add(partition1("v|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
+    ps_.add(partition1("k|", partition1::decimal, 5, nbacking, nservers - nbacking));
+    ps_.add(partition1("ma|", partition1::decimal, 5, nbacking, nservers - nbacking));
+}
+
 }
 
 
@@ -507,6 +523,8 @@ Partitioner *Partitioner::make(const String &name, uint32_t nbacking,
         return new TwitterPartitioner(nservers, nbacking, default_owner, true, true);
     else if (name == "twitternew-text")
         return new TwitterPartitioner(nservers, nbacking, default_owner, true, false);
+    else if (name == "hackernews")
+        return new HackerNewsPartitioner(nservers, nbacking, default_owner);
     else
         assert(0 && "Unknown partition name");
     return 0;

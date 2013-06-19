@@ -16,10 +16,13 @@
 #include "sp_key.hh"
 #include "hnpopulator.hh"
 #include "hnshim.hh"
+#include "pqlog.hh"
 
 namespace pq {
 using tamer::event;
 using tamer::preevent;
+class Hosts;
+class Partitioner;
 
 template <typename S>
 class HackernewsRunner {
@@ -34,13 +37,16 @@ class HackernewsRunner {
     tamed void vote(uint32_t voter, uint32_t aid, event<> e);
     tamed void read_article(uint32_t aid, event<> e);
 
+    tamed void periodic_logger(event<> e);
+
     S& server_;
     HackernewsPopulator& hp_;
+    Log log_;
 };
 
 template <typename S>
 inline HackernewsRunner<S>::HackernewsRunner(S& server, HackernewsPopulator& hp)
-    : server_(server), hp_(hp) {
+    : server_(server), hp_(hp), log_(tstamp()) {
 }
 
 tamed template <typename S>
@@ -64,6 +70,31 @@ tamed template <typename S>
     void HackernewsRunner<S>::read_article(uint32_t aid, event<> e) {
     mandatory_assert(aid < hp_.narticles());
     twait { server_.read_article(aid, hp_.articles()[aid], hp_.karmas(), !hp_.run_only(), e); }
+}
+
+tamed template <typename S>
+void HackernewsRunner<S>::periodic_logger(event<> e) {
+    tvars {
+        struct rusage u, lu;
+        uint64_t now, utime, stime;
+        double scale = 1.0 / 10000;
+    }
+    memset(&lu, 0, sizeof(struct rusage));
+
+    while(e) {
+        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
+        now = tstamp();
+        utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
+        stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
+
+        log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
+        log_.record_at("utime_us", now, utime);
+        log_.record_at("stime_us", now, stime);
+        log_.record_at("cpu_pct", now, (utime + stime) * scale);
+
+        lu = u;
+        twait volatile { tamer::at_delay_sec(1, make_event()); }
+    }
 }
 
 tamed template <typename S>
@@ -136,12 +167,16 @@ void HackernewsRunner<S>::run(event<> e) {
         struct rusage ru[2];
         struct timeval tv[2];
         uint32_t nread = 0, npost = 0, ncomment = 0, nvote = 0;
-        Json old_stats, stats;
+        Json old_stats, stats, logs, j;
         double real_time;
         uint32_t i, p, user, aid;
         tamer::gather_rendezvous gr;
     }
     gen.seed(13918);
+    periodic_logger(e);
+
+    log_.clear();
+    twait { server_.control(Json().set("clear_log", true), make_event(j)); }
     twait { server_.stats(make_event(old_stats)); }
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], NULL);
@@ -175,24 +210,39 @@ void HackernewsRunner<S>::run(event<> e) {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], NULL);
     twait { server_.stats(make_event(stats)); }
-    if (stats.get("server_user_time")) {
-        stats["server_user_time"] -= old_stats["server_user_time"];
-        stats["server_system_time"] -= old_stats["server_system_time"];
+    twait { server_.control(Json().set("get_log", true), make_event(logs)); }
+
+    if (!stats.is_array()) {
+        old_stats = Json::make_array(old_stats);
+        stats = Json::make_array(stats);
     }
+
+    uint32_t s = 0;
+    for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s)
+        if (it->get("server_user_time")) {
+            (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
+            (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
+        }
+
+    stats = Json().set("log", log_.as_json())
+                  .set("server_logs", logs)
+                  .set("server_stats", stats);
+
     real_time = to_real(tv[1] - tv[0]);
-    stats = Json().set("nread", nread).set("npost", npost)
+    stats.set("nread", nread).set("npost", npost)
 	.set("ncomment", ncomment).set("nvote", nvote)
 	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
 	.set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-	.set("real_time", real_time)
-        .merge(stats);
+	.set("real_time", real_time);
+
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     std::cerr << nops << " done, " << real_time << " seconds, " 
               << nops / real_time << " qps\n";
     e();
 }
 
-tamed void run_hn_remote(HackernewsPopulator& hp, int client_port);
+tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
+                         const Hosts* hosts, const Partitioner* part);
 tamed void run_hn_remote_redis(HackernewsPopulator& hp);
 
 };
