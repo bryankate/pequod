@@ -50,7 +50,7 @@ function redraw(rawjson) {
                     legend: {show: false, position: "nw"}}
     
     if (g.indexOf("_pct") !== -1)
-      options.yaxis['max'] = 100;
+      options.yaxis['max'] = 105;
                     
     plotGraph(alldata, plotid, options);
   }
