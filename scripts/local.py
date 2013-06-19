@@ -109,7 +109,7 @@ for x in exps:
             if affinity:
                 pin = "numactl -C " + str(startcpu + nprocesses) + " "
             
-            full_cmd = pin + popcmd + " &> " + fartfile
+            full_cmd = pin + popcmd + " 2> " + fartfile
 
             print full_cmd
             procs.append(Popen(full_cmd, shell=True));
