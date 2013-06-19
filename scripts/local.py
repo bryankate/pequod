@@ -17,6 +17,7 @@ parser.add_option("-a", "--affinity", action="store_true", dest="affinity", defa
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
+parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
 (options, args) = parser.parse_args()
 
 nbacking = options.nbacking
@@ -25,7 +26,7 @@ startport = options.startport
 affinity = options.affinity
 startcpu = options.startcpu
 perfserver = options.perfserver
-count = 0
+ngroups = options.ngroups
 
 nprocesses = nbacking + ncaching
 hosts = []
@@ -99,11 +100,28 @@ for x in exps:
 
         sleep(3)
 
+        if 'populatecmd' in e:
+            print "Populating backend."
+            procs = []
+            popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
+            fartfile = os.path.join(resdir, "fart_pop.txt")
+            
+            if affinity:
+                pin = "numactl -C " + str(startcpu + nprocesses) + " "
+            
+            full_cmd = pin + popcmd + " &> " + fartfile
+
+            print full_cmd
+            procs.append(Popen(full_cmd, shell=True));
+            
+            for p in procs:
+                p.wait()
+
         print "Starting app clients."
         procs = []
         clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
         
-        for c in range(1):
+        for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_")
             fartfile = os.path.join(resdir, "fart_app_")
             
@@ -111,6 +129,7 @@ for x in exps:
                 pin = "numactl -C " + str(startcpu + nprocesses + c) + " "
 
             full_cmd = pin + clientcmd + \
+                " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
                 " > " + outfile + str(c) + ".json" + \
                 " 2> " + fartfile + str(c) + ".txt"
 
