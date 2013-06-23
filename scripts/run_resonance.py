@@ -189,7 +189,7 @@ for x in exps:
 				procs = []
 				clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking) + " --ngroups=" + str(groupcount) + " --groupid=" + str(0)
 				
-				for c in range(1):
+				for c in range(groupcount):
 						outfile = os.path.join(resdir, "output_app_")
 						fartfile = os.path.join(resdir, "fart_app_")
 						
@@ -212,9 +212,12 @@ for x in exps:
 
 				print "Cleaning up..."
 				call(["rm -f " + homedir + "/start_pequod_srv*"], shell=True)
-				for s in range(nprocesses):
+				used_srv_cnt = nprocesses if nprocesses < len(hosts) else len(hosts)
+				for s in range(used_srv_cnt):
 						print "Killing %s" % (hosts[s])
 						ssh_cmd = 'ssh -x %s "killall pqserver"' % (hosts[s])
 						call([ssh_cmd], shell=True)
+
+				call(["scripts/aggregate_json.py " + resdir], shell=True)
 
 				print "Experiment complete. Results are stored at", resdir
