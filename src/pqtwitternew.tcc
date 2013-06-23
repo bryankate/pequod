@@ -29,7 +29,7 @@ TwitterGraphNode::TwitterGraphNode(uint32_t uid)
 }
 
 TwitterUser::TwitterUser(uint32_t uid)
-    : TwitterGraphNode(uid), last_read_(0), pending_(false) {
+    : TwitterGraphNode(uid), last_read_(0) {
 }
 
 TwitterGraphNode::Compare::Compare(CompareField field) : field_(field) {

@@ -55,7 +55,7 @@ def aggregate_dir(dir):
 	files = glob.glob(dir + "output_app_*")
 	files = [os.path.abspath(x) for x in files]
 	combined_json = aggregate(*files)
-	fdout = open(dir + "aggrgate_output_app.json", 'w')
+	fdout = open(dir + "aggregate_output_app.json", 'w')
 	json.dump(combined_json, fdout, indent=4, separators=(',', ': '))	
 
 if __name__ == "__main__":
