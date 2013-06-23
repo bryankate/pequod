@@ -15,6 +15,7 @@
 #include "check.hh"
 #include "redisclient.hh"
 #include "redisfd.hh"
+#include "pqdb.hh"
 
 namespace  {
 
@@ -1097,6 +1098,22 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
+void test_pqdb() {
+	Pqdb *dbi = new Pqdb();
+
+	String s1 = "derp";
+	String s2 = "herp";
+
+	dbi->put(s1,s2);
+
+	String s3 = dbi->get(s1);
+
+	assert(s3 == "herp");
+
+	delete dbi;
+
+}
+
 void test_redis() {
     pq::RedisSyncClient client;
     client.set("hello", "world");
@@ -1154,6 +1171,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
+    ADD_TEST(test_pqdb);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
