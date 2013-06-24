@@ -41,7 +41,7 @@ if test "$ac_cv_have_memcached" = yes; then
 fi
 AC_SUBST([MEMCACHED_LIB])
 
-AC_SEARCH_LIBS([open], [db_cxx], [ac_cv_have_db_cxx=yes], [ac_cv_have_db_cxx=no])
+AC_SEARCH_LIBS([__db_open], [db_cxx], [ac_cv_have_db_cxx=yes], [ac_cv_have_db_cxx=no])
 DB_CXX_LIB=
 if test "$ac_cv_have_db_cxx" = yes; then
     AC_CHECK_HEADERS([db_cxx.h])
