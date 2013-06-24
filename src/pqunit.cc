@@ -1101,12 +1101,12 @@ bb|<bid> = copy b|<bid> where bid:3"));
 void test_pqdb() {
 	Pqdb *dbi = new Pqdb();
 
-	String s1 = "derp";
-	String s2 = "herp";
+	Str s1 = "derp";
+	Str s2 = "herp";
 
 	dbi->put(s1,s2);
 
-	String s3 = dbi->get(s1);
+	Str s3 = dbi->get(s1);
 
 	assert(s3 == "herp");
 

@@ -1,4 +1,4 @@
-#include "string.hh"
+#include "str.hh"
 #include <db_cxx.h>
 #include <iostream>
 
@@ -62,8 +62,8 @@ class Pqdb {
       } 
     }
   
-    int put(String, String);
-    String get(String);
+    int put(Str, Str);
+    Str get(Str);
 
   private:
     std::string envHome, dbName;
@@ -71,29 +71,25 @@ class Pqdb {
     Db *dbh;
 };
 
-int Pqdb::put(String key, String val){
+int Pqdb::put(Str key, Str val){
 
   DbTxn *txn = nullptr;
   int ret;
-  char *key_str = new char[key.length()+1];
-  char *val_str = new char[val.length()+1];
-  strcpy(key_str, key.c_str());
-  strcpy(val_str, val.c_str());
 
-  Dbt k(key_str, strlen(key_str) + 1);
-  Dbt v(val_str, strlen(val_str) + 1);
+  Dbt k(key.mutable_data(), key.length() + 1);
+  Dbt v(val.mutable_data(), val.length() + 1);
 
   ret = pqdbEnv->txn_begin(NULL, &txn, 0);
   if (ret != 0) {
     pqdbEnv->err(ret, "Transaction begin failed.");
-    goto done;
+    return ret;
   }
 
   ret = dbh->put(txn, &k, &v, 0);
   if (ret != 0) {
     pqdbEnv->err(ret, "Database put failed.");
     txn->abort();
-    goto done;
+    return ret;
   }
 
   ret = txn->commit(0);
@@ -101,29 +97,22 @@ int Pqdb::put(String key, String val){
     pqdbEnv->err(ret, "Transaction commit failed.");
   }
 
-done:
-  delete[] key_str;
-  delete[] val_str;
   return ret;
 
 }
 
-String Pqdb::get(String k){
+Str Pqdb::get(Str k){
 
   // since this is always a point get we shouldn't need a transaction
-  char *key_str = new char[k.length()+1];
-  strcpy(key_str, k.c_str());
-
   Dbt key, val;
 
-  key.set_data(key_str);
-  key.set_size(strlen(key_str) + 1);
+  key.set_data(k.mutable_data());
+  key.set_size(k.length() + 1);
 
   val.set_flags(DB_DBT_MALLOC);
 
   dbh->get(NULL, &key, &val, 0);
 
-  delete[] key_str;
-  return String( (char *) val.get_data());
+  return Str((char*)val.get_data());
 
 }
