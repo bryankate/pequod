@@ -1098,6 +1098,7 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
+#if HAVE_DB_CXX_H
 void test_pqdb() {
 	Pqdb *dbi = new Pqdb();
 
@@ -1113,6 +1114,7 @@ void test_pqdb() {
 	delete dbi;
 
 }
+#endif
 
 void test_redis() {
     pq::RedisSyncClient client;
@@ -1171,7 +1173,9 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
+#if HAVE_DB_CXX_H
     ADD_TEST(test_pqdb);
+#endif
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
