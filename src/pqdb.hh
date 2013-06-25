@@ -1,3 +1,5 @@
+#ifndef PEQUOD_DATABASE_HH
+#define PEQUOD_DATABASE_HH
 #include "str.hh"
 #include <db_cxx.h>
 #include <iostream>
@@ -5,6 +7,11 @@
 class Pqdb {
 
   public:
+
+    Pqdb(Str name, int me) : envHome("./db/localEnv"), dbName(makeDbName(name, me)), pqdbEnv(new DbEnv(0))
+    {
+      init(DB_CREATE | DB_INIT_TXN | DB_INIT_MPOOL, DB_CREATE | DB_AUTO_COMMIT);
+    }
 
     Pqdb(uint32_t env_flags = DB_CREATE |
                               DB_INIT_TXN  | // Initialize transactions
@@ -15,26 +22,7 @@ class Pqdb {
          std::string dbN = "pequod.db")
          : envHome(eH), dbName(dbN), pqdbEnv(new DbEnv(0))
     {
-      try {
-        pqdbEnv->open(envHome.c_str(), env_flags, 0);
-        dbh = new Db(pqdbEnv, 0);
-        dbh->open(NULL,
-                  dbName.c_str(),
-                  NULL,
-                  DB_BTREE,
-                  db_flags,
-                  0);
-      } catch(DbException &e) {
-        std::cerr << "Error opening database or environment: "
-                  << envHome << std::endl;
-        std::cerr << e.what() << std::endl;
-        exit( -1 );
-      } catch(std::exception &e) {
-        std::cerr << "Error opening database or environment: "
-                  << envHome << std::endl;
-        std::cerr << e.what() << std::endl;
-        exit( -1 );
-      } 
+      init(env_flags, db_flags);
     }
 
     ~Pqdb() {
@@ -62,14 +50,54 @@ class Pqdb {
       } 
     }
   
-    int put(Str, Str);
-    Str get(Str);
+    inline std::string makeDbName(Str, int);
+    inline void init(uint32_t, uint32_t);
+    inline int put(Str, Str);
+    inline Str get(Str);
 
   private:
     std::string envHome, dbName;
     DbEnv *pqdbEnv;
     Db *dbh;
 };
+
+std::string Pqdb::makeDbName(Str name, int me){
+
+  std::cerr << "name(" << name << ")" << std::endl;
+  std::cerr << "me(" << me << ")" << std::endl;
+
+  std::string s = "pequod";
+  if (name.length())
+    s += "-" + std::string(name.data(), name.length());
+  if (me != -1)
+    s += "-" + std::to_string(me);
+  s += ".db";
+
+  return s;
+} 
+
+void Pqdb::init(uint32_t env_flags, uint32_t db_flags){
+  try {
+    pqdbEnv->open(envHome.c_str(), env_flags, 0);
+    dbh = new Db(pqdbEnv, 0);
+    dbh->open(NULL,
+              dbName.c_str(),
+              NULL,
+              DB_BTREE,
+              db_flags,
+              0);
+  } catch(DbException &e) {
+    std::cerr << "Error opening database or environment: "
+              << envHome << std::endl;
+    std::cerr << e.what() << std::endl;
+    exit( -1 );
+  } catch(std::exception &e) {
+    std::cerr << "Error opening database or environment: "
+              << envHome << std::endl;
+    std::cerr << e.what() << std::endl;
+    exit( -1 );
+  } 
+}
 
 int Pqdb::put(Str key, Str val){
 
@@ -116,3 +144,4 @@ Str Pqdb::get(Str k){
   return Str((char*)val.get_data());
 
 }
+#endif

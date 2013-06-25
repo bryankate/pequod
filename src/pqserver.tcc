@@ -35,8 +35,23 @@ void Table::iterator::fix() {
 Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
-      server_{server}, parent_{parent},
+      server_{server}, parent_{parent}, 
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
+#if HAVE_DB_CXX_H
+      if (server) {
+        if (!parent){
+          dbh = new Pqdb(name, server->me());
+        } else {
+          Table *t = parent;
+          while (t->parent_)
+            t = t->parent_;
+          dbh = t->dbh;
+        }
+      } else {
+        dbh = nullptr;
+      }
+#endif
+  assert(false);
 }
 
 Table::~Table() {
@@ -53,6 +68,10 @@ Table::~Table() {
         else
             delete d;
     }
+#if HAVE_DB_CXX_H
+    if (!parent_)
+      delete dbh;
+#endif
 }
 
 Table* Table::next_table_for(Str key) {
@@ -196,6 +215,10 @@ auto Table::insert(Table& t) -> local_iterator {
 void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
     store_type::insert_commit_data cd;
+#if HAVE_DB_CXX_H
+    if (server_->is_owned_public(server_->owner_for(key)))
+      dbh->put(key, value);   
+#endif
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {

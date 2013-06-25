@@ -82,7 +82,7 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
-$(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
+$(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh $(top_srcdir)/src/pqdb.hh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqclient.cc: $(top_srcdir)/src/pqclient.tcc
@@ -123,7 +123,7 @@ $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqforker.o: $(OBJDIR)/pqforker.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
-
+$(OBJDIR)/pqunit.o: $(top_srcdir)/src/pqdb.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \

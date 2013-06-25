@@ -13,6 +13,9 @@
 #include "partitions.hh"
 #include <iterator>
 #include <vector>
+#if HAVE_DB_CXX_H
+#include "pqdb.hh"
+#endif
 
 class Json;
 
@@ -94,6 +97,9 @@ class Table : public Datum {
     bool all_pull_;
     Server* server_;
     Table* parent_;
+#if HAVE_DB_CXX_H
+    Pqdb *dbh;
+#endif
 
   public:
     uint64_t ninsert_;
