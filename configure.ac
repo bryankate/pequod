@@ -41,11 +41,17 @@ if test "$ac_cv_have_memcached" = yes; then
 fi
 AC_SUBST([MEMCACHED_LIB])
 
-AC_SEARCH_LIBS([__db_open], [db_cxx], [ac_cv_have_db_cxx=yes], [ac_cv_have_db_cxx=no])
+AC_ARG_WITH([db_cxx],
+    [AS_HELP_STRING([--with-db_cxx],
+    [enable db backend if available])],
+    [], [with_db_cxx=no])
 DB_CXX_LIB=
-if test "$ac_cv_have_db_cxx" = yes; then
-    AC_CHECK_HEADERS([db_cxx.h])
-    DB_CXX_LIB="-ldb_cxx"
+if test "x$with_db_cxx" != "xno"; then
+    AC_SEARCH_LIBS([__db_open], [db_cxx], [ac_cv_have_db_cxx=yes], [ac_cv_have_db_cxx=no])
+    if test "$ac_cv_have_db_cxx" = yes; then
+        AC_CHECK_HEADERS([db_cxx.h])
+        DB_CXX_LIB="-ldb_cxx"
+    fi
 fi
 AC_SUBST([DB_CXX_LIB])
 
