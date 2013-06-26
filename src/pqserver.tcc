@@ -37,21 +37,6 @@ Table::Table(Str name, Table* parent, Server* server)
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent}, 
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
-#if HAVE_DB_CXX_H
-      if (server) {
-        if (!parent){
-          dbh = new Pqdb(name, server->me());
-        } else {
-          Table *t = parent;
-          while (t->parent_)
-            t = t->parent_;
-          dbh = t->dbh;
-        }
-      } else {
-        dbh = nullptr;
-      }
-#endif
-  assert(false);
 }
 
 Table::~Table() {
@@ -68,10 +53,6 @@ Table::~Table() {
         else
             delete d;
     }
-#if HAVE_DB_CXX_H
-    if (!parent_)
-      delete dbh;
-#endif
 }
 
 Table* Table::next_table_for(Str key) {
@@ -216,8 +197,8 @@ void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
     store_type::insert_commit_data cd;
 #if HAVE_DB_CXX_H
-    if (server_->is_owned_public(server_->owner_for(key)))
-      dbh->put(key, value);   
+    if (server_->dbh_ && server_->is_owned_public(server_->owner_for(key)))
+      server_->dbh_->put(key, value);   
 #endif
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -500,7 +481,7 @@ void Table::invalidate_remote(Str first, Str last) {
 
 
 Server::Server()
-    : supertable_(Str(), nullptr, this),
+    : dbh_(nullptr), supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
       part_(nullptr), me_(-1) {
 }
@@ -508,6 +489,8 @@ Server::Server()
 Server::~Server() {
     for (auto& s : remote_sinks_)
         s->deref();
+    if (!dbh_)
+        delete dbh_;
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {

@@ -8,92 +8,70 @@ class Pqdb {
 
   public:
 
-    Pqdb(Str name, int me) : envHome("./db/localEnv"), dbName(makeDbName(name, me)), pqdbEnv(new DbEnv(0))
+    Pqdb(std::string eH = "./db/localEnv",
+         std::string dbN = "pequod.db",
+         uint32_t e_flags = Pqdb::env_flags_, 
+         uint32_t d_flags = Pqdb::db_flags_)
+: env_home_(eH), db_name_(dbN), pqdb_env_(new DbEnv(0))
     {
-      init(DB_CREATE | DB_INIT_TXN | DB_INIT_MPOOL, DB_CREATE | DB_AUTO_COMMIT);
-    }
-
-    Pqdb(uint32_t env_flags = DB_CREATE |
-                              DB_INIT_TXN  | // Initialize transactions
-                              DB_INIT_MPOOL, // maybe we should be the in memory cache?
-         uint32_t db_flags = DB_CREATE |
-                             DB_AUTO_COMMIT,
-         std::string eH = "./db/localEnv",
-         std::string dbN = "pequod.db")
-         : envHome(eH), dbName(dbN), pqdbEnv(new DbEnv(0))
-    {
-      init(env_flags, db_flags);
+      init(e_flags, d_flags);
     }
 
     ~Pqdb() {
       try {
-        if (dbh != NULL) {
-          dbh->close(0);
+        if (dbh_ != NULL) {
+          dbh_->close(0);
         }
-        pqdbEnv->close(0);
-        delete dbh;
-        delete pqdbEnv;
+        pqdb_env_->close(0);
+        delete dbh_;
+        delete pqdb_env_;
       } catch(DbException &e) {
         std::cerr << "Error closing database environment: "
-                  << envHome 
+                  << env_home_ 
                   << " or database "
-                  << dbName << std::endl;
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
       } catch(std::exception &e) {
         std::cerr << "Error closing database environment: "
-                  << envHome 
+                  << env_home_ 
                   << " or database "
-                  << dbName << std::endl;
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
       } 
     }
   
-    inline std::string makeDbName(Str, int);
     inline void init(uint32_t, uint32_t);
     inline int put(Str, Str);
     inline Str get(Str);
 
   private:
-    std::string envHome, dbName;
-    DbEnv *pqdbEnv;
-    Db *dbh;
+		static const uint32_t env_flags_ = DB_CREATE | DB_INIT_TXN | DB_INIT_MPOOL;
+		static const uint32_t db_flags_ = DB_CREATE | DB_AUTO_COMMIT;
+    std::string env_home_, db_name_;
+    DbEnv *pqdb_env_;
+    Db *dbh_;
 };
-
-std::string Pqdb::makeDbName(Str name, int me){
-
-  std::cerr << "name(" << name << ")" << std::endl;
-  std::cerr << "me(" << me << ")" << std::endl;
-
-  std::string s = "pequod";
-  if (name.length())
-    s += "-" + std::string(name.data(), name.length());
-  if (me != -1)
-    s += "-" + std::to_string(me);
-  s += ".db";
-
-  return s;
-} 
 
 void Pqdb::init(uint32_t env_flags, uint32_t db_flags){
   try {
-    pqdbEnv->open(envHome.c_str(), env_flags, 0);
-    dbh = new Db(pqdbEnv, 0);
-    dbh->open(NULL,
-              dbName.c_str(),
+    pqdb_env_->open(env_home_.c_str(), env_flags, 0);
+    dbh_ = new Db(pqdb_env_, 0);
+    dbh_->open(NULL,
+              db_name_.c_str(),
               NULL,
               DB_BTREE,
               db_flags,
               0);
   } catch(DbException &e) {
     std::cerr << "Error opening database or environment: "
-              << envHome << std::endl;
+              << env_home_ << std::endl;
     std::cerr << e.what() << std::endl;
     exit( -1 );
   } catch(std::exception &e) {
     std::cerr << "Error opening database or environment: "
-              << envHome << std::endl;
+              << env_home_ << std::endl;
     std::cerr << e.what() << std::endl;
     exit( -1 );
   } 
@@ -107,22 +85,22 @@ int Pqdb::put(Str key, Str val){
   Dbt k(key.mutable_data(), key.length() + 1);
   Dbt v(val.mutable_data(), val.length() + 1);
 
-  ret = pqdbEnv->txn_begin(NULL, &txn, 0);
+  ret = pqdb_env_->txn_begin(NULL, &txn, 0);
   if (ret != 0) {
-    pqdbEnv->err(ret, "Transaction begin failed.");
+    pqdb_env_->err(ret, "Transaction begin failed.");
     return ret;
   }
 
-  ret = dbh->put(txn, &k, &v, 0);
+  ret = dbh_->put(txn, &k, &v, 0);
   if (ret != 0) {
-    pqdbEnv->err(ret, "Database put failed.");
+    pqdb_env_->err(ret, "Database put failed.");
     txn->abort();
     return ret;
   }
 
   ret = txn->commit(0);
   if (ret != 0) {
-    pqdbEnv->err(ret, "Transaction commit failed.");
+    pqdb_env_->err(ret, "Transaction commit failed.");
   }
 
   return ret;
@@ -139,7 +117,7 @@ Str Pqdb::get(Str k){
 
   val.set_flags(DB_DBT_MALLOC);
 
-  dbh->get(NULL, &key, &val, 0);
+  dbh_->get(NULL, &key, &val, 0);
 
   return Str((char*)val.get_data());
 

@@ -60,6 +60,10 @@ static Clp_Option options[] = {
     { "subtables", 0, 3009, 0, Clp_Negate },
     { "ngroups", 0, 3010, Clp_ValInt, 0 },
     { "groupid", 0, 3011, Clp_ValInt, 0 },
+#if HAVE_DB_CXX_H
+    { "dbname", 0, 3014, Clp_ValStringNotOption, 0 },
+    { "envpath", 0, 3015, Clp_ValStringNotOption, 0 },
+#endif
     { "populate", 0, 3012, 0, Clp_Negate },
     { "execute", 0, 3013, 0, Clp_Negate },
 
@@ -117,6 +121,7 @@ int main(int argc, char** argv) {
     int mode = mode_unknown, listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
     String hostfile, partfunc;
+    std::string dbname, envpath;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -184,6 +189,10 @@ int main(int argc, char** argv) {
             tp_param.set("ngroups", clp->val.i);
         else if (clp->option->long_name == String("groupid"))
             tp_param.set("groupid", clp->val.i);
+        else if (clp->option->long_name == String("dbname"))
+            dbname = clp->val.s;
+        else if (clp->option->long_name == String("envpath"))
+            envpath = clp->val.s;
         else if (clp->option->long_name == String("populate"))
             tp_param.set("populate", !clp->negated);
         else if (clp->option->long_name == String("execute"))
@@ -273,6 +282,15 @@ int main(int argc, char** argv) {
     pq::Server server;
     const pq::Hosts* hosts = nullptr;
     const pq::Partitioner* part = nullptr;
+
+    if (!envpath.empty() || !dbname.empty()){
+#if HAVE_DB_CXX_H
+        Pqdb *dbh = new Pqdb(envpath, dbname);
+        server.dbh_ = dbh;
+#else
+        mandatory_assert(false, "build not configured for db use");
+#endif
+    }
 
     if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);

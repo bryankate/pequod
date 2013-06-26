@@ -97,9 +97,6 @@ class Table : public Datum {
     bool all_pull_;
     Server* server_;
     Table* parent_;
-#if HAVE_DB_CXX_H
-    Pqdb *dbh;
-#endif
 
   public:
     uint64_t ninsert_;
@@ -202,6 +199,9 @@ class Server {
     void control(const Json& cmd);
 
     void print(std::ostream& stream);
+#if HAVE_DB_CXX_H
+    Pqdb *dbh_;
+#endif
 
   private:
     mutable Table supertable_;
@@ -212,7 +212,6 @@ class Server {
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
-
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
 };
