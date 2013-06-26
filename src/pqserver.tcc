@@ -481,7 +481,11 @@ void Table::invalidate_remote(Str first, Str last) {
 
 
 Server::Server()
-    : dbh_(nullptr), supertable_(Str(), nullptr, this),
+    : 
+#if HAVE_DB_CXX_H
+    dbh_(nullptr),
+#endif 
+      supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
       part_(nullptr), me_(-1) {
 }
@@ -489,8 +493,10 @@ Server::Server()
 Server::~Server() {
     for (auto& s : remote_sinks_)
         s->deref();
+#if HAVE_DB_CXX_H
     if (!dbh_)
         delete dbh_;
+#endif
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {
