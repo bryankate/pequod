@@ -4,6 +4,7 @@
 #include <tamer/tamer.hh>
 #include <boost/intrusive/rbtree.hpp>
 #include <boost/intrusive/set.hpp>
+#include <boost/intrusive/list.hpp>
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqsource.hh"
@@ -79,6 +80,9 @@ class Table : public Datum {
 
     inline bool flush_for_pull(uint64_t now);
 
+    void evict_remote(RemoteRange* rr);
+    void evict_sink(SinkRange* sink);
+
     void add_stats(Json& j) const;
     void print_sources(std::ostream& stream) const;
 
@@ -123,9 +127,6 @@ class Table : public Datum {
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
 
-    void evict_remote(RemoteRange* rr);
-    void evict_sink(SinkRange* sink);
-
     friend class Server;
     friend class iterator;
 };
@@ -155,6 +156,7 @@ class Table::iterator : public std::iterator<std::forward_iterator_tag, Datum> {
 class Server {
   public:
     typedef ServerStore store_type;
+    typedef bi::list<Evictable> lru_type;
 
     Server();
     ~Server();
@@ -204,6 +206,10 @@ class Server {
     inline PersistentStore* persistent_store() const;
     inline void set_persistent_store(PersistentStore* store);
 
+    inline void lru_add(Evictable* e);
+    inline void lru_remove(Evictable* e);
+    inline void lru_touch(Evictable* e);
+
     Json stats() const;
     void control(const Json& cmd);
 
@@ -219,6 +225,7 @@ class Server {
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
+    lru_type lru_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -534,6 +541,21 @@ inline void Server::set_persistent_store(PersistentStore* store) {
     if (persistent_store_)
         delete persistent_store_;
     persistent_store_ = store;
+}
+
+inline void Server::lru_add(Evictable* e) {
+    e->set_last_access(tstamp());
+    lru_.push_back(*e);
+}
+
+inline void Server::lru_remove(Evictable* e) {
+    lru_.erase(lru_.iterator_to(*e));
+}
+
+inline void Server::lru_touch(Evictable* e) {
+    lru_.erase(lru_.iterator_to(*e));
+    e->set_last_access(tstamp());
+    lru_.push_back(*e);
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {

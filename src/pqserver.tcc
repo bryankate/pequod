@@ -332,8 +332,10 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 completed = false;
                 delete rr;
             }
-            else
+            else {
+                server_->lru_touch(r.operator->());
                 ++r;
+            }
 
             if (have >= last)
                 break;
@@ -354,8 +356,11 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                     && itx->owner()->valid() && !itx->owner()->has_expired(now)
                     && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
                     && !itx->owner()->need_restart()
-                    && !itx->owner()->need_update())
+                    && !itx->owner()->need_update()) {
+                if (itx->owner()->join()->maintained())
+                    server_->lru_touch(const_cast<SinkRange*>(itx->owner()));
                 return std::make_pair(true, iterator(this, it));
+            }
         }
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
@@ -438,8 +443,10 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 
 tamed void Table::fetch_remote(String first, String last, int32_t owner,
                                tamer::event<> done) {
+    assert(!triecut_);
+
     tvars {
-        RemoteRange* rr = new RemoteRange(first, last, owner);
+        RemoteRange* rr = new RemoteRange(this, first, last, owner);
         Interconnect::scan_result res;
     }
 
@@ -458,6 +465,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     for (auto it = res.begin(); it != res.end(); ++it)
         sourcet.insert(it->key(), it->value());
 
+    server_->lru_add(rr);
     rr->notify_waiting();
 }
 
@@ -487,6 +495,8 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
+    server_->lru_remove(rr);
+
     if (!kept) {
         server_->interconnect(rr->owner())->unsubscribe(rr->ibegin(), rr->iend(),
                                                         server_->me(), tamer::event<>());
@@ -502,7 +512,7 @@ void Table::evict_sink(SinkRange* sink) {
     assert(!sink->need_restart());
 
     uint64_t before = SinkRange::invalidate_hit_keys;
-    sink->invalidate();
+    sink->invalidate(); // lru removal is handled within
     nevict_sink_ += (SinkRange::invalidate_hit_keys - before);
 }
 
@@ -544,6 +554,8 @@ void Table::invalidate_remote(Str first, Str last) {
         while(it != itend)
             it = erase_invalid(it);
 
+        if (!rrange->pending() && !rrange->evicted())
+            server_->lru_remove(rrange);
         delete rrange;
     }
 }
