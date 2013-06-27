@@ -195,11 +195,8 @@ auto Table::insert(Table& t) -> local_iterator {
 
 void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
+
     store_type::insert_commit_data cd;
-#if HAVE_DB_CXX_H
-    if (server_->dbh_ && server_->is_owned_public(server_->owner_for(key)))
-      server_->dbh_->put(key, value);   
-#endif
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
     if (p.second) {
@@ -210,6 +207,11 @@ void Table::insert(Str key, String value) {
 	d = p.first.operator->();
         d->value().swap(value);
     }
+
+    PersistentStore* pstore = server_->persistent_store();
+    if (unlikely(pstore && server_->is_owned_public(server_->owner_for(key))))
+        pstore->put(key, value);
+
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
     all_pull_ = false;
@@ -481,11 +483,7 @@ void Table::invalidate_remote(Str first, Str last) {
 
 
 Server::Server()
-    : 
-#if HAVE_DB_CXX_H
-    dbh_(nullptr),
-#endif 
-      supertable_(Str(), nullptr, this),
+    : persistent_store_(nullptr), supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
       part_(nullptr), me_(-1) {
 }
@@ -493,10 +491,9 @@ Server::Server()
 Server::~Server() {
     for (auto& s : remote_sinks_)
         s->deref();
-#if HAVE_DB_CXX_H
-    if (!dbh_)
-        delete dbh_;
-#endif
+
+    if (persistent_store_)
+        delete persistent_store_;
 }
 
 auto Server::create_table(Str tname) -> Table::local_iterator {

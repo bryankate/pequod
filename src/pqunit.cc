@@ -15,9 +15,7 @@
 #include "check.hh"
 #include "redisclient.hh"
 #include "redisfd.hh"
-#if HAVE_DB_CXX_H
 #include "pqdb.hh"
-#endif
 
 namespace  {
 
@@ -1102,18 +1100,16 @@ bb|<bid> = copy b|<bid> where bid:3"));
 
 void test_pqdb() {
 #if HAVE_DB_CXX_H
-	Pqdb *dbi = new Pqdb();
+    Pqdb *dbi = new Pqdb();
 
-	Str s1 = "derp";
-	Str s2 = "herp";
+    Str s1 = "derp";
+    String s2 = "herp";
 
-	dbi->put(s1,s2);
+    dbi->put(s1, s2);
+    String s3 = dbi->get(s1);
+    assert(s3 == s2);
 
-	Str s3 = dbi->get(s1);
-
-	assert(s3 == "herp");
-
-	delete dbi;
+    delete dbi;
 #endif
 }
 

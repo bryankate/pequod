@@ -8,14 +8,12 @@
 #include "hashtable.hh"
 #include "pqsource.hh"
 #include "pqsink.hh"
+#include "pqdb.hh"
 #include "time.hh"
 #include "hosts.hh"
 #include "partitions.hh"
 #include <iterator>
 #include <vector>
-#if HAVE_DB_CXX_H
-#include "pqdb.hh"
-#endif
 
 class Json;
 
@@ -195,15 +193,16 @@ class Server {
                                     const std::vector<Interconnect*>& interconnect,
                                     const Partitioner* part);
 
+    inline PersistentStore* persistent_store() const;
+    inline void set_persistent_store(PersistentStore* store);
+
     Json stats() const;
     void control(const Json& cmd);
 
     void print(std::ostream& stream);
-#if HAVE_DB_CXX_H
-    Pqdb *dbh_;
-#endif
 
   private:
+    mutable PersistentStore* persistent_store_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
     double validate_time_;
@@ -212,6 +211,7 @@ class Server {
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
+
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
 };
@@ -516,6 +516,16 @@ inline Table::iterator Server::begin() {
 
 inline Table::iterator Server::end() {
     return supertable_.end();
+}
+
+inline PersistentStore* Server::persistent_store() const {
+    return persistent_store_;
+}
+
+inline void Server::set_persistent_store(PersistentStore* store) {
+    if (persistent_store_)
+        delete persistent_store_;
+    persistent_store_ = store;
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {

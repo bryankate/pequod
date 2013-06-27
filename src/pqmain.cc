@@ -60,12 +60,11 @@ static Clp_Option options[] = {
     { "subtables", 0, 3009, 0, Clp_Negate },
     { "ngroups", 0, 3010, Clp_ValInt, 0 },
     { "groupid", 0, 3011, Clp_ValInt, 0 },
-#if HAVE_DB_CXX_H
-    { "dbname", 0, 3014, Clp_ValStringNotOption, 0 },
-    { "envpath", 0, 3015, Clp_ValStringNotOption, 0 },
-#endif
     { "populate", 0, 3012, 0, Clp_Negate },
     { "execute", 0, 3013, 0, Clp_Negate },
+    { "dbname", 0, 3014, Clp_ValString, 0 },
+    { "envpath", 0, 3015, Clp_ValString, 0 },
+    { "berkeleydb", 0, 3016, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -112,19 +111,23 @@ static Clp_Option options[] = {
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
+enum { db_unknown, db_berkeley };
+
 static char envstr[] = "TAMER_NOLIBEVENT=1";
 
 int main(int argc, char** argv) {
     putenv(envstr);
     tamer::initialize();
 
-    int mode = mode_unknown, listen_port = 8000, client_port = -1, nbacking = 0;
+    int mode = mode_unknown, db = db_unknown;
+    int listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
     String hostfile, partfunc;
     std::string dbname, envpath;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
+
     while (Clp_Next(clp) != Clp_Done) {
         // modes
         if (clp->option->long_name == String("twitter"))
@@ -189,14 +192,16 @@ int main(int argc, char** argv) {
             tp_param.set("ngroups", clp->val.i);
         else if (clp->option->long_name == String("groupid"))
             tp_param.set("groupid", clp->val.i);
-        else if (clp->option->long_name == String("dbname"))
-            dbname = clp->val.s;
-        else if (clp->option->long_name == String("envpath"))
-            envpath = clp->val.s;
         else if (clp->option->long_name == String("populate"))
             tp_param.set("populate", !clp->negated);
         else if (clp->option->long_name == String("execute"))
             tp_param.set("execute", !clp->negated);
+        else if (clp->option->long_name == String("dbname"))
+            dbname = clp->val.s;
+        else if (clp->option->long_name == String("envpath"))
+            envpath = clp->val.s;
+        else if (clp->option->long_name == String("berkeleydb"))
+            db = db_berkeley;
 
         // twitter
         else if (clp->option->long_name == String("shape"))
@@ -283,13 +288,17 @@ int main(int argc, char** argv) {
     const pq::Hosts* hosts = nullptr;
     const pq::Partitioner* part = nullptr;
 
-    if (!envpath.empty() || !dbname.empty()){
+    if (db != db_unknown) {
+        if (db == db_berkeley) {
 #if HAVE_DB_CXX_H
-        Pqdb *dbh = new Pqdb(envpath, dbname);
-        server.dbh_ = dbh;
+            Pqdb* dbh = new Pqdb(envpath, dbname);
+            server.set_persistent_store(dbh);
 #else
-        mandatory_assert(false, "build not configured for db use");
+            mandatory_assert(false && "Not configured for BerkeleyDB.");
 #endif
+        }
+        else
+            mandatory_assert(false && "Unknown DB type.");
     }
 
     if (hostfile)
