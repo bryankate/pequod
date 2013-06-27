@@ -495,6 +495,9 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
+    //std::cerr << "evicting remote range [" << rr->ibegin() << ", " << rr->iend()
+    //          << "), keeping " << kept << " source ranges in place " << std::endl;
+
     server_->lru_remove(rr);
 
     if (!kept) {
@@ -510,6 +513,9 @@ void Table::evict_remote(RemoteRange* rr) {
 void Table::evict_sink(SinkRange* sink) {
     assert(!triecut_);
     assert(!sink->need_restart());
+
+    //std::cerr << "evicting sink range [" << sink->ibegin() << ", "
+    //          << sink->iend() << ")" << std::endl;
 
     uint64_t before = SinkRange::invalidate_hit_keys;
     sink->invalidate(); // lru removal is handled within
