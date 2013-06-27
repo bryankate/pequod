@@ -102,6 +102,9 @@ class Table : public Datum {
     uint64_t nmodify_nohint_;
     uint64_t nerase_;
     uint64_t nvalidate_;
+    uint64_t nevict_remote_;
+    uint64_t nevict_local_;
+    uint64_t nevict_sink_;
 
   private:
     inline bool subtable_hashable() const;
@@ -116,8 +119,12 @@ class Table : public Datum {
     void invalidate_dependents_down(Str first, Str last);
 
     void add_subscription(Str first, Str last, int32_t peer);
+    void remove_subscription(Str first, Str last, int32_t peer);
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
+
+    void evict_remote(RemoteRange* rr);
+    void evict_sink(SinkRange* sink);
 
     friend class Server;
     friend class iterator;
@@ -182,6 +189,7 @@ class Server {
     tamed void validate_count(Str first, Str last, tamer::event<size_t> done);
 
     inline void subscribe(Str first, Str last, int32_t peer);
+    inline void unsubscribe(Str first, Str last, int32_t peer);
 
     inline int32_t me() const;
     inline Interconnect* interconnect(int32_t seqid) const;
@@ -530,6 +538,10 @@ inline void Server::set_persistent_store(PersistentStore* store) {
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {
     table_for(first, last).add_subscription(first, last, peer);
+}
+
+inline void Server::unsubscribe(Str first, Str last, int32_t peer) {
+    table_for(first, last).remove_subscription(first, last, peer);
 }
 
 inline void Server::set_cluster_details(int32_t me,

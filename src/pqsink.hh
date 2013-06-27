@@ -166,12 +166,15 @@ class RemoteRange : public ServerRangeBase {
     inline bool pending() const;
     inline void add_waiting(tamer::event<> w);
     inline void notify_waiting();
+    inline void mark_evicted();
+    inline bool evicted() const;
 
   public:
     rblinks<RemoteRange> rblinks_;
   private:
     int32_t owner_;
     std::list<tamer::event<>> waiting_;
+    bool evicted_;
 };
 
 /*
@@ -325,6 +328,15 @@ inline int Restart::notifier() const {
 
 inline int32_t RemoteRange::owner() const {
     return owner_;
+}
+
+inline void RemoteRange::mark_evicted() {
+    assert(!evicted_);
+    evicted_ = true;
+}
+
+inline bool RemoteRange::evicted() const {
+    return evicted_;
 }
 
 inline bool RemoteRange::pending() const {

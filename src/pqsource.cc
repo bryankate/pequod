@@ -57,6 +57,10 @@ void SourceRange::remove_sink(SinkRange* sink, Str context) {
         kill();
 }
 
+bool SourceRange::can_evict() const {
+    return false;
+}
+
 bool SourceRange::check_match(Str key) const {
     return join_->source(joinpos_).match(key);
 }
@@ -120,6 +124,10 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
             res.sink->add_update(joinpos_, res.context, d->key(), notifier);
 }
 
+bool InvalidatorRange::can_evict() const {
+    return true;
+}
+
 void SubscribedRange::invalidate() {
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; ++it) {
@@ -151,6 +159,7 @@ void SubscribedRange::notify(const Datum* src, const String&, int notifier) cons
     }
 }
 
+
 void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {
 #if HAVE_VALUE_SHARING_ENABLED
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) {
@@ -163,6 +172,9 @@ void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, co
 #endif
 }
 
+bool CopySourceRange::can_evict() const {
+    return true;
+}
 
 void CountSourceRange::notify(Str sink_key, SinkRange* sink, const Datum*, const String&, int notifier) const {
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum* dst) {

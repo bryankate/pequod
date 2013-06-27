@@ -426,7 +426,7 @@ void SinkRange::invalidate() {
 
 
 RemoteRange::RemoteRange(Str first, Str last, int32_t owner)
-    : ServerRangeBase(first, last), owner_(owner) {
+    : ServerRangeBase(first, last), owner_(owner), evicted_(false) {
 }
 
 RemoteSink::RemoteSink(Interconnect* conn, uint32_t peer)

@@ -36,7 +36,8 @@ Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent}, 
-      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
+      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
+      nevict_remote_(0), nevict_local_(0), nevict_sink_(0) {
 }
 
 Table::~Table() {
@@ -306,17 +307,36 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                     completed = false;
                 }
             }
-
             have = r->iend();
-            if (have >= last)
-                break;
 
             if (r->pending()) {
                 r->add_waiting(gr.make_event());
                 completed = false;
             }
 
-            ++r;
+            if (r->evicted()) {
+                RemoteRange* rr = r.operator->();
+                ++r;
+
+                // todo: re-evict data here?
+                // no - since we have been getting
+                // updates to the table, the data should
+                // be overwritten anyway on the remote fetch
+                t->remote_ranges_.erase(*rr);
+                t->invalidate_dependents(rr->ibegin(), rr->iend());
+
+                server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
+                                                          server_->me(), tamer::event<>());
+                t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
+
+                completed = false;
+                delete rr;
+            }
+            else
+                ++r;
+
+            if (have >= last)
+                break;
         }
 
         if (have < last) {
@@ -441,6 +461,51 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->notify_waiting();
 }
 
+void Table::evict_remote(RemoteRange* rr) {
+    assert(!triecut_);
+    assert(!rr->pending());
+    assert(!rr->evicted());
+
+    uint32_t kept = 0;
+    auto sit = source_ranges_.begin_overlaps(rr->ibegin(), rr->iend());
+    while(sit != source_ranges_.end()) {
+        SourceRange* sr = sit.operator->();
+        ++sit;
+
+        if (!sr->can_evict()) {
+            source_ranges_.erase(*sr);
+            sr->invalidate();
+        }
+        else
+            ++kept;
+    }
+
+    auto it = lower_bound(rr->ibegin());
+    auto itx = lower_bound(rr->iend());
+    while(it != itx) {
+        it = erase_invalid(it);
+        ++nevict_remote_;
+    }
+
+    if (!kept) {
+        server_->interconnect(rr->owner())->unsubscribe(rr->ibegin(), rr->iend(),
+                                                        server_->me(), tamer::event<>());
+        remote_ranges_.erase(*rr);
+        delete rr;
+    }
+    else
+        rr->mark_evicted();
+}
+
+void Table::evict_sink(SinkRange* sink) {
+    assert(!triecut_);
+    assert(!sink->need_restart());
+
+    uint64_t before = SinkRange::invalidate_hit_keys;
+    sink->invalidate();
+    nevict_sink_ += (SinkRange::invalidate_hit_keys - before);
+}
+
 void Table::add_subscription(Str first, Str last, int32_t peer) {
     assert(peer != server_->me());
 
@@ -448,9 +513,15 @@ void Table::add_subscription(Str first, Str last, int32_t peer) {
     SourceRange::parameters p {*server_, nullptr, -1, Match(),
                                first, last, server_->remote_sink(peer)};
 
-    // todo: look at current subscription sources and only add new
-    // source ranges for the gaps.
+    // todo: ensure subscription invariant holds
     add_source(new SubscribedRange(p));
+}
+
+void Table::remove_subscription(Str first, Str last, int32_t peer) {
+    assert(peer != server_->me());
+
+    //std::cerr << "unsubscribing " << peer << " from range [" << first << ", " << last << ")" << std::endl;
+    remove_source(first, last, server_->remote_sink(peer), Str());
 }
 
 void Table::invalidate_remote(Str first, Str last) {
@@ -470,12 +541,8 @@ void Table::invalidate_remote(Str first, Str last) {
 
         auto it = t->lower_bound(rrange->ibegin());
         auto itend = t->lower_bound(rrange->iend());
-        while(it != itend) {
-            Datum* d = it.operator->();
-            it.it_ = it.table_->store_.erase(it.it_);
-            it.maybe_fix();
-            d->invalidate();
-        }
+        while(it != itend)
+            it = erase_invalid(it);
 
         delete rrange;
     }
@@ -570,6 +637,9 @@ void Table::add_stats(Json& j) const {
         j["sink_ranges_size"] += jr.valid_ranges_size();
     j["remote_ranges_size"] += remote_ranges_.size();
     j["nvalidate"] += nvalidate_;
+    j["nevict_remote"] += nevict_remote_;
+    j["nevict_local"] += nevict_local_;
+    j["nevict_sink"] += nevict_sink_;
 
     if (triecut_)
         for (auto& d : store_)
