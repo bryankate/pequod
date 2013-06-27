@@ -747,7 +747,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     if (tp_.log())
                         fprintf(stderr, "%d: login %08d\n", currtime_, user->uid());
 
-                    loggedin_.push_back(user->uid());
                     ++nlogin;
                 }
                 // fall through to check timeline after login
@@ -808,8 +807,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     // each distributed experiment does roughly the same amount of work
     // despite differences in rpc ordering
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
-    for (uint32_t u : loggedin_) {
-        user = tp_.managed_user(u);
+    for (u = 0; u < loggedin_.size(); ++u) {
+        user = tp_.managed_user(loggedin_.front());
+        loggedin_.pop_front();
         check(user, currtime_, user->last_read_, END_TIME, gr.make_event(nread));
     }
     twait(gr);
