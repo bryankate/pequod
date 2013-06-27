@@ -67,7 +67,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       ngroups_(param["ngroups"].as_i(1)),
       groupid_(param["groupid"].as_i(0)),
       duration_(param["duration"].as_i(100000) / ngroups_),
-      popduration_(param["popduration"].as_i(duration_ / 10) / ngroups_),
+      popduration_(param["popduration"].as_i(0)),
       postlimit_(param["postlimit"].as_i(0) / ngroups_),
       populate_(param["populate"].as_b(true)),
       execute_(param["execute"].as_b(true)),
