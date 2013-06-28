@@ -478,7 +478,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                                 event<uint32_t> done) {
     tvars {
         typename S::scan_result sr;
-        size_t count;
+        size_t count = 0;
     }
 
     if (tp_.fetch() || tp_.log()) {
