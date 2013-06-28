@@ -481,23 +481,25 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         size_t count;
     }
 
-    if (tp_.log()) {
+    if (tp_.fetch() || tp_.log()) {
         twait { server_.timeline_scan(user->uid(), beg_scan, end_scan,
                                       make_event(sr)); }
         count = sr.size();
 
-        fprintf(stderr, "%d: scan [t|%08u|%010u, t|%08u|%010u)\n",
-                time, user->uid(), beg_scan, user->uid(), end_scan);
+        if (tp_.log()) {
+            fprintf(stderr, "%d: scan [t|%08u|%010u, t|%08u|%010u)\n",
+                    time, user->uid(), beg_scan, user->uid(), end_scan);
 
-        for (auto it = sr.begin(); it != sr.end(); ++it) {
-            if (tp_.binary()) {
-                std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
-                          << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
-                          << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
-                          << ": " << it->value() << "\n";
+            for (auto it = sr.begin(); it != sr.end(); ++it) {
+                if (tp_.binary()) {
+                    std::cerr << "  t|" << read_in_net_order<uint32_t>(it->key().data() + 2)
+                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 7)
+                                  << "|" << read_in_net_order<uint32_t>(it->key().data() + 12)
+                                  << ": " << it->value() << "\n";
+                }
+                else
+                    std::cerr << "  " << it->key() << ": " << it->value() << "\n";
             }
-            else
-                std::cerr << "  " << it->key() << ": " << it->value() << "\n";
         }
     }
     else
