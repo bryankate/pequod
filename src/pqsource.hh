@@ -48,6 +48,7 @@ class SourceRange {
     inline int joinpos() const;
     void take_results(SourceRange& r);
     void remove_sink(SinkRange* sink, Str context);
+    virtual bool can_evict() const;
 
     enum notify_type {
 	notify_erase = -1, notify_update = 0, notify_insert = 1
@@ -85,6 +86,7 @@ class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(const parameters& p);
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual bool can_evict() const;
   protected:
     virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
 };
@@ -107,6 +109,7 @@ class SubscribedRange : public SourceRange {
 class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(const parameters& p);
+    virtual bool can_evict() const;
   protected:
     virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
 };

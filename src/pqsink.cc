@@ -9,6 +9,12 @@ uint64_t ServerRangeBase::allocated_key_bytes = 0;
 uint64_t SinkRange::invalidate_hit_keys = 0;
 uint64_t SinkRange::invalidate_miss_keys = 0;
 
+Evictable::Evictable() : last_access_(0) {
+}
+
+Evictable::~Evictable() {
+}
+
 JoinRange::JoinRange(Str first, Str last, Join* join)
     : ServerRangeBase(first, last), join_(join), flush_at_(0) {
 }
@@ -46,7 +52,11 @@ inline bool JoinRange::validate_one(Str first, Str last, Server& server,
     va.sink = new SinkRange(this, va.rm, now);
     //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
     valid_ranges_.insert(*va.sink);
-    return validate_step(va, 0);
+
+    bool complete = validate_step(va, 0);
+    if (complete && join_->maintained())
+        server.lru_add(va.sink);
+    return complete;
 }
 
 bool JoinRange::validate(Str first, Str last, Server& server,
@@ -73,12 +83,17 @@ bool JoinRange::validate(Str first, Str last, Server& server,
             ++it;
             sink->invalidate();
         } else {
+            bool step_complete = true;
             if (last_valid < sink->ibegin())
-                complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
+                step_complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
             if (sink->need_restart())
-                complete &= sink->restart(first, last, server, now, gr);
+                step_complete &= sink->restart(first, last, server, now, gr);
             if (!sink->need_restart() && sink->need_update())
-                complete &= sink->update(first, last, server, now, gr);
+                step_complete &= sink->update(first, last, server, now, gr);
+
+            if (step_complete && join_->maintained())
+                server.lru_touch(sink);
+            complete &= step_complete;
             last_valid = sink->iend();
             ++it;
         }
@@ -417,6 +432,8 @@ void SinkRange::invalidate() {
                 ++invalidate_hit_keys;
             }
 
+        if (join()->maintained())
+            join()->server().lru_remove(this);
         ibegin_ = Str();
         table_ = nullptr;
         if (refcount_ == 0)
@@ -424,9 +441,18 @@ void SinkRange::invalidate() {
     }
 }
 
+void SinkRange::evict() {
+    assert(table_);
+    table_->evict_sink(this);
+}
 
-RemoteRange::RemoteRange(Str first, Str last, int32_t owner)
-    : ServerRangeBase(first, last), owner_(owner) {
+RemoteRange::RemoteRange(Table* table, Str first, Str last, int32_t owner)
+    : ServerRangeBase(first, last), table_(table), owner_(owner), evicted_(false) {
+}
+
+void RemoteRange::evict() {
+    assert(table_);
+    table_->evict_remote(this);
 }
 
 RemoteSink::RemoteSink(Interconnect* conn, uint32_t peer)

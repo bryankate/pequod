@@ -20,6 +20,7 @@ typedef struct {
     uint32_t ninsert;
     uint32_t ncount;
     uint32_t nsubscribe;
+    uint32_t nunsubscribe;
     uint32_t nscan;
     uint32_t ninvalidate;
 } nrpc;
@@ -104,9 +105,21 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         rj[3] = count;
         ++diff_.ncount;
         break;
+    case pq_unsubscribe:
+        rj[2] = pq_ok;
+        first = j[2].as_s(), last = j[3].as_s();
+        if (j[4] && j[4].is_o() && j[4]["subscriber"].is_i())
+            peer = j[4]["subscriber"].as_i();
+        if (unlikely(peer < 0)) {
+            rj[2] = pq_fail;
+            break;
+        }
+        server.unsubscribe(first, last, peer);
+        ++diff_.nunsubscribe;
+        break;
     case pq_subscribe:
-        if (j[4] && j[4].is_o() && j[4]["subscribe"].is_i())
-            peer = j[4]["subscribe"].as_i();
+        if (j[4] && j[4].is_o() && j[4]["subscriber"].is_i())
+            peer = j[4]["subscriber"].as_i();
         if (unlikely(peer < 0)) {
             rj[2] = pq_fail;
             break;
@@ -286,6 +299,7 @@ tamed void periodic_logger() {
         log_.record_at("ninsert", now, diff_.ninsert);
         log_.record_at("ncount", now, diff_.ncount);
         log_.record_at("nsubscribe", now, diff_.nsubscribe);
+        log_.record_at("nunsubscribe", now, diff_.nunsubscribe);
         log_.record_at("nscan", now, diff_.nscan);
         log_.record_at("ninvalidate", now, diff_.ninvalidate);
 

@@ -1,5 +1,6 @@
 #ifndef PEQUOD_SINK_HH
 #define PEQUOD_SINK_HH
+#include <boost/intrusive/list.hpp>
 #include "pqjoin.hh"
 #include "interval.hh"
 #include "local_vector.hh"
@@ -33,6 +34,22 @@ class ServerRangeBase {
     LocalStr<24> ibegin_;
     LocalStr<24> iend_;
     Str subtree_iend_;
+};
+
+class Evictable : public boost::intrusive::list_base_hook<> {
+  public:
+    Evictable();
+    virtual ~Evictable();
+
+    virtual void evict() = 0;
+
+    inline uint64_t last_access() const;
+    inline void set_last_access(uint64_t now);
+
+  public:
+    boost::intrusive::list_member_hook<> member_hook_;
+  private:
+    uint64_t last_access_;
 };
 
 class IntermediateUpdate : public ServerRangeBase {
@@ -69,7 +86,7 @@ class Restart {
     friend class SinkRange;
 };
 
-class SinkRange : public ServerRangeBase {
+class SinkRange : public ServerRangeBase, public Evictable {
   public:
     SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now);
     ~SinkRange();
@@ -104,6 +121,8 @@ class SinkRange : public ServerRangeBase {
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
+
+    virtual void evict();
 
     friend std::ostream& operator<<(std::ostream&, const SinkRange&);
 
@@ -158,20 +177,26 @@ class JoinRange : public ServerRangeBase {
     friend class SinkRange;
 };
 
-class RemoteRange : public ServerRangeBase {
+class RemoteRange : public ServerRangeBase, public Evictable {
   public:
-    RemoteRange(Str first, Str last, int32_t owner);
+    RemoteRange(Table* table, Str first, Str last, int32_t owner);
 
     inline int32_t owner() const;
     inline bool pending() const;
     inline void add_waiting(tamer::event<> w);
     inline void notify_waiting();
+    inline void mark_evicted();
+    inline bool evicted() const;
+
+    virtual void evict();
 
   public:
     rblinks<RemoteRange> rblinks_;
   private:
+    Table* table_;
     int32_t owner_;
     std::list<tamer::event<>> waiting_;
+    bool evicted_;
 };
 
 /*
@@ -191,6 +216,7 @@ class RemoteSink : public SinkRange {
     Interconnect* conn_;
     uint32_t peer_;
 };
+
 
 inline ServerRangeBase::ServerRangeBase(Str first, Str last)
     : ibegin_(first), iend_(last) {
@@ -218,6 +244,14 @@ inline Str ServerRangeBase::subtree_iend() const {
 
 inline void ServerRangeBase::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
+}
+
+inline uint64_t Evictable::last_access() const {
+    return last_access_;
+}
+
+inline void Evictable::set_last_access(uint64_t now) {
+    last_access_ = now;
 }
 
 inline Join* JoinRange::join() const {
@@ -325,6 +359,15 @@ inline int Restart::notifier() const {
 
 inline int32_t RemoteRange::owner() const {
     return owner_;
+}
+
+inline void RemoteRange::mark_evicted() {
+    assert(!evicted_);
+    evicted_ = true;
+}
+
+inline bool RemoteRange::evicted() const {
+    return evicted_;
 }
 
 inline bool RemoteRange::pending() const {
