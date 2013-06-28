@@ -1103,11 +1103,11 @@ void test_pqdb() {
     Pqdb *dbi = new Pqdb();
 
     Str s1 = "derp";
-    String s2 = "herp";
+    Str s2 = "herp";
 
     dbi->put(s1, s2);
     String s3 = dbi->get(s1);
-    assert(s3 == s2);
+    assert(std::string(s3.mutable_data()) == std::string(s2.mutable_data()));
 
     delete dbi;
 #endif

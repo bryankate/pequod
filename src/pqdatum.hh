@@ -6,6 +6,7 @@
 
 namespace pq {
 class SinkRange;
+class Table;
 
 typedef boost::intrusive::set_base_hook<
     boost::intrusive::link_mode<boost::intrusive::normal_link>,
