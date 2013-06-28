@@ -24,9 +24,6 @@ class PersistentStore {
 
 class Pqdb : public pq::PersistentStore {
 
-  private:
-    class iterator;
-
   public:
 
     Pqdb(std::string eH = "./db/localEnv",
@@ -63,6 +60,7 @@ class Pqdb : public pq::PersistentStore {
         }
     }
 
+    class iterator;
     iterator lower_bound(Str start);
     void init(uint32_t, uint32_t);
     virtual int32_t put(Str key, Str value);
@@ -130,7 +128,7 @@ inline pq::Datum Pqdb::iterator::operator*() const {
 }
 
 inline bool Pqdb::iterator::operator==(const iterator& x) const {
-    if (this->key_->get_size() == x.key_->get_size())
+    if (this->key_->get_size() != x.key_->get_size())
         return false;
     char* mydata = (char*) this->key_->get_data();
     char* xdata = (char*) x.key_->get_data();
@@ -148,6 +146,7 @@ inline bool Pqdb::iterator::operator!=(const iterator& x) const {
 inline void Pqdb::iterator::operator++() {
     db_cursor_->get(key_, value_, DB_NEXT);
 };
+
 
 #endif
 
