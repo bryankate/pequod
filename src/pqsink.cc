@@ -90,7 +90,7 @@ bool JoinRange::validate(Str first, Str last, Server& server,
             if (!sink->need_restart() && sink->need_update())
                 complete &= sink->update(first, last, server, now, gr);
 
-            if (join_->maintained())
+            if (sink->valid() && join_->maintained())
                 server.lru_touch(sink);
             last_valid = sink->iend();
             ++it;
