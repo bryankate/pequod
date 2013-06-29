@@ -310,12 +310,29 @@ tamed void periodic_logger() {
     }
 }
 
+tamed void periodic_eviction(pq::Server& server, uint32_t low, uint32_t high) {
+    tvars { struct rusage u; }
+
+    while(true) {
+        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
+
+        if (u.ru_maxrss / 1024 >= high)
+            do {
+                if (!server.evict_one())
+                    break;
+                mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
+            } while(u.ru_maxrss / 1024 > low);
+
+        twait volatile { tamer::at_delay_sec(1, make_event()); }
+    }
+}
+
 } // namespace
 
-tamed void server_loop(int port, bool kill, pq::Server& server,
+tamed void server_loop(pq::Server& server, int port, bool kill,
                        const pq::Hosts* hosts, const pq::Host* me,
-                       const pq::Partitioner* part) {
-
+                       const pq::Partitioner* part,
+                       uint32_t mem_lo, uint32_t mem_hi) {
     tvars {
         tamer::fd killer;
         bool connected = false;
@@ -324,6 +341,11 @@ tamed void server_loop(int port, bool kill, pq::Server& server,
 
     memset(&diff_, 0, sizeof(nrpc));
     periodic_logger();
+
+    if (mem_hi) {
+        assert(mem_lo < mem_hi);
+        periodic_eviction(server, mem_lo, mem_hi);
+    }
 
     if (kill) {
         twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(killer)); }

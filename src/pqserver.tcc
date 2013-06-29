@@ -571,7 +571,9 @@ void Table::invalidate_remote(Str first, Str last) {
 Server::Server()
     : persistent_store_(nullptr), supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
-      part_(nullptr), me_(-1) {
+      part_(nullptr), me_(-1), prob_rng_(0,1), pevict_(0) {
+
+    gen_.seed(112181);
 }
 
 Server::~Server() {
@@ -606,6 +608,7 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     gettimeofday(&tv[1], NULL);
     validate_time_ += to_real(tv[1] - tv[0]);
 
+    maybe_evict();
     done(it.second);
 }
 
@@ -627,6 +630,7 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     gettimeofday(&tv[1], NULL);
     validate_time_ += to_real(tv[1] - tv[0]);
 
+    maybe_evict();
     done(it.second);
 }
 
