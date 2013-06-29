@@ -5,6 +5,7 @@
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "pqinterconnect.hh"
+#include "pqmemory.hh"
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
@@ -511,7 +512,6 @@ void Table::evict_remote(RemoteRange* rr) {
 
 void Table::evict_sink(SinkRange* sink) {
     assert(!triecut_);
-    assert(!sink->need_restart());
 
     //std::cerr << "evicting sink range [" << sink->ibegin() << ", "
     //          << sink->iend() << ")" << std::endl;
