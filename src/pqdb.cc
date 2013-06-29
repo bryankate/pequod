@@ -13,41 +13,30 @@ void Pqdb::init(uint32_t env_flags, uint32_t db_flags){
                    0);
     } catch(DbException &e) {
         std::cerr << "Error opening database or environment: "
-                << env_home_ << std::endl;
+                << env_home_ << std::endl
+                << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
     } catch(std::exception &e) {
         std::cerr << "Error opening database or environment: "
-                << env_home_ << std::endl;
+                << env_home_ << std::endl
+                << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
     }
 }
 
-int32_t Pqdb::put(Str key, String val){
+int32_t Pqdb::put(Str key, Str val){
 
-    DbTxn *txn = nullptr;
     int32_t ret;
 
     Dbt k(key.mutable_data(), key.length() + 1);
     Dbt v(val.mutable_data(), val.length() + 1);
 
-    ret = pqdb_env_->txn_begin(NULL, &txn, 0);
-    if (ret != 0) {
-        pqdb_env_->err(ret, "Transaction begin failed.");
-        return ret;
-    }
-
-    ret = dbh_->put(txn, &k, &v, 0);
+    ret = dbh_->put(NULL, &k, &v, 0);
     if (ret != 0) {
         pqdb_env_->err(ret, "Database put failed.");
-        txn->abort();
         return ret;
-    }
-
-    ret = txn->commit(0);
-    if (ret != 0) {
-        pqdb_env_->err(ret, "Transaction commit failed.");
     }
 
     return ret;
@@ -55,16 +44,27 @@ int32_t Pqdb::put(Str key, String val){
 
 String Pqdb::get(Str k){
 
-    // since this is always a point get we shouldn't need a transaction
     Dbt key, val;
+    int32_t ret;
 
     key.set_data(k.mutable_data());
     key.set_size(k.length() + 1);
 
     val.set_flags(DB_DBT_MALLOC);
 
-    dbh_->get(NULL, &key, &val, 0);
+    ret = dbh_->get(NULL, &key, &val, 0);
+    if (ret != 0) {
+        pqdb_env_->err(ret, "Database get failed.");
+        std::cerr << "this is error..bad get." << std::endl;
+    }
 
-    return String((char*)val.get_data());
+    return String((char*)val.get_data(), val.get_size());
 }
+
+Pqdb::iterator Pqdb::lower_bound(Str start){
+    return Pqdb::iterator(this, start);
+}
+
+
+
 #endif
