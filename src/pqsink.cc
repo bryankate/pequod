@@ -53,10 +53,10 @@ inline bool JoinRange::validate_one(Str first, Str last, Server& server,
     //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
     valid_ranges_.insert(*va.sink);
 
-    bool complete = validate_step(va, 0);
-    if (complete && join_->maintained())
+    if (join_->maintained())
         server.lru_add(va.sink);
-    return complete;
+
+    return validate_step(va, 0);
 }
 
 bool JoinRange::validate(Str first, Str last, Server& server,
@@ -83,17 +83,15 @@ bool JoinRange::validate(Str first, Str last, Server& server,
             ++it;
             sink->invalidate();
         } else {
-            bool step_complete = true;
             if (last_valid < sink->ibegin())
-                step_complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
+                complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
             if (sink->need_restart())
-                step_complete &= sink->restart(first, last, server, now, gr);
+                complete &= sink->restart(first, last, server, now, gr);
             if (!sink->need_restart() && sink->need_update())
-                step_complete &= sink->update(first, last, server, now, gr);
+                complete &= sink->update(first, last, server, now, gr);
 
-            if (step_complete && join_->maintained())
+            if (join_->maintained())
                 server.lru_touch(sink);
-            complete &= step_complete;
             last_valid = sink->iend();
             ++it;
         }

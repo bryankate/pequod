@@ -333,7 +333,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 delete rr;
             }
             else {
-                server_->lru_touch(r.operator->());
+                if (!r->pending())
+                    server_->lru_touch(r.operator->());
                 ++r;
             }
 
