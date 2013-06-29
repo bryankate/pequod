@@ -481,10 +481,8 @@ void Table::evict_remote(RemoteRange* rr) {
         SourceRange* sr = sit.operator->();
         ++sit;
 
-        if (!sr->can_evict()) {
-            source_ranges_.erase(*sr);
+        if (!sr->can_evict())
             sr->invalidate();
-        }
         else
             ++kept;
     }
