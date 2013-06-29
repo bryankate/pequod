@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pqserver.hh"
+#include "pqmemory.hh"
 #include "mpfd.hh"
 #include "pqrpc.hh"
 #include "error.hh"
@@ -295,7 +296,9 @@ tamed void periodic_logger() {
         log_.record_at("utime_us", now, utime);
         log_.record_at("stime_us", now, stime);
         log_.record_at("cpu_pct", now, (before) ? ((utime + stime) * scale / fromus(now - before)) : 0);
-        log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
+        log_.record_at("mem_max_rss_mb", now, pq::maxrss_mb(u.ru_maxrss));
+        log_.record_at("mem_size_store_mb", now, pq::mem_store_size >> 20);
+        log_.record_at("mem_size_other_mb", now, pq::mem_other_size >> 20);
         log_.record_at("ninsert", now, diff_.ninsert);
         log_.record_at("ncount", now, diff_.ncount);
         log_.record_at("nsubscribe", now, diff_.nsubscribe);
@@ -311,17 +314,16 @@ tamed void periodic_logger() {
 }
 
 tamed void periodic_eviction(pq::Server& server, uint32_t low, uint32_t high) {
-    tvars { struct rusage u; }
+    mandatory_assert(pq::enable_memory_tracking && "Cannot evict without memory tracking.");
 
     while(true) {
-        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
-
-        if (u.ru_maxrss / 1024 >= high)
+        // todo: use store size once its allocation is broken out
+        if (pq::mem_other_size >= high) {
             do {
                 if (!server.evict_one())
                     break;
-                mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
-            } while(u.ru_maxrss / 1024 > low);
+            } while(pq::mem_other_size > low);
+        }
 
         twait volatile { tamer::at_delay_sec(1, make_event()); }
     }
@@ -332,7 +334,7 @@ tamed void periodic_eviction(pq::Server& server, uint32_t low, uint32_t high) {
 tamed void server_loop(pq::Server& server, int port, bool kill,
                        const pq::Hosts* hosts, const pq::Host* me,
                        const pq::Partitioner* part,
-                       uint32_t mem_lo, uint32_t mem_hi) {
+                       uint32_t mem_lo_mb, uint32_t mem_hi_mb) {
     tvars {
         tamer::fd killer;
         bool connected = false;
@@ -342,9 +344,9 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
     memset(&diff_, 0, sizeof(nrpc));
     periodic_logger();
 
-    if (mem_hi) {
-        assert(mem_lo < mem_hi);
-        periodic_eviction(server, mem_lo, mem_hi);
+    if (mem_hi_mb) {
+        assert(mem_lo_mb < mem_hi_mb);
+        periodic_eviction(server, mem_lo_mb << 20, mem_hi_mb << 20);
     }
 
     if (kill) {
