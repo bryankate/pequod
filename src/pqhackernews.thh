@@ -17,6 +17,7 @@
 #include "hnpopulator.hh"
 #include "hnshim.hh"
 #include "pqlog.hh"
+#include "pqmemory.hh"
 
 namespace pq {
 using tamer::event;
@@ -88,7 +89,7 @@ void HackernewsRunner<S>::periodic_logger(event<> e) {
         utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
         stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
 
-        log_.record_at("rss_mb", now, u.ru_maxrss / 1024);
+        log_.record_at("mem_max_rss_mb", now, maxrss_mb(u.ru_maxrss));
         log_.record_at("utime_us", now, utime);
         log_.record_at("stime_us", now, stime);
         log_.record_at("cpu_pct", now, (before) ? ((utime + stime) * scale / fromus(now - before)) : 0);
