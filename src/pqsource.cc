@@ -32,7 +32,7 @@ SourceRange::~SourceRange() {
         r.sink->deref();
 }
 
-inline void SourceRange::kill() {
+void SourceRange::kill() {
     join_->server().table_for(ibegin(), iend()).unlink_source(this);
     delete this;
 }
@@ -152,7 +152,10 @@ void SubscribedRange::invalidate() {
         //std::cerr << "sending invalidation of [" << ibegin() << ", " << iend() << ") to " << sink->peer() << std::endl;
         sink->conn()->invalidate(ibegin(), iend(), tamer::event<>());
     }
+    kill();
+}
 
+void SubscribedRange::kill() {
     server_.table_for(ibegin(), iend()).unlink_source(this);
     delete this;
 }

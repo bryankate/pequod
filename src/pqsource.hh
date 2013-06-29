@@ -77,7 +77,7 @@ class SourceRange {
     int joinpos_;
     mutable local_vector<result, 4> results_;
 
-    inline void kill();
+    virtual void kill();
     virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
@@ -100,6 +100,7 @@ class SubscribedRange : public SourceRange {
     virtual bool check_match(Str key) const;
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
   protected:
+    virtual void kill();
     virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
   private:
     Server& server_;
