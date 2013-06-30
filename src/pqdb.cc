@@ -1,7 +1,9 @@
 #include "pqdb.hh"
 
+namespace pq {
+
 #if HAVE_DB_CXX_H
-void Pqdb::init(uint32_t env_flags, uint32_t db_flags){
+void Pqdb::init(uint32_t env_flags, uint32_t db_flags) {
     try {
         pqdb_env_->open(env_home_.c_str(), env_flags, 0);
         dbh_ = new Db(pqdb_env_, 0);
@@ -61,10 +63,10 @@ String Pqdb::get(Str k){
     return String((char*)val.get_data(), val.get_size());
 }
 
-Pqdb::iterator Pqdb::lower_bound(Str start){
-    return Pqdb::iterator(this, start);
+Pqdb::iterator& Pqdb::lower_bound(Str start){
+    return new Pqdb::iterator(this, start);
 }
 
-
-
 #endif
+
+}

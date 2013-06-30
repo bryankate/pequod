@@ -2,25 +2,33 @@
 #define PEQUOD_DATABASE_HH
 #include "str.hh"
 #include "string.hh"
+#include <iterator>
+
 
 namespace pq {
 
+struct StringPair {
+    String key;
+    String value;
+};
+
 class PersistentStore {
   public:
-    virtual ~PersistentStore() { }
+    class iterator;
+    virtual ~PersistentStore() { };
 
+    virtual iterator& lower_bound(Str start) = 0; // how do i return any iterator
     virtual int32_t put(Str key, Str value) = 0;
     virtual String get(Str key) = 0;
 };
 
-}
+class PersistentStore::iterator {
 
+};
 
 #if HAVE_DB_CXX_H
 #include <db_cxx.h>
 #include <iostream>
-#include <iterator>
-#include "pqdatum.hh"
 
 class Pqdb : public pq::PersistentStore {
 
@@ -61,7 +69,7 @@ class Pqdb : public pq::PersistentStore {
     }
 
     class iterator;
-    iterator lower_bound(Str start);
+    iterator& lower_bound(Str start);
     void init(uint32_t, uint32_t);
     virtual int32_t put(Str key, Str value);
     virtual String get(Str);
@@ -78,12 +86,12 @@ class Pqdb : public pq::PersistentStore {
 };
 
 
-class Pqdb::iterator : public std::iterator<std::forward_iterator_tag, Dbt> {
+class Pqdb::iterator : public std::iterator<std::forward_iterator_tag, Dbt>, public PersistentStore::iterator {
   public:
     inline iterator() = default;
     inline iterator(Pqdb* pqdb, Str start);
 
-    inline pq::Datum operator*() const;
+    inline StringPair operator*() const;
 
     inline bool operator==(const iterator& x) const;
     inline bool operator!=(const iterator& x) const;
@@ -123,8 +131,11 @@ inline Pqdb::iterator::iterator(Pqdb* pqdb, Str start){
 
 }
 
-inline pq::Datum Pqdb::iterator::operator*() const {
-   return pq::Datum(Str((char*) key_->get_data(), key_->get_size()), String((char*)value_->get_data(), value_->get_size()));
+inline StringPair Pqdb::iterator::operator*() const {
+    struct StringPair sp;
+    sp.key = String((char*) key_->get_data(), key_->get_size());
+    sp.value = String((char*)value_->get_data(), value_->get_size());
+    return sp;
 }
 
 inline bool Pqdb::iterator::operator==(const iterator& x) const {
@@ -145,9 +156,10 @@ inline bool Pqdb::iterator::operator!=(const iterator& x) const {
 
 inline void Pqdb::iterator::operator++() {
     db_cursor_->get(key_, value_, DB_NEXT);
-};
-
+}
 
 #endif
+
+}
 
 #endif
