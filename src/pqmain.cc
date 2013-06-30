@@ -65,6 +65,9 @@ static Clp_Option options[] = {
     { "dbname", 0, 3014, Clp_ValString, 0 },
     { "envpath", 0, 3015, Clp_ValString, 0 },
     { "berkeleydb", 0, 3016, 0, Clp_Negate },
+    { "pevict", 0, 3017, Clp_ValDouble, 0 },
+    { "mem-lo", 0, 3018, Clp_ValInt, 0 },
+    { "mem-hi", 0, 3019, Clp_ValInt, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -124,6 +127,8 @@ int main(int argc, char** argv) {
     bool kill_old_server = false;
     String hostfile, partfunc;
     std::string dbname, envpath;
+    double pevict = 0;
+    uint32_t mem_hi_mb = 0, mem_lo_mb = 0;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
@@ -202,6 +207,12 @@ int main(int argc, char** argv) {
             envpath = clp->val.s;
         else if (clp->option->long_name == String("berkeleydb"))
             db = db_berkeley;
+        else if (clp->option->long_name == String("pevict"))
+            pevict = clp->val.d;
+        else if (clp->option->long_name == String("mem-lo"))
+            mem_lo_mb = clp->val.i;
+        else if (clp->option->long_name == String("mem-hi"))
+            mem_hi_mb = clp->val.i;
 
         // twitter
         else if (clp->option->long_name == String("shape"))
@@ -301,6 +312,11 @@ int main(int argc, char** argv) {
             mandatory_assert(false && "Unknown DB type.");
     }
 
+    if (pevict) {
+        mandatory_assert(pevict < 1 &&  "Invalid random eviction probability.");
+        server.set_prob_evict(pevict);
+    }
+
     if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);
 
@@ -317,10 +333,15 @@ int main(int argc, char** argv) {
             me = hosts->get_by_uid(pq::sock_helper::get_uid(hostname, listen_port));
         }
 
-        extern void server_loop(int port, bool kill, pq::Server& server,
+        if (mem_hi_mb)
+            mandatory_assert(mem_lo_mb && "Need to set a low water mark.");
+
+        extern void server_loop(pq::Server& server, int port, bool kill,
                                 const pq::Hosts* hosts, const pq::Host* me,
-                                const pq::Partitioner* part);
-        server_loop(listen_port, kill_old_server, server, hosts, me, part);
+                                const pq::Partitioner* part,
+                                uint32_t mem_lo_mb, uint32_t mem_hi_mb);
+        server_loop(server, listen_port, kill_old_server,
+                    hosts, me, part, mem_lo_mb, mem_hi_mb);
     } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);

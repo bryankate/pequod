@@ -53,10 +53,10 @@ inline bool JoinRange::validate_one(Str first, Str last, Server& server,
     //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
     valid_ranges_.insert(*va.sink);
 
-    bool complete = validate_step(va, 0);
-    if (complete && join_->maintained())
+    if (join_->maintained())
         server.lru_add(va.sink);
-    return complete;
+
+    return validate_step(va, 0);
 }
 
 bool JoinRange::validate(Str first, Str last, Server& server,
@@ -83,17 +83,15 @@ bool JoinRange::validate(Str first, Str last, Server& server,
             ++it;
             sink->invalidate();
         } else {
-            bool step_complete = true;
             if (last_valid < sink->ibegin())
-                step_complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
+                complete &= validate_one(last_valid, sink->ibegin(), server, now, gr);
             if (sink->need_restart())
-                step_complete &= sink->restart(first, last, server, now, gr);
+                complete &= sink->restart(first, last, server, now, gr);
             if (!sink->need_restart() && sink->need_update())
-                step_complete &= sink->update(first, last, server, now, gr);
+                complete &= sink->update(first, last, server, now, gr);
 
-            if (step_complete && join_->maintained())
+            if (sink->valid() && join_->maintained())
                 server.lru_touch(sink);
-            complete &= step_complete;
             last_valid = sink->iend();
             ++it;
         }
@@ -348,25 +346,28 @@ void SinkRange::add_invalidate(Str key) {
 
 bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
                           Server& server, uint64_t now, tamer::gather_rendezvous& gr) {
-    if (first < iu->ibegin())
-        first = iu->ibegin();
-    if (iu->iend() < last)
-        last = iu->iend();
-    if (first != iu->ibegin() && last != iu->iend())
+
+    LocalStr<24> f = first, l = last;
+
+    if (f < iu->ibegin())
+        f = iu->ibegin();
+    if (iu->iend() < l)
+        l = iu->iend();
+    if (f != iu->ibegin() && l != iu->iend())
         // XXX embiggening range
-        last = iu->iend();
+        l = iu->iend();
 
     Join* join = jr_->join();
-    JoinRange::validate_args va(first, last, server, now, this, iu->notifier_, gr);
+    JoinRange::validate_args va(f, l, server, now, this, iu->notifier_, gr);
     join->assign_context(va.rm.match, context_);
     join->assign_context(va.rm.match, iu->context_);
     if (!jr_->validate_step(va, iu->joinpos_ + 1))
         return false;
 
-    if (first == iu->ibegin())
-        iu->ibegin_ = last;
-    if (last == iu->iend())
-        iu->iend_ = first;
+    if (f == iu->ibegin())
+        iu->ibegin_ = l;
+    if (l == iu->iend())
+        iu->iend_ = f;
 
     remaining = iu->ibegin_ < iu->iend_;
     return true;

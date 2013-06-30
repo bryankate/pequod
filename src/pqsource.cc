@@ -32,7 +32,7 @@ SourceRange::~SourceRange() {
         r.sink->deref();
 }
 
-inline void SourceRange::kill() {
+void SourceRange::kill() {
     join_->server().table_for(ibegin(), iend()).unlink_source(this);
     delete this;
 }
@@ -118,10 +118,27 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
 
 
 void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const {
-    // XXX PERFORMANCE the match() is often not necessary
-    if (notifier)
-        for (auto& res : results_)
-            res.sink->add_update(joinpos_, res.context, d->key(), notifier);
+    using std::swap;
+
+    if (!notifier)
+        return;
+
+    result* endit = results_.end();
+    for (result* it = results_.begin(); it != endit; ) {
+        if (it->sink->valid()) {
+            it->sink->add_update(joinpos_, it->context, d->key(), notifier);
+            ++it;
+        }
+        else {
+            it->sink->deref();
+            swap(*it, endit[-1]);
+            results_.pop_back();
+            --endit;
+        }
+    }
+
+    if (results_.empty())
+        const_cast<InvalidatorRange*>(this)->kill();
 }
 
 bool InvalidatorRange::can_evict() const {
@@ -135,7 +152,10 @@ void SubscribedRange::invalidate() {
         //std::cerr << "sending invalidation of [" << ibegin() << ", " << iend() << ") to " << sink->peer() << std::endl;
         sink->conn()->invalidate(ibegin(), iend(), tamer::event<>());
     }
+    kill();
+}
 
+void SubscribedRange::kill() {
     server_.table_for(ibegin(), iend()).unlink_source(this);
     delete this;
 }

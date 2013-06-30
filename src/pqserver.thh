@@ -5,6 +5,7 @@
 #include <boost/intrusive/rbtree.hpp>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
+#include <boost/random.hpp>
 #include "local_vector.hh"
 #include "hashtable.hh"
 #include "pqsource.hh"
@@ -209,6 +210,9 @@ class Server {
     inline void lru_add(Evictable* e);
     inline void lru_remove(Evictable* e);
     inline void lru_touch(Evictable* e);
+    inline void maybe_evict();
+    inline bool evict_one();
+    inline void set_prob_evict(double pevict);
 
     Json stats() const;
     void control(const Json& cmd);
@@ -226,6 +230,9 @@ class Server {
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
     lru_type lru_;
+    boost::mt19937 gen_;
+    boost::uniform_real<> prob_rng_;
+    double pevict_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -477,12 +484,13 @@ inline bool Table::flush_for_pull(uint64_t now) {
 
 inline void Server::insert(Str key, const String& value) {
     struct timeval tv[2];
+
     gettimeofday(&tv[0], NULL);
-
     make_table_for(key).insert(key, value);
-
     gettimeofday(&tv[1], NULL);
     insert_time_ += to_real(tv[1] - tv[0]);
+
+    maybe_evict();
 }
 
 inline void Server::erase(Str key) {
@@ -556,6 +564,21 @@ inline void Server::lru_touch(Evictable* e) {
     lru_.erase(lru_.iterator_to(*e));
     e->set_last_access(tstamp());
     lru_.push_back(*e);
+}
+
+inline void Server::maybe_evict() {
+    if (unlikely(pevict_ && prob_rng_(gen_) < pevict_))
+        evict_one();
+}
+
+inline bool Server::evict_one() {
+    if (!lru_.empty())
+        (&lru_.front())->evict();
+    return !lru_.empty();
+}
+
+inline void Server::set_prob_evict(double pevict) {
+    pevict_ = pevict;
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {

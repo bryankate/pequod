@@ -154,6 +154,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqanalytics.o \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
+        $(OBJDIR)/pqmemory.o \
 	$(OBJDIR)/pqunit.o \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqclient.o \

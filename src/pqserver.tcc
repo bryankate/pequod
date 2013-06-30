@@ -5,6 +5,7 @@
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "pqinterconnect.hh"
+#include "pqmemory.hh"
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
@@ -333,7 +334,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 delete rr;
             }
             else {
-                server_->lru_touch(r.operator->());
+                if (!r->pending())
+                    server_->lru_touch(r.operator->());
                 ++r;
             }
 
@@ -480,10 +482,8 @@ void Table::evict_remote(RemoteRange* rr) {
         SourceRange* sr = sit.operator->();
         ++sit;
 
-        if (!sr->can_evict()) {
-            source_ranges_.erase(*sr);
+        if (!sr->can_evict())
             sr->invalidate();
-        }
         else
             ++kept;
     }
@@ -512,7 +512,6 @@ void Table::evict_remote(RemoteRange* rr) {
 
 void Table::evict_sink(SinkRange* sink) {
     assert(!triecut_);
-    assert(!sink->need_restart());
 
     //std::cerr << "evicting sink range [" << sink->ibegin() << ", "
     //          << sink->iend() << ")" << std::endl;
@@ -570,7 +569,9 @@ void Table::invalidate_remote(Str first, Str last) {
 Server::Server()
     : persistent_store_(nullptr), supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
-      part_(nullptr), me_(-1) {
+      part_(nullptr), me_(-1), prob_rng_(0,1), pevict_(0) {
+
+    gen_.seed(112181);
 }
 
 Server::~Server() {
@@ -605,6 +606,7 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     gettimeofday(&tv[1], NULL);
     validate_time_ += to_real(tv[1] - tv[0]);
 
+    maybe_evict();
     done(it.second);
 }
 
@@ -626,6 +628,7 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     gettimeofday(&tv[1], NULL);
     validate_time_ += to_real(tv[1] - tv[0]);
 
+    maybe_evict();
     done(it.second);
 }
 
