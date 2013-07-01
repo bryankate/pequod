@@ -6,9 +6,8 @@
 #include <queue>
 #include "string.hh"
 
-class PersistentStore;
-
 namespace pq {
+class PersistentStore;
 
 typedef std::pair<String,String> StringPair;
 
@@ -23,15 +22,13 @@ class ResultSet {
 
 class DatabaseOperation {
   public:
-    DatabaseOperation() {}
-    virtual ~DatabaseOperation() {}
-
+    virtual ~DatabaseOperation() { }
     virtual void operator()(PersistentStore*) = 0;
 };
 
 class ReadOperation : public pq::DatabaseOperation {
   public:
-    ReadOperation(ResultSet& rsr) : DatabaseOperation(), rs_(rsr) {};
+    ReadOperation(Str first, Str last, ResultSet& rsr, tamer::event<> ev);
     virtual void operator()(PersistentStore*);
 
   private:
@@ -43,7 +40,7 @@ class ReadOperation : public pq::DatabaseOperation {
 
 class WriteOperation : public pq::DatabaseOperation {
   public:
-    WriteOperation() : DatabaseOperation() {}
+    WriteOperation(Str key, Str value);
     virtual void operator()(PersistentStore*);
 
   private:
@@ -53,6 +50,8 @@ class WriteOperation : public pq::DatabaseOperation {
 
 class BackendDatabaseThread {
   public:
+    BackendDatabaseThread(PersistentStore* store);
+
     void enqueue(DatabaseOperation* dbo);
     void run();
 

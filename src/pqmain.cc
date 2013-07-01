@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <set>
 #include "pqserver.hh"
+#include "pqdb.hh"
+#include "pqdbthread.hh"
 #include "json.hh"
 #include "pqtwitter.hh"
 #include "pqtwitternew.hh"
@@ -303,16 +305,18 @@ int main(int argc, char** argv) {
     const pq::Partitioner* part = nullptr;
 
     if (db != db_unknown) {
+        pq::PersistentStore* pstore = nullptr;
         if (db == db_berkeley) {
 #if HAVE_DB_CXX_H
-            Pqdb* dbh = new Pqdb(envpath, dbname);
-            server.set_persistent_store(dbh);
+            pstore = new Pqdb(envpath, dbname);
 #else
             mandatory_assert(false && "Not configured for BerkeleyDB.");
 #endif
         }
         else
             mandatory_assert(false && "Unknown DB type.");
+
+        server.set_persistent_store(new pq::BackendDatabaseThread(pstore));
     }
 
     if (evict_inline && mem_hi_mb) {

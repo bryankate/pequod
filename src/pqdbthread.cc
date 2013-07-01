@@ -4,9 +4,17 @@
 
 namespace pq {
 
+ReadOperation::ReadOperation(Str first, Str last, ResultSet& rs, tamer::event<> ev)
+    : rs_(rs), tev_(ev), first_key_(first), last_key_(last) {
+}
+
 void ReadOperation::operator()(PersistentStore* ps){
     ps->scan(first_key_, last_key_, rs_);
     tev_();
+}
+
+WriteOperation::WriteOperation(Str key, Str value)
+    : key_(key), value_(value) {
 }
 
 void WriteOperation::operator()(PersistentStore* ps){
@@ -20,6 +28,10 @@ void ResultSet::add(StringPair sp) {
 
 void ResultSet::add(String k, String v) {
     add(std::make_pair(k,v));
+}
+
+BackendDatabaseThread::BackendDatabaseThread(PersistentStore* store)
+    : dbh_(store) {
 }
 
 void BackendDatabaseThread::enqueue(DatabaseOperation* dbo) {
