@@ -51,6 +51,7 @@ class WriteOperation : public pq::DatabaseOperation {
 class BackendDatabaseThread {
   public:
     BackendDatabaseThread(PersistentStore* store);
+    ~BackendDatabaseThread();
 
     void enqueue(DatabaseOperation* dbo);
     void run();
@@ -61,6 +62,7 @@ class BackendDatabaseThread {
     boost::mutex mu_;
     boost::condition_variable its_time_to_;
     std::queue<DatabaseOperation*> pending_operations_;
+    bool running_;
 };
 
 inline std::vector<StringPair> ResultSet::results(){

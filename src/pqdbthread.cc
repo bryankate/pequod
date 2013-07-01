@@ -31,7 +31,14 @@ void ResultSet::add(String k, String v) {
 }
 
 BackendDatabaseThread::BackendDatabaseThread(PersistentStore* store)
-    : dbh_(store), dbworker_(&BackendDatabaseThread::run, this) {
+    : dbh_(store), dbworker_(&BackendDatabaseThread::run, this), running_(true) {
+}
+
+BackendDatabaseThread::~BackendDatabaseThread() {
+    boost::mutex::scoped_lock lock(mu_);
+    running_ = false;
+    its_time_to_.notify_all();
+    delete dbh_;
 }
 
 void BackendDatabaseThread::enqueue(DatabaseOperation* dbo) {
@@ -42,7 +49,7 @@ void BackendDatabaseThread::enqueue(DatabaseOperation* dbo) {
 
 void BackendDatabaseThread::run() {
     DatabaseOperation *dbo;
-    for(;;){
+    while(running_) {
         while (!pending_operations_.empty()){
             {
                 boost::mutex::scoped_lock lock(mu_);
@@ -53,7 +60,8 @@ void BackendDatabaseThread::run() {
               // chance to write even if there is work left on the queue 
         }
         boost::mutex::scoped_lock lock(mu_);
-        its_time_to_.wait(lock);
+        if (running_)
+            its_time_to_.wait(lock);
     }
 }
 
