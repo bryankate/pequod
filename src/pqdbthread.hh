@@ -56,11 +56,11 @@ class BackendDatabaseThread {
     void run();
 
   private:
+    PersistentStore* dbh_;
     boost::thread dbworker_;
     boost::mutex mu_;
     boost::condition_variable its_time_to_;
     std::queue<DatabaseOperation*> pending_operations_;
-    PersistentStore* dbh_;
 };
 
 inline std::vector<StringPair> ResultSet::results(){

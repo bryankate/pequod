@@ -31,7 +31,7 @@ void ResultSet::add(String k, String v) {
 }
 
 BackendDatabaseThread::BackendDatabaseThread(PersistentStore* store)
-    : dbh_(store) {
+    : dbh_(store), dbworker_(&BackendDatabaseThread::run, this) {
 }
 
 void BackendDatabaseThread::enqueue(DatabaseOperation* dbo) {
