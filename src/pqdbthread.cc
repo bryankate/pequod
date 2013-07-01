@@ -11,6 +11,7 @@ void ReadOperation::operator()(PersistentStore* ps){
 
 void WriteOperation::operator()(PersistentStore* ps){
     ps->put(key_,value_);
+    delete this;
 }
 
 void ResultSet::add(StringPair sp) {
@@ -21,18 +22,20 @@ void ResultSet::add(String k, String v) {
     add(std::make_pair(k,v));
 }
 
-void BackendDatabaseThread::enqueue(DatabaseOperation dbo) {
+void BackendDatabaseThread::enqueue(DatabaseOperation* dbo) {
     boost::mutex::scoped_lock lock( mu_ ); 
     pending_operations_.push(dbo);
     its_time_to_.notify_one();
 }
 
 void BackendDatabaseThread::run() {
+    DatabaseOperation *dbo;
     for(;;){
         while (!pending_operations_.empty()){
             {
                 boost::mutex::scoped_lock lock(mu_);
-                pending_operations_.front()(dbh_);
+                dbo = pending_operations_.front();
+                (*dbo)(dbh_);
                 pending_operations_.pop();
             } // scope this lock so the writer gets a 
               // chance to write even if there is work left on the queue 
