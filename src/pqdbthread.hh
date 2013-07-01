@@ -10,12 +10,12 @@ class PersistentStore;
 
 namespace pq {
 
-class StringPair;
+typedef std::pair<String,String> StringPair;
 
 class ResultSet {
   public:
-    int add(String k, String v);
-    int add(StringPair sp);
+    void add(String k, String v);
+    void add(StringPair sp);
     inline std::vector<StringPair> results();
   private:
     std::vector<StringPair> results_;
@@ -23,15 +23,16 @@ class ResultSet {
 
 class DatabaseOperation {
   public:
-    virtual ~DatabaseOperation();
+    DatabaseOperation() {}
+    virtual ~DatabaseOperation() {}
 
-    virtual void operator()(PersistentStore*);
+    virtual void operator()(PersistentStore*) {}
 };
 
 class ReadOperation : public pq::DatabaseOperation {
   public:
-    void operator()(PersistentStore*);
-    ReadOperation(ResultSet& rsr) : rs_(rsr) {};
+    ReadOperation(ResultSet& rsr) : DatabaseOperation(), rs_(rsr) {};
+    virtual void operator()(PersistentStore*);
 
   private:
     ResultSet& rs_;
@@ -42,7 +43,8 @@ class ReadOperation : public pq::DatabaseOperation {
 
 class WriteOperation : public pq::DatabaseOperation {
   public:
-    void operator()(PersistentStore*);
+    WriteOperation() : DatabaseOperation() {}
+    virtual void operator()(PersistentStore*);
 
   private:
     String key_;

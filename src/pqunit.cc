@@ -1109,11 +1109,12 @@ void test_pqdb() {
     String s3 = dbi->get(s1);
     assert(std::string(s3.mutable_data()) == std::string(s2.mutable_data()));
 
+/*  No more iterator, replace with a scan  
+
     Str strgrp[10] = {"c","d","e","f","g","h","i","j","m","n"};
     String stringgrp[10] = {"c","d","e","f","g","h","i","j","m","n"};
     for (int i=0; i < 10; i+=2)
         dbi->put(strgrp[i], strgrp[i+1]);
-    
     Pqdb::iterator it0 = dbi->lower_bound("c");
     Pqdb::iterator it1 = dbi->lower_bound("a");
     Pqdb::iterator it2 = dbi->lower_bound("j");
@@ -1131,7 +1132,7 @@ void test_pqdb() {
     } 
     assert(it0 == it3);
     assert(result_count == 4);
-
+*/
     delete dbi;
 #endif
 }

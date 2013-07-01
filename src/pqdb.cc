@@ -1,6 +1,5 @@
 #include "pqdb.hh"
-
-namespace pq {
+#include "pqdbthread.hh"
 
 #if HAVE_DB_CXX_H
 void Pqdb::init(uint32_t env_flags, uint32_t db_flags) {
@@ -63,22 +62,41 @@ String Pqdb::get(Str k){
     return String((char*)val.get_data(), val.get_size());
 }
 
-Pqdb::iterator& Pqdb::lower_bound(Str start){
-    return new Pqdb::iterator(this, start);
-}
-
-
-void Pqdb::scan(Str first, Str last, ResultSet& results){
-    Pqdb::iterator begin = lower_bound(first);
-    Pqdb::iterator end = lower_bound(last);
-
-    while (*begin != *end){
-        results.add(*begin);        
-        ++begin;
+void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
+    Dbc *db_cursor;
+    // start a new cursor 
+    try{  
+        dbh_->cursor(NULL, &db_cursor, Pqdb::cursor_flags_);
+    } catch(DbException &e) {
+        std::cerr << "Scan Error: opening database cursor failed: "
+                << env_home_ << std::endl
+                << db_name_ << std::endl;
+        std::cerr << e.what() << std::endl;
+    } catch(std::exception &e) {
+        std::cerr << "Scan Error: opening database cursor failed: "
+                << env_home_ << std::endl
+                << db_name_ << std::endl;
+        std::cerr << e.what() << std::endl;
     }
+    
+    Dbt key(first.mutable_data(), first.length());
+    Dbt end_key(last.mutable_data(), last.length());
+    Dbt value = Dbt();
+    value.set_flags(DB_DBT_MALLOC);
 
+    db_cursor->get(&end_key, &value, DB_SET_RANGE);
+    String end((char*) end_key.get_data(), end_key.get_size());
+    db_cursor->get(&key, &value, DB_SET_RANGE); //over write the end value since we only care what the key is
+
+    String k((char*) key.get_data(), key.get_size());
+    String v((char*) value.get_data(), value.get_size());
+    while (k < end) {
+        results.add(k, v);
+        db_cursor->get(&key, &value, DB_NEXT);
+        k = String((char*) key.get_data(), key.get_size());
+        v = String((char*) value.get_data(), value.get_size());
+    }
 }
 
 #endif
 
-}

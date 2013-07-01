@@ -7,21 +7,6 @@
 
 namespace pq {
 
-class StringPair {
-  public:
-    StringPair() {};
-    StringPair(String k, String v) : key_(k), value_(v) {};
-
-    inline String key() { return key_; }
-    inline void key(String s) { key_ = s; }
-    inline String val() { return value_; }
-    inline void val(String s) { value_ = s; }
-
-  private:
-    String key_;
-    String value_;
-};
-
 class ResultSet;
 
 class PersistentStore {
@@ -29,10 +14,11 @@ class PersistentStore {
     virtual ~PersistentStore() { };
 
     virtual void scan(Str first, Str last, ResultSet& results) = 0;
-//    virtual iterator& lower_bound(Str start) = 0; // how do i return any iterator
     virtual int32_t put(Str key, Str value) = 0;
     virtual String get(Str key) = 0;
 };
+
+}
 
 #if HAVE_DB_CXX_H
 #include <db_cxx.h>
@@ -76,26 +62,24 @@ class Pqdb : public pq::PersistentStore {
         }
     }
 
-    class iterator;
-    iterator& lower_bound(Str start);
-    virtual void scan(Str, Str, ResultSet&);
+    virtual void scan(Str, Str, pq::ResultSet&);
     void init(uint32_t, uint32_t);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
+    bool strings_equal(String, String);
 
   private:
     static const uint32_t env_flags_ = DB_CREATE | DB_INIT_MPOOL;
     static const uint32_t db_flags_ = DB_CREATE;
+    static const uint32_t cursor_flags_ = DB_CURSOR_BULK;
     std::string env_home_, db_name_;
     DbEnv *pqdb_env_;
     Db *dbh_;
 
-    friend class iterator;
-
 };
 
-
-class Pqdb::iterator : public std::iterator<std::forward_iterator_tag, Dbt> {
+/*
+Pqdb::scan(Str first, Str) {
   public:
     inline iterator() = default;
     inline iterator(Pqdb* pqdb, Str start);
@@ -166,11 +150,9 @@ inline bool Pqdb::iterator::operator!=(const iterator& x) const {
 inline void Pqdb::iterator::operator++() {
     db_cursor_->get(key_, value_, DB_NEXT);
 }
-
+*/
 
 
 #endif
-
-}
 
 #endif
