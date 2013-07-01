@@ -19,7 +19,7 @@ PROTOGENDIR = $(OBJDIR)
 TAMER_COMMIT = 326f5b81dd5d6dd7cbf2a8845fa81b7ed30f84de
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
-LIBS = -lev -lboost_thread @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@
+LIBS = -lev -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
