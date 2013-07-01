@@ -10,7 +10,7 @@ class PersistentStore;
 
 namespace pq {
 
-struct StringPair;
+class StringPair;
 
 class ResultSet {
   public:

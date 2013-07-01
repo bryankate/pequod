@@ -7,23 +7,31 @@
 
 namespace pq {
 
-struct StringPair {
-    String key;
-    String value;
+class StringPair {
+  public:
+    StringPair() {};
+    StringPair(String k, String v) : key_(k), value_(v) {};
+
+    inline String key() { return key_; }
+    inline void key(String s) { key_ = s; }
+    inline String val() { return value_; }
+    inline void val(String s) { value_ = s; }
+
+  private:
+    String key_;
+    String value_;
 };
+
+class ResultSet;
 
 class PersistentStore {
   public:
-    class iterator;
     virtual ~PersistentStore() { };
 
-    virtual iterator& lower_bound(Str start) = 0; // how do i return any iterator
+    virtual void scan(Str first, Str last, ResultSet& results) = 0;
+//    virtual iterator& lower_bound(Str start) = 0; // how do i return any iterator
     virtual int32_t put(Str key, Str value) = 0;
     virtual String get(Str key) = 0;
-};
-
-class PersistentStore::iterator {
-
 };
 
 #if HAVE_DB_CXX_H
@@ -70,8 +78,9 @@ class Pqdb : public pq::PersistentStore {
 
     class iterator;
     iterator& lower_bound(Str start);
+    virtual void scan(Str, Str, ResultSet&);
     void init(uint32_t, uint32_t);
-    virtual int32_t put(Str key, Str value);
+    virtual int32_t put(Str, Str);
     virtual String get(Str);
 
   private:
@@ -86,7 +95,7 @@ class Pqdb : public pq::PersistentStore {
 };
 
 
-class Pqdb::iterator : public std::iterator<std::forward_iterator_tag, Dbt>, public PersistentStore::iterator {
+class Pqdb::iterator : public std::iterator<std::forward_iterator_tag, Dbt> {
   public:
     inline iterator() = default;
     inline iterator(Pqdb* pqdb, Str start);
@@ -132,10 +141,10 @@ inline Pqdb::iterator::iterator(Pqdb* pqdb, Str start){
 }
 
 inline StringPair Pqdb::iterator::operator*() const {
-    struct StringPair sp;
-    sp.key = String((char*) key_->get_data(), key_->get_size());
-    sp.value = String((char*)value_->get_data(), value_->get_size());
-    return sp;
+    return new StringPair(
+        String((char*) key_->get_data(), key_->get_size()),
+        String((char*)value_->get_data(), value_->get_size())
+    );
 }
 
 inline bool Pqdb::iterator::operator==(const iterator& x) const {
@@ -157,6 +166,8 @@ inline bool Pqdb::iterator::operator!=(const iterator& x) const {
 inline void Pqdb::iterator::operator++() {
     db_cursor_->get(key_, value_, DB_NEXT);
 }
+
+
 
 #endif
 

@@ -67,6 +67,18 @@ Pqdb::iterator& Pqdb::lower_bound(Str start){
     return new Pqdb::iterator(this, start);
 }
 
+
+void Pqdb::scan(Str first, Str last, ResultSet& results){
+    Pqdb::iterator begin = lower_bound(first);
+    Pqdb::iterator end = lower_bound(last);
+
+    while (*begin != *end){
+        results.add(*begin);        
+        ++begin;
+    }
+
+}
+
 #endif
 
 }
