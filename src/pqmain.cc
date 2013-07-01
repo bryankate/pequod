@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     int listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
     String hostfile, partfunc;
-    std::string dbname, envpath;
+    std::string dbname = "pequod.db", envpath = "db/localEnv";
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
