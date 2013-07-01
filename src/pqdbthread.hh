@@ -26,7 +26,7 @@ class DatabaseOperation {
     DatabaseOperation() {}
     virtual ~DatabaseOperation() {}
 
-    virtual void operator()(PersistentStore*) {}
+    virtual void operator()(PersistentStore*) = 0;
 };
 
 class ReadOperation : public pq::DatabaseOperation {
@@ -53,14 +53,14 @@ class WriteOperation : public pq::DatabaseOperation {
 
 class BackendDatabaseThread {
   public:
-    void enqueue(DatabaseOperation dbo);
+    void enqueue(DatabaseOperation* dbo);
     void run();
 
   private:
     boost::thread dbworker_;
     boost::mutex mu_;
     boost::condition_variable its_time_to_;
-    std::queue<DatabaseOperation> pending_operations_;
+    std::queue<DatabaseOperation*> pending_operations_;
     PersistentStore* dbh_;
 };
 
