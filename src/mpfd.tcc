@@ -81,7 +81,7 @@ tamed void msgpack_fd::reader_coroutine() {
     kill = rdkill_ = tamer::make_event(rendez);
 
     while (kill && fd_) {
-        if (rdwait_.empty() && rdreqwait_.empty())
+        if (rdreqwait_.empty() && rdreplywait_.empty())
             twait { rdwake_ = make_event(); }
         else if (rdblocked_) {
             twait { tamer::at_fd_read(fd_.value(), make_event()); }
@@ -93,13 +93,13 @@ tamed void msgpack_fd::reader_coroutine() {
         }
     }
 
-    for (auto& e : rdwait_)
-        e.unblock();
-    rdwait_.clear();
     for (auto& e : rdreqwait_)
         e.unblock();
     rdreqwait_.clear();
-    kill();
+    for (auto& e : rdreplywait_)
+        e.unblock();
+    rdreplywait_.clear();
+    kill();                     // avoid leak of active event
 }
 
 bool msgpack_fd::dispatch(Json* result_pointer) {
@@ -109,14 +109,14 @@ bool msgpack_fd::dispatch(Json* result_pointer) {
     if (result.is_a() && result[0].is_i() && result[1].is_i()
         && result[0].as_i() < 0) {
         unsigned long seq = result[1].as_i();
-        if (seq >= rdwait_seq_ && seq < rdwait_seq_ + rdwait_.size()) {
-            tamer::event<Json>& done = rdwait_[seq - rdwait_seq_];
+        if (seq >= rdreply_seq_ && seq < rdreply_seq_ + rdreplywait_.size()) {
+            tamer::event<Json>& done = rdreplywait_[seq - rdreply_seq_];
             if (done.result_pointer())
                 swap(*done.result_pointer(), result);
             done.unblock();
-            while (!rdwait_.empty() && !rdwait_.front()) {
-                rdwait_.pop_front();
-                ++rdwait_seq_;
+            while (!rdreplywait_.empty() && !rdreplywait_.front()) {
+                rdreplywait_.pop_front();
+                ++rdreply_seq_;
             }
         }
         return false;
