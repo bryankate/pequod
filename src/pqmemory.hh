@@ -10,12 +10,12 @@ void* operator new[](size_t, int64_t* type);
 
 namespace pq {
 
-void* allocate(size_t, int64_t* type);
+void* allocate(size_t, uint64_t* type);
 void deallocate(void* p);
 
 enum { enable_memory_tracking = 1 };
 
-template <typename T, int64_t* mem_type = nullptr>
+template <typename T, uint64_t* mem_type = nullptr>
 class Allocator {
   public:
     typedef T*          pointer;
@@ -62,9 +62,9 @@ class Allocator {
 };
 
 
-extern int64_t mem_overhead_size;
-extern int64_t mem_other_size;
-extern int64_t mem_store_size;
+extern uint64_t mem_overhead_size;
+extern uint64_t mem_other_size;
+extern uint64_t mem_store_size;
 
 template <class T>
 struct heap_type {
@@ -73,11 +73,11 @@ struct heap_type {
 
 
 // report rusage ru_maxrss in megabytes
-inline int32_t maxrss_mb(int32_t rss) {
+inline uint32_t maxrss_mb(int32_t rss) {
 #ifdef __APPLE__
-    return rss >> 20; // apple reports in bytes
+    return (uint32_t)rss >> 20; // apple reports in bytes
 #else
-    return rss >> 10; // linux reports in kilobytes
+    return (uint32_t)rss >> 10; // linux reports in kilobytes
 #endif
 }
 

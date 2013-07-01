@@ -3,18 +3,18 @@
 
 namespace pq {
 
-int64_t mem_overhead_size = 0;
-int64_t mem_other_size = 0;
-int64_t mem_store_size = 0;
+uint64_t mem_overhead_size = 0;
+uint64_t mem_other_size = 0;
+uint64_t mem_store_size = 0;
 
 namespace {
 struct meminfo {
-    int64_t* type;
+    uint64_t* type;
     size_t sz;
 };
 }
 
-void* allocate(size_t sz, int64_t* type) {
+void* allocate(size_t sz, uint64_t* type) {
     if (sz == 0)
         return NULL;
     if (!enable_memory_tracking)
@@ -61,11 +61,11 @@ void* operator new[](size_t size) {
     return pq::allocate(size, nullptr);
 }
 
-void* operator new(size_t size, int64_t* type) {
+void* operator new(size_t size, uint64_t* type) {
     return pq::allocate(size, type);
 }
 
-void* operator new[](size_t size, int64_t* type) {
+void* operator new[](size_t size, uint64_t* type) {
     return pq::allocate(size, type);
 }
 
