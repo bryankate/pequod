@@ -10,6 +10,7 @@
 #include "hashtable.hh"
 #include "pqsource.hh"
 #include "pqsink.hh"
+#include "pqmemory.hh"
 #include "pqdb.hh"
 #include "time.hh"
 #include "hosts.hh"
@@ -212,7 +213,7 @@ class Server {
     inline void lru_touch(Evictable* e);
     inline void maybe_evict();
     inline bool evict_one();
-    inline void set_prob_evict(double pevict);
+    inline void set_eviction_details(uint64_t low_water_mb, uint64_t high_water_mb);
 
     Json stats() const;
     void control(const Json& cmd);
@@ -232,7 +233,9 @@ class Server {
     lru_type lru_;
     boost::mt19937 gen_;
     boost::uniform_real<> prob_rng_;
-    double pevict_;
+    uint64_t evict_lo_;
+    uint64_t evict_hi_;
+    double evict_scale_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -567,8 +570,17 @@ inline void Server::lru_touch(Evictable* e) {
 }
 
 inline void Server::maybe_evict() {
-    if (unlikely(pevict_ && prob_rng_(gen_) < pevict_))
+    if (!enable_memory_tracking || !evict_hi_ || (mem_other_size <= evict_lo_))
+        return;
+
+    if (mem_other_size >= evict_hi_)
         evict_one();
+    else {
+        double pevict = 1.0 / (1.0 + exp(-((mem_other_size - evict_lo_) * evict_scale_ - 6)));
+
+        if (unlikely(prob_rng_(gen_) < pevict))
+            evict_one();
+    }
 }
 
 inline bool Server::evict_one() {
@@ -577,8 +589,11 @@ inline bool Server::evict_one() {
     return !lru_.empty();
 }
 
-inline void Server::set_prob_evict(double pevict) {
-    pevict_ = pevict;
+inline void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb) {
+    assert(!high_mb || (high_mb && low_mb < high_mb));
+    evict_lo_ = low_mb << 20;
+    evict_hi_ = high_mb << 20;
+    evict_scale_ = 1.0 / ((evict_hi_ - evict_lo_) / 12.0);
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {

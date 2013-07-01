@@ -5,7 +5,6 @@
 #include "pqserver.hh"
 #include "pqjoin.hh"
 #include "pqinterconnect.hh"
-#include "pqmemory.hh"
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
@@ -569,7 +568,8 @@ void Table::invalidate_remote(Str first, Str last) {
 Server::Server()
     : persistent_store_(nullptr), supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
-      part_(nullptr), me_(-1), prob_rng_(0,1), pevict_(0) {
+      part_(nullptr), me_(-1),
+      prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
 
     gen_.seed(112181);
 }

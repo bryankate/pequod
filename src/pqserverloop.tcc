@@ -313,7 +313,7 @@ tamed void periodic_logger() {
     }
 }
 
-tamed void periodic_eviction(pq::Server& server, uint32_t low, uint32_t high) {
+tamed void periodic_eviction(pq::Server& server, uint64_t low, uint64_t high) {
     mandatory_assert(pq::enable_memory_tracking && "Cannot evict without memory tracking.");
 
     while(true) {
@@ -334,7 +334,7 @@ tamed void periodic_eviction(pq::Server& server, uint32_t low, uint32_t high) {
 tamed void server_loop(pq::Server& server, int port, bool kill,
                        const pq::Hosts* hosts, const pq::Host* me,
                        const pq::Partitioner* part,
-                       uint32_t mem_lo_mb, uint32_t mem_hi_mb) {
+                       uint64_t mem_lo_mb, uint64_t mem_hi_mb) {
     tvars {
         tamer::fd killer;
         bool connected = false;
