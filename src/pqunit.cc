@@ -1100,7 +1100,7 @@ bb|<bid> = copy b|<bid> where bid:3"));
 
 void test_pqdb() {
 #if HAVE_DB_CXX_H
-    Pqdb *dbi = new Pqdb();
+    BerkeleyDBStore *dbi = new BerkeleyDBStore();
 
     Str s1 = "xxx";
     Str s2 = "zzz";

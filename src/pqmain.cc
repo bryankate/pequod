@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
         pq::PersistentStore* pstore = nullptr;
         if (db == db_berkeley) {
 #if HAVE_DB_CXX_H
-            pstore = new Pqdb(envpath, dbname);
+            pstore = new BerkeleyDBStore(envpath, dbname);
 #else
             mandatory_assert(false && "Not configured for BerkeleyDB.");
 #endif

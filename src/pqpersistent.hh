@@ -71,14 +71,14 @@ class PersistentStoreThread {
 #if HAVE_DB_CXX_H
 #include <db_cxx.h>
 
-class Pqdb : public pq::PersistentStore {
+class BerkeleyDBStore : public pq::PersistentStore {
 
   public:
-    Pqdb(std::string eH = "./db/localEnv",
-         std::string dbN = "pequod.db",
-         uint32_t e_flags = Pqdb::env_flags_,
-         uint32_t d_flags = Pqdb::db_flags_);
-    ~Pqdb();
+    BerkeleyDBStore(std::string eH = "./db/localEnv",
+                    std::string dbN = "pequod.db",
+                    uint32_t e_flags = BerkeleyDBStore::env_flags_,
+                    uint32_t d_flags = BerkeleyDBStore::db_flags_);
+    ~BerkeleyDBStore();
 
     virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
     void init(uint32_t, uint32_t);
@@ -91,7 +91,7 @@ class Pqdb : public pq::PersistentStore {
     static const uint32_t db_flags_ = DB_CREATE;
     static const uint32_t cursor_flags_ = DB_CURSOR_BULK;
     std::string env_home_, db_name_;
-    DbEnv *pqdb_env_;
+    DbEnv *env_;
     Db *dbh_;
 };
 

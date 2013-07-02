@@ -62,19 +62,19 @@ void PersistentStoreThread::run() {
 #if HAVE_DB_CXX_H
 #include <iostream>
 
-Pqdb::Pqdb(std::string eH, std::string dbN, uint32_t e_flags, uint32_t d_flags)
-    : env_home_(eH), db_name_(dbN), pqdb_env_(new DbEnv(0)) {
+BerkeleyDBStore::BerkeleyDBStore(std::string eH, std::string dbN, uint32_t e_flags, uint32_t d_flags)
+    : env_home_(eH), db_name_(dbN), env_(new DbEnv(0)) {
     init(e_flags, d_flags);
 }
 
-Pqdb::~Pqdb() {
+BerkeleyDBStore::~BerkeleyDBStore() {
     try {
         if (dbh_ != NULL) {
             dbh_->close(0);
         }
-        pqdb_env_->close(0);
+        env_->close(0);
         delete dbh_;
-        delete pqdb_env_;
+        delete env_;
     } catch(DbException &e) {
         std::cerr << "Error closing database environment: "
                 << env_home_
@@ -92,10 +92,10 @@ Pqdb::~Pqdb() {
     }
 }
 
-void Pqdb::init(uint32_t env_flags, uint32_t db_flags) {
+void BerkeleyDBStore::init(uint32_t env_flags, uint32_t db_flags) {
     try {
-        pqdb_env_->open(env_home_.c_str(), env_flags, 0);
-        dbh_ = new Db(pqdb_env_, 0);
+        env_->open(env_home_.c_str(), env_flags, 0);
+        dbh_ = new Db(env_, 0);
         dbh_->open(NULL,
                    db_name_.c_str(),
                    NULL,
@@ -104,20 +104,20 @@ void Pqdb::init(uint32_t env_flags, uint32_t db_flags) {
                    0);
     } catch(DbException &e) {
         std::cerr << "Error opening database or environment: "
-                << env_home_ << std::endl
-                << db_name_ << std::endl;
+                  << env_home_ << std::endl
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
     } catch(std::exception &e) {
         std::cerr << "Error opening database or environment: "
-                << env_home_ << std::endl
-                << db_name_ << std::endl;
+                  << env_home_ << std::endl
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
         exit( -1 );
     }
 }
 
-int32_t Pqdb::put(Str key, Str val){
+int32_t BerkeleyDBStore::put(Str key, Str val){
 
     int32_t ret;
 
@@ -126,14 +126,14 @@ int32_t Pqdb::put(Str key, Str val){
 
     ret = dbh_->put(NULL, &k, &v, 0);
     if (ret != 0) {
-        pqdb_env_->err(ret, "Database put failed.");
+        env_->err(ret, "Database put failed.");
         return ret;
     }
 
     return ret;
 }
 
-String Pqdb::get(Str k){
+String BerkeleyDBStore::get(Str k){
 
     Dbt key, val;
     int32_t ret;
@@ -145,27 +145,27 @@ String Pqdb::get(Str k){
 
     ret = dbh_->get(NULL, &key, &val, 0);
     if (ret != 0) {
-        pqdb_env_->err(ret, "Database get failed.");
+        env_->err(ret, "Database get failed.");
         std::cerr << "this is error..bad get." << std::endl;
     }
 
     return String((char*)val.get_data(), val.get_size());
 }
 
-void Pqdb::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
+void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
     Dbc *db_cursor;
     // start a new cursor
     try{
-        dbh_->cursor(NULL, &db_cursor, Pqdb::cursor_flags_);
+        dbh_->cursor(NULL, &db_cursor, BerkeleyDBStore::cursor_flags_);
     } catch(DbException &e) {
         std::cerr << "Scan Error: opening database cursor failed: "
-                << env_home_ << std::endl
-                << db_name_ << std::endl;
+                  << env_home_ << std::endl
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
     } catch(std::exception &e) {
         std::cerr << "Scan Error: opening database cursor failed: "
-                << env_home_ << std::endl
-                << db_name_ << std::endl;
+                  << env_home_ << std::endl
+                  << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
     }
 
