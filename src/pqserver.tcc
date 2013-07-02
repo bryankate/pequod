@@ -362,7 +362,6 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
     }
-    /*
     else if (server_->persistent_store()) {
         Str have = first;
         auto r = t->persisted_ranges_.begin_overlaps(first, last);
@@ -389,6 +388,9 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 ++r;
 
                 t->persisted_ranges_.erase(*pr);
+
+                // todo: do not invalidate remote sinks - some peers might have the range
+                // and a scan by another peer will invalidate all the others!
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
 
@@ -411,7 +413,6 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             server_->lru_add(pr);
         }
     }
-    */
 
     return std::make_pair(completed, lower_bound(first));
 }
@@ -540,8 +541,8 @@ void Table::evict_persisted(PersistedRange* pr) {
         ++nevict_persistent_;
     }
 
-    //std::cerr << "evicting persisted range " << pr->interval()
-    //          << ", keeping " << kept << " source ranges in place " << std::endl;
+    std::cerr << "evicting persisted range " << pr->interval()
+              << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(pr);
 
@@ -565,12 +566,14 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
-    //std::cerr << "fetching remote data: " << rr->interval() << std::endl;
+    std::cerr << "fetching remote data: " << rr->interval() << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
     twait { server_->interconnect(owner)->pace(make_event()); }
+
+    std::cerr << "remote data fetch: " << rr->interval() << " returned " << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -605,8 +608,8 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
-    //std::cerr << "evicting remote range " << rr->interval()
-    //          << ", keeping " << kept << " source ranges in place " << std::endl;
+    std::cerr << "evicting remote range " << rr->interval()
+              << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(rr);
 
@@ -654,12 +657,15 @@ void Table::invalidate_remote(Str first, Str last) {
         t = t->parent_;
 
     // todo: truncate range instead of invalidating whole range?
-    //std::cerr << "invalidating remote range [" << first << ", " << last << ")" << std::endl;
     auto r = t->remote_ranges_.begin_overlaps(first, last);
     while(r != t->remote_ranges_.end()) {
         RemoteRange* rrange = r.operator->();
         ++r;
 
+        if (rrange->pending())
+            continue;
+
+        std::cerr << "invalidating remote range " << rrange->interval() << std::endl;
         t->remote_ranges_.erase(*rrange);
         t->invalidate_dependents(rrange->ibegin(), rrange->iend());
 
@@ -668,7 +674,7 @@ void Table::invalidate_remote(Str first, Str last) {
         while(it != itend)
             it = erase_invalid(it);
 
-        if (!rrange->pending() && !rrange->evicted())
+        if (!rrange->evicted())
             server_->lru_remove(rrange);
         delete rrange;
     }
