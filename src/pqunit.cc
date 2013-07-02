@@ -1098,7 +1098,7 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
-void test_pqdb() {
+void test_berkeleydb() {
 #if HAVE_DB_CXX_H
     using namespace pq;
     BerkeleyDBStore *dbi = new BerkeleyDBStore();
@@ -1207,7 +1207,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
-    ADD_TEST(test_pqdb);
+    ADD_TEST(test_berkeleydb);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
