@@ -100,6 +100,8 @@ void BerkeleyDBStore::init(uint32_t env_flags, uint32_t db_flags) {
                    DB_BTREE,
                    db_flags,
                    0);
+        uint32_t ndropped = 0;
+        dbh_->truncate(NULL, &ndropped, 0);
     } catch(DbException &e) {
         std::cerr << "Error opening database or environment: "
                   << env_home_ << std::endl
