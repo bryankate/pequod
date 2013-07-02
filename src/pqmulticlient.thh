@@ -3,7 +3,7 @@
 
 #include "pqremoteclient.hh"
 #include "hosts.hh"
-#include "partitions.hh"
+#include "partitioner.hh"
 #include "sock_helper.hh"
 #include <vector>
 #include <iostream>

@@ -1,5 +1,5 @@
-#ifndef PARTITIONS_HH_
-#define PARTITIONS_HH_
+#ifndef PARTITIONER_HH_
+#define PARTITIONER_HH_
 #include "keyrange.hh"
 #include "str.hh"
 #include <vector>

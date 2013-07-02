@@ -16,7 +16,7 @@
 #include "hnshim.hh"
 #include "pqrwmicro.hh"
 #include "hosts.hh"
-#include "partitions.hh"
+#include "partitioner.hh"
 #include "sock_helper.hh"
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H

@@ -82,7 +82,7 @@ $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
-$(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh $(top_srcdir)/src/pqdb.hh
+$(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqclient.cc: $(top_srcdir)/src/pqclient.tcc
@@ -108,8 +108,10 @@ $(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
 $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
 $(OBJDIR)/pqforker.cc: $(top_srcdir)/src/pqforker.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh $(top_srcdir)/src/pqdb.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
+$(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
@@ -123,7 +125,6 @@ $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqforker.o: $(OBJDIR)/pqforker.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
-$(OBJDIR)/pqunit.o: $(top_srcdir)/src/pqdb.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -136,7 +137,7 @@ COMMON_OBJS = \
 	$(OBJDIR)/encoding.o \
 	$(OBJDIR)/hashallocator.o \
 	$(OBJDIR)/sp_key.o \
-	$(OBJDIR)/partitions.o \
+	$(OBJDIR)/partitioner.o \
 	$(OBJDIR)/hosts.o \
 	$(OBJDIR)/clp.o
 
@@ -147,6 +148,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsink.o \
 	$(OBJDIR)/pqpersistent.o \
 	$(OBJDIR)/pqserver.o \
+	$(OBJDIR)/pqpartition.o \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqtwitternew.o \
 	$(OBJDIR)/pqhackernews.o \

@@ -14,7 +14,7 @@
 #include "pqpersistent.hh"
 #include "time.hh"
 #include "hosts.hh"
-#include "partitions.hh"
+#include "partitioner.hh"
 #include <iterator>
 #include <vector>
 
