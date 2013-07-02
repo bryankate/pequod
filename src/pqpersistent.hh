@@ -5,7 +5,7 @@
 #include "readerwriterqueue.h"
 #include <tamer/tamer.hh>
 #include <boost/thread.hpp>
-#include <boost/atomic.hpp>
+#include <atomic>
 
 namespace pq {
 
@@ -65,7 +65,7 @@ class PersistentStoreThread {
     boost::mutex mu_;
     boost::condition_variable cond_;
     moodycamel::ReaderWriterQueue<PersistentOp*> pending_;
-    boost::atomic<bool> running_;
+    std::atomic<bool> running_;
 };
 
 }
