@@ -80,10 +80,13 @@ for x in exps:
         system("killall pqserver")
         sleep(3)
         
+        dbenvpath = os.path.join(resdir, "store")
+        os.makedirs(dbenvpath)
+            
         for s in range(nprocesses):
             outfile = os.path.join(resdir, "output_srv_")
             fartfile = os.path.join(resdir, "fart_srv_")
-            
+  
             if affinity:
                 pin = "numactl -C " + str(startcpu + s) + " "
                 
@@ -94,6 +97,8 @@ for x in exps:
 
             full_cmd = pin + perf + servercmd + \
                 " -kl=" + str(startport + s) + \
+                " --dbname=pequod_" + str(s) + ".db" \
+                " --envpath=" + dbenvpath + \
                 " > " + outfile + str(s) + ".txt" + \
                 " 2> " + fartfile + str(s) + ".txt &"
 
