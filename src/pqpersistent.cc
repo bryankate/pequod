@@ -1,15 +1,19 @@
 #include "pqpersistent.hh"
+#include <boost/date_time.hpp>
 
 namespace pq {
 
-PersistentRead::PersistentRead(Str first, Str last,
-                               PersistentStore::ResultSet& rs, tamer::event<> ev)
-    : rs_(rs), tev_(ev), first_(first), last_(last) {
+PersistentRead::PersistentRead(Str first, Str last, PersistentStore::ResultSet& rs)
+    : rs_(rs), first_(first), last_(last) {
 }
 
 void PersistentRead::operator()(PersistentStore* ps){
     ps->scan(first_, last_, rs_);
     tev_();
+}
+
+void PersistentRead::set_trigger(tamer::event<> t) {
+    tev_ = t;
 }
 
 PersistentWrite::PersistentWrite(Str key, Str value)
@@ -22,37 +26,31 @@ void PersistentWrite::operator()(PersistentStore* ps){
 }
 
 PersistentStoreThread::PersistentStoreThread(PersistentStore* store)
-    : store_(store), worker_(&PersistentStoreThread::run, this), running_(true) {
+    : store_(store), worker_(&PersistentStoreThread::run, this),
+      pending_(1024), running_(true) {
 }
 
 PersistentStoreThread::~PersistentStoreThread() {
-    boost::mutex::scoped_lock lock(mu_);
     running_ = false;
     cond_.notify_all();
+    worker_.join();
     delete store_;
 }
 
 void PersistentStoreThread::enqueue(PersistentOp* op) {
-    boost::mutex::scoped_lock lock(mu_);
-    pending_.push(op);
-    cond_.notify_one();
+    pending_.enqueue(op);
+    cond_.notify_all();
 }
 
 void PersistentStoreThread::run() {
     PersistentOp *op;
     while(running_) {
-        while (!pending_.empty()){
-            {
-                boost::mutex::scoped_lock lock(mu_);
-                op = pending_.front();
-                (*op)(store_);
-                pending_.pop();
-            } // scope this lock so the writer gets a
-              // chance to write even if there is work left on the queue
+        if (pending_.try_dequeue(op))
+            (*op)(store_);
+        else {
+            boost::mutex::scoped_lock lock(mu_);
+            cond_.timed_wait(lock, boost::posix_time::milliseconds(5));
         }
-        boost::mutex::scoped_lock lock(mu_);
-        if (running_)
-            cond_.wait(lock);
     }
 }
 

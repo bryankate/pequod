@@ -493,16 +493,20 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     tvars {
         PersistedRange* pr = new PersistedRange(this, first, last);
         PersistentStore::ResultSet res;
+        PersistentRead op(first, last, res);
     }
 
     pr->add_waiting(done);
     persisted_ranges_.insert(*pr);
 
-    //std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
+    std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
     twait {
-        PersistentRead op(first, last, res, make_event());
+        // BNK: this doesn't feel right. is tamer's event loop thread safe?
+        op.set_trigger(make_event());
         server_->persistent_store()->enqueue(&op);
     }
+
+    std::cerr << "persisted data fetch: " << pr->interval() << " returned " << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);

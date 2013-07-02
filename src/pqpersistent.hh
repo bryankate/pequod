@@ -2,9 +2,10 @@
 #define PQ_PERSISTENT_HH
 #include "str.hh"
 #include "string.hh"
+#include "readerwriterqueue.h"
 #include <tamer/tamer.hh>
 #include <boost/thread.hpp>
-#include <queue>
+#include <boost/atomic.hpp>
 
 namespace pq {
 
@@ -28,9 +29,10 @@ class PersistentOp {
 
 class PersistentRead : public PersistentOp {
   public:
-    PersistentRead(Str first, Str last,
-                   PersistentStore::ResultSet& rs, tamer::event<> ev);
+    PersistentRead(Str first, Str last, PersistentStore::ResultSet& rs);
+
     virtual void operator()(PersistentStore*);
+    void set_trigger(tamer::event<> t);
 
   private:
     PersistentStore::ResultSet& rs_;
@@ -62,8 +64,8 @@ class PersistentStoreThread {
     boost::thread worker_;
     boost::mutex mu_;
     boost::condition_variable cond_;
-    std::queue<PersistentOp*> pending_;
-    bool running_;
+    moodycamel::ReaderWriterQueue<PersistentOp*> pending_;
+    boost::atomic<bool> running_;
 };
 
 }
