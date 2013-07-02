@@ -121,8 +121,8 @@ int32_t BerkeleyDBStore::put(Str key, Str val){
 
     int32_t ret;
 
-    Dbt k(key.mutable_data(), key.length() + 1);
-    Dbt v(val.mutable_data(), val.length() + 1);
+    Dbt k(key.mutable_data(), key.length());
+    Dbt v(val.mutable_data(), val.length());
 
     ret = dbh_->put(NULL, &k, &v, 0);
     if (ret != 0) {
@@ -135,11 +135,9 @@ int32_t BerkeleyDBStore::put(Str key, Str val){
 
 String BerkeleyDBStore::get(Str k){
 
-    Dbt key, val;
+    Dbt key(k.mutable_data(), k.length());
+    Dbt val;
     int32_t ret;
-
-    key.set_data(k.mutable_data());
-    key.set_size(k.length() + 1);
 
     val.set_flags(DB_DBT_MALLOC);
 
