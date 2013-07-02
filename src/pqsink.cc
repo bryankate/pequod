@@ -447,8 +447,21 @@ void SinkRange::evict() {
     table_->evict_sink(this);
 }
 
+LoadableRange::LoadableRange(Table* table, Str first, Str last)
+    : ServerRangeBase(first, last), table_(table), evicted_(false) {
+}
+
+PersistedRange::PersistedRange(Table* table, Str first, Str last)
+    : LoadableRange(table, first, last) {
+}
+
+void PersistedRange::evict() {
+    assert(table_);
+    table_->evict_persisted(this);
+}
+
 RemoteRange::RemoteRange(Table* table, Str first, Str last, int32_t owner)
-    : ServerRangeBase(first, last), table_(table), owner_(owner), evicted_(false) {
+    : LoadableRange(table, first, last), owner_(owner) {
 }
 
 void RemoteRange::evict() {

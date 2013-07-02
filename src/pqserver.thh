@@ -82,6 +82,7 @@ class Table : public Datum {
 
     inline bool flush_for_pull(uint64_t now);
 
+    void evict_persisted(PersistedRange* pr);
     void evict_remote(RemoteRange* rr);
     void evict_sink(SinkRange* sink);
 
@@ -94,6 +95,7 @@ class Table : public Datum {
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
     interval_tree<RemoteRange> remote_ranges_;
+    interval_tree<PersistedRange> persisted_ranges_;
     enum { subtable_hash_size = 8 };
     HashTable<uint64_t, Table*> subtables_;
     unsigned njoins_;
@@ -108,6 +110,7 @@ class Table : public Datum {
     uint64_t nmodify_nohint_;
     uint64_t nerase_;
     uint64_t nvalidate_;
+    uint64_t nevict_persistent_;
     uint64_t nevict_remote_;
     uint64_t nevict_local_;
     uint64_t nevict_sink_;
@@ -128,6 +131,8 @@ class Table : public Datum {
     void remove_subscription(Str first, Str last, int32_t peer);
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
+
+    tamed void fetch_persisted(String first, String last, tamer::event<> done);
 
     friend class Server;
     friend class iterator;

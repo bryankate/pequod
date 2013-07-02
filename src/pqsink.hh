@@ -177,26 +177,44 @@ class JoinRange : public ServerRangeBase {
     friend class SinkRange;
 };
 
-class RemoteRange : public ServerRangeBase, public Evictable {
+class LoadableRange : public ServerRangeBase {
   public:
-    RemoteRange(Table* table, Str first, Str last, int32_t owner);
+    LoadableRange(Table* table, Str first, Str last);
 
-    inline int32_t owner() const;
     inline bool pending() const;
     inline void add_waiting(tamer::event<> w);
     inline void notify_waiting();
     inline void mark_evicted();
     inline bool evicted() const;
 
+  protected:
+    Table* table_;
+  private:
+    std::list<tamer::event<>> waiting_;
+    bool evicted_;
+};
+
+class PersistedRange : public LoadableRange, public Evictable {
+  public:
+    PersistedRange(Table* table, Str first, Str last);
+
+    virtual void evict();
+
+  public:
+    rblinks<PersistedRange> rblinks_;
+};
+
+class RemoteRange : public LoadableRange, public Evictable {
+  public:
+    RemoteRange(Table* table, Str first, Str last, int32_t owner);
+
+    inline int32_t owner() const;
     virtual void evict();
 
   public:
     rblinks<RemoteRange> rblinks_;
   private:
-    Table* table_;
     int32_t owner_;
-    std::list<tamer::event<>> waiting_;
-    bool evicted_;
 };
 
 /*
@@ -357,32 +375,32 @@ inline int Restart::notifier() const {
     return notifier_;
 }
 
-inline int32_t RemoteRange::owner() const {
-    return owner_;
-}
-
-inline void RemoteRange::mark_evicted() {
+inline void LoadableRange::mark_evicted() {
     assert(!evicted_);
     evicted_ = true;
 }
 
-inline bool RemoteRange::evicted() const {
+inline bool LoadableRange::evicted() const {
     return evicted_;
 }
 
-inline bool RemoteRange::pending() const {
+inline bool LoadableRange::pending() const {
     return !waiting_.empty();
 }
 
-inline void RemoteRange::add_waiting(tamer::event<> w) {
+inline void LoadableRange::add_waiting(tamer::event<> w) {
     waiting_.push_back(w);
 }
 
-inline void RemoteRange::notify_waiting() {
+inline void LoadableRange::notify_waiting() {
     while(!waiting_.empty()) {
         waiting_.front().operator()();
         waiting_.pop_front();
     }
+}
+
+inline int32_t RemoteRange::owner() const {
+    return owner_;
 }
 
 inline Interconnect* RemoteSink::conn() const {

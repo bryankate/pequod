@@ -37,7 +37,7 @@ Table::Table(Str name, Table* parent, Server* server)
       triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
       server_{server}, parent_{parent}, 
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      nevict_remote_(0), nevict_local_(0), nevict_sink_(0) {
+      nevict_persistent_(0), nevict_remote_(0), nevict_local_(0), nevict_sink_(0) {
 }
 
 Table::~Table() {
@@ -318,13 +318,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 RemoteRange* rr = r.operator->();
                 ++r;
 
-                // todo: re-evict data here?
-                // no - since we have been getting
-                // updates to the table, the data should
-                // be overwritten anyway on the remote fetch
                 t->remote_ranges_.erase(*rr);
                 t->invalidate_dependents(rr->ibegin(), rr->iend());
-
                 server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
                                                           server_->me(), tamer::event<>());
                 t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
@@ -366,6 +361,54 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
+    }
+    else if (server_->persistent_store()) {
+        Str have = first;
+        auto r = t->persisted_ranges_.begin_overlaps(first, last);
+
+        while(r != t->persisted_ranges_.end()) {
+            if (r->ibegin() > have) {
+                if (last < r->ibegin())
+                    break;
+                else {
+                    PersistedRange* pr = new PersistedRange(this, have, r->ibegin());
+                    persisted_ranges_.insert(*pr);
+                    server_->lru_add(pr);
+                }
+            }
+            have = r->iend();
+
+            if (r->pending()) {
+                r->add_waiting(gr.make_event());
+                completed = false;
+            }
+
+            if (r->evicted()) {
+                PersistedRange* pr = r.operator->();
+                ++r;
+
+                t->persisted_ranges_.erase(*pr);
+                t->invalidate_dependents(pr->ibegin(), pr->iend());
+                t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
+
+                completed = false;
+                delete pr;
+            }
+            else {
+                if (!r->pending())
+                    server_->lru_touch(r.operator->());
+                ++r;
+            }
+
+            if (have >= last)
+                break;
+        }
+
+        if (have < last) {
+            PersistedRange* pr = new PersistedRange(this, have, last);
+            persisted_ranges_.insert(*pr);
+            server_->lru_add(pr);
+        }
     }
 
     return std::make_pair(completed, lower_bound(first));
@@ -442,6 +485,68 @@ bool Table::hard_flush_for_pull(uint64_t now) {
     return true;
 }
 
+tamed void Table::fetch_persisted(String first, String last, tamer::event<> done) {
+    assert(!triecut_);
+
+    tvars {
+        PersistedRange* pr = new PersistedRange(this, first, last);
+        PersistentStore::ResultSet res;
+    }
+
+    pr->add_waiting(done);
+    persisted_ranges_.insert(*pr);
+
+    //std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
+    twait {
+        PersistentRead op(first, last, res, make_event());
+        server_->persistent_store()->enqueue(&op);
+    }
+
+    // XXX: not sure if this is correct. what if the range goes outside this triecut?
+    Table& sourcet = server_->make_table_for(first);
+    for (auto it = res.begin(); it != res.end(); ++it)
+        sourcet.insert(it->first, it->second);
+
+    server_->lru_add(pr);
+    pr->notify_waiting();
+}
+
+void Table::evict_persisted(PersistedRange* pr) {
+    assert(!pr->pending());
+    assert(!pr->evicted());
+
+    uint32_t kept = 0;
+    auto sit = source_ranges_.begin_overlaps(pr->ibegin(), pr->iend());
+    while(sit != source_ranges_.end()) {
+        SourceRange* sr = sit.operator->();
+        ++sit;
+
+        if (!sr->can_evict())
+            sr->invalidate();
+        else
+            ++kept;
+    }
+
+    auto it = lower_bound(pr->ibegin());
+    auto itx = lower_bound(pr->iend());
+    while(it != itx) {
+        it = erase_invalid(it);
+        ++nevict_persistent_;
+    }
+
+    //std::cerr << "evicting persisted range " << pr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
+
+    server_->lru_remove(pr);
+
+    if (!kept) {
+        persisted_ranges_.erase(*pr);
+        delete pr;
+    }
+    else
+        pr->mark_evicted();
+}
+
 tamed void Table::fetch_remote(String first, String last, int32_t owner,
                                tamer::event<> done) {
     assert(!triecut_);
@@ -454,7 +559,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
-    //std::cerr << "fetching remote data: [" << first << ", " << last << std::endl;
+    //std::cerr << "fetching remote data: " << rr->interval() << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
@@ -494,8 +599,8 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
-    //std::cerr << "evicting remote range [" << rr->ibegin() << ", " << rr->iend()
-    //          << "), keeping " << kept << " source ranges in place " << std::endl;
+    //std::cerr << "evicting remote range " << rr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(rr);
 
@@ -512,8 +617,7 @@ void Table::evict_remote(RemoteRange* rr) {
 void Table::evict_sink(SinkRange* sink) {
     assert(!triecut_);
 
-    //std::cerr << "evicting sink range [" << sink->ibegin() << ", "
-    //          << sink->iend() << ")" << std::endl;
+    //std::cerr << "evicting sink range " << sink->interval() << std::endl;
 
     uint64_t before = SinkRange::invalidate_hit_keys;
     sink->invalidate(); // lru removal is handled within
@@ -658,6 +762,7 @@ void Table::add_stats(Json& j) const {
         j["sink_ranges_size"] += jr.valid_ranges_size();
     j["remote_ranges_size"] += remote_ranges_.size();
     j["nvalidate"] += nvalidate_;
+    j["nevict_persistent"] += nevict_persistent_;
     j["nevict_remote"] += nevict_remote_;
     j["nevict_local"] += nevict_local_;
     j["nevict_sink"] += nevict_sink_;
@@ -673,7 +778,7 @@ void Table::add_stats(Json& j) const {
 
 Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
-           sink_ranges_size = 0, remote_ranges_size = 0;
+           sink_ranges_size = 0, remote_ranges_size = 0, persisted_ranges_size = 0;
     struct rusage ru;
     getrusage(RUSAGE_SELF, &ru);
 
@@ -695,6 +800,7 @@ Json Server::stats() const {
         join_ranges_size += t.join_ranges_.size();
         sink_ranges_size += j["sink_ranges_size"].to_i();
         remote_ranges_size += j["remote_ranges_size"].to_i();
+        persisted_ranges_size += j["persisted_ranges_size"].to_i();
     }
 
     Json answer;
