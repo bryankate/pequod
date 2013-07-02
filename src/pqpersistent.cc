@@ -151,6 +151,8 @@ String BerkeleyDBStore::get(Str k){
 }
 
 void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
+    int ret, include_last_element;
+    ret = include_last_element = 0;
     Dbc *db_cursor;
     // start a new cursor
     try{
@@ -172,13 +174,24 @@ void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
     Dbt value = Dbt();
     value.set_flags(DB_DBT_MALLOC);
 
-    db_cursor->get(&end_key, &value, DB_SET_RANGE);
+    ret = db_cursor->get(&end_key, &value, DB_SET_RANGE);
+    if (ret == DB_NOTFOUND) {
+        // if `last' is DB_NOTFOUND, we will shift to the last element in the
+        // database which should also be included in the while below
+        include_last_element = 1;
+        ret = db_cursor->get(&end_key, &value, DB_LAST);
+        if (ret == DB_NOTFOUND)
+            return;
+        assert(ret == 0);
+    }
+
     String end((char*) end_key.get_data(), end_key.get_size());
+
     db_cursor->get(&key, &value, DB_SET_RANGE); //over write the end value since we only care what the key is
 
     String k((char*) key.get_data(), key.get_size());
     String v((char*) value.get_data(), value.get_size());
-    while (k < end) {
+    while (k < end || (k == end && include_last_element--)) {
         results.push_back(PersistentStore::Result(k, v));
         db_cursor->get(&key, &value, DB_NEXT);
         k = String((char*) key.get_data(), key.get_size());
