@@ -29,7 +29,7 @@ void msgpack_fd::write(const Json& j) {
 }
 
 bool msgpack_fd::read_one_message(Json* result_pointer) {
-    assert(!rdblocked_);
+    assert(rdquota_ != 0);
 
  readmore:
     // if buffer empty, read more data
@@ -52,7 +52,7 @@ bool msgpack_fd::read_one_message(Json* result_pointer) {
                 fd_.close();
             else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                 fd_.close(-errno);
-            rdblocked_ = true;
+            rdquota_ = 0;
             rdwake_();          // wake up coroutine [if it's sleeping]
             return false;
         }
@@ -69,9 +69,12 @@ bool msgpack_fd::read_one_message(Json* result_pointer) {
     rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_, rdlen_ - rdpos_,
                                 rdbuf_);
 
-    if (rdparser_.complete())
+    if (rdparser_.complete()) {
+        --rdquota_;
+        if (rdquota_ == 0)
+            rdwake_();          // wake up coroutine [if it's sleeping]
         return true;
-    else
+    } else
         goto readmore;
 }
 
@@ -84,16 +87,19 @@ tamed void msgpack_fd::reader_coroutine() {
     kill = rdkill_ = tamer::make_event(rendez);
 
     while (kill && fd_) {
-        if (rdreqwait_.empty() && rdreplywait_.empty())
-            twait { rdwake_ = make_event(); }
-        else if (rdblocked_) {
+        if (rdquota_ == 0 && rdpos_ != rdlen_)
+            twait { tamer::at_asap(make_event()); }
+        else if (rdquota_ == 0)
             twait { tamer::at_fd_read(fd_.value(), make_event()); }
-            rdblocked_ = false;
-        } else if (read_one_message(0)) {
+        else if (rdreqwait_.empty() && rdreplywait_.empty())
+            twait { rdwake_ = make_event(); }
+
+        rdquota_ = rdbatch;
+        while (rdquota_ && (!rdreqwait_.empty() || !rdreplywait_.empty())
+               && read_one_message(0))
             dispatch(0);
-            if (pace_recovered())
-                pacer_();
-        }
+        if (pace_recovered())
+            pacer_();
     }
 
     for (auto& e : rdreqwait_)
