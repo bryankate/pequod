@@ -74,7 +74,7 @@ for x in exps:
 
         resdir = prepare_experiment(x["name"], e["name"])
         part = options.part if options.part else e['def_part']
-        servercmd = e['servercmd'] + " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
+        serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
 
         print "Running experiment '" + e['name'] + "'."
         system("killall pqserver")
@@ -84,6 +84,7 @@ for x in exps:
         os.makedirs(dbenvpath)
             
         for s in range(nprocesses):
+            servercmd = e['backendcmd'] if s < nbacking else e['cachecmd']
             outfile = os.path.join(resdir, "output_srv_")
             fartfile = os.path.join(resdir, "fart_srv_")
   
@@ -95,7 +96,7 @@ for x in exps:
             else:
                 perf = ""
 
-            full_cmd = pin + perf + servercmd + \
+            full_cmd = pin + perf + servercmd + serverargs + \
                 " -kl=" + str(startport + s) + \
                 " --dbname=pequod_" + str(s) + ".db" \
                 " --envpath=" + dbenvpath + \

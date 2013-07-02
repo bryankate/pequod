@@ -11,14 +11,7 @@ clientCmd = "./obj/pqserver --twitternew --verbose --no-populate %s --duration=1
 exps[0]['defs'].append(
     {'name': "autopush",
      'def_part': "twitternew",
-     'servercmd': serverCmd,
+     'backendcmd': "%s --berkeleydb" % (serverCmd),
+     'cachecmd': serverCmd,
      'populatecmd': populateCmd,
      'clientcmd': "%s" % (clientCmd)})
-
-'''
-exps[0]['defs'].append(
-    {'name': "push",
-     'def_part': "twitternew",
-     'servercmd': serverCmd,
-     'clientcmd': "%s --push" % (clientCmd)})
-'''
