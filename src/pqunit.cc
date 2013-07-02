@@ -1112,8 +1112,8 @@ void test_pqdb() {
 
     String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
     for (int i = 0; i < 10; ++i) {
-        PersistentWrite* rop = new PersistentWrite(keys[i], keys[i]);
-        (*rop)(dbi);
+        PersistentWrite* wop = new PersistentWrite(keys[i], keys[i]);
+        (*wop)(dbi);
     }
 
     PersistentStore::ResultSet res;
@@ -1136,6 +1136,12 @@ void test_pqdb() {
 
     res.clear();
     rop = new PersistentRead("c0", "g", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)3);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("j", "p0", res);
     (*rop)(dbi);
     CHECK_EQ(res.size(), (uint32_t)3);
     delete rop;
