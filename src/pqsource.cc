@@ -149,7 +149,7 @@ void SubscribedRange::invalidate() {
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; ++it) {
         RemoteSink* sink = reinterpret_cast<RemoteSink*>(it->sink);
-        //std::cerr << "sending invalidation of [" << ibegin() << ", " << iend() << ") to " << sink->peer() << std::endl;
+        //std::cerr << "sending invalidation of " << interval() << " to " << sink->peer() << std::endl;
         sink->conn()->invalidate(ibegin(), iend(), tamer::event<>());
     }
     kill();
@@ -179,6 +179,9 @@ void SubscribedRange::notify(const Datum* src, const String&, int notifier) cons
     }
 }
 
+bool SubscribedRange::can_evict() const {
+    return true;
+}
 
 void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {
 #if HAVE_VALUE_SHARING_ENABLED

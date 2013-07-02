@@ -99,6 +99,7 @@ class SubscribedRange : public SourceRange {
     virtual void invalidate();
     virtual bool check_match(Str key) const;
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual bool can_evict() const;
   protected:
     virtual void kill();
     virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
