@@ -57,7 +57,7 @@ class msgpack_fd {
     void check() const;
     bool dispatch(Json* result_pointer);
     inline bool read_until_request(Json* result_pointer);
-    bool read_once(Json* result_pointer);
+    bool read_one_message(Json* result_pointer);
     void write_once();
     inline bool need_pace() const;
     inline bool pace_recovered() const;
@@ -102,11 +102,9 @@ inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
 }
 
 inline bool msgpack_fd::read_until_request(Json* result_pointer) {
-    while ((rdpos_ != rdlen_ || !rdblocked_) && read_once(result_pointer))
+    while (!rdblocked_ && read_one_message(result_pointer))
         if (dispatch(result_pointer))
             return true;
-    if (rdpos_ == rdlen_ && rdblocked_)
-        rdwake_();
     return false;
 }
 

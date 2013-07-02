@@ -28,7 +28,9 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
-bool msgpack_fd::read_once(Json* result_pointer) {
+bool msgpack_fd::read_one_message(Json* result_pointer) {
+    assert(!rdblocked_);
+
  readmore:
     // if buffer empty, read more data
     if (rdpos_ == rdlen_) {
@@ -42,17 +44,18 @@ bool msgpack_fd::read_once(Json* result_pointer) {
         ssize_t amt = ::read(fd_.value(),
                              const_cast<char*>(rdbuf_.data()) + rdpos_,
                              rdcap - rdpos_);
-        rdblocked_ = amt == 0 || amt == (ssize_t) -1;
 
         if (amt != 0 && amt != (ssize_t) -1)
             rdlen_ += amt;
-        else if (amt == 0)
-            fd_.close();
-        else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-            fd_.close(-errno);
-
-        if (rdpos_ == rdlen_)
+        else {
+            if (amt == 0)
+                fd_.close();
+            else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+                fd_.close(-errno);
+            rdblocked_ = true;
+            rdwake_();          // wake up coroutine [if it's sleeping]
             return false;
+        }
     }
 
     // process new data
@@ -86,7 +89,7 @@ tamed void msgpack_fd::reader_coroutine() {
         else if (rdblocked_) {
             twait { tamer::at_fd_read(fd_.value(), make_event()); }
             rdblocked_ = false;
-        } else if (read_once(0)) {
+        } else if (read_one_message(0)) {
             dispatch(0);
             if (pace_recovered())
                 pacer_();
