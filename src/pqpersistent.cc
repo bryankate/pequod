@@ -2,15 +2,8 @@
 
 namespace pq {
 
-inline void ResultSet::add(Str k, Str v) {
-    results_.push_back(std::make_pair(k,v));
-}
-
-inline const std::vector<StringPair>& ResultSet::results() const {
-    return results_;
-}
-
-PersistentRead::PersistentRead(Str first, Str last, ResultSet& rs, tamer::event<> ev)
+PersistentRead::PersistentRead(Str first, Str last,
+                               PersistentStore::ResultSet& rs, tamer::event<> ev)
     : rs_(rs), tev_(ev), first_(first), last_(last) {
 }
 
@@ -159,7 +152,7 @@ String Pqdb::get(Str k){
     return String((char*)val.get_data(), val.get_size());
 }
 
-void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
+void Pqdb::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
     Dbc *db_cursor;
     // start a new cursor
     try{
@@ -188,7 +181,7 @@ void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
     String k((char*) key.get_data(), key.get_size());
     String v((char*) value.get_data(), value.get_size());
     while (k < end) {
-        results.add(k, v);
+        results.push_back(PersistentStore::Result(k, v));
         db_cursor->get(&key, &value, DB_NEXT);
         k = String((char*) key.get_data(), key.get_size());
         v = String((char*) value.get_data(), value.get_size());

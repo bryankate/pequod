@@ -8,18 +8,11 @@
 
 namespace pq {
 
-typedef std::pair<String,String> StringPair;
-
-class ResultSet {
-  public:
-    inline void add(Str k, Str v);
-    inline const std::vector<StringPair>& results() const;
-  private:
-    std::vector<StringPair> results_;
-};
-
 class PersistentStore {
   public:
+    typedef std::pair<String,String> Result;
+    typedef std::vector<Result> ResultSet;
+
     virtual ~PersistentStore() { }
 
     virtual void scan(Str first, Str last, ResultSet& results) = 0;
@@ -35,11 +28,12 @@ class PersistentOp {
 
 class PersistentRead : public PersistentOp {
   public:
-    PersistentRead(Str first, Str last, ResultSet& rs, tamer::event<> ev);
+    PersistentRead(Str first, Str last,
+                   PersistentStore::ResultSet& rs, tamer::event<> ev);
     virtual void operator()(PersistentStore*);
 
   private:
-    ResultSet& rs_;
+    PersistentStore::ResultSet& rs_;
     tamer::event<> tev_;
     String first_;
     String last_;
@@ -86,7 +80,7 @@ class Pqdb : public pq::PersistentStore {
          uint32_t d_flags = Pqdb::db_flags_);
     ~Pqdb();
 
-    virtual void scan(Str, Str, pq::ResultSet&);
+    virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
     void init(uint32_t, uint32_t);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
