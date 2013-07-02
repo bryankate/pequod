@@ -1101,8 +1101,7 @@ bb|<bid> = copy b|<bid> where bid:3"));
 void test_berkeleydb() {
 #if HAVE_DB_CXX_H
     using namespace pq;
-    BerkeleyDBStore *dbi = new BerkeleyDBStore();
-
+    BerkeleyDBStore *dbi = new BerkeleyDBStore("/tmp", "pqunit.db");
     String s1 = "xxx";
     String s2 = "zzz";
 
