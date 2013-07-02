@@ -11,7 +11,7 @@
 #include "pqsource.hh"
 #include "pqsink.hh"
 #include "pqmemory.hh"
-#include "pqdbthread.hh"
+#include "pqpersistent.hh"
 #include "time.hh"
 #include "hosts.hh"
 #include "partitions.hh"
@@ -205,8 +205,8 @@ class Server {
                                     const std::vector<Interconnect*>& interconnect,
                                     const Partitioner* part);
 
-    inline BackendDatabaseThread* persistent_store() const;
-    inline void set_persistent_store(BackendDatabaseThread* store);
+    inline PersistentStoreThread* persistent_store() const;
+    inline void set_persistent_store(PersistentStoreThread* store);
 
     inline void lru_add(Evictable* e);
     inline void lru_remove(Evictable* e);
@@ -221,7 +221,7 @@ class Server {
     void print(std::ostream& stream);
 
   private:
-    mutable BackendDatabaseThread* persistent_store_;
+    mutable PersistentStoreThread* persistent_store_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
     double validate_time_;
@@ -544,11 +544,11 @@ inline Table::iterator Server::end() {
     return supertable_.end();
 }
 
-inline BackendDatabaseThread* Server::persistent_store() const {
+inline PersistentStoreThread* Server::persistent_store() const {
     return persistent_store_;
 }
 
-inline void Server::set_persistent_store(BackendDatabaseThread* store) {
+inline void Server::set_persistent_store(PersistentStoreThread* store) {
     if (persistent_store_)
         delete persistent_store_;
     persistent_store_ = store;

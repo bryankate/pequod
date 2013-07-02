@@ -145,8 +145,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqsink.o \
-	$(OBJDIR)/pqdb.o \
-	$(OBJDIR)/pqdbthread.o \
+	$(OBJDIR)/pqpersistent.o \
 	$(OBJDIR)/pqserver.o \
 	$(OBJDIR)/pqtwitter.o \
 	$(OBJDIR)/pqtwitternew.o \

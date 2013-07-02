@@ -2,8 +2,7 @@
 #include <unistd.h>
 #include <set>
 #include "pqserver.hh"
-#include "pqdb.hh"
-#include "pqdbthread.hh"
+#include "pqpersistent.hh"
 #include "json.hh"
 #include "pqtwitter.hh"
 #include "pqtwitternew.hh"
@@ -316,7 +315,7 @@ int main(int argc, char** argv) {
         else
             mandatory_assert(false && "Unknown DB type.");
 
-        server.set_persistent_store(new pq::BackendDatabaseThread(pstore));
+        server.set_persistent_store(new pq::PersistentStoreThread(pstore));
     }
 
     if (evict_inline && mem_hi_mb) {

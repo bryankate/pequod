@@ -209,9 +209,9 @@ void Table::insert(Str key, String value) {
         d->value().swap(value);
     }
 
-    BackendDatabaseThread* pstore = server_->persistent_store();
+    PersistentStoreThread* pstore = server_->persistent_store();
     if (unlikely(pstore && server_->is_owned_public(server_->owner_for(key))))
-        pstore->enqueue(new WriteOperation(key, value));
+        pstore->enqueue(new PersistentWrite(key, value));
 
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;

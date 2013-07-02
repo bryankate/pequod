@@ -15,7 +15,7 @@
 #include "check.hh"
 #include "redisclient.hh"
 #include "redisfd.hh"
-#include "pqdb.hh"
+#include "pqpersistent.hh"
 
 namespace  {
 

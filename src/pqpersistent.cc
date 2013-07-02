@@ -1,7 +1,104 @@
-#include "pqdb.hh"
-#include "pqdbthread.hh"
+#include "pqpersistent.hh"
+
+namespace pq {
+
+inline void ResultSet::add(Str k, Str v) {
+    results_.push_back(std::make_pair(k,v));
+}
+
+inline const std::vector<StringPair>& ResultSet::results() const {
+    return results_;
+}
+
+PersistentRead::PersistentRead(Str first, Str last, ResultSet& rs, tamer::event<> ev)
+    : rs_(rs), tev_(ev), first_(first), last_(last) {
+}
+
+void PersistentRead::operator()(PersistentStore* ps){
+    ps->scan(first_, last_, rs_);
+    tev_();
+}
+
+PersistentWrite::PersistentWrite(Str key, Str value)
+    : key_(key), value_(value) {
+}
+
+void PersistentWrite::operator()(PersistentStore* ps){
+    ps->put(key_, value_);
+    delete this;
+}
+
+PersistentStoreThread::PersistentStoreThread(PersistentStore* store)
+    : store_(store), worker_(&PersistentStoreThread::run, this), running_(true) {
+}
+
+PersistentStoreThread::~PersistentStoreThread() {
+    boost::mutex::scoped_lock lock(mu_);
+    running_ = false;
+    cond_.notify_all();
+    delete store_;
+}
+
+void PersistentStoreThread::enqueue(PersistentOp* op) {
+    boost::mutex::scoped_lock lock(mu_);
+    pending_.push(op);
+    cond_.notify_one();
+}
+
+void PersistentStoreThread::run() {
+    PersistentOp *op;
+    while(running_) {
+        while (!pending_.empty()){
+            {
+                boost::mutex::scoped_lock lock(mu_);
+                op = pending_.front();
+                (*op)(store_);
+                pending_.pop();
+            } // scope this lock so the writer gets a
+              // chance to write even if there is work left on the queue
+        }
+        boost::mutex::scoped_lock lock(mu_);
+        if (running_)
+            cond_.wait(lock);
+    }
+}
+
+}
+
 
 #if HAVE_DB_CXX_H
+#include <iostream>
+
+Pqdb::Pqdb(std::string eH, std::string dbN, uint32_t e_flags, uint32_t d_flags)
+    : env_home_(eH), db_name_(dbN), pqdb_env_(new DbEnv(0)) {
+    init(e_flags, d_flags);
+}
+
+Pqdb::~Pqdb() {
+    try {
+        if (dbh_ != NULL) {
+            dbh_->close(0);
+        }
+        pqdb_env_->close(0);
+        delete dbh_;
+        delete pqdb_env_;
+    } catch(DbException &e) {
+        std::cerr << "Error closing database environment: "
+                << env_home_
+                << " or database "
+                << db_name_ << std::endl;
+        std::cerr << e.what() << std::endl;
+        exit( -1 );
+    } catch(std::exception &e) {
+        std::cerr << "Error closing database environment: "
+                << env_home_
+                << " or database "
+                << db_name_ << std::endl;
+        std::cerr << e.what() << std::endl;
+        exit( -1 );
+    }
+}
+
 void Pqdb::init(uint32_t env_flags, uint32_t db_flags) {
     try {
         pqdb_env_->open(env_home_.c_str(), env_flags, 0);
@@ -64,8 +161,8 @@ String Pqdb::get(Str k){
 
 void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
     Dbc *db_cursor;
-    // start a new cursor 
-    try{  
+    // start a new cursor
+    try{
         dbh_->cursor(NULL, &db_cursor, Pqdb::cursor_flags_);
     } catch(DbException &e) {
         std::cerr << "Scan Error: opening database cursor failed: "
@@ -78,7 +175,7 @@ void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
                 << db_name_ << std::endl;
         std::cerr << e.what() << std::endl;
     }
-    
+
     Dbt key(first.mutable_data(), first.length());
     Dbt end_key(last.mutable_data(), last.length());
     Dbt value = Dbt();
@@ -99,4 +196,3 @@ void Pqdb::scan(Str first, Str last, pq::ResultSet& results){
 }
 
 #endif
-
