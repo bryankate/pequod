@@ -362,6 +362,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
     }
+    /*
     else if (server_->persistent_store()) {
         Str have = first;
         auto r = t->persisted_ranges_.begin_overlaps(first, last);
@@ -410,6 +411,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             server_->lru_add(pr);
         }
     }
+    */
 
     return std::make_pair(completed, lower_bound(first));
 }
