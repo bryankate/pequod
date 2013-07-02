@@ -1100,39 +1100,46 @@ bb|<bid> = copy b|<bid> where bid:3"));
 
 void test_pqdb() {
 #if HAVE_DB_CXX_H
+    using namespace pq;
     BerkeleyDBStore *dbi = new BerkeleyDBStore();
 
-    Str s1 = "xxx";
-    Str s2 = "zzz";
+    String s1 = "xxx";
+    String s2 = "zzz";
 
     dbi->put(s1, s2);
     String s3 = dbi->get(s1);
-    assert(std::string(s3.mutable_data()) == std::string(s2.mutable_data()));
+    CHECK_EQ(s3, s2);
 
-/*  No more iterator, replace with a scan  
+    String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
+    for (int i = 0; i < 10; ++i) {
+        PersistentWrite* rop = new PersistentWrite(keys[i], keys[i]);
+        (*rop)(dbi);
+    }
 
-    Str strgrp[10] = {"c","d","e","f","g","h","i","j","m","n"};
-    String stringgrp[10] = {"c","d","e","f","g","h","i","j","m","n"};
-    for (int i=0; i < 10; i+=2)
-        dbi->put(strgrp[i], strgrp[i+1]);
-    Pqdb::iterator it0 = dbi->lower_bound("c");
-    Pqdb::iterator it1 = dbi->lower_bound("a");
-    Pqdb::iterator it2 = dbi->lower_bound("j");
-    Pqdb::iterator it3 = dbi->lower_bound("m");
-    int result_count = 0;
-    assert(it0 == it1);
-    for (int i=0; i < 10; i+=2){
-        pq::Datum d = *it0;
-        assert(*(strgrp[i].data()) == *(d.key().data()));
-        assert(*(stringgrp[i+1].data()) == *(d.value().data()));
-        ++it0;
-        ++result_count;
-        if (it0 == it2)
-            break;
-    } 
-    assert(it0 == it3);
-    assert(result_count == 4);
-*/
+    PersistentStore::ResultSet res;
+    PersistentRead* rop = new PersistentRead("b", "p", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)10);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("a", "c", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)0);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("c", "d0", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)2);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("c0", "g", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)3);
+    delete rop;
+
     delete dbi;
 #endif
 }
