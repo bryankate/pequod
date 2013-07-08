@@ -27,10 +27,6 @@ if test -z "$ac_cv_header_evpp_h"; then
     AC_MSG_ERROR([Cannot find <ev++.h>])
 fi
 
-AC_CHECK_HEADERS([postgresql/libpq-fe.h])
-AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [POSTGRES_LIBS=])
-AC_SUBST([POSTGRES_LIBS])
-
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
 
 AC_SEARCH_LIBS([memcached], [memcached], [ac_cv_have_memcached=yes], [ac_cv_have_memcached=no])
@@ -54,6 +50,25 @@ if test "x$with_db_cxx" != "xno"; then
     fi
 fi
 AC_SUBST([DB_CXX_LIB])
+
+AC_ARG_WITH([pqxx],
+    [AS_HELP_STRING([--with-pqxx],
+    [enable postgres backend if available])],
+    [], [with_pqxx=no])
+if test "x$with_pqxx" != "xno"; then
+    AC_CHECK_HEADERS([postgresql/libpq-fe.h])
+    AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [POSTGRES_LIBS=])
+    PKG_CHECK_MODULES([LIBPQXX], [libpqxx >= 5.0], [HAVE_PQXX_HXX=1;PQXX_LIB="-lpqxx"], [])
+fi
+AC_SUBST([POSTGRES_LIBS])
+AC_SUBST([PQXX_LIB])
+
+if test "x$with_pqxx" != "xno"; then
+    if test "x$with_db_cxx" != "xno"; then
+        AC_MSG_ERROR([Cannot compile with multiple databases; choose at most one backend.])
+    fi
+fi
+
 
 dnl Builtins
 
