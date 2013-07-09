@@ -101,31 +101,11 @@ class BerkeleyDBStore : public pq::PersistentStore {
 };
 #endif
 
-#if HAVE_PQXX_NOTIFICATION
 
-//#include "pqxx/binarystring"
+#if HAVE_PQXX_NOTIFICATION
 #include "pqxx/connection"
-//#include "pqxx/cursor"
-//#include "pqxx/errorhandler"
-//#include "pqxx/except"
-//#include "pqxx/field"
-//#include "pqxx/largeobject"
-//#include "pqxx/nontransaction"
-//#include "pqxx/notification"
-//#include "pqxx/notify-listen"
-//#include "pqxx/pipeline"
-//#include "pqxx/prepared_statement"
 #include "pqxx/result"
-//#include "pqxx/robusttransaction"
-//#include "pqxx/subtransaction"
-//#include "pqxx/strconv"
-//#include "pqxx/tablereader"
-//#include "pqxx/tablewriter"
 #include "pqxx/transaction"
-//#include "pqxx/transactor"
-//#include "pqxx/tuple"
-//#include "pqxx/util"
-//#include "pqxx/version"
 
 class PostgreSQLStore : public pq::PersistentStore {
 
@@ -138,6 +118,7 @@ class PostgreSQLStore : public pq::PersistentStore {
     virtual String get(Str);
     virtual void run_monitor(pq::Server& server);
 
+
   private:
     String dbname_;
     String host_;
@@ -145,7 +126,9 @@ class PostgreSQLStore : public pq::PersistentStore {
     pqxx::connection *dbh_;
     tamer::fd monitor_fd_;
 
+    void init();
     String connection_string() const;
+
     tamed void monitor_db(pq::Server& server);
 
 };

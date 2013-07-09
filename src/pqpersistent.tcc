@@ -211,6 +211,7 @@ void BerkeleyDBStore::run_monitor(pq::Server& server) {
 PostgreSQLStore::PostgreSQLStore(String db, String host, uint32_t port)
     : dbname_(db), host_(host), port_(port),
       dbh_(new pqxx::connection(connection_string().c_str())) {
+    init();
 }
 
 PostgreSQLStore::~PostgreSQLStore() {
@@ -218,32 +219,40 @@ PostgreSQLStore::~PostgreSQLStore() {
     monitor_fd_.close();
 }
 
-//void PostgreSQLStore::init(std::string conf) {
-//    try {
-//        env_->open(env_home_.c_str(), env_flags, 0);
-//        dbh_ = new Db(env_, 0);
-//        dbh_->open(NULL,
-//                   db_name_.c_str(),
-//                   NULL,
-//                   DB_BTREE,
-//                   db_flags,
-//                   0);
-//        uint32_t ndropped = 0;
-//        dbh_->truncate(NULL, &ndropped, 0);
-//    } catch(DbException &e) {
-//        std::cerr << "Error opening database or environment: "
-//                  << env_home_ << std::endl
-//                  << db_name_ << std::endl;
-//        std::cerr << e.what() << std::endl;
-//        exit( -1 );
-//    } catch(std::exception &e) {
-//        std::cerr << "Error opening database or environment: "
-//                  << env_home_ << std::endl
-//                  << db_name_ << std::endl;
-//        std::cerr << e.what() << std::endl;
-//        exit( -1 );
-//    }
-//}
+void PostgreSQLStore::init() {
+    try{
+        // start with an empty table, make it empty if needed
+        pqxx::work txn(*dbh_);
+        txn.exec(
+            "DROP TABLE IF EXISTS cache"
+        );
+        txn.exec(
+            "CREATE TABLE cache (key varchar, value varchar)"
+        );
+        // create the notify trigger function
+        txn.exec("CREATE OR REPLACE FUNCTION notify_pequod_listener() "
+            "RETURNS trigger AS "
+            "$BODY$ "
+            "BEGIN "
+            "PERFORM pg_notify('backend_queue', CAST (NEW.key AS text)); "
+            "RETURN NULL; "
+            "END; "
+            "$BODY$ "
+            "LANGUAGE plpgsql VOLATILE "
+            "COST 100"
+        );
+        // drop and create the trigger
+        txn.exec("DROP TRIGGER IF EXISTS notify_cache ON cache");
+        txn.exec("CREATE TRIGGER notify_cache "
+            "AFTER INSERT OR UPDATE ON cache "
+            "FOR EACH ROW "
+            "EXECUTE PROCEDURE notify_pequod_listener()"
+        );
+        txn.commit();
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+    }
+}
 
 int32_t PostgreSQLStore::put(Str key, Str val){
     try{
