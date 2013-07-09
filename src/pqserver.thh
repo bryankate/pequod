@@ -211,7 +211,8 @@ class Server {
                                     const Partitioner* part);
 
     inline PersistentStoreThread* persistent_store() const;
-    inline void set_persistent_store(PersistentStoreThread* store);
+    inline void set_persistent_store(PersistentStoreThread* store, bool writethrough);
+    inline bool writethrough() const;
 
     inline void lru_add(Evictable* e);
     inline void lru_remove(Evictable* e);
@@ -227,6 +228,7 @@ class Server {
 
   private:
     mutable PersistentStoreThread* persistent_store_;
+    bool writethrough_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
     double validate_time_;
@@ -553,10 +555,15 @@ inline PersistentStoreThread* Server::persistent_store() const {
     return persistent_store_;
 }
 
-inline void Server::set_persistent_store(PersistentStoreThread* store) {
+inline void Server::set_persistent_store(PersistentStoreThread* store, bool writethrough) {
     if (persistent_store_)
         delete persistent_store_;
     persistent_store_ = store;
+    writethrough_ = writethrough;
+}
+
+inline bool Server::writethrough() const {
+    return writethrough_;
 }
 
 inline void Server::lru_add(Evictable* e) {

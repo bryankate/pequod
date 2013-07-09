@@ -69,10 +69,11 @@ static Clp_Option options[] = {
     { "dbport", 0, 3017, Clp_ValString, 0 },
     { "berkeleydb", 0, 3018, 0, Clp_Negate },
     { "postgres", 0, 3019, 0, Clp_Negate },
-    { "mem-lo", 0, 3020, Clp_ValInt, 0 },
-    { "mem-hi", 0, 3021, Clp_ValInt, 0 },
-    { "evict-inline", 0, 3022, 0, Clp_Negate },
-    { "evict-periodic", 0, 3023, 0, Clp_Negate },
+    { "monitordb", 0, 3020, 0, Clp_Negate },
+    { "mem-lo", 0, 3021, Clp_ValInt, 0 },
+    { "mem-hi", 0, 3022, Clp_ValInt, 0 },
+    { "evict-inline", 0, 3023, 0, Clp_Negate },
+    { "evict-periodic", 0, 3024, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -133,6 +134,7 @@ int main(int argc, char** argv) {
     String hostfile, partfunc;
     std::string dbname = "pequod", dbenvpath = "db/localEnv", dbhost = "127.0.0.1";
     uint32_t dbport = 5432;
+    bool monitordb = false;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
@@ -219,6 +221,8 @@ int main(int argc, char** argv) {
             db = db_berkeley;
         else if (clp->option->long_name == String("postgres"))
             db = db_postgres;
+        else if (clp->option->long_name == String("monitordb"))
+            monitordb = !clp->negated;
         else if (clp->option->long_name == String("mem-lo"))
             mem_lo_mb = clp->val.i;
         else if (clp->option->long_name == String("mem-hi"))
@@ -333,7 +337,9 @@ int main(int argc, char** argv) {
         else
             mandatory_assert(false && "Unknown DB type.");
 
-        server.set_persistent_store(new pq::PersistentStoreThread(pstore));
+        server.set_persistent_store(new pq::PersistentStoreThread(pstore), !monitordb);
+        if (monitordb)
+            pstore->run_monitor(server);
     }
 
     if (evict_inline && mem_hi_mb) {

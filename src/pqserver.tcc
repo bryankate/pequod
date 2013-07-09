@@ -209,9 +209,9 @@ void Table::insert(Str key, String value) {
         d->value().swap(value);
     }
 
-    PersistentStoreThread* pstore = server_->persistent_store();
-    if (unlikely(pstore && server_->is_owned_public(server_->owner_for(key))))
-        pstore->enqueue(new PersistentWrite(key, value));
+    if (unlikely(server_->writethrough() &&
+                 server_->is_owned_public(server_->owner_for(key))))
+        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
 
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
@@ -684,7 +684,8 @@ void Table::invalidate_remote(Str first, Str last) {
 
 
 Server::Server()
-    : persistent_store_(nullptr), supertable_(Str(), nullptr, this),
+    : persistent_store_(nullptr), writethrough_(false),
+      supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0),
       part_(nullptr), me_(-1),
       prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
