@@ -58,7 +58,8 @@ AC_ARG_WITH([pqxx],
 if test "x$with_pqxx" != "xno"; then
     AC_CHECK_HEADERS([postgresql/libpq-fe.h])
     AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [POSTGRES_LIBS=])
-    PKG_CHECK_MODULES([LIBPQXX], [libpqxx >= 4.0.1], [HAVE_PQXX_HXX=1;PQXX_LIB="-lpqxx"], [])
+    PKG_CHECK_MODULES([LIBPQXX], [libpqxx >= 4.0.1], [PQXX_LIB="-lpqxx"], [])
+    AC_CHECK_HEADERS([pqxx/notification])
 fi
 AC_SUBST([POSTGRES_LIBS])
 AC_SUBST([PQXX_LIB])
