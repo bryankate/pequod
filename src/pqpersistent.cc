@@ -199,4 +199,97 @@ void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
     }
 }
 
+#elif HAVE_PQXX_NOTIFICATION
+#include <iostream>
+
+PostgreSQLStore::PostgreSQLStore(std::string connection_string)
+    : dbh_(new pqxx::connection(connection_string)){
+}
+
+PostgreSQLStore::~PostgreSQLStore() {
+    delete dbh_;
+}
+
+//void PostgreSQLStore::init(std::string conf) {
+//    try {
+//        env_->open(env_home_.c_str(), env_flags, 0);
+//        dbh_ = new Db(env_, 0);
+//        dbh_->open(NULL,
+//                   db_name_.c_str(),
+//                   NULL,
+//                   DB_BTREE,
+//                   db_flags,
+//                   0);
+//        uint32_t ndropped = 0;
+//        dbh_->truncate(NULL, &ndropped, 0);
+//    } catch(DbException &e) {
+//        std::cerr << "Error opening database or environment: "
+//                  << env_home_ << std::endl
+//                  << db_name_ << std::endl;
+//        std::cerr << e.what() << std::endl;
+//        exit( -1 );
+//    } catch(std::exception &e) {
+//        std::cerr << "Error opening database or environment: "
+//                  << env_home_ << std::endl
+//                  << db_name_ << std::endl;
+//        std::cerr << e.what() << std::endl;
+//        exit( -1 );
+//    }
+//}
+
+int32_t PostgreSQLStore::put(Str key, Str val){
+    try{
+        pqxx::work txn(*dbh_);
+        txn.exec(
+            "INSERT INTO cache(key, value) "
+            "VALUES (" +
+            txn.quote(std::string(key.mutable_data(), key.length())) + ", " +
+            txn.quote(std::string(val.mutable_data(), val.length())) +
+            ")"
+        );
+        txn.commit();
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+        return -1;
+    }
+    return 0;
+}
+
+String PostgreSQLStore::get(Str k){
+    try{
+        pqxx::work txn(*dbh_);
+        pqxx::result scan = txn.exec(
+            "SELECT key, value FROM cache "
+            "WHERE key = " +
+            txn.quote(std::string(k.mutable_data(), k.length()))
+        );
+        return String(scan.begin()["value"].as<std::string>());
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+        return nullptr;
+    }
+}
+
+void PostgreSQLStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
+    try{
+        pqxx::work txn(*dbh_);
+        pqxx::result scan = txn.exec(
+            "SELECT key, value FROM cache "
+            "WHERE key >= " +
+            txn.quote(std::string(first.mutable_data(), first.length())) +
+            " AND key < " +
+            txn.quote(std::string(last.mutable_data(), last.length()))
+        );
+
+        for (auto row = scan.begin(); row != scan.end(); ++row) {
+            results.push_back(PersistentStore::Result(
+                String(row["key"].as<std::string>()),
+                String(row["value"].as<std::string>())
+            ));
+        }
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+    }
+}
+
 #endif

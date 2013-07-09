@@ -1,4 +1,3 @@
-#define DO_PERF 0
 #include <boost/random/random_number_generator.hpp>
 #include <sys/resource.h>
 #include <unistd.h>
@@ -1098,10 +1097,14 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
-void test_berkeleydb() {
-#if HAVE_DB_CXX_H
+void test_db() {
     using namespace pq;
+#if HAVE_DB_CXX_H
     BerkeleyDBStore *dbi = new BerkeleyDBStore("/tmp", "pqunit.db");
+#elif HAVE_PQXX_NOTIFICATION
+    PostgreSQLStore *dbi = new PostgreSQLStore();
+#endif
+#if HAVE_DB_CXX_H || HAVE_PQXX_NOTIFICATION
     String s1 = "xxx";
     String s2 = "zzz";
 
@@ -1206,7 +1209,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
-    ADD_TEST(test_berkeleydb);
+    ADD_TEST(test_db);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
