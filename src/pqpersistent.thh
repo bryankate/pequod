@@ -130,7 +130,7 @@ class BerkeleyDBStore : public pq::PersistentStore {
 class PostgreSQLStore : public pq::PersistentStore {
 
   public:
-    PostgreSQLStore(std::string connection_string = "dbname=pequod port=5432 host=127.0.0.1");
+    PostgreSQLStore(String db = "pequod", String host = "127.0.0.1", uint32_t port = 5432);
     ~PostgreSQLStore();
 
     virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
@@ -139,10 +139,15 @@ class PostgreSQLStore : public pq::PersistentStore {
     virtual void run_monitor(pq::Server& server);
 
   private:
+    String dbname_;
+    String host_;
+    uint32_t port_;
     pqxx::connection *dbh_;
     tamer::fd monitor_fd_;
 
+    String connection_string() const;
     tamed void monitor_db(pq::Server& server);
+
 };
 
 #endif

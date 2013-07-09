@@ -328,8 +328,7 @@ int main(int argc, char** argv) {
         }
         else if (db == db_postgres) {
 #if HAVE_PQXX_NOTIFICATION
-            String cs = "dbname=" + dbname + " host=" + dbhost + " port=" + dbport;
-            pstore = new PostgreSQLStore(cs.c_str());
+            pstore = new PostgreSQLStore(dbname, dbhost, dbport);
 #else
             mandatory_assert(false && "Not configured for PostgreSQL.");
 #endif

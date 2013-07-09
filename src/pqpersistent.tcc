@@ -208,8 +208,9 @@ void BerkeleyDBStore::run_monitor(pq::Server& server) {
 #if HAVE_PQXX_NOTIFICATION
 #include <iostream>
 
-PostgreSQLStore::PostgreSQLStore(std::string connection_string)
-    : dbh_(new pqxx::connection(connection_string)){
+PostgreSQLStore::PostgreSQLStore(String db, String host, uint32_t port)
+    : dbname_(db), host_(host), port_(port),
+      dbh_(new pqxx::connection(connection_string().c_str())) {
 }
 
 PostgreSQLStore::~PostgreSQLStore() {
@@ -301,6 +302,10 @@ void PostgreSQLStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
     }
+}
+
+String PostgreSQLStore::connection_string() const {
+    return "dbname=" + dbname_ + " host=" + host_ + " port=" + port_;
 }
 
 void PostgreSQLStore::run_monitor(pq::Server& server) {
