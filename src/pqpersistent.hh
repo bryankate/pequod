@@ -98,29 +98,9 @@ class BerkeleyDBStore : public pq::PersistentStore {
 
 #elif HAVE_PQXX_NOTIFICATION
 
-//#include "pqxx/binarystring"
 #include "pqxx/connection"
-//#include "pqxx/cursor"
-//#include "pqxx/errorhandler"
-//#include "pqxx/except"
-//#include "pqxx/field"
-//#include "pqxx/largeobject"
-//#include "pqxx/nontransaction"
-//#include "pqxx/notification"
-//#include "pqxx/notify-listen"
-//#include "pqxx/pipeline"
-//#include "pqxx/prepared_statement"
 #include "pqxx/result"
-//#include "pqxx/robusttransaction"
-//#include "pqxx/subtransaction"
-//#include "pqxx/strconv"
-//#include "pqxx/tablereader"
-//#include "pqxx/tablewriter"
 #include "pqxx/transaction"
-//#include "pqxx/transactor"
-//#include "pqxx/tuple"
-//#include "pqxx/util"
-//#include "pqxx/version"
 
 class PostgreSQLStore : public pq::PersistentStore {
 
@@ -131,6 +111,7 @@ class PostgreSQLStore : public pq::PersistentStore {
     virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
+    void init();
 
   private:
     pqxx::connection *dbh_;
