@@ -198,8 +198,9 @@ void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
         v = String((char*) value.get_data(), value.get_size());
     }
 }
+#endif
 
-#elif HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_NOTIFICATION
 #include <iostream>
 
 PostgreSQLStore::PostgreSQLStore(std::string connection_string)

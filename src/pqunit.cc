@@ -1097,14 +1097,61 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
-void test_db() {
+void test_berkeleydb() {
     using namespace pq;
 #if HAVE_DB_CXX_H
     BerkeleyDBStore *dbi = new BerkeleyDBStore("/tmp", "pqunit.db");
-#elif HAVE_PQXX_NOTIFICATION
-    PostgreSQLStore *dbi = new PostgreSQLStore();
+    String s1 = "xxx";
+    String s2 = "zzz";
+
+    dbi->put(s1, s2);
+    String s3 = dbi->get(s1);
+    CHECK_EQ(s3, s2);
+
+    String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
+    for (int i = 0; i < 10; ++i) {
+        PersistentWrite* wop = new PersistentWrite(keys[i], keys[i]);
+        (*wop)(dbi);
+    }
+
+    PersistentStore::ResultSet res;
+    PersistentRead* rop = new PersistentRead("b", "p", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)10);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("a", "c", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)0);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("c", "d0", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)2);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("c0", "g", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)3);
+    delete rop;
+
+    res.clear();
+    rop = new PersistentRead("j", "p0", res);
+    (*rop)(dbi);
+    CHECK_EQ(res.size(), (uint32_t)3);
+    delete rop;
+
+    delete dbi;
 #endif
-#if HAVE_DB_CXX_H || HAVE_PQXX_NOTIFICATION
+}
+
+void test_postgres() {
+    using namespace pq;
+#if HAVE_PQXX_NOTIFICATION
+    PostgreSQLStore *dbi = new PostgreSQLStore();
     String s1 = "xxx";
     String s2 = "zzz";
 
@@ -1209,7 +1256,8 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
-    ADD_TEST(test_db);
+    ADD_TEST(test_berkeleydb);
+    ADD_TEST(test_postgres);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);

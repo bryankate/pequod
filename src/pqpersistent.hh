@@ -95,8 +95,9 @@ class BerkeleyDBStore : public pq::PersistentStore {
     DbEnv *env_;
     Db *dbh_;
 };
+#endif
 
-#elif HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_NOTIFICATION
 
 //#include "pqxx/binarystring"
 #include "pqxx/connection"

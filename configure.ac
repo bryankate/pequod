@@ -64,12 +64,6 @@ fi
 AC_SUBST([POSTGRES_LIBS])
 AC_SUBST([PQXX_LIB])
 
-if test "x$with_pqxx" != "xno"; then
-    if test "x$with_db_cxx" != "xno"; then
-        AC_MSG_ERROR([Cannot compile with multiple databases; choose at most one backend.])
-    fi
-fi
-
 
 dnl Builtins
 
