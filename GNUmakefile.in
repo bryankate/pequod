@@ -83,6 +83,8 @@ $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
 $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
+$(OBJDIR)/pqpersistent.cc: $(top_srcdir)/src/pqpersistent.tcc
+$(OBJDIR)/pqpersistent.hh: $(top_srcdir)/src/pqpersistent.thh
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqclient.cc: $(top_srcdir)/src/pqclient.tcc
@@ -108,7 +110,7 @@ $(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
 $(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
 $(OBJDIR)/pqforker.cc: $(top_srcdir)/src/pqforker.tcc
 
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqpersistent.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh

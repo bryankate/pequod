@@ -4,6 +4,7 @@
 #include "string.hh"
 #include "readerwriterqueue.h"
 #include <tamer/tamer.hh>
+#include <tamer/fd.hh>
 #include <boost/thread.hpp>
 #include <atomic>
 
