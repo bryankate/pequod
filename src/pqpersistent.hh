@@ -8,6 +8,7 @@
 #include <atomic>
 
 namespace pq {
+class Server;
 
 class PersistentStore {
   public:
@@ -19,6 +20,7 @@ class PersistentStore {
     virtual void scan(Str first, Str last, ResultSet& results) = 0;
     virtual int32_t put(Str key, Str value) = 0;
     virtual String get(Str key) = 0;
+    virtual void run_monitor(Server& server) = 0;
 };
 
 class PersistentOp {
@@ -86,6 +88,7 @@ class BerkeleyDBStore : public pq::PersistentStore {
     void init(uint32_t, uint32_t);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
+    virtual void run_monitor(pq::Server& server);
 
   private:
     static const uint32_t env_flags_ = DB_CREATE | DB_INIT_MPOOL;
@@ -132,9 +135,13 @@ class PostgreSQLStore : public pq::PersistentStore {
     virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
+    virtual void run_monitor(pq::Server& server);
 
   private:
     pqxx::connection *dbh_;
+    tamer::fd monitor_fd_;
+
+    tamed void monitor_db(pq::Server& server);
 };
 
 #endif

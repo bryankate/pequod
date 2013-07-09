@@ -198,6 +198,11 @@ void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
         v = String((char*) value.get_data(), value.get_size());
     }
 }
+
+void BerkeleyDBStore::run_monitor(pq::Server& server) {
+    mandatory_assert(false && "DB monitoring not supported for BerkeleyDB.");
+}
+
 #endif
 
 #if HAVE_PQXX_NOTIFICATION
@@ -209,6 +214,7 @@ PostgreSQLStore::PostgreSQLStore(std::string connection_string)
 
 PostgreSQLStore::~PostgreSQLStore() {
     delete dbh_;
+    monitor_fd_.close();
 }
 
 //void PostgreSQLStore::init(std::string conf) {
@@ -295,6 +301,18 @@ void PostgreSQLStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
     }
+}
+
+void PostgreSQLStore::run_monitor(pq::Server& server) {
+    monitor_db(server);
+}
+
+tamed void PostgreSQLStore::monitor_db(pq::Server& server) {
+
+    // connect with tamer
+    // make triggers
+    // add listener
+    // process changes
 }
 
 #endif
