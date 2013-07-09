@@ -98,8 +98,8 @@ for x in exps:
 
             full_cmd = pin + perf + servercmd + serverargs + \
                 " -kl=" + str(startport + s) + \
-                " --dbname=pequod_" + str(s) + ".db" \
-                " --envpath=" + dbenvpath + \
+                " --dbname=pequod_" + str(s) + \
+                " --dbenvpath=" + dbenvpath + \
                 " > " + outfile + str(s) + ".txt" + \
                 " 2> " + fartfile + str(s) + ".txt &"
 

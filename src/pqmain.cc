@@ -64,12 +64,15 @@ static Clp_Option options[] = {
     { "populate", 0, 3012, 0, Clp_Negate },
     { "execute", 0, 3013, 0, Clp_Negate },
     { "dbname", 0, 3014, Clp_ValString, 0 },
-    { "envpath", 0, 3015, Clp_ValString, 0 },
-    { "berkeleydb", 0, 3016, 0, Clp_Negate },
-    { "mem-lo", 0, 3017, Clp_ValInt, 0 },
-    { "mem-hi", 0, 3018, Clp_ValInt, 0 },
-    { "evict-inline", 0, 3019, 0, Clp_Negate },
-    { "evict-periodic", 0, 3020, 0, Clp_Negate },
+    { "dbenvpath", 0, 3015, Clp_ValString, 0 },
+    { "dbhost", 0, 3016, Clp_ValString, 0 },
+    { "dbport", 0, 3017, Clp_ValString, 0 },
+    { "berkeleydb", 0, 3018, 0, Clp_Negate },
+    { "postgres", 0, 3019, 0, Clp_Negate },
+    { "mem-lo", 0, 3020, Clp_ValInt, 0 },
+    { "mem-hi", 0, 3021, Clp_ValInt, 0 },
+    { "evict-inline", 0, 3022, 0, Clp_Negate },
+    { "evict-periodic", 0, 3023, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -116,7 +119,7 @@ static Clp_Option options[] = {
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
-enum { db_unknown, db_berkeley };
+enum { db_unknown, db_berkeley, db_postgres };
 
 static char envstr[] = "TAMER_NOLIBEVENT=1";
 
@@ -128,7 +131,8 @@ int main(int argc, char** argv) {
     int listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
     String hostfile, partfunc;
-    std::string dbname = "pequod.db", envpath = "db/localEnv";
+    std::string dbname = "pequod", dbenvpath = "db/localEnv", dbhost = "127.0.0.1";
+    uint32_t dbport = 5432;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
@@ -205,10 +209,16 @@ int main(int argc, char** argv) {
             tp_param.set("execute", !clp->negated);
         else if (clp->option->long_name == String("dbname"))
             dbname = clp->val.s;
-        else if (clp->option->long_name == String("envpath"))
-            envpath = clp->val.s;
+        else if (clp->option->long_name == String("dbenvpath"))
+            dbenvpath = clp->val.s;
+        else if (clp->option->long_name == String("dbhost"))
+            dbhost = clp->val.s;
+        else if (clp->option->long_name == String("dbport"))
+            dbport = clp->val.i;
         else if (clp->option->long_name == String("berkeleydb"))
             db = db_berkeley;
+        else if (clp->option->long_name == String("postgres"))
+            db = db_postgres;
         else if (clp->option->long_name == String("mem-lo"))
             mem_lo_mb = clp->val.i;
         else if (clp->option->long_name == String("mem-hi"))
@@ -307,9 +317,17 @@ int main(int argc, char** argv) {
         pq::PersistentStore* pstore = nullptr;
         if (db == db_berkeley) {
 #if HAVE_DB_CXX_H
-            pstore = new BerkeleyDBStore(envpath, dbname);
+            pstore = new BerkeleyDBStore(dbenvpath, dbname + ".db");
 #else
             mandatory_assert(false && "Not configured for BerkeleyDB.");
+#endif
+        }
+        else if (db == db_postgres) {
+#if HAVE_PQXX_NOTIFICATION
+            String cs = "dbname=" + dbname + " host=" + dbhost + " port=" + dbport;
+            pstore = new PostgreSQLStore(cs.c_str());
+#else
+            mandatory_assert(false && "Not configured for PostgreSQL.");
 #endif
         }
         else
