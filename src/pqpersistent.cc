@@ -240,12 +240,16 @@ PostgreSQLStore::~PostgreSQLStore() {
 int32_t PostgreSQLStore::put(Str key, Str val){
     try{
         pqxx::work txn(*dbh_);
+        auto k = txn.quote(std::string(key.mutable_data(), key.length()));
+        auto v = txn.quote(std::string(val.mutable_data(), val.length()));
         txn.exec(
-            "INSERT INTO cache(key, value) "
-            "VALUES (" +
-            txn.quote(std::string(key.mutable_data(), key.length())) + ", " +
-            txn.quote(std::string(val.mutable_data(), val.length())) +
-            ")"
+            "WITH upsert AS " 
+            "(UPDATE cache SET value=" + v +
+            " WHERE key=" + k +
+            " RETURNING cache.* ) " 
+            "INSERT INTO cache " 
+            "SELECT * FROM (SELECT " + k + " k, " + v + " v) AS tmp_table " 
+            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)"
         );
         txn.commit();
     } catch (const std::exception &e){
