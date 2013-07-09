@@ -1151,7 +1151,8 @@ void test_berkeleydb() {
 void test_postgres() {
     using namespace pq;
 #if HAVE_PQXX_NOTIFICATION
-    PostgreSQLStore *dbi = new PostgreSQLStore();
+    // this will fail if postgres is not running or the pqunit db does not exist
+    PostgreSQLStore *dbi = new PostgreSQLStore("dbname=pqunit host=127.0.0.1 port=5432");
     String s1 = "xxx";
     String s2 = "zzz";
 
@@ -1257,7 +1258,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_celebrity);
     ADD_TEST(test_berkeleydb);
-    ADD_TEST(test_postgres);
+    ADD_EXP_TEST(test_postgres);
     ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
