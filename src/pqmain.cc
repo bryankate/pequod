@@ -328,7 +328,7 @@ int main(int argc, char** argv) {
         }
         else if (db == db_postgres) {
 #if HAVE_PQXX_NOTIFICATION
-            pstore = new PostgreSQLStore(dbname, dbhost, dbport);
+            pstore = new PostgresStore(dbname, dbhost, dbport);
 #else
             mandatory_assert(false && "Not configured for PostgreSQL.");
 #endif

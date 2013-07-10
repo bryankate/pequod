@@ -1152,7 +1152,7 @@ void test_postgres() {
     using namespace pq;
 #if HAVE_PQXX_NOTIFICATION
     // this will fail if postgres is not running or the pqunit db does not exist
-    PostgreSQLStore *dbi = new PostgreSQLStore("dbname=pqunit host=127.0.0.1 port=5432");
+    PostgresStore *dbi = new PostgresStore("pqunit", "127.0.0.1", 5432);
     String s1 = "xxx";
     String s2 = "zzz";
 
