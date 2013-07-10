@@ -3,8 +3,9 @@
 
 namespace pq {
 
-MultiClient::MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer)
-    : hosts_(hosts), part_(part), localNode_(nullptr),
+MultiClient::MultiClient(const Hosts* hosts, const Hosts* dbhosts,
+                         const Partitioner* part, int colocateCacheServer)
+    : hosts_(hosts), dbhosts_(dbhosts), part_(part), localNode_(nullptr),
       colocateCacheServer_(colocateCacheServer) {
 }
 
@@ -47,6 +48,16 @@ tamed void MultiClient::connect(tamer::event<> done) {
             localNode_ = clients_[colocateCacheServer_];
         }
     }
+
+#if HAVE_PQXX_NOTIFICATION
+    if (dbhosts_ && part_) {
+        for (i = 0; i < dbhosts_->size(); ++i) {
+            h = dbhosts_->get_by_seqid(i);
+            String cs = "dbname=pequod host=" + h->name() + " port=" + String(h->port());
+            dbclients_.push_back(new pqxx::connection(cs.c_str()));
+        }
+    }
+#endif
 
     done();
 }
@@ -94,6 +105,44 @@ tamed void MultiClient::insert(const String& key, const String& value, event<> e
 
 tamed void MultiClient::erase(const String& key, event<> e) {
     cache_for(key)->erase(key, e);
+}
+
+tamed void MultiClient::insert_db(const String& key, const String& value, event<> e) {
+    mandatory_assert(dbhosts_ && part_);
+
+#if HAVE_PQXX_NOTIFICATION
+    tvars {
+        pqxx::connection* conn = this->backend_for(key);
+    }
+
+    twait {
+        tamer::event<> done = make_event();
+
+        done();
+    }
+#else
+    mandatory_assert("Backend database not configured.");
+#endif
+    e();
+}
+
+tamed void MultiClient::erase_db(const String& key, event<> e) {
+    mandatory_assert(dbhosts_ && part_);
+
+#if HAVE_PQXX_NOTIFICATION
+    tvars {
+        pqxx::connection* conn = this->backend_for(key);
+    }
+
+    twait {
+        tamer::event<> done = make_event();
+
+        done();
+    }
+#else
+    mandatory_assert("Backend database not configured.");
+#endif
+    e();
 }
 
 tamed void MultiClient::count(const String& first, const String& last,

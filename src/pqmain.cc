@@ -45,8 +45,10 @@ static Clp_Option options[] = {
     { "listen", 'l', 2001, Clp_ValInt, Clp_Optional },
     { "kill", 'k', 2002, 0, Clp_Negate },
     { "hostfile", 'H', 2003, Clp_ValStringNotOption, 0 },
-    { "partfunc", 'P', 2004, Clp_ValStringNotOption, 0 },
-    { "nbacking", 'B', 2005, Clp_ValInt, 0 },
+    { "dbhostfile", 0, 2004, Clp_ValStringNotOption, 0 },
+    { "partfunc", 'P', 2005, Clp_ValStringNotOption, 0 },
+    { "nbacking", 'B', 2006, Clp_ValInt, 0 },
+    { "writearound", 0, 2007, 0, Clp_Negate },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -131,7 +133,7 @@ int main(int argc, char** argv) {
     int mode = mode_unknown, db = db_unknown;
     int listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
-    String hostfile, partfunc;
+    String hostfile, dbhostfile, partfunc;
     std::string dbname = "pequod", dbenvpath = "db/localEnv", dbhost = "127.0.0.1";
     uint32_t dbport = 5432;
     bool monitordb = false;
@@ -175,10 +177,14 @@ int main(int argc, char** argv) {
             kill_old_server = !clp->negated;
         else if (clp->option->long_name == String("hostfile"))
              hostfile = clp->val.s;
+        else if (clp->option->long_name == String("dbhostfile"))
+             dbhostfile = clp->val.s;
         else if (clp->option->long_name == String("partfunc"))
              partfunc = clp->val.s;
         else if (clp->option->long_name == String("nbacking"))
             nbacking = clp->val.i;
+        else if (clp->option->long_name == String("writearound"))
+            tp_param.set("writearound", !clp->negated);
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -315,6 +321,7 @@ int main(int argc, char** argv) {
 
     pq::Server server;
     const pq::Hosts* hosts = nullptr;
+    const pq::Hosts* dbhosts = nullptr;
     const pq::Partitioner* part = nullptr;
 
     if (db != db_unknown) {
@@ -348,6 +355,8 @@ int main(int argc, char** argv) {
 
     if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);
+    if (dbhostfile)
+        dbhosts = pq::Hosts::get_instance(dbhostfile);
 
     if (mode == mode_tests || !testcases.empty()) {
         extern void unit_tests(const std::set<String> &);
@@ -398,10 +407,12 @@ int main(int argc, char** argv) {
         } else if (client_port >= 0 || hosts) {
             if (hosts)
                 part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
-            run_twitter_remote(tp, client_port, hosts, part);
+            if (tp_param.get("writearound").as_b(false))
+                mandatory_assert(dbhosts && part);
+            run_twitter_remote(tp, client_port, hosts, dbhosts, part);
         } else {
             pq::DirectClient dc(server);
-            pq::TwitterShim<pq::DirectClient> shim(dc);
+            pq::TwitterShim<pq::DirectClient> shim(dc, tp.writearound());
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
@@ -415,7 +426,9 @@ int main(int argc, char** argv) {
             if (hosts)
                 part = pq::Partitioner::make((tp->binary()) ? "twitternew" : "twitternew-text",
                                              nbacking, hosts->count(), -1);
-            run_twitter_new_remote(*tp, client_port, hosts, part);
+            if (tp_param.get("writearound").as_b(false))
+                mandatory_assert(dbhosts && part);
+            run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
         }
         else {
             pq::DirectClient client(server);
@@ -462,11 +475,13 @@ int main(int argc, char** argv) {
 	    if (client_port >= 0 || hosts) {
 	        if (hosts)
 	            part = pq::Partitioner::make("hackernews", nbacking, hosts->count(), -1);
-	        run_hn_remote(*hp, client_port, hosts, part);
+	        if (tp_param.get("writearound").as_b(false))
+	            mandatory_assert(dbhosts && part);
+	        run_hn_remote(*hp, client_port, hosts, dbhosts, part);
 	    }
 	    else {
 	        pq::DirectClient dc(server);
-	        pq::PQHackerNewsShim<pq::DirectClient> shim(dc);
+	        pq::PQHackerNewsShim<pq::DirectClient> shim(dc, hp->writearound());
 	        pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
 	        hr.populate(tamer::event<>());
 	        hr.run(tamer::event<>());
@@ -499,7 +514,7 @@ int main(int argc, char** argv) {
             pq::run_rwmicro_pqremote(tp_param, client_port);
         else {
             pq::DirectClient client(server);
-            pq::TwitterShim<pq::DirectClient> shim(client);
+            pq::TwitterShim<pq::DirectClient> shim(client, tp_param["writearound"].as_b(false));
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
             rw.safe_run();
         }

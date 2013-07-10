@@ -17,6 +17,7 @@ TwitterPopulator::TwitterPopulator(const Json& param)
     : nusers_(param["nusers"].as_i(5000)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
+      writearound_(param["writearound"].as_b(false)),
       log_(param["log"].as_b(false)),
       full_scan_(param["full_scan"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
@@ -138,10 +139,11 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
 }
 
 tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
-                              const Hosts* hosts, const Partitioner* part) {
+                              const Hosts* hosts, const Hosts* dbhosts,
+                              const Partitioner* part) {
     tvars {
-        MultiClient* mc = new MultiClient(hosts, part, client_port);
-        TwitterShim<MultiClient>* shim = new TwitterShim<MultiClient>(*mc);
+        MultiClient* mc = new MultiClient(hosts, dbhosts, part, client_port);
+        TwitterShim<MultiClient>* shim = new TwitterShim<MultiClient>(*mc, tp.writearound());
         TwitterRunner<TwitterShim<MultiClient>>* tr = new TwitterRunner<TwitterShim<MultiClient> >(*shim, tp);
     }
     twait { mc->connect(make_event()); }

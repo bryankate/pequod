@@ -50,6 +50,19 @@ tamed void RemoteClient::erase(const String& key, event<> e) {
     e();
 }
 
+tamed void RemoteClient::insert_db(const String& key, const String& value, event<> e) {
+    (void)key;
+    (void)value;
+    (void)e;
+    mandatory_assert(false && "Not supported.");
+}
+
+tamed void RemoteClient::erase_db(const String& key, event<> e) {
+    (void)key;
+    (void)e;
+    mandatory_assert(false && "Not supported.");
+}
+
 tamed void RemoteClient::count(const String& first, const String& last,
                                event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }

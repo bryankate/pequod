@@ -120,7 +120,9 @@ inline void HashHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
 template <typename S>
 class PQHackerNewsShim {
   public:
-    PQHackerNewsShim(S& server) : server_(server) { }
+    PQHackerNewsShim(S& server, bool writearound)
+        : writearound_(writearound), server_(server) {
+    }
 
     tamed void initialize(bool log, bool mk, bool ma, bool push, tamer::event<> e);
     tamed void post_populate(event<> e);
@@ -131,7 +133,10 @@ class PQHackerNewsShim {
         sprintf(buf, "c|%07d%07d|%07d|%07d", author, aid, cid, commentor);
         if (log_)
             printf("comment  %.32s\n", buf);
-        server_.insert(Str(buf, 32), v, e);
+        if (writearound_)
+            server_.insert_db(Str(buf, 32), v, e);
+        else
+            server_.insert(Str(buf, 32), v, e);
     }
 
     tamed void post_article(uint32_t author, uint32_t aid, const String &v, karmas_type& check_karmas, event<> e);
@@ -163,6 +168,7 @@ class PQHackerNewsShim {
     bool mk_;
     bool ma_;
     bool push_;
+    bool writearound_;
     S& server_;
     char buf1_[128];
     char buf2_[128];
@@ -372,12 +378,19 @@ void PQHackerNewsShim<S>::post_article(uint32_t author, uint32_t aid, const Stri
     sprintf(buf1_, "a|%07d%07d", author, aid);
     if (log_)
         printf("post %.16s\n", buf1_);
-    twait { server_.insert(Str(buf1_, 16), v, e); }
+    if (writearound_)
+        twait { server_.insert_db(Str(buf1_, 16), v, e); }
+    else
+        twait { server_.insert(Str(buf1_, 16), v, e); }
 
     sprintf(buf1_, "v|%07d%07d|%07d", author, aid, author);
     if (log_)
         printf("vote %.24s\n", buf1_);
-    twait { server_.insert(Str(buf1_, 24), Str("1", 1), e); }
+    if (writearound_)
+        twait { server_.insert_db(Str(buf1_, 24), Str("1", 1), e); }
+    else
+        twait { server_.insert(Str(buf1_, 24), Str("1", 1), e); }
+
     if (push_) {
         sprintf(buf1_, "k|%07d", author);
         // XXX: check_karmas is empty if we are in run_only mode!
@@ -395,7 +408,11 @@ void PQHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid,
     sprintf(buf1_, "v|%07d%07d|%07d", author, aid, voter);
     if (log_)
         printf("vote %.24s\n", buf1_);
-    twait { server_.insert(Str(buf1_, 24), Str("", 0), make_event()); }
+    if (writearound_)
+        twait { server_.insert_db(Str(buf1_, 24), Str("", 0), make_event()); }
+    else
+        twait { server_.insert(Str(buf1_, 24), Str("", 0), make_event()); }
+
     if (push_) {
         sprintf(buf1_, "k|%07d", author);
         // XXX: check_karmas is empty if we are in run_only mode!

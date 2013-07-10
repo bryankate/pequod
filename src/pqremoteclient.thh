@@ -21,6 +21,9 @@ class RemoteClient {
     tamed void insert(const String& key, const String& value, event<> e);
     tamed void erase(const String& key, event<> e);
 
+    tamed void insert_db(const String& key, const String& value, event<> e);
+    tamed void erase_db(const String& key, event<> e);
+
     tamed void count(const String& first, const String& last,
                      event<size_t> e);
     tamed void add_count(const String& first, const String& last,

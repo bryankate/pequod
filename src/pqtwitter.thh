@@ -31,6 +31,7 @@ class TwitterPopulator {
     inline uint32_t psubscribe() const;
     inline bool push() const;
     inline bool pull() const;
+    inline bool writearound() const;
     inline bool log() const;
     inline bool full_scan() const;
     inline bool synchronous() const;
@@ -51,6 +52,7 @@ class TwitterPopulator {
     uint32_t nusers_;
     bool push_;
     bool pull_;
+    bool writearound_;
     bool log_;
     bool full_scan_;
     bool synchronous_;
@@ -78,7 +80,7 @@ class TwitterPopulator {
 template <typename S>
 class TwitterShim {
   public:
-    TwitterShim(S& server);
+    TwitterShim(S& server, bool writearound);
 
     tamed inline void get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e);
     template <typename R>
@@ -113,14 +115,15 @@ class TwitterShim {
 
   private:
     S& server_;
+    bool writearound_;
     char buf_[key_capacity];
     String value_;
     std::vector<bool> celeb_;
 };
 
 template <typename S>
-TwitterShim<S>::TwitterShim(S& server)
-    : server_(server) {
+TwitterShim<S>::TwitterShim(S& server, bool writearound)
+    : server_(server), writearound_(writearound) {
 }
 
 tamed template <typename S>
@@ -140,7 +143,10 @@ inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::vect
 template <typename S> template <typename R>
 inline void TwitterShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "f|%05u|%05u", poster, subscriber);
-    server_.insert(Str(buf_, 13), Str("1", 1), done);
+    if (writearound_)
+        server_.insert_db(Str(buf_, 13), Str("1", 1), done);
+    else
+        server_.insert(Str(buf_, 13), Str("1", 1), done);
 }
 
 tamed template <typename S>
@@ -231,21 +237,30 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
 template <typename S> template <typename R>
 inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "s|%05u|%05u", subscriber, poster);
-    server_.insert(Str(buf_, 13), Str("1", 1), done);
+    if (writearound_)
+        server_.insert_db(Str(buf_, 13), Str("1", 1), done);
+    else
+        server_.insert(Str(buf_, 13), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
     celeb_[poster] = true;
     sprintf(buf_, "c|%05u", poster);
-    server_.insert(Str(buf_, 7), Str("1", 1), done);
+    if (writearound_)
+        server_.insert_db(Str(buf_, 7), Str("1", 1), done);
+    else
+        server_.insert(Str(buf_, 7), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
     bool nonceleb = celeb_.empty() || !celeb_[poster];
     sprintf(buf_, "cp|%05u|%010u", poster, time);
-    server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
+    if (writearound_)
+        server_.insert_db(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
+    else
+        server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
 }
 
 template <typename S>
@@ -345,6 +360,10 @@ inline bool TwitterPopulator::push() const {
 
 inline bool TwitterPopulator::pull() const {
     return pull_;
+}
+
+inline bool TwitterPopulator::writearound() const {
+    return writearound_;
 }
 
 inline bool TwitterPopulator::log() const {
@@ -577,7 +596,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
 }
 
 tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
-                              const Hosts* hosts, const Partitioner* part);
+                              const Hosts* hosts, const Hosts* dbhosts,
+                              const Partitioner* part);
 
 } // namespace pq
 #endif

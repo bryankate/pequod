@@ -20,6 +20,9 @@ class DirectClient {
     inline void insert(const String& key, const String& value, tamer::event<> e);
     inline void erase(const String& key, tamer::event<> e);
 
+    inline void insert_db(const String& key, const String& value, tamer::event<> e);
+    inline void erase_db(const String& key, tamer::event<> e);
+
     tamed void count(const String& first, const String& last,
                      tamer::event<size_t> e);
     tamed void add_count(const String& first, const String& last,
@@ -56,6 +59,11 @@ class DirectClient {
     inline void insert(const String& key, const String& value, preevent<R> e);
     template <typename R>
     inline void erase(const String& key, preevent<R> e);
+
+    template <typename R>
+    inline void insert_db(const String& key, const String& value, preevent<R> e);
+    template <typename R>
+    inline void erase_db(const String& key, preevent<R> e);
 
     template <typename R>
     inline void count(const String& first, const String& last,
@@ -109,6 +117,14 @@ inline void DirectClient::insert(const String& key, const String& value,
 inline void DirectClient::erase(const String& key, event<> e) {
     server_.erase(key);
     e();
+}
+
+inline void DirectClient::insert_db(const String&, const String&, event<>) {
+    mandatory_assert(false && "Not supported.");
+}
+
+inline void DirectClient::erase_db(const String&, event<>) {
+    mandatory_assert(false && "Not supported.");
 }
 
 inline DirectClient::scan_result::scan_result(iterator first, iterator last)
@@ -165,6 +181,16 @@ template <typename R>
 inline void DirectClient::erase(const String& key, preevent<R> e) {
     server_.erase(key);
     e();
+}
+
+template <typename R>
+inline void DirectClient::insert_db(const String&, const String&, preevent<R>) {
+    mandatory_assert(false && "Not supported.");
+}
+
+template <typename R>
+inline void DirectClient::erase_db(const String&, preevent<R>) {
+    mandatory_assert(false && "Not supported.");
 }
 
 template <typename R>

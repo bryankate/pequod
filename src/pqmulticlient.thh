@@ -8,13 +8,17 @@
 #include <vector>
 #include <iostream>
 #include <tamer/tamer.hh>
+#if HAVE_PQXX_NOTIFICATION
+#include "pqxx/pqxx"
+#endif
 
 namespace pq {
 
+// todo: make DB client templated
 class MultiClient {
   public:
-    MultiClient(const Hosts* hosts, const Partitioner* part,
-               int colocateCacheServer);
+    MultiClient(const Hosts* hosts, const Hosts* dbhosts,
+                const Partitioner* part, int colocateCacheServer);
     ~MultiClient();
 
     tamed void connect(tamer::event<> done);
@@ -31,6 +35,9 @@ class MultiClient {
     tamed void insert(const String& key, const String& value, event<> e);
     tamed void erase(const String& key, event<> e);
 
+    tamed void insert_db(const String& key, const String& value, event<> e);
+    tamed void erase_db(const String& key, event<> e);
+
     tamed void count(const String& first, const String& last,
                      event<size_t> e);
     tamed void add_count(const String& first, const String& last,
@@ -44,14 +51,20 @@ class MultiClient {
     tamed void pace(tamer::event<> done);
 
   private:
-    inline RemoteClient* backend_for(const String &key) const;
     inline RemoteClient* cache_for(const String &key) const;
+#if HAVE_PQXX_NOTIFICATION
+    inline pqxx::connection* backend_for(const String &key) const;
+#endif
 
     const Hosts* hosts_;
+    const Hosts* dbhosts_;
     const Partitioner* part_;
-    std::vector<RemoteClient* > clients_;
+    std::vector<RemoteClient*> clients_;
     RemoteClient* localNode_;
     int colocateCacheServer_;
+#if HAVE_PQXX_NOTIFICATION
+    std::vector<pqxx::connection*> dbclients_;
+#endif
 };
 
 inline void MultiClient::clear() {
@@ -59,13 +72,21 @@ inline void MultiClient::clear() {
         delete c;
     clients_.clear();
     localNode_ = nullptr;
+
+#if HAVE_PQXX_NOTIFICATION
+    for (auto &c : dbclients_)
+        delete c;
+    dbclients_.clear();
+#endif
 }
 
-inline RemoteClient* MultiClient::backend_for(const String &key) const {
+#if HAVE_PQXX_NOTIFICATION
+inline pqxx::connection* MultiClient::backend_for(const String &key) const {
     int32_t owner = part_->owner(key);
-    assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
-    return clients_[owner];
+    assert(owner >= 0 && owner < (int32_t)dbclients_.size() && "Make sure the partition function is correct.");
+    return dbclients_[owner];
 }
+#endif
 
 inline RemoteClient* MultiClient::cache_for(const String &key) const {
     if (colocateCacheServer_ >= 0)

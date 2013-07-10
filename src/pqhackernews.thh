@@ -245,7 +245,8 @@ void HackernewsRunner<S>::run(event<> e) {
 }
 
 tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
-                         const Hosts* hosts, const Partitioner* part);
+                         const Hosts* hosts, const Hosts* dbhosts,
+                         const Partitioner* part);
 tamed void run_hn_remote_redis(HackernewsPopulator& hp);
 
 };

@@ -86,6 +86,7 @@ class TwitterNewPopulator {
     inline bool pull() const { return pull_; }
     inline bool pull_celeb() const { return celebthresh_; }
     inline bool fetch() const { return fetch_; }
+    inline bool writearound() const { return writearound_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
@@ -121,6 +122,7 @@ class TwitterNewPopulator {
     bool push_;
     bool pull_;
     bool fetch_;
+    bool writearound_;
     bool log_;
     bool synchronous_;
     bool visualize_;
@@ -278,11 +280,17 @@ inline void TwitterNewShim<S>::subscribe(uint32_t subscriber, uint32_t poster, t
         memcpy(buf_, "s|XXXX|XXXX", 11);
         write_in_net_order(buf_ + 2, subscriber);
         write_in_net_order(buf_ + 7, poster);
-        server_.insert(Str(buf_, 11), Str("1", 1), done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_, 11), Str("1", 1), done);
+        else
+            server_.insert(Str(buf_, 11), Str("1", 1), done);
     }
     else {
         sprintf(buf_, "s|%08u|%08u", subscriber, poster);
-        server_.insert(Str(buf_, 19), Str("1", 1), done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_, 19), Str("1", 1), done);
+        else
+            server_.insert(Str(buf_, 19), Str("1", 1), done);
     }
 }
 
@@ -291,11 +299,17 @@ inline void TwitterNewShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R
     if (tp_.binary()) {
         memcpy(buf_, "c|XXXX", 6);
         write_in_net_order(buf_ + 2, poster);
-        server_.insert(Str(buf_, 6), Str("1", 1), done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_, 6), Str("1", 1), done);
+        else
+            server_.insert(Str(buf_, 6), Str("1", 1), done);
     }
     else {
         sprintf(buf_, "c|%08u", poster);
-        server_.insert(Str(buf_, 10), Str("1", 1), done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_, 10), Str("1", 1), done);
+        else
+            server_.insert(Str(buf_, 10), Str("1", 1), done);
     }
 }
 
@@ -306,11 +320,17 @@ inline void TwitterNewShim<S>::post(uint32_t poster, uint32_t time, const String
         memcpy(buf_, "cp|XXXX|XXXX", 11);
         write_in_net_order(buf_ + 3, poster);
         write_in_net_order(buf_ + 8, time);
-        server_.insert(Str(buf_ + !celeb, 11 + celeb), value, done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_ + !celeb, 11 + celeb), value, done);
+        else
+            server_.insert(Str(buf_ + !celeb, 11 + celeb), value, done);
     }
     else {
         sprintf(buf_, "cp|%08u|%010u", poster, time);
-        server_.insert(Str(buf_ + !celeb, 21 + celeb), value, done);
+        if (tp_.writearound())
+            server_.insert_db(Str(buf_ + !celeb, 21 + celeb), value, done);
+        else
+            server_.insert(Str(buf_ + !celeb, 21 + celeb), value, done);
     }
 }
 
@@ -857,7 +877,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 }
 
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
-                                  const Hosts* hosts, const Partitioner* part);
+                                  const Hosts* hosts, const Hosts* dbhosts,
+                                  const Partitioner* part);
 
 } // namespace pq
 #endif

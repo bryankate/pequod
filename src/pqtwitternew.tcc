@@ -74,6 +74,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
       fetch_(param["fetch"].as_b(false)),
+      writearound_(param["writearound"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
@@ -278,9 +279,10 @@ void TwitterNewPopulator::print_subscription_statistics(ostream& stream) {
 }
 
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
-                                  const Hosts* hosts, const Partitioner* part) {
+                                  const Hosts* hosts, const Hosts* dbhosts,
+                                  const Partitioner* part) {
     tvars {
-        MultiClient* mc = new MultiClient(hosts, part, client_port);
+        MultiClient* mc = new MultiClient(hosts, dbhosts, part, client_port);
         TwitterNewShim<MultiClient>* shim = new TwitterNewShim<MultiClient>(*mc, tp);
         TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
     }
