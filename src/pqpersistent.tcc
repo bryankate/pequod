@@ -1,4 +1,5 @@
 #include "pqpersistent.hh"
+#include "pqserver.hh"
 #include <boost/date_time.hpp>
 
 namespace pq {
@@ -199,7 +200,7 @@ void BerkeleyDBStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
     }
 }
 
-void BerkeleyDBStore::run_monitor(pq::Server& server) {
+void BerkeleyDBStore::run_monitor(pq::Server&) {
     mandatory_assert(false && "DB monitoring not supported for BerkeleyDB.");
 }
 
@@ -208,18 +209,18 @@ void BerkeleyDBStore::run_monitor(pq::Server& server) {
 #if HAVE_PQXX_NOTIFICATION
 #include <iostream>
 
-PostgreSQLStore::PostgreSQLStore(String db, String host, uint32_t port)
+PostgresStore::PostgresStore(String db, String host, uint32_t port)
     : dbname_(db), host_(host), port_(port),
-      dbh_(new pqxx::connection(connection_string().c_str())) {
+      dbh_(new pqxx::connection(connection_string().c_str())), monitor_(nullptr) {
     init();
 }
 
-PostgreSQLStore::~PostgreSQLStore() {
+PostgresStore::~PostgresStore() {
     delete dbh_;
-    monitor_fd_.close();
+    delete monitor_;
 }
 
-void PostgreSQLStore::init() {
+void PostgresStore::init() {
     try{
         // start with an empty table, make it empty if needed
         pqxx::work txn(*dbh_);
@@ -229,32 +230,14 @@ void PostgreSQLStore::init() {
         txn.exec(
             "CREATE TABLE cache (key varchar, value varchar)"
         );
-        // create the notify trigger function
-        txn.exec("CREATE OR REPLACE FUNCTION notify_pequod_listener() "
-            "RETURNS trigger AS "
-            "$BODY$ "
-            "BEGIN "
-            "PERFORM pg_notify('backend_queue', CAST (NEW.key AS text)); "
-            "RETURN NULL; "
-            "END; "
-            "$BODY$ "
-            "LANGUAGE plpgsql VOLATILE "
-            "COST 100"
-        );
-        // drop and create the trigger
-        txn.exec("DROP TRIGGER IF EXISTS notify_cache ON cache");
-        txn.exec("CREATE TRIGGER notify_cache "
-            "AFTER INSERT OR UPDATE ON cache "
-            "FOR EACH ROW "
-            "EXECUTE PROCEDURE notify_pequod_listener()"
-        );
         txn.commit();
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
+        mandatory_assert(false);
     }
 }
 
-int32_t PostgreSQLStore::put(Str key, Str val){
+int32_t PostgresStore::put(Str key, Str val){
     try{
         pqxx::work txn(*dbh_);
         auto k = txn.quote(std::string(key.mutable_data(), key.length()));
@@ -276,7 +259,7 @@ int32_t PostgreSQLStore::put(Str key, Str val){
     return 0;
 }
 
-String PostgreSQLStore::get(Str k){
+String PostgresStore::get(Str k){
     try{
         pqxx::work txn(*dbh_);
         pqxx::result scan = txn.exec(
@@ -287,11 +270,11 @@ String PostgreSQLStore::get(Str k){
         return String(scan.begin()["value"].as<std::string>());
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
-        return nullptr;
+        mandatory_assert(false);
     }
 }
 
-void PostgreSQLStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
+void PostgresStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
     try{
         pqxx::work txn(*dbh_);
         pqxx::result scan = txn.exec(
@@ -310,23 +293,93 @@ void PostgreSQLStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& 
         }
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
+        mandatory_assert(false);
     }
 }
 
-String PostgreSQLStore::connection_string() const {
+String PostgresStore::connection_string() const {
     return "dbname=" + dbname_ + " host=" + host_ + " port=" + port_;
 }
 
-void PostgreSQLStore::run_monitor(pq::Server& server) {
+void PostgresStore::run_monitor(pq::Server& server) {
+    monitor_ = new pqxx::connection(connection_string().c_str());
+
+    try {
+        pqxx::work txn(*monitor_);
+
+        // create the notify trigger function
+        txn.exec("CREATE OR REPLACE FUNCTION notify_pequod_listener() "
+                 "RETURNS trigger AS "
+                 "$BODY$ "
+                 "BEGIN "
+                 "PERFORM pg_notify('backend_queue', CAST (NEW.key AS text)); "
+                 "RETURN NULL; "
+                 "END; "
+                 "$BODY$ "
+                 "LANGUAGE plpgsql VOLATILE "
+                 "COST 100"
+        );
+        // drop and create the trigger
+        txn.exec("DROP TRIGGER IF EXISTS notify_cache ON cache");
+        txn.exec("CREATE TRIGGER notify_cache "
+                 "AFTER INSERT OR UPDATE ON cache "
+                 "FOR EACH ROW "
+                 "EXECUTE PROCEDURE notify_pequod_listener()"
+        );
+        txn.commit();
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+        mandatory_assert(false);
+    }
+
     monitor_db(server);
 }
 
-tamed void PostgreSQLStore::monitor_db(pq::Server& server) {
+tamed void PostgresStore::monitor_db(pq::Server& server) {
+    tvars {
+        int32_t ret;
+        PostgresListener listener(*(this->monitor_), "backend_queue", server);
+    }
 
-    // connect with tamer
-    // make triggers
-    // add listener
-    // process changes
+    while(true) {
+        twait { tamer::at_fd_read(monitor_->sock(), make_event(ret)); }
+
+        if (ret == 0) {
+            // todo: i don't think this will block.
+            // also, this will fire all notifications, which might take a while
+            monitor_->get_notifs();
+        }
+        else
+            mandatory_assert(false);
+    }
+}
+
+PostgresListener::PostgresListener(pqxx::connection_base& conn, const std::string& channel,
+                                   pq::Server& server)
+    : pqxx::notification_receiver(conn, channel), server_(server) {
+}
+
+void PostgresListener::operator()(const std::string& payload, int32_t) {
+    std::cerr << "Notification: " << payload << std::endl;
+
+    Json j;
+    j.parse(payload);
+    assert(j && j.is_o());
+
+    int32_t op = j["op"].as_i();
+    switch(op) {
+      case pg_update:
+          server_.insert(j["key"].as_s(), j["value"].as_s());
+          break;
+
+      case pg_delete:
+          server_.erase(j["key"].as_s());
+          break;
+
+      default:
+          mandatory_assert(false && "Unknown DB operation.");
+          break;
+    }
 }
 
 #endif

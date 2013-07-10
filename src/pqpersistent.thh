@@ -4,7 +4,6 @@
 #include "string.hh"
 #include "readerwriterqueue.h"
 #include <tamer/tamer.hh>
-#include <tamer/fd.hh>
 #include <boost/thread.hpp>
 #include <atomic>
 
@@ -103,34 +102,43 @@ class BerkeleyDBStore : public pq::PersistentStore {
 
 
 #if HAVE_PQXX_NOTIFICATION
+#include "pqxx/pqxx"
 #include "pqxx/connection"
 #include "pqxx/result"
 #include "pqxx/transaction"
 
-class PostgreSQLStore : public pq::PersistentStore {
-
+class PostgresStore : public pq::PersistentStore {
   public:
-    PostgreSQLStore(String db = "pequod", String host = "127.0.0.1", uint32_t port = 5432);
-    ~PostgreSQLStore();
+    PostgresStore(String db = "pequod", String host = "127.0.0.1", uint32_t port = 5432);
+    ~PostgresStore();
 
     virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
     virtual int32_t put(Str, Str);
     virtual String get(Str);
     virtual void run_monitor(pq::Server& server);
 
-
   private:
     String dbname_;
     String host_;
     uint32_t port_;
-    pqxx::connection *dbh_;
-    tamer::fd monitor_fd_;
+    pqxx::connection* dbh_;
+    pqxx::connection* monitor_;
 
     void init();
     String connection_string() const;
 
     tamed void monitor_db(pq::Server& server);
+};
 
+class PostgresListener : public pqxx::notification_receiver {
+  public:
+    enum { pg_update = 0, pg_delete };
+
+    PostgresListener(pqxx::connection_base& conn, const std::string& channel, pq::Server& server);
+    virtual void operator()(const std::string& payload, int32_t);
+
+  private:
+    pq::Server& server_;
 };
 
 #endif
