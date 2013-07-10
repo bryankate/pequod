@@ -298,7 +298,7 @@ void PostgresStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& re
 }
 
 String PostgresStore::connection_string() const {
-    return "dbname=" + dbname_ + " host=" + host_ + " port=" + port_;
+    return "dbname=" + dbname_ + " host=" + host_ + " port=" + String(port_);
 }
 
 void PostgresStore::run_monitor(pq::Server& server) {
@@ -307,25 +307,51 @@ void PostgresStore::run_monitor(pq::Server& server) {
     try {
         pqxx::work txn(*monitor_);
 
-        // create the notify trigger function
-        txn.exec("CREATE OR REPLACE FUNCTION notify_pequod_listener() "
-                 "RETURNS trigger AS "
-                 "$BODY$ "
-                 "BEGIN "
-                 "PERFORM pg_notify('backend_queue', CAST (NEW.key AS text)); "
-                 "RETURN NULL; "
-                 "END; "
-                 "$BODY$ "
-                 "LANGUAGE plpgsql VOLATILE "
-                 "COST 100"
+        // create the notify trigger functions
+        txn.exec(
+        "CREATE OR REPLACE FUNCTION notify_upsert_listener() "
+        "RETURNS trigger AS "
+        "$BODY$ "
+        "BEGIN "
+        "PERFORM pg_notify('backend_queue', '{ \"op\":0, \"key\":\"' || CAST (NEW.key AS TEXT) || '\", \"value\":\"' || CAST (NEW.value AS TEXT) || '\" }'); "
+        "RETURN NULL; "
+        "END; "
+        "$BODY$ "
+        "LANGUAGE plpgsql VOLATILE "
+        "COST 100"
         );
-        // drop and create the trigger
-        txn.exec("DROP TRIGGER IF EXISTS notify_cache ON cache");
-        txn.exec("CREATE TRIGGER notify_cache "
-                 "AFTER INSERT OR UPDATE ON cache "
-                 "FOR EACH ROW "
-                 "EXECUTE PROCEDURE notify_pequod_listener()"
+
+        txn.exec(
+        "CREATE OR REPLACE FUNCTION notify_delete_listener() "
+        "RETURNS trigger AS "
+        "$BODY$ "
+        "BEGIN "
+        "PERFORM pg_notify('backend_queue', '{ \"op\":1, \"key\":\"' || CAST (OLD.key AS TEXT) || '\" }'); "
+        "RETURN NULL; "
+        "END; "
+        "$BODY$ "
+        "LANGUAGE plpgsql VOLATILE "
+        "COST 100"
         );
+
+        // drop and create the triggers
+        txn.exec("DROP TRIGGER IF EXISTS notify_upsert_cache ON cache");
+        txn.exec("DROP TRIGGER IF EXISTS notify_delete_cache ON cache");
+
+        txn.exec(
+        "CREATE TRIGGER notify_upsert_cache "
+        "AFTER INSERT OR UPDATE ON cache "
+        "FOR EACH ROW "
+        "EXECUTE PROCEDURE notify_upsert_listener()"
+        );
+
+        txn.exec(
+        "CREATE TRIGGER notify_delete_cache "
+        "AFTER DELETE ON cache "
+        "FOR EACH ROW "
+        "EXECUTE PROCEDURE notify_delete_listener()"
+        );
+
         txn.commit();
     } catch (const std::exception &e){
         std::cerr << e.what() << std::endl;
@@ -363,7 +389,7 @@ void PostgresListener::operator()(const std::string& payload, int32_t) {
     std::cerr << "Notification: " << payload << std::endl;
 
     Json j;
-    j.parse(payload);
+    j.assign_parse(payload);
     assert(j && j.is_o());
 
     int32_t op = j["op"].as_i();
