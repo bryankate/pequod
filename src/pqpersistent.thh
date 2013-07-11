@@ -53,12 +53,23 @@ class PersistentWrite : public PersistentOp {
     String value_;
 };
 
+class PersistentFlush : public PersistentOp {
+  public:
+    PersistentFlush(std::atomic<bool>& waiting, boost::condition_variable& cond);
+    virtual void operator()(PersistentStore*);
+
+  private:
+    std::atomic<bool>& waiting_;
+    boost::condition_variable& cond_;
+};
+
 class PersistentStoreThread {
   public:
     PersistentStoreThread(PersistentStore* store);
     ~PersistentStoreThread();
 
     void enqueue(PersistentOp* op);
+    void flush();
     void run();
 
   private:

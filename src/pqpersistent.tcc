@@ -26,6 +26,16 @@ void PersistentWrite::operator()(PersistentStore* ps){
     delete this;
 }
 
+PersistentFlush::PersistentFlush(std::atomic<bool>& waiting, boost::condition_variable& cond)
+    : waiting_(waiting), cond_(cond) {
+}
+
+void PersistentFlush::operator()(PersistentStore* ps) {
+    waiting_ = false;
+    cond_.notify_all();
+    delete this;
+}
+
 PersistentStoreThread::PersistentStoreThread(PersistentStore* store)
     : store_(store), worker_(&PersistentStoreThread::run, this),
       pending_(1024), running_(true) {
@@ -41,6 +51,19 @@ PersistentStoreThread::~PersistentStoreThread() {
 void PersistentStoreThread::enqueue(PersistentOp* op) {
     pending_.enqueue(op);
     cond_.notify_all();
+}
+
+void PersistentStoreThread::flush() {
+    std::atomic<bool> waiting(true);
+    boost::mutex mu;
+    boost::condition_variable cond;
+
+    pending_.enqueue(new PersistentFlush(waiting, cond));
+
+    while(waiting) {
+        boost::mutex::scoped_lock lock(mu);
+        cond.timed_wait(lock, boost::posix_time::milliseconds(5));
+    }
 }
 
 void PersistentStoreThread::run() {
