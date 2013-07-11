@@ -220,6 +220,11 @@ void Table::insert(Str key, String value) {
 
 void Table::erase(Str key) {
     assert(!triecut_ || key.length() < triecut_);
+
+    if (unlikely(server_->writethrough() &&
+                 server_->is_owned_public(server_->owner_for(key))))
+        server_->persistent_store()->enqueue(new PersistentErase(key));
+
     auto it = store_.find(key, DatumCompare());
     if (it != store_.end())
         erase(iterator(this, it));
