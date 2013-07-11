@@ -38,6 +38,7 @@ topdir = None
 uniquedir = None
 hostpath = None
 begintime = time.time()
+localhost = socket.gethostname()
 
 def prepare_experiment(xname, ename):
     global topdir, uniquedir, hostpath, begintime, nprocesses
@@ -55,7 +56,7 @@ def prepare_experiment(xname, ename):
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
         for h in range(nprocesses):
-            hfile.write(socket.gethostname() + "\t" + str(startport + h) + "\n");
+            hfile.write(localhost + "\t" + str(startport + h) + "\n");
         hfile.close()
 
     resdir = os.path.join(uniquedir, xname, ename)
@@ -79,12 +80,53 @@ for x in exps:
         print "Running experiment '" + e['name'] + "'."
         system("killall pqserver")
         sleep(3)
-        
+
+        dbport = 10000        
         dbenvpath = os.path.join(resdir, "store")
         os.makedirs(dbenvpath)
-            
+        
+        dbhostpath = os.path.join(resdir, "dbhosts.txt")
+        dbfile = open(dbhostpath, "w")
+        dbprocs = []
+        
+        dbmonitor = False
+        if 'def_db_writearound' in e:
+            dbmonitor = e['def_db_writearound']
+
         for s in range(nprocesses):
-            servercmd = e['backendcmd'] if s < nbacking else e['cachecmd']
+            if s < nbacking:
+                servercmd = e['backendcmd']
+                
+                if 'def_db_type' in e:
+                    if e['def_db_type'] == 'berkeleydb':
+                        servercmd = servercmd + \
+                            " --berkeleydb --dbname=pequod_" + str(s) + \
+                            " --dbenvpath=" + dbenvpath
+                    elif e['def_db_type'] == 'postgres':
+                        dbfile.write(localhost + "\t" + str(dbport + s) + "\n");
+                        servercmd = servercmd + \
+                            " --postgres --dbname=pequod" + \
+                            " --dbhost=" + localhost + " --dbport=" + str(dbport + s)
+                        
+                        if dbmonitor:
+                            servercmd = servercmd + " --monitordb"
+                        
+                        # start postgres server
+                        fartfile = os.path.join(resdir, "fart_db_" + str(s) + ".txt")
+                        dbpath = os.path.join(dbenvpath, "postgres_" + str(s))
+                        os.makedirs(dbpath)
+                        
+                        Popen("initdb " + dbpath + " -E utf8 -A trust" + \
+                              " >> " + fartfile + " 2>> " + fartfile, shell=True).wait()
+                              
+                        dbprocs.append(Popen("postgres -p " + str(dbport + s) + " -D " + dbpath + \
+                                             " >> " + fartfile + " 2>> " + fartfile, shell=True))
+                        sleep(1)
+                        Popen("createdb -h " + localhost + " -p " + str(dbport + s) + " pequod" + \
+                              " >> " + fartfile + " 2>> " + fartfile, shell=True).wait()
+            else:
+                servercmd = e['cachecmd']
+                
             outfile = os.path.join(resdir, "output_srv_")
             fartfile = os.path.join(resdir, "fart_srv_")
   
@@ -98,14 +140,13 @@ for x in exps:
 
             full_cmd = pin + perf + servercmd + serverargs + \
                 " -kl=" + str(startport + s) + \
-                " --dbname=pequod_" + str(s) + \
-                " --dbenvpath=" + dbenvpath + \
                 " > " + outfile + str(s) + ".txt" + \
                 " 2> " + fartfile + str(s) + ".txt &"
 
             print full_cmd
             system(full_cmd)
-
+            
+        dbfile.close()
         sleep(3)
 
         if 'populatecmd' in e:
@@ -113,6 +154,9 @@ for x in exps:
             procs = []
             popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
             fartfile = os.path.join(resdir, "fart_pop.txt")
+            
+            if dbmonitor:
+                popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
             
             if affinity:
                 pin = "numactl -C " + str(startcpu + nprocesses) + " "
@@ -133,6 +177,9 @@ for x in exps:
             outfile = os.path.join(resdir, "output_app_")
             fartfile = os.path.join(resdir, "fart_app_")
             
+            if dbmonitor:
+                clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
+                
             if affinity:
                 pin = "numactl -C " + str(startcpu + nprocesses + c) + " "
 
@@ -153,3 +200,4 @@ for x in exps:
     
         print "Done experiment. Results are stored at", resdir
         system("killall pqserver")
+        system("killall postgres")

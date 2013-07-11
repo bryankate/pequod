@@ -1,4 +1,3 @@
-# open loop test definitions
 import copy
 
 exps = [{'name': "twitter", 'defs': []}]
@@ -11,7 +10,9 @@ clientCmd = "./obj/pqserver --twitternew --verbose --no-populate %s --duration=1
 exps[0]['defs'].append(
     {'name': "autopush",
      'def_part': "twitternew",
-     'backendcmd': "%s --berkeleydb" % (serverCmd),
+     'def_db_type': "postgres",
+     'def_db_writearound': False,
+     'backendcmd': "%s" % (serverCmd),
      'cachecmd': serverCmd,
      'populatecmd': populateCmd,
      'clientcmd': "%s" % (clientCmd)})
