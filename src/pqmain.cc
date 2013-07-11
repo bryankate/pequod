@@ -66,7 +66,7 @@ static Clp_Option options[] = {
     { "dbname", 0, 3014, Clp_ValString, 0 },
     { "dbenvpath", 0, 3015, Clp_ValString, 0 },
     { "dbhost", 0, 3016, Clp_ValString, 0 },
-    { "dbport", 0, 3017, Clp_ValString, 0 },
+    { "dbport", 0, 3017, Clp_ValInt, 0 },
     { "berkeleydb", 0, 3018, 0, Clp_Negate },
     { "postgres", 0, 3019, 0, Clp_Negate },
     { "monitordb", 0, 3020, 0, Clp_Negate },
