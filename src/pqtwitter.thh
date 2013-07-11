@@ -112,6 +112,8 @@ class TwitterShim {
     inline void pace(tamer::preevent<R> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
+    template <typename R>
+    inline void control(const Json& cmd, tamer::preevent<R, Json> e);
 
   private:
     S& server_;
@@ -318,6 +320,11 @@ inline void TwitterShim<S>::stats(tamer::preevent<R, Json> done) {
     server_.stats(done);
 }
 
+template <typename S> template <typename R>
+inline void TwitterShim<S>::control(const Json& cmd, tamer::preevent<R, Json> done) {
+    server_.control(cmd, done);
+}
+
 template <typename S>
 class TwitterRunner {
   public:
@@ -432,9 +439,10 @@ void TwitterRunner<S>::post(uint32_t u, uint32_t time, Str value,
 
 tamed template <typename S>
 void TwitterRunner<S>::populate(tamer::event<> done) {
-    tvars { boost::mt19937 gen; }
+    tvars { boost::mt19937 gen; Json j; }
     gen.seed(0);
     tp_.create_subscriptions(gen);
+    tp_.print_subscription_statistics(std::cout);
 
     twait { server_.initialize(tp_.push(), tp_.pull(), tp_.celebrity(),
                                tp_.celebrity_type(), tp_.nusers(), false, make_event()); }
@@ -465,7 +473,7 @@ void TwitterRunner<S>::populate(tamer::event<> done) {
         }
 #endif
 
-    tp_.print_subscription_statistics(std::cout);
+    twait { server_.control(Json().set("flush_db_queue", true), make_event(j)); }
     done();
 }
 

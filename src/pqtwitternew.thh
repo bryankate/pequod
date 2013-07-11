@@ -598,6 +598,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         uint32_t u, s;
         uint32_t post_end_time = this->currtime_ + this->tp_.popduration();
         std::vector<std::pair<uint32_t, uint32_t>> subs;
+        Json j;
         tamer::gather_rendezvous gr;
     }
     gen.seed(112181 + tp_.groupid());
@@ -634,6 +635,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         twait{ server_.pace(make_event()); }
     }
     twait(gr);
+
+    twait { server_.control(Json().set("flush_db_queue", true), make_event(j)); }
 
     finish:
     currtime_ = post_end_time;

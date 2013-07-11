@@ -162,6 +162,8 @@ class TwitterHashShim {
     inline void pace(tamer::preevent<R> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
+    template <typename R>
+    inline void control(const Json& cmd, tamer::preevent<R, Json> e);
 
   private:
     S& server_;
@@ -298,6 +300,12 @@ inline void TwitterHashShim<S>::pace(tamer::preevent<R> done) {
 
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::stats(tamer::preevent<R, Json> done) {
+    done(Json());
+}
+
+template <typename S> template <typename R>
+inline void TwitterHashShim<S>::control(const Json& cmd, tamer::preevent<R, Json> done) {
+    (void)cmd;
     done(Json());
 }
 
