@@ -852,6 +852,10 @@ void Server::control(const Json& cmd) {
         for (auto it = t.begin(); it != t.end(); ++it)
             std::cerr << it->key() << std::endl;
     }
+    else if (cmd["flush_db_queue"]) {
+        if (persistent_store_)
+            persistent_store_->flush();
+    }
 }
 
 void Table::print_sources(std::ostream& stream) const {
