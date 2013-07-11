@@ -197,6 +197,10 @@ auto Table::insert(Table& t) -> local_iterator {
 void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
 
+    if (unlikely(server_->writethrough() &&
+                 server_->is_owned_public(server_->owner_for(key))))
+        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
+
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, DatumCompare(), cd);
     Datum* d;
@@ -208,10 +212,6 @@ void Table::insert(Str key, String value) {
 	d = p.first.operator->();
         d->value().swap(value);
     }
-
-    if (unlikely(server_->writethrough() &&
-                 server_->is_owned_public(server_->owner_for(key))))
-        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
 
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
