@@ -26,11 +26,19 @@ void PersistentWrite::operator()(PersistentStore* ps){
     delete this;
 }
 
+PersistentErase::PersistentErase(Str key) : key_(key) {
+}
+
+void PersistentErase::operator()(PersistentStore* ps) {
+    ps->erase(key_);
+    delete this;
+}
+
 PersistentFlush::PersistentFlush(std::atomic<bool>& waiting, boost::condition_variable& cond)
     : waiting_(waiting), cond_(cond) {
 }
 
-void PersistentFlush::operator()(PersistentStore* ps) {
+void PersistentFlush::operator()(PersistentStore*) {
     waiting_ = false;
     cond_.notify_all();
     delete this;
@@ -157,6 +165,11 @@ int32_t BerkeleyDBStore::put(Str key, Str val){
     return ret;
 }
 
+void BerkeleyDBStore::erase(Str key) {
+    (void)key;
+    mandatory_assert(false && "Not yet implemented!");
+}
+
 String BerkeleyDBStore::get(Str k){
 
     Dbt key(k.mutable_data(), k.length());
@@ -280,6 +293,18 @@ int32_t PostgresStore::put(Str key, Str val){
         return -1;
     }
     return 0;
+}
+
+void PostgresStore::erase(Str key) {
+    try{
+        pqxx::work txn(*dbh_);
+        auto k = txn.quote(std::string(key.mutable_data(), key.length()));
+        txn.exec("DELETE FROM cache WHERE key=" + k);
+        txn.commit();
+    } catch (const std::exception &e){
+        std::cerr << e.what() << std::endl;
+        mandatory_assert(false);
+    }
 }
 
 String PostgresStore::get(Str k){
