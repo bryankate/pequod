@@ -1,17 +1,17 @@
 import copy
 
 exps = [{'name': "twitter", 'defs': []}]
-users = "--graph=twitter_graph_1.8M.dat"
+users = "--nusers=1000"
 
 serverCmd = "./obj/pqserver"
-populateCmd = "./obj/pqserver --twitternew --verbose --no-execute %s" % (users)
-clientCmd = "./obj/pqserver --twitternew --verbose --no-populate %s --duration=1000000 --popduration=0" % (users)
+populateCmd = "./obj/pqserver --twitternew --no-binary --verbose --no-execute %s" % (users)
+clientCmd = "./obj/pqserver --twitternew --no-binary --verbose --no-populate %s --duration=10000 --popduration=0" % (users)
 
 exps[0]['defs'].append(
     {'name': "autopush",
-     'def_part': "twitternew",
-     'def_db_type': "postgres",
-     'def_db_writearound': False,
+     'def_part': "twitternew-text",
+#     'def_db_type': "postgres",
+#     'def_db_writearound': True,
      'backendcmd': "%s" % (serverCmd),
      'cachecmd': serverCmd,
      'populatecmd': populateCmd,
