@@ -120,6 +120,7 @@ for x in exps:
                               " >> " + fartfile + " 2>> " + fartfile, shell=True).wait()
                               
                         dbprocs.append(Popen("postgres -p " + str(dbport + s) + " -D " + dbpath + \
+                                             " -c synchronous_commit=OFF -c fsync=OFF"
                                              " >> " + fartfile + " 2>> " + fartfile, shell=True))
                         sleep(1)
                         Popen("createdb -h " + localhost + " -p " + str(dbport + s) + " pequod" + \
