@@ -95,6 +95,8 @@ $(OBJDIR)/pqmulticlient.cc: $(top_srcdir)/src/pqmulticlient.tcc
 $(OBJDIR)/pqmulticlient.hh: $(top_srcdir)/src/pqmulticlient.thh
 $(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
 $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
+$(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
+$(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
 $(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
 $(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
@@ -124,7 +126,7 @@ $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqforker.o: $(OBJDIR)/pqforker.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
@@ -165,6 +167,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqmulticlient.o \
 	$(OBJDIR)/pqremoteclient.o \
 	$(OBJDIR)/pqinterconnect.o \
+	$(OBJDIR)/pqdbpool.o \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
 	$(OBJDIR)/hashclient.o \

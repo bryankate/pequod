@@ -1,0 +1,47 @@
+#ifndef PQDBPOOL_HH_
+#define PQDBPOOL_HH_
+
+#include "string.hh"
+#include <queue>
+#include <vector>
+#include <tamer/tamer.hh>
+#if HAVE_PQXX_NOTIFICATION
+#include "pqxx/pqxx"
+#endif
+
+namespace pq {
+
+class DBPool {
+  public:
+    DBPool(const String& host, uint32_t port);
+    DBPool(const String& host, uint32_t port, uint32_t min, uint32_t max);
+    ~DBPool();
+
+    void connect();
+    void clear();
+
+    tamed void insert(const String& key, const String& value, tamer::event<> e);
+    tamed void erase(const String& key, tamer::event<> e);
+
+  private:
+    String host_;
+    uint32_t port_;
+    uint32_t min_;
+    uint32_t max_;
+#if HAVE_PQXX_NOTIFICATION
+    std::vector<pqxx::connection*> conn_;
+    std::queue<pqxx::connection*> pool_;
+    std::queue<tamer::event<pqxx::connection*>> waiting_;
+
+    tamed void do_insert(pqxx::connection* conn, const String& key, const String& value, tamer::event<> e);
+    tamed void do_erase(pqxx::connection* conn, const String& key, tamer::event<> e);
+
+    void next_connection(tamer::event<pqxx::connection*> e);
+    void replace_connection(pqxx::connection* conn);
+    pqxx::connection* connect_one();
+#endif
+};
+
+}
+
+#endif

@@ -2,15 +2,13 @@
 #define PQMULTICLIENT_HH_
 
 #include "pqremoteclient.hh"
+#include "pqdbpool.hh"
 #include "hosts.hh"
 #include "partitioner.hh"
 #include "sock_helper.hh"
 #include <vector>
 #include <iostream>
 #include <tamer/tamer.hh>
-#if HAVE_PQXX_NOTIFICATION
-#include "pqxx/pqxx"
-#endif
 
 namespace pq {
 
@@ -52,9 +50,7 @@ class MultiClient {
 
   private:
     inline RemoteClient* cache_for(const String &key) const;
-#if HAVE_PQXX_NOTIFICATION
-    inline pqxx::connection* backend_for(const String &key) const;
-#endif
+    inline DBPool* backend_for(const String &key) const;
 
     const Hosts* hosts_;
     const Hosts* dbhosts_;
@@ -62,9 +58,7 @@ class MultiClient {
     std::vector<RemoteClient*> clients_;
     RemoteClient* localNode_;
     int colocateCacheServer_;
-#if HAVE_PQXX_NOTIFICATION
-    std::vector<pqxx::connection*> dbclients_;
-#endif
+    std::vector<DBPool*> dbclients_;
 };
 
 inline void MultiClient::clear() {
@@ -73,20 +67,16 @@ inline void MultiClient::clear() {
     clients_.clear();
     localNode_ = nullptr;
 
-#if HAVE_PQXX_NOTIFICATION
     for (auto &c : dbclients_)
         delete c;
     dbclients_.clear();
-#endif
 }
 
-#if HAVE_PQXX_NOTIFICATION
-inline pqxx::connection* MultiClient::backend_for(const String &key) const {
+inline DBPool* MultiClient::backend_for(const String &key) const {
     int32_t owner = part_->owner(key);
     assert(owner >= 0 && owner < (int32_t)dbclients_.size() && "Make sure the partition function is correct.");
     return dbclients_[owner];
 }
-#endif
 
 inline RemoteClient* MultiClient::cache_for(const String &key) const {
     if (colocateCacheServer_ >= 0)
