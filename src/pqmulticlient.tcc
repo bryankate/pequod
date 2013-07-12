@@ -111,29 +111,23 @@ tamed void MultiClient::insert_db(const String& key, const String& value, event<
     mandatory_assert(dbhosts_ && part_);
 
 #if HAVE_PQXX_NOTIFICATION
-    tvars {
-        pqxx::connection* conn = this->backend_for(key);
-    }
-
-    twait {
-        tamer::event<> done = make_event();
-        try {
-            pqxx::work txn(*conn);
-            auto k = txn.quote(std::string(key.data(), key.length()));
-            auto v = txn.quote(std::string(value.data(), value.length()));
-            txn.exec("WITH upsert AS "
-                     "(UPDATE cache SET value=" + v +
-                     " WHERE key=" + k +
-                     " RETURNING cache.* ) "
-                     "INSERT INTO cache "
-                     "SELECT * FROM (SELECT " + k + " k, " + v + " v) AS tmp_table "
-                     "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)"
-            );
-            txn.commit();
-        } catch (const std::exception &e) {
-            mandatory_assert(false && "Database whoopsy.");
-        }
-        done();
+    // todo: make non-blocking
+    pqxx::connection* conn = this->backend_for(key);
+    try {
+        pqxx::work txn(*conn);
+        auto k = txn.quote(std::string(key.data(), key.length()));
+        auto v = txn.quote(std::string(value.data(), value.length()));
+        txn.exec("WITH upsert AS "
+                 "(UPDATE cache SET value=" + v +
+                 " WHERE key=" + k +
+                 " RETURNING cache.* ) "
+                 "INSERT INTO cache "
+                 "SELECT * FROM (SELECT " + k + " k, " + v + " v) AS tmp_table "
+                 "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)"
+        );
+        txn.commit();
+    } catch (const std::exception &e) {
+        mandatory_assert(false && "Database whoopsy.");
     }
 #else
     mandatory_assert("Backend database not configured.");
@@ -145,21 +139,15 @@ tamed void MultiClient::erase_db(const String& key, event<> e) {
     mandatory_assert(dbhosts_ && part_);
 
 #if HAVE_PQXX_NOTIFICATION
-    tvars {
-        pqxx::connection* conn = this->backend_for(key);
-    }
-
-    twait {
-        tamer::event<> done = make_event();
-        try {
-            pqxx::work txn(*conn);
-            auto k = txn.quote(std::string(key.data(), key.length()));
-            txn.exec("DELETE FROM cache WHERE key=" + k);
-            txn.commit();
-        } catch (const std::exception &e) {
-            mandatory_assert(false && "Database whoopsy.");
-        }
-        done();
+    // todo: make non-blocking
+    pqxx::connection* conn = this->backend_for(key);
+    try {
+        pqxx::work txn(*conn);
+        auto k = txn.quote(std::string(key.data(), key.length()));
+        txn.exec("DELETE FROM cache WHERE key=" + k);
+        txn.commit();
+    } catch (const std::exception &e) {
+        mandatory_assert(false && "Database whoopsy.");
     }
 #else
     mandatory_assert("Backend database not configured.");
