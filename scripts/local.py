@@ -78,9 +78,11 @@ for x in exps:
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
 
         print "Running experiment '" + e['name'] + "'."
-        system("killall pqserver")
+        system("killall -q pqserver")
+        system("killall -q postgres")
         sleep(3)
 
+        dbhost = "127.0.0.1"
         dbport = 10000        
         dbenvpath = os.path.join(resdir, "store")
         os.makedirs(dbenvpath)
@@ -103,10 +105,10 @@ for x in exps:
                             " --berkeleydb --dbname=pequod_" + str(s) + \
                             " --dbenvpath=" + dbenvpath
                     elif e['def_db_type'] == 'postgres':
-                        dbfile.write(localhost + "\t" + str(dbport + s) + "\n");
+                        dbfile.write(dbhost + "\t" + str(dbport + s) + "\n");
                         servercmd = servercmd + \
                             " --postgres --dbname=pequod" + \
-                            " --dbhost=" + localhost + " --dbport=" + str(dbport + s)
+                            " --dbhost=" + dbhost + " --dbport=" + str(dbport + s)
                         
                         if dbmonitor:
                             servercmd = servercmd + " --monitordb"
@@ -116,15 +118,22 @@ for x in exps:
                         dbpath = os.path.join(dbenvpath, "postgres_" + str(s))
                         os.makedirs(dbpath)
                         
-                        Popen("initdb " + dbpath + " -E utf8 -A trust" + \
-                              " >> " + fartfile + " 2>> " + fartfile, shell=True).wait()
+                        cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
+                              " >> " + fartfile + " 2>> " + fartfile
+                        print cmd
+                        Popen(cmd, shell=True).wait()
                               
-                        dbprocs.append(Popen("postgres -p " + str(dbport + s) + " -D " + dbpath + \
-                                             " -c synchronous_commit=OFF -c fsync=OFF"
-                                             " >> " + fartfile + " 2>> " + fartfile, shell=True))
-                        sleep(1)
-                        Popen("createdb -h " + localhost + " -p " + str(dbport + s) + " pequod" + \
-                              " >> " + fartfile + " 2>> " + fartfile, shell=True).wait()
+                        cmd = "postgres -h " + dbhost + " -p " + str(dbport + s) + \
+                              " -D " + dbpath + " -c synchronous_commit=off -c fsync=off" + \
+                              " >> " + fartfile + " 2>> " + fartfile
+                        print cmd
+                        dbprocs.append(Popen(cmd, shell=True))
+                        sleep(2)
+                        
+                        cmd = "createdb -h " + dbhost + " -p " + str(dbport + s) + " pequod" + \
+                              " >> " + fartfile + " 2>> " + fartfile
+                        print cmd
+                        Popen(cmd, shell=True).wait()
             else:
                 servercmd = e['cachecmd']
                 
@@ -170,6 +179,7 @@ for x in exps:
             for p in procs:
                 p.wait()
 
+        exit(0)
         print "Starting app clients."
         procs = []
         clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
@@ -200,5 +210,5 @@ for x in exps:
             aggregate_dir(resdir)
     
         print "Done experiment. Results are stored at", resdir
-        system("killall pqserver")
-        system("killall postgres")
+        system("killall -q pqserver")
+        system("killall -q postgres")
