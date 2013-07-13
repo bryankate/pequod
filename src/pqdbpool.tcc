@@ -47,7 +47,7 @@ void DBPool::clear() {
 }
 
 #if HAVE_PQXX_PQXX
-tamed void DBPool::insert(const String& key, const String& value, event<> e) {
+tamed void DBPool::insert(String key, String value, event<> e) {
     tvars {
         pqxx::connection* conn;
     }
@@ -56,7 +56,7 @@ tamed void DBPool::insert(const String& key, const String& value, event<> e) {
     do_insert(conn, key, value, e);
 }
 
-tamed void DBPool::erase(const String& key, event<> e) {
+tamed void DBPool::erase(String key, event<> e) {
     tvars {
         pqxx::connection* conn;
     }
@@ -65,7 +65,7 @@ tamed void DBPool::erase(const String& key, event<> e) {
     do_erase(conn, key, e);
 }
 
-tamed void DBPool::do_insert(pqxx::connection* conn, const String& key, const String& value, event<> e) {
+tamed void DBPool::do_insert(pqxx::connection* conn, String key, String value, event<> e) {
     tvars {
         pqxx::work txn(*conn);
         pqxx::pipeline pipe(txn);
@@ -74,6 +74,7 @@ tamed void DBPool::do_insert(pqxx::connection* conn, const String& key, const St
         int32_t qid;
     }
 
+    std::cerr << " inserting " << key << std::endl;
     qid = pipe.insert("WITH upsert AS "
                       "(UPDATE cache SET value=" + v +
                       " WHERE key=" + k +
@@ -86,13 +87,14 @@ tamed void DBPool::do_insert(pqxx::connection* conn, const String& key, const St
         twait { tamer::at_fd_read(conn->sock(), make_event()); }
         pipe.resume();
     }
-    pipe.retrieve(qid);
+    pipe.complete();
+    txn.commit();
 
     replace_connection(conn);
     e();
 }
 
-tamed void DBPool::do_erase(pqxx::connection* conn, const String& key, event<> e) {
+tamed void DBPool::do_erase(pqxx::connection* conn, String key, event<> e) {
     tvars {
         pqxx::work txn(*conn);
         pqxx::pipeline pipe(txn);
@@ -106,7 +108,8 @@ tamed void DBPool::do_erase(pqxx::connection* conn, const String& key, event<> e
         twait { tamer::at_fd_read(conn->sock(), make_event()); }
         pipe.resume();
     }
-    pipe.retrieve(qid);
+    pipe.complete();
+    txn.commit();
 
     replace_connection(conn);
     e();
@@ -140,11 +143,11 @@ pqxx::connection* DBPool::connect_one() {
 }
 #else
 
-tamed void DBPool::insert(const String& key, const String& value, event<> e) {
+tamed void DBPool::insert(String key, String value, event<> e) {
     mandatory_assert(false && "Database not configured.");
 }
 
-tamed void DBPool::erase(const String& key, event<> e) {
+tamed void DBPool::erase(String key, event<> e) {
     mandatory_assert(false && "Database not configured.");
 }
 
