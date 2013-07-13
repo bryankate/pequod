@@ -1150,7 +1150,7 @@ void test_berkeleydb() {
 
 void test_postgres() {
     using namespace pq;
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
     // this will fail if postgres is not running or the pqunit db does not exist
     PostgresStore *dbi = new PostgresStore("pqunit", "127.0.0.1", 5432);
     String s1 = "xxx";

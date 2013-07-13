@@ -5,7 +5,7 @@
 #include <queue>
 #include <vector>
 #include <tamer/tamer.hh>
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
 #include "pqxx/pqxx"
 #endif
 
@@ -28,7 +28,7 @@ class DBPool {
     uint32_t port_;
     uint32_t min_;
     uint32_t max_;
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
     std::vector<pqxx::connection*> conn_;
     std::queue<pqxx::connection*> pool_;
     std::queue<tamer::event<pqxx::connection*>> waiting_;

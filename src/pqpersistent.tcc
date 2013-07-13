@@ -242,7 +242,7 @@ void BerkeleyDBStore::run_monitor(pq::Server&) {
 
 #endif
 
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
 #include <iostream>
 
 PostgresStore::PostgresStore(String db, String host, uint32_t port)
