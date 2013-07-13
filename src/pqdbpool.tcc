@@ -46,29 +46,25 @@ void DBPool::clear() {
 #endif
 }
 
-tamed void DBPool::insert(const String& key, const String& value, event<> e) {
 #if HAVE_PQXX_PQXX
+tamed void DBPool::insert(const String& key, const String& value, event<> e) {
     tvars {
         pqxx::connection* conn;
     }
 
     twait { next_connection(make_event(conn)); }
     do_insert(conn, key, value, e);
-#endif
 }
 
 tamed void DBPool::erase(const String& key, event<> e) {
-#if HAVE_PQXX_PQXX
     tvars {
         pqxx::connection* conn;
     }
 
     twait { next_connection(make_event(conn)); }
     do_erase(conn, key, e);
-#endif
 }
 
-#if HAVE_PQXX_PQXX
 tamed void DBPool::do_insert(pqxx::connection* conn, const String& key, const String& value, event<> e) {
     tvars {
         pqxx::work txn(*conn);
@@ -142,6 +138,16 @@ pqxx::connection* DBPool::connect_one() {
     String cs = "dbname=pequod host=" + host_ + " port=" + String(port_);
     return new pqxx::connection(cs.c_str());
 }
+#else
+
+tamed void DBPool::insert(const String& key, const String& value, event<> e) {
+    mandatory_assert(false && "Database not configured.");
+}
+
+tamed void DBPool::erase(const String& key, event<> e) {
+    mandatory_assert(false && "Database not configured.");
+}
+
 #endif
 
 }
