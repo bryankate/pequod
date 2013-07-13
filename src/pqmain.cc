@@ -143,6 +143,8 @@ int main(int argc, char** argv) {
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
 
+    (void)dbhost; (void)dbport; (void)dbname; (void)dbenvpath;
+
     while (Clp_Next(clp) != Clp_Done) {
         // modes
         if (clp->option->long_name == String("twitter"))
