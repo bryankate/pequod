@@ -1,5 +1,5 @@
 #include "pqdbpool.hh"
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
 #include "pqxx/pipeline"
 #endif
 
@@ -20,7 +20,7 @@ DBPool::~DBPool() {
 }
 
 void DBPool::connect() {
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
     for (uint32_t i = 0; i < min_; ++i) {
         pqxx::connection* conn = connect_one();
         assert(conn);
@@ -34,7 +34,7 @@ void DBPool::connect() {
 }
 
 void DBPool::clear() {
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
     while(!pool_.empty())
         pool_.pop();
 
@@ -47,7 +47,7 @@ void DBPool::clear() {
 }
 
 tamed void DBPool::insert(const String& key, const String& value, event<> e) {
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
     tvars {
         pqxx::connection* conn;
     }
@@ -58,17 +58,17 @@ tamed void DBPool::insert(const String& key, const String& value, event<> e) {
 }
 
 tamed void DBPool::erase(const String& key, event<> e) {
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
     tvars {
-         pqxx::connection* conn;
-     }
+        pqxx::connection* conn;
+    }
 
-     twait { next_connection(make_event(conn)); }
-     do_erase(conn, key, e);
+    twait { next_connection(make_event(conn)); }
+    do_erase(conn, key, e);
 #endif
 }
 
-#ifdef HAVE_PQXX_PQXX
+#if HAVE_PQXX_PQXX
 tamed void DBPool::do_insert(pqxx::connection* conn, const String& key, const String& value, event<> e) {
     tvars {
         pqxx::work txn(*conn);
