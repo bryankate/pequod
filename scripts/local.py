@@ -179,7 +179,6 @@ for x in exps:
             for p in procs:
                 p.wait()
 
-        exit(0)
         print "Starting app clients."
         procs = []
         clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
