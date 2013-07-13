@@ -55,11 +55,21 @@ AC_ARG_WITH([pqxx],
     [AS_HELP_STRING([--with-pqxx],
     [enable postgres backend if available])],
     [], [with_pqxx=no])
+POSTGRES_LIBS=
+PQXX_LIB=
 if test "x$with_pqxx" != "xno"; then
     AC_CHECK_HEADERS([postgresql/libpq-fe.h])
     AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [POSTGRES_LIBS=])
-    PKG_CHECK_MODULES([LIBPQXX], [libpqxx >= 4.0.1], [PQXX_LIB="-lpqxx"], [])
+    AC_CHECK_HEADERS([pqxx/pqxx])
     AC_CHECK_HEADERS([pqxx/notification])
+    # test for pqxx library >= 4.0 by looking for transactor class
+    AC_LANG_PUSH(C++)
+    SAVED_LDFLAGS=$LDFLAGS
+    LDFLAGS="$LDFLAGS -lpqxx"
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <pqxx/transactor.hxx>], [pqxx::transactor<> dummy;])], 
+                   [PQXX_LIB="-lpqxx"], [PQXX_LIB=])
+    LDFLAGS=$SAVED_LDFLAGS
+    AC_LANG_POP(C++)
 fi
 AC_SUBST([POSTGRES_LIBS])
 AC_SUBST([PQXX_LIB])
