@@ -20,6 +20,8 @@ parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
+parser.add_option("-d", "--dumpdb", action="store_true", dest="dumpdb", default=False)
+parser.add_option("-l", "--loaddb", action="store_true", dest="loaddb", default=False)
 (options, args) = parser.parse_args()
 
 nbacking = options.nbacking
@@ -29,6 +31,8 @@ affinity = options.affinity
 startcpu = options.startcpu
 perfserver = options.perfserver
 ngroups = options.ngroups
+dumpdb = options.dumpdb
+loaddb = options.loaddb
 
 nprocesses = nbacking + ncaching
 hosts = []
@@ -78,8 +82,8 @@ for x in exps:
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
 
         print "Running experiment '" + e['name'] + "'."
-        system("killall -q pqserver")
-        system("killall -q postgres")
+        system("killall pqserver")
+        system("killall postgres")
         sleep(3)
 
         dbhost = "127.0.0.1"
@@ -159,7 +163,19 @@ for x in exps:
         dbfile.close()
         sleep(3)
 
-        if 'populatecmd' in e:
+        if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
+            print "Populating backend from database archive."
+            dbarchive = os.path.join("dumps", x["name"], e["name"], "b_" + str(nbacking))
+            procs = []
+            for s in range(nbacking):
+                archfile = os.path.join(dbarchive, "pequod_" + str(s))
+                cmd = "pg_restore -p " + str(dbport + s) + " -d pequod -a " + archfile
+                print cmd
+                procs.append(Popen(cmd, shell=True))
+                
+            for p in procs:
+                p.wait()
+        elif 'populatecmd' in e:
             print "Populating backend."
             procs = []
             popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
@@ -174,8 +190,22 @@ for x in exps:
             full_cmd = pin + popcmd + " 2> " + fartfile
 
             print full_cmd
-            procs.append(Popen(full_cmd, shell=True));
-            
+            procs.append(Popen(full_cmd, shell=True))
+
+            for p in procs:
+                p.wait()
+
+        if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
+            print "Dumping backend database after population."
+            procs = []
+            dbarchive = os.path.join("dumps", x["name"], e["name"], "b_" + str(nbacking))
+            for s in range(nbacking):
+                archfile = os.path.join(dbarchive, "pequod_" + str(s))
+                system("rm -rf " + archfile + "; mkdir -p " + dbarchive)
+                cmd = "pg_dump -p " + str(dbport + s) + " -f " + archfile + " -a -F d pequod" 
+                print cmd
+                procs.append(Popen(cmd, shell=True))
+                
             for p in procs:
                 p.wait()
 
@@ -209,5 +239,5 @@ for x in exps:
             aggregate_dir(resdir)
     
         print "Done experiment. Results are stored at", resdir
-        system("killall -q pqserver")
-        system("killall -q postgres")
+        system("killall pqserver")
+        system("killall postgres")
