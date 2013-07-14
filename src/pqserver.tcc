@@ -691,10 +691,11 @@ void Table::invalidate_remote(Str first, Str last) {
 Server::Server()
     : persistent_store_(nullptr), writethrough_(false),
       supertable_(Str(), nullptr, this),
-      last_validate_at_(0), validate_time_(0), insert_time_(0),
+      last_validate_at_(0), validate_time_(0), insert_time_(0), evict_time_(0),
       part_(nullptr), me_(-1),
       prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
 
+    gettimeofday(&start_tv_, NULL);
     gen_.seed(112181);
 }
 
@@ -800,7 +801,10 @@ Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
            sink_ranges_size = 0, remote_ranges_size = 0, persisted_ranges_size = 0;
     struct rusage ru;
+    struct timeval tv;
+
     getrusage(RUSAGE_SELF, &ru);
+    gettimeofday(&tv, NULL);
 
     Json tables = Json::make_array();
     for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
@@ -830,9 +834,10 @@ Json Server::stats() const {
 	.set("valid_ranges_size", sink_ranges_size)
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
+        .set("server_real_time", to_real(tv - start_tv_))
         .set("server_validate_time", validate_time_)
         .set("server_insert_time", insert_time_)
-        .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)
+        .set("server_evict_time", evict_time_)
         .set("server_max_rss_mb", ru.ru_maxrss / 1024);
     if (SourceRange::allocated_key_bytes)
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);

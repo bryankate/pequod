@@ -231,8 +231,10 @@ class Server {
     bool writethrough_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
+    struct timeval start_tv_;
     double validate_time_;
     double insert_time_;
+    double evict_time_;
     const Partitioner* part_;
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
@@ -596,9 +598,15 @@ inline void Server::maybe_evict() {
 }
 
 inline bool Server::evict_one() {
+    struct timeval tv[2];
+    gettimeofday(&tv[0], NULL);
+
     if (!lru_.empty())
         (&lru_.front())->evict();
     return !lru_.empty();
+
+    gettimeofday(&tv[1], NULL);
+    evict_time_ += to_real(tv[1] - tv[0]);
 }
 
 inline void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb) {
