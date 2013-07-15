@@ -80,6 +80,7 @@ class TwitterNewPopulator {
     inline uint32_t popduration() const { return popduration_; }
     inline uint32_t postlimit() const { return postlimit_; }
     inline double pct_active() const { return pct_active_; }
+    inline bool initialize() const { return initialize_; }
     inline bool populate() const { return populate_; }
     inline bool execute() const { return execute_; }
     inline bool push() const { return push_; }
@@ -117,6 +118,7 @@ class TwitterNewPopulator {
     uint32_t duration_;
     uint32_t popduration_;
     uint32_t postlimit_;
+    bool initialize_;
     bool populate_;
     bool execute_;
     bool push_;
@@ -455,6 +457,7 @@ class TwitterNewRunner {
   public:
     TwitterNewRunner(S& server, TwitterNewPopulator& tp);
 
+    tamed void initialize(tamer::event<> done);
     tamed void populate(tamer::event<> done);
     tamed void run(tamer::event<> done);
 
@@ -592,6 +595,13 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
 }
 
 tamed template <typename S>
+void TwitterNewRunner<S>::initialize(tamer::event<> done) {
+    if (tp_.initialize() && !tp_.groupid())
+        twait { server_.initialize(make_event()); }
+    done();
+}
+
+tamed template <typename S>
 void TwitterNewRunner<S>::populate(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
@@ -603,6 +613,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     }
     gen.seed(112181 + tp_.groupid());
 
+    if (!tp_.populate() && !tp_.execute())
+        goto finish;
+
     if (tp_.verbose()) { std::cerr << "Creating social graph." << std::endl; }
     tp_.make_subscriptions(gen, subs);
     if (!tp_.groupid())
@@ -611,9 +624,6 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     // in some experiments we pre-populate the servers using another process
     if (!tp_.populate())
         goto finish;
-
-    if (!tp_.groupid())
-        twait { server_.initialize(make_event()); }
 
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
     for (s = 0; s != subs.size(); ++s) {

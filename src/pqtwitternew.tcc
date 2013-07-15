@@ -69,6 +69,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       duration_(param["duration"].as_i(100000) / ngroups_),
       popduration_(param["popduration"].as_i(0)),
       postlimit_(param["postlimit"].as_i(0) / ngroups_),
+      initialize_(param["initialize"].as_b(true)),
       populate_(param["populate"].as_b(true)),
       execute_(param["execute"].as_b(true)),
       push_(param["push"].as_b(false)),
@@ -287,6 +288,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
         TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
     }
     twait { mc->connect(make_event()); }
+    twait { tr->initialize(make_event()); }
     twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;
