@@ -163,6 +163,19 @@ for x in exps:
         dbfile.close()
         sleep(3)
 
+        if 'initcmd' in e:
+            print "Initializing cache servers."
+            initcmd = e['initcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
+            fartfile = os.path.join(resdir, "fart_init.txt")
+            
+            if affinity:
+                pin = "numactl -C " + str(startcpu + nprocesses) + " "
+            
+            full_cmd = pin + initcmd + " 2> " + fartfile
+
+            print full_cmd
+            Popen(full_cmd, shell=True).wait()
+
         if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Populating backend from database archive."
             dbarchive = os.path.join("dumps", x["name"], e["name"], "b_" + str(nbacking))
