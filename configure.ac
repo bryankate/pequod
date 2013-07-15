@@ -241,6 +241,9 @@ dnl Memory allocator
 
 AC_CHECK_LIB([flow], [malloc], [have_flow=true], [have_flow=])
 AC_CHECK_LIB([jemalloc], [mallctl], [have_jemalloc=true], [have_jemalloc=])
+if test "x$have_jemalloc" != "xyes"; then
+    AC_CHECK_LIB([jemalloc], [je_mallctl], [have_jemalloc=true], [have_jemalloc=])
+fi
 AC_CHECK_LIB([tcmalloc], [tc_malloc], [have_tcmalloc=true], [have_tcmalloc=])
 AC_CHECK_LIB([tcmalloc_minimal], [tc_malloc], [have_tcmalloc_minimal=true], [have_tcmalloc_minimal=])
 
