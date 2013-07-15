@@ -434,7 +434,7 @@ PostgresListener::PostgresListener(pqxx::connection_base& conn, const std::strin
 }
 
 void PostgresListener::operator()(const std::string& payload, int32_t) {
-    std::cerr << "Notification: " << payload << std::endl;
+    //std::cerr << "Notification: " << payload << std::endl;
 
     Json j;
     j.assign_parse(payload);
