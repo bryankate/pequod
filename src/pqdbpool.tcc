@@ -65,9 +65,8 @@ tamed void DBPool::insert(String key, String value, event<> e) {
     Str v(vbuff, vsz);
 
     do_query(conn,
-             "WITH upsert AS (UPDATE cache SET value=\'" + v + "\'" +
-             "WHERE key=\'" + k + "\'" +
-             "RETURNING cache.* ) "
+             "WITH upsert AS (UPDATE cache SET value=\'" + v + "\' " +
+             "WHERE key=\'" + k + "\'" + " RETURNING cache.* ) "
              "INSERT INTO cache "
              "SELECT * FROM (SELECT \'" + k + "\' k, \'" + v + "\' v) AS tmp_table "
              "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)",
@@ -106,12 +105,12 @@ tamed void DBPool::do_query(PGconn* conn, String query, tamer::event<> e) {
     } while(PQisBusy(conn));
 
     PGresult* result = PQgetResult(conn);
-    if (PQresultStatus(result) != PGRES_COMMAND_OK)
-        mandatory_assert(false && "Error getting result of DB query.");
+    mandatory_assert(PQresultStatus(result) == PGRES_COMMAND_OK && "Error getting result of DB query.");
+    mandatory_assert(String(PQcmdTuples(result)).to_i() == 1 && "Result should affect one row.");
 
     PQclear(result);
     result = PQgetResult(conn);
-    mandatory_assert(!result && "Should only be one result for an insert!");
+    mandatory_assert(!result && "Should only be one result!");
 
     replace_connection(conn);
     e();
