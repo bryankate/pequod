@@ -74,6 +74,17 @@ tamed void RemoteClient::count(const String& first, const String& last,
     e(j && j[2].to_i() == pq_ok ? j[3].to_u64() : 0);
 }
 
+tamed void RemoteClient::count(const String& first, const String& last,
+                               const String& scanlast, event<size_t> e) {
+    tvars { Json j; unsigned long seq = this->seq_; }
+    twait {
+        fd_->call(Json::make_array(pq_count, seq_, first, last, scanlast), make_event(j));
+        ++seq_;
+    }
+    assert(j[0] == -pq_count && j[1] == seq);
+    e(j && j[2].to_i() == pq_ok ? j[3].to_u64() : 0);
+}
+
 tamed void RemoteClient::add_count(const String& first, const String& last,
                                    event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
@@ -88,11 +99,35 @@ tamed void RemoteClient::add_count(const String& first, const String& last,
         e(0);
 }
 
+tamed void RemoteClient::add_count(const String& first, const String& last,
+                                   const String& scanlast, event<size_t> e) {
+    tvars { Json j; unsigned long seq = this->seq_; }
+    twait {
+        fd_->call(Json::make_array(pq_count, seq_, first, last, scanlast), make_event(j));
+        ++seq_;
+    }
+    assert(j[0] == -pq_count && j[1] == seq);
+    if (e.has_result() && j && j[2].to_i() == pq_ok)
+        e(e.result() + j[3].to_u64());
+    else
+        e(0);
+}
+
 tamed void RemoteClient::scan(const String& first, const String& last,
                               event<scan_result> e) {
     tvars { Json j; }
     twait {
         fd_->call(Json::make_array(pq_scan, seq_, first, last), make_event(j));
+        ++seq_;
+    }
+    e(scan_result(j && j[2].to_i() == pq_ok ? j[3] : Json::make_array()));
+}
+
+tamed void RemoteClient::scan(const String& first, const String& last,
+                              const String& scanlast, event<scan_result> e) {
+    tvars { Json j; }
+    twait {
+        fd_->call(Json::make_array(pq_scan, seq_, first, last, scanlast), make_event(j));
         ++seq_;
     }
     e(scan_result(j && j[2].to_i() == pq_ok ? j[3] : Json::make_array()));

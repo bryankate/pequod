@@ -34,7 +34,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     tvars {
         Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
         int32_t command;
-        String key, first, last;
+        String key, first, last, scanlast;
         pq::Table* t;
         pq::Table::iterator it;
         size_t count;
@@ -102,8 +102,9 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     case pq_count:
         rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
-        twait { server.validate_count(first, last, make_event(count)); }
-        rj[3] = count;
+        scanlast = (j[4] && j[4].is_s()) ? j[4].as_s() : last;
+        twait { server.validate(first, last, make_event(it)); }
+        rj[3] = std::distance(it, server.table_for(first).lower_bound(scanlast));
         ++diff_.ncount;
         break;
     case pq_unsubscribe:
@@ -125,11 +126,15 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             rj[2] = pq_fail;
             break;
         }
+        first = j[2].as_s(), last = j[3].as_s(), scanlast = last;
         ++diff_.nsubscribe;
-        // fall through to return scanned range
+        goto do_scan;
     case pq_scan: {
-        rj[2] = pq_ok;
         first = j[2].as_s(), last = j[3].as_s();
+        scanlast = (j[4] && j[4].is_s()) ? j[4].as_s() : last;
+
+        do_scan:
+        rj[2] = pq_ok;
         twait { server.validate(first, last, make_event(it)); }
         if (unlikely(peer >= 0))
             server.subscribe(first, last, peer);
@@ -137,7 +142,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         auto itend = server.table_for(first).end();
         assert(!aj.shared());
         aj.clear();
-        while (it != itend && it->key() < last) {
+        while (it != itend && it->key() < scanlast) {
             aj.push_back(it->key()).push_back(it->value());
             ++it;
         }

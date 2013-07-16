@@ -119,14 +119,29 @@ tamed void MultiClient::count(const String& first, const String& last,
     cache_for(first)->count(first, last, e);
 }
 
+tamed void MultiClient::count(const String& first, const String& last,
+                              const String& scanlast, event<size_t> e) {
+    cache_for(first)->count(first, last, scanlast, e);
+}
+
 tamed void MultiClient::add_count(const String& first, const String& last,
                                   event<size_t> e) {
     cache_for(first)->add_count(first, last, e);
 }
 
+tamed void MultiClient::add_count(const String& first, const String& last,
+                                  const String& scanlast, event<size_t> e) {
+    cache_for(first)->add_count(first, last, scanlast, e);
+}
+
 tamed void MultiClient::scan(const String& first, const String& last,
-                event<scan_result> e) {
+                             event<scan_result> e) {
     cache_for(first)->scan(first, last, e);
+}
+
+tamed void MultiClient::scan(const String& first, const String& last,
+                             const String& scanlast, event<scan_result> e) {
+    cache_for(first)->scan(first, last, scanlast, e);
 }
 
 tamed void MultiClient::stats(event<Json> e) {

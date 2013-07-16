@@ -25,8 +25,12 @@ class DirectClient {
 
     tamed void count(const String& first, const String& last,
                      tamer::event<size_t> e);
+    tamed void count(const String& first, const String& last,
+                     const String& scanlast, tamer::event<size_t> e);
     tamed void add_count(const String& first, const String& last,
                          tamer::event<size_t> e);
+    tamed void add_count(const String& first, const String& last,
+                         const String& scanlast, tamer::event<size_t> e);
 
     inline void pace(tamer::event<> done);
 
@@ -46,6 +50,8 @@ class DirectClient {
 
     tamed void scan(const String& first, const String& last,
                     tamer::event<scan_result> e);
+    tamed void scan(const String& first, const String& last,
+                    const String& scanlast, tamer::event<scan_result> e);
 
     inline void stats(tamer::event<Json> e);
     inline void control(const Json& cmd, tamer::event<Json> e);
@@ -69,8 +75,14 @@ class DirectClient {
     inline void count(const String& first, const String& last,
                       preevent<R, size_t> e);
     template <typename R>
+    inline void count(const String& first, const String& last,
+                      const String& scanlast, preevent<R, size_t> e);
+    template <typename R>
     inline void add_count(const String& first, const String& last,
                           preevent<R, size_t> e);
+    template <typename R>
+    inline void add_count(const String& first, const String& last,
+                          const String& scanlast, preevent<R, size_t> e);
 
     template <typename R>
     inline void pace(preevent<R> done);
@@ -78,6 +90,9 @@ class DirectClient {
     template <typename R>
     inline void scan(const String& first, const String& last,
                      preevent<R, scan_result> e);
+    template <typename R>
+    inline void scan(const String& first, const String& last,
+                     const String& scanlast, preevent<R, scan_result> e);
 
     template <typename R>
     inline void stats(preevent<R, Json> e);
@@ -196,20 +211,40 @@ inline void DirectClient::erase_db(const String&, preevent<R>) {
 template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
                                 preevent<R, size_t> e) {
-    e(server_.validate_count(first, last));
+    count(first, last, last, e);
+}
+
+template <typename R>
+inline void DirectClient::count(const String& first, const String& last,
+                                const String& scanlast, preevent<R, size_t> e) {
+    auto it = server_.validate(first, last);
+    e(std::distance(it, server_.table_for(first).lower_bound(scanlast)));
 }
 
 template <typename R>
 inline void DirectClient::add_count(const String& first, const String& last,
                                     preevent<R, size_t> e) {
-    e(e.result() + server_.validate_count(first, last));
+    add_count(first, last, last, e);
+}
+
+template <typename R>
+inline void DirectClient::add_count(const String& first, const String& last,
+                                    const String& scanlast, preevent<R, size_t> e) {
+    auto it = server_.validate(first, last);
+    e(e.result() + std::distance(it, server_.table_for(first).lower_bound(scanlast)));
 }
 
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
+    scan(first, last, last, e);
+}
+
+template <typename R>
+inline void DirectClient::scan(const String& first, const String& last,
+                               const String& scanlast, preevent<R, scan_result> e) {
     auto it = server_.validate(first, last);
-    e(scan_result(it, server_.table_for(first).lower_bound(last)));
+    e(scan_result(it, server_.table_for(first).lower_bound(scanlast)));
 }
 
 template <typename R>
