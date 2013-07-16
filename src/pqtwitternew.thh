@@ -369,17 +369,18 @@ inline void TwitterNewShim<S>::timeline_scan(uint32_t subscriber,
                                              tamer::preevent<R, scan_result> done) {
 
     if (tp_.binary()) {
-        memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
+        memcpy(buf_, "t|XXXX|XXXX t|XXXX} t|XXXX|XXXX", 31);
         write_in_net_order(buf_ + 2, subscriber);
         write_in_net_order(buf_ + 7, start_time);
         write_in_net_order(buf_ + 14, subscriber);
-        write_in_net_order(buf_ + 19, end_time);
-        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+        write_in_net_order(buf_ + 22, subscriber);
+        write_in_net_order(buf_ + 27, end_time);
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), done);
     }
     else {
-        sprintf(buf_, "t|%08u|%010u t|%08u|%010u",
-                subscriber, start_time, subscriber, end_time);
-        server_.scan(Str(buf_, 21), Str(buf_ + 22, 21), done);
+        sprintf(buf_, "t|%08u|%010u t|%08u} t|%08u|%010u",
+                subscriber, start_time, subscriber, subscriber, end_time);
+        server_.scan(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), done);
     }
 }
 
@@ -388,17 +389,18 @@ inline void TwitterNewShim<S>::timeline_add_count(uint32_t subscriber,
                                                   uint32_t start_time, uint32_t end_time,
                                                   tamer::preevent<R, size_t> done) {
     if (tp_.binary()) {
-        memcpy(buf_, "t|XXXX|XXXX t|XXXX|XXXX", 23);
+        memcpy(buf_, "t|XXXX|XXXX t|XXXX} t|XXXX|XXXX", 31);
         write_in_net_order(buf_ + 2, subscriber);
         write_in_net_order(buf_ + 7, start_time);
         write_in_net_order(buf_ + 14, subscriber);
-        write_in_net_order(buf_ + 19, end_time);
-        server_.add_count(Str(buf_, 11), Str(buf_ + 12, 11), done);
+        write_in_net_order(buf_ + 22, subscriber);
+        write_in_net_order(buf_ + 27, end_time);
+        server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), done);
     }
     else {
-        sprintf(buf_, "t|%08u|%010u t|%08u|%010u",
-                subscriber, start_time, subscriber, end_time);
-        server_.add_count(Str(buf_, 21), Str(buf_ + 22, 21), done);
+        sprintf(buf_, "t|%08u|%010u t|%08u} t|%08u|%010u",
+                subscriber, start_time, subscriber, subscriber, end_time);
+        server_.add_count(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), done);
     }
 }
 
@@ -713,7 +715,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         if (active_rng(gen) >= tp_.pct_active())
             continue;
 
-        check(tp_.managed_user(u), currtime_, 0, END_TIME, gr.make_event(nread));
+        check(tp_.managed_user(u), currtime_, 0, 0, gr.make_event(nread));
         twait{ server_.pace(make_event()); }
     }
     twait(gr);
@@ -846,7 +848,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     for (u = 0; u < loggedin_.size(); ++u) {
         user = tp_.managed_user(loggedin_.front());
         loggedin_.pop_front();
-        check(user, currtime_, user->last_read_, END_TIME, gr.make_event(nread));
+        check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
     }
     twait(gr);
 
