@@ -1,4 +1,5 @@
 #include "pqdbpool.hh"
+#include "str.hh"
 
 using namespace tamer;
 
@@ -47,31 +48,53 @@ void DBPool::clear() {
 tamed void DBPool::insert(String key, String value, event<> e) {
     tvars {
         PGconn* conn;
-        String k, v, query;
-        int32_t err;
+    }
+
+    twait { next_connection(make_event(conn)); }
+
+    char kbuff[256], vbuff[256];
+    int32_t err;
+
+    // todo: this does not handle strings with binary data!
+    size_t ksz = PQescapeStringConn(conn, kbuff, key.data(), key.length(), &err);
+    mandatory_assert(!err);
+    size_t vsz = PQescapeStringConn(conn, vbuff, value.data(), value.length(), &err);
+    mandatory_assert(!err);
+
+    Str k(kbuff, ksz);
+    Str v(vbuff, vsz);
+
+    do_query(conn,
+             "WITH upsert AS (UPDATE cache SET value=\'" + v + "\'" +
+             "WHERE key=\'" + k + "\'" +
+             "RETURNING cache.* ) "
+             "INSERT INTO cache "
+             "SELECT * FROM (SELECT \'" + k + "\' k, \'" + v + "\' v) AS tmp_table "
+             "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)",
+             e);
+}
+
+tamed void DBPool::erase(String key, event<> e) {
+    tvars {
+        PGconn* conn;
     }
 
     twait { next_connection(make_event(conn)); }
 
     char buff[256];
-    size_t sz;
+    int32_t err;
 
     // todo: this does not handle strings with binary data!
-    sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
+    size_t sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
     mandatory_assert(!err);
-    k = String(buff, sz);
 
-    sz = PQescapeStringConn(conn, buff, value.data(), value.length(), &err);
-    mandatory_assert(!err);
-    v = String(buff, sz);
+    do_query(conn, "DELETE FROM cache WHERE key=\'" + Str(buff, sz) + "\'", e);
+}
 
-    query = "WITH upsert AS "
-            "(UPDATE cache SET value=\'" + v + "\'" +
-            "WHERE key=\'" + k + "\'" +
-            "RETURNING cache.* ) "
-            "INSERT INTO cache "
-            "SELECT * FROM (SELECT \'" + k + "\' k, \'" + v + "\' v) AS tmp_table "
-            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)";
+tamed void DBPool::do_query(PGconn* conn, String query, tamer::event<> e) {
+    tvars {
+        int32_t err;
+    }
 
     err = PQsendQuery(conn, query.c_str());
     mandatory_assert(err == 1 && "Could not send query to DB.");
@@ -89,46 +112,6 @@ tamed void DBPool::insert(String key, String value, event<> e) {
     PQclear(result);
     result = PQgetResult(conn);
     mandatory_assert(!result && "Should only be one result for an insert!");
-
-    replace_connection(conn);
-    e();
-}
-
-tamed void DBPool::erase(String key, event<> e) {
-    tvars {
-        PGconn* conn;
-        String k, query;
-        int32_t err;
-    }
-
-    twait { next_connection(make_event(conn)); }
-
-    char buff[256];
-    size_t sz;
-
-    // todo: this does not handle strings with binary data!
-    sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
-    mandatory_assert(!err);
-    k = String(buff, sz);
-
-    query = "DELETE FROM cache WHERE key=\'" + k + "\'";
-
-    err = PQsendQuery(conn, query.c_str());
-    mandatory_assert(err == 1 && "Could not send query to DB.");
-
-    do {
-        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
-        err = PQconsumeInput(conn);
-        mandatory_assert(err == 1 && "Error reading data from DB.");
-    } while(PQisBusy(conn));
-
-    PGresult* result = PQgetResult(conn);
-    if (PQresultStatus(result) != PGRES_COMMAND_OK)
-        mandatory_assert(false && "Error getting result of DB query.");
-
-    PQclear(result);
-    result = PQgetResult(conn);
-    mandatory_assert(!result && "Should only be one result for an erase!");
 
     replace_connection(conn);
     e();

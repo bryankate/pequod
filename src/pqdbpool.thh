@@ -35,6 +35,8 @@ class DBPool {
     std::queue<PGconn*> pool_;
     std::queue<tamer::event<PGconn*>> waiting_;
 
+    tamed void do_query(PGconn* conn, String query, tamer::event<> e);
+
     void next_connection(tamer::event<PGconn*> e);
     void replace_connection(PGconn* conn);
     PGconn* connect_one();
