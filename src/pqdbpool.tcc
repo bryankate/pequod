@@ -106,7 +106,8 @@ tamed void DBPool::do_query(PGconn* conn, String query, tamer::event<> e) {
 
     PGresult* result = PQgetResult(conn);
     mandatory_assert(PQresultStatus(result) == PGRES_COMMAND_OK && "Error getting result of DB query.");
-    mandatory_assert(String(PQcmdTuples(result)).to_i() == 1 && "Result should affect one row.");
+    int32_t affected = String(PQcmdTuples(result)).to_i();
+    mandatory_assert(affected >= 0 && affected <= 1 && "Query should affect one row at most.");
 
     PQclear(result);
     result = PQgetResult(conn);
