@@ -191,11 +191,9 @@ class Server {
     inline uint64_t next_validate_at();
     inline Table::iterator validate(Str key);
     inline Table::iterator validate(Str first, Str last);
-    inline size_t validate_count(Str first, Str last);
 
     tamed void validate(Str key, tamer::event<Table::iterator> done);
     tamed void validate(Str first, Str last, tamer::event<Table::iterator> done);
-    tamed void validate_count(Str first, Str last, tamer::event<size_t> done);
 
     inline void subscribe(Str first, Str last, int32_t peer);
     inline void unsubscribe(Str first, Str last, int32_t peer);
@@ -533,16 +531,6 @@ inline Table::iterator Server::validate(Str key) {
     validate(key, done);
     mandatory_assert(!done && "validate would block, use tamed version.");
     return it;
-}
-
-inline size_t Server::validate_count(Str first, Str last) {
-    size_t count;
-    tamer::rendezvous<> r;
-    tamer::event<size_t> done = r.make_event(count);
-
-    validate_count(first, last, done);
-    mandatory_assert(!done && "validate would block, use tamed version.");
-    return count;
 }
 
 inline Table::iterator Server::begin() {

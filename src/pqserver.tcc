@@ -757,21 +757,6 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     done(it.second);
 }
 
-tamed void Server::validate_count(Str first, Str last, tamer::event<size_t> done) {
-    tvars {
-        Table::iterator it;
-    }
-
-    twait { validate(first, last, make_event(it)); }
-    auto itend = make_table_for(first, last).end();
-    size_t n = 0;
-
-    for (; it != itend && it->key() < last; ++it)
-        ++n;
-
-    done(n);
-}
-
 void Table::add_stats(Json& j) const {
     j["ninsert"] += ninsert_;
     j["nmodify"] += nmodify_;
