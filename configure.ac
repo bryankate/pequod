@@ -52,8 +52,10 @@ fi
 AC_SUBST([DB_CXX_LIB])
 
 POSTGRES_LIBS=
-AC_CHECK_HEADERS([postgresql/libpq-fe.h])
+AC_CHECK_HEADERS([postgresql/libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
+AC_CHECK_HEADERS([libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
 AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [ac_cv_have_postgres=no])
+AC_SUBST([POSTGRES_LIBS])
 
 AC_ARG_WITH([pqxx],
     [AS_HELP_STRING([--with-pqxx],
@@ -74,7 +76,6 @@ if test "x$with_pqxx" != "xno"; then
     LDFLAGS=$SAVED_LDFLAGS
     AC_LANG_POP(C++)
 fi
-AC_SUBST([POSTGRES_LIBS])
 AC_SUBST([PQXX_LIB])
 
 
