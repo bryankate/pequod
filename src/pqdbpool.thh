@@ -5,8 +5,10 @@
 #include <queue>
 #include <vector>
 #include <tamer/tamer.hh>
-#if HAVE_PQXX_PQXX
-#include "pqxx/pqxx"
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
+#include <postgresql/libpq-fe.h>
+#elif HAVE_LIBPQ_FE_H
+#include <libpq-fe.h>
 #endif
 
 namespace pq {
@@ -28,17 +30,14 @@ class DBPool {
     uint32_t port_;
     uint32_t min_;
     uint32_t max_;
-#if HAVE_PQXX_PQXX
-    std::vector<pqxx::connection*> conn_;
-    std::queue<pqxx::connection*> pool_;
-    std::queue<tamer::event<pqxx::connection*>> waiting_;
+#if HAVE_LIBPQ
+    std::vector<PGconn*> conn_;
+    std::queue<PGconn*> pool_;
+    std::queue<tamer::event<PGconn*>> waiting_;
 
-    tamed void do_insert(pqxx::connection* conn, String key, String value, tamer::event<> e);
-    tamed void do_erase(pqxx::connection* conn, String key, tamer::event<> e);
-
-    void next_connection(tamer::event<pqxx::connection*> e);
-    void replace_connection(pqxx::connection* conn);
-    pqxx::connection* connect_one();
+    void next_connection(tamer::event<PGconn*> e);
+    void replace_connection(PGconn* conn);
+    PGconn* connect_one();
 #endif
 };
 

@@ -1,7 +1,4 @@
 #include "pqdbpool.hh"
-#if HAVE_PQXX_PQXX
-#include "pqxx/pipeline"
-#endif
 
 using namespace tamer;
 
@@ -20,9 +17,9 @@ DBPool::~DBPool() {
 }
 
 void DBPool::connect() {
-#if HAVE_PQXX_PQXX
+#if HAVE_LIBPQ
     for (uint32_t i = 0; i < min_; ++i) {
-        pqxx::connection* conn = connect_one();
+        PGconn* conn = connect_one();
         assert(conn);
 
         conn_.push_back(conn);
@@ -34,88 +31,110 @@ void DBPool::connect() {
 }
 
 void DBPool::clear() {
-#if HAVE_PQXX_PQXX
+#if HAVE_LIBPQ
     while(!pool_.empty())
         pool_.pop();
 
     while(!conn_.empty()) {
-        pqxx::connection* conn = conn_.back();
+        PGconn* conn = conn_.back();
         conn_.pop_back();
-        delete conn;
+        PQfinish(conn);
     }
 #endif
 }
 
-#if HAVE_PQXX_PQXX
+#if HAVE_LIBPQ
 tamed void DBPool::insert(String key, String value, event<> e) {
     tvars {
-        pqxx::connection* conn;
+        PGconn* conn;
+        String k, v, query;
+        int32_t err;
     }
 
     twait { next_connection(make_event(conn)); }
-    do_insert(conn, key, value, e);
+
+    char buff[256];
+    size_t sz;
+
+    // todo: this does not handle strings with binary data!
+    sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
+    mandatory_assert(!err);
+    k = String(buff, sz);
+
+    sz = PQescapeStringConn(conn, buff, value.data(), value.length(), &err);
+    mandatory_assert(!err);
+    v = String(buff, sz);
+
+    query = "WITH upsert AS "
+            "(UPDATE cache SET value=\'" + v + "\'" +
+            "WHERE key=\'" + k + "\'" +
+            "RETURNING cache.* ) "
+            "INSERT INTO cache "
+            "SELECT * FROM (SELECT \'" + k + "\' k, \'" + v + "\' v) AS tmp_table "
+            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)";
+
+    err = PQsendQuery(conn, query.c_str());
+    mandatory_assert(err == 1 && "Could not send query to DB.");
+
+    do {
+        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
+        err = PQconsumeInput(conn);
+        mandatory_assert(err == 1 && "Error reading data from DB.");
+    } while(PQisBusy(conn));
+
+    PGresult* result = PQgetResult(conn);
+    if (PQresultStatus(result) != PGRES_COMMAND_OK)
+        mandatory_assert(false && "Error getting result of DB query.");
+
+    PQclear(result);
+    result = PQgetResult(conn);
+    mandatory_assert(!result && "Should only be one result for an insert!");
+
+    replace_connection(conn);
+    e();
 }
 
 tamed void DBPool::erase(String key, event<> e) {
     tvars {
-        pqxx::connection* conn;
+        PGconn* conn;
+        String k, query;
+        int32_t err;
     }
 
     twait { next_connection(make_event(conn)); }
-    do_erase(conn, key, e);
-}
 
-tamed void DBPool::do_insert(pqxx::connection* conn, String key, String value, event<> e) {
-    tvars {
-        pqxx::work txn(*conn);
-        pqxx::pipeline pipe(txn);
-        std::string k = txn.quote(std::string(key.data(), key.length()));
-        std::string v = txn.quote(std::string(value.data(), value.length()));
-        int32_t qid;
-    }
+    char buff[256];
+    size_t sz;
 
-    std::cerr << " inserting " << key << std::endl;
-    qid = pipe.insert("WITH upsert AS "
-                      "(UPDATE cache SET value=" + v +
-                      " WHERE key=" + k +
-                      " RETURNING cache.* ) "
-                      "INSERT INTO cache "
-                      "SELECT * FROM (SELECT " + k + " k, " + v + " v) AS tmp_table "
-                      "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)");
+    // todo: this does not handle strings with binary data!
+    sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
+    mandatory_assert(!err);
+    k = String(buff, sz);
 
-    while(!pipe.is_finished(qid)) {
-        twait { tamer::at_fd_read(conn->sock(), make_event()); }
-        pipe.resume();
-    }
-    pipe.complete();
-    txn.commit();
+    query = "DELETE FROM cache WHERE key=\'" + k + "\'";
 
-    replace_connection(conn);
-    e();
-}
+    err = PQsendQuery(conn, query.c_str());
+    mandatory_assert(err == 1 && "Could not send query to DB.");
 
-tamed void DBPool::do_erase(pqxx::connection* conn, String key, event<> e) {
-    tvars {
-        pqxx::work txn(*conn);
-        pqxx::pipeline pipe(txn);
-        std::string k = txn.quote(std::string(key.data(), key.length()));
-        int32_t qid;
-    }
+    do {
+        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
+        err = PQconsumeInput(conn);
+        mandatory_assert(err == 1 && "Error reading data from DB.");
+    } while(PQisBusy(conn));
 
-    qid = pipe.insert("DELETE FROM cache WHERE key=" + k);
+    PGresult* result = PQgetResult(conn);
+    if (PQresultStatus(result) != PGRES_COMMAND_OK)
+        mandatory_assert(false && "Error getting result of DB query.");
 
-    while(!pipe.is_finished(qid)) {
-        twait { tamer::at_fd_read(conn->sock(), make_event()); }
-        pipe.resume();
-    }
-    pipe.complete();
-    txn.commit();
+    PQclear(result);
+    result = PQgetResult(conn);
+    mandatory_assert(!result && "Should only be one result for an erase!");
 
     replace_connection(conn);
     e();
 }
 
-void DBPool::next_connection(tamer::event<pqxx::connection*> e) {
+void DBPool::next_connection(tamer::event<PGconn*> e) {
     if (!pool_.empty()) {
         e(pool_.front());
         pool_.pop();
@@ -128,7 +147,7 @@ void DBPool::next_connection(tamer::event<pqxx::connection*> e) {
         waiting_.push(e);
 }
 
-void DBPool::replace_connection(pqxx::connection* conn) {
+void DBPool::replace_connection(PGconn* conn) {
     if (!waiting_.empty()) {
         waiting_.front()(conn);
         waiting_.pop();
@@ -137,9 +156,12 @@ void DBPool::replace_connection(pqxx::connection* conn) {
         pool_.push(conn);
 }
 
-pqxx::connection* DBPool::connect_one() {
+PGconn* DBPool::connect_one() {
     String cs = "dbname=pequod host=" + host_ + " port=" + String(port_);
-    return new pqxx::connection(cs.c_str());
+    PGconn* conn = PQconnectdb(cs.c_str());
+    mandatory_assert(conn);
+    mandatory_assert(PQstatus(conn) != CONNECTION_BAD);
+    return conn;
 }
 #else
 
