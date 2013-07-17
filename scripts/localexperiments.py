@@ -14,9 +14,10 @@ exps[0]['defs'].append(
      'def_part': partfunc,
      'def_db_type': "postgres",
      'def_db_writearound': True,
-#     'backendcmd': "%s --evict-periodic --mem-lo=20 --mem-hi=25" % (serverCmd),
-     'backendcmd': "%s" % (serverCmd),
-     'cachecmd': serverCmd,
+     'backendcmd': "%s --evict-periodic --mem-lo=15 --mem-hi=20" % (serverCmd),
+#     'backendcmd': "%s" % (serverCmd),
+     'cachecmd': "%s --evict-periodic --mem-lo=5 --mem-hi=10" % (serverCmd),
+#     'cachecmd': "%s" % (serverCmd),
      'initcmd': initCmd,
      'populatecmd': populateCmd,
      'clientcmd': "%s" % (clientCmd)})
