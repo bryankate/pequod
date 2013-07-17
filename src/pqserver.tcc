@@ -367,7 +367,6 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 it != t->join_ranges_.end(); ++it)
             completed &= it->validate(first, last, *server_, now, gr);
     }
-#if 0
     else if (server_->persistent_store()) {
         Str have = first;
         auto r = t->persisted_ranges_.begin_overlaps(first, last);
@@ -419,7 +418,6 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             server_->lru_add(pr);
         }
     }
-#endif
 
     return std::make_pair(completed, lower_bound(first));
 }
@@ -507,14 +505,15 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     pr->add_waiting(done);
     persisted_ranges_.insert(*pr);
 
-    std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
+    //std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
     twait {
         // BNK: this doesn't feel right. is tamer's event loop thread safe?
         op.set_trigger(make_event());
         server_->persistent_store()->enqueue(&op);
     }
 
-    std::cerr << "persisted data fetch: " << pr->interval() << " returned " << res.size() << " results" << std::endl;
+    //std::cerr << "persisted data fetch: " << pr->interval() << " returned "
+    //          << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -548,8 +547,8 @@ void Table::evict_persisted(PersistedRange* pr) {
         ++nevict_persistent_;
     }
 
-    std::cerr << "evicting persisted range " << pr->interval()
-              << ", keeping " << kept << " source ranges in place " << std::endl;
+    //std::cerr << "evicting persisted range " << pr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(pr);
 
@@ -573,14 +572,15 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
-    std::cerr << "fetching remote data: " << rr->interval() << std::endl;
+    //std::cerr << "fetching remote data: " << rr->interval() << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
     twait { server_->interconnect(owner)->pace(make_event()); }
 
-    std::cerr << "remote data fetch: " << rr->interval() << " returned " << res.size() << " results" << std::endl;
+    //std::cerr << "remote data fetch: " << rr->interval() << " returned "
+    //          << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -615,8 +615,8 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
-    std::cerr << "evicting remote range " << rr->interval()
-              << ", keeping " << kept << " source ranges in place " << std::endl;
+    //std::cerr << "evicting remote range " << rr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(rr);
 
@@ -672,7 +672,7 @@ void Table::invalidate_remote(Str first, Str last) {
         if (rrange->pending())
             continue;
 
-        std::cerr << "invalidating remote range " << rrange->interval() << std::endl;
+        //std::cerr << "invalidating remote range " << rrange->interval() << std::endl;
         t->remote_ranges_.erase(*rrange);
         t->invalidate_dependents(rrange->ibegin(), rrange->iend());
 
