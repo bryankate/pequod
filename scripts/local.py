@@ -1,6 +1,6 @@
-import localexperiments
 import aggregate_json
 from aggregate_json import aggregate_dir
+import sys
 import os
 from os import system
 import subprocess
@@ -12,6 +12,7 @@ import json, fnmatch, re
 import socket
 
 parser = OptionParser()
+parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "testexperiments.py"))
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)
@@ -24,6 +25,7 @@ parser.add_option("-d", "--dumpdb", action="store_true", dest="dumpdb", default=
 parser.add_option("-l", "--loaddb", action="store_true", dest="loaddb", default=False)
 (options, args) = parser.parse_args()
 
+expfile = options.expfile
 nbacking = options.nbacking
 ncaching = options.ncaching
 startport = options.startport
@@ -35,6 +37,7 @@ dumpdb = options.dumpdb
 loaddb = options.loaddb
 
 nprocesses = nbacking + ncaching
+ndbs = nbacking if nbacking > 0 else ncaching
 hosts = []
 pin = ""
 
@@ -50,7 +53,7 @@ def prepare_experiment(xname, ename):
         topdir = "results"
 
     if uniquedir is None:
-        uniquedir = topdir + "/exp_" + str(begintime)
+        uniquedir = topdir + "/exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
         os.makedirs(uniquedir)
 
         if os.path.lexists("last"):
@@ -63,25 +66,31 @@ def prepare_experiment(xname, ename):
             hfile.write(localhost + "\t" + str(startport + h) + "\n");
         hfile.close()
 
-    resdir = os.path.join(uniquedir, xname, ename)
+    resdir = os.path.join(uniquedir, xname, ename if ename else "")
     os.makedirs(resdir)
     return resdir
 
-exps = localexperiments.exps
+# load experiment definitions as global 'exps'
+exph = open(expfile, "r")
+exec(exph, globals())
+exph.close()
 
 for x in exps:
     for e in x['defs']:
+        expname = e['name'] if 'name' in e else None
+        
         # skip this experiment if it doesn't match an argument
-        if args and not [argmatcher for argmatcher in args if fnmatch.fnmatch(e['name'], argmatcher)]:
+        if args and not [argmatcher for argmatcher in args if fnmatch.fnmatch(x['name'], argmatcher)]:
             continue
         elif not args and e.get("disabled"):
             continue
 
-        resdir = prepare_experiment(x["name"], e["name"])
+        resdir = prepare_experiment(x["name"], expname)
         part = options.part if options.part else e['def_part']
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
 
-        print "Running experiment '" + e['name'] + "'."
+        print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
+              " in test '" + x['name'] + "'."
         system("killall pqserver")
         system("killall postgres")
         sleep(3)
@@ -102,7 +111,10 @@ for x in exps:
         for s in range(nprocesses):
             if s < nbacking:
                 servercmd = e['backendcmd']
-                
+            else:
+                servercmd = e['cachecmd']
+            
+            if s < ndbs:
                 if 'def_db_type' in e:
                     if e['def_db_type'] == 'berkeleydb':
                         servercmd = servercmd + \
@@ -138,8 +150,6 @@ for x in exps:
                               " >> " + fartfile + " 2>> " + fartfile
                         print cmd
                         Popen(cmd, shell=True).wait()
-            else:
-                servercmd = e['cachecmd']
                 
             outfile = os.path.join(resdir, "output_srv_")
             fartfile = os.path.join(resdir, "fart_srv_")
@@ -178,9 +188,9 @@ for x in exps:
 
         if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Populating backend from database archive."
-            dbarchive = os.path.join("dumps", x["name"], e["name"], "b_" + str(nbacking))
+            dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
             procs = []
-            for s in range(nbacking):
+            for s in range(ndbs):
                 archfile = os.path.join(dbarchive, "pequod_" + str(s))
                 cmd = "pg_restore -p " + str(dbport + s) + " -d pequod -a " + archfile
                 print cmd
@@ -211,8 +221,8 @@ for x in exps:
         if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Dumping backend database after population."
             procs = []
-            dbarchive = os.path.join("dumps", x["name"], e["name"], "b_" + str(nbacking))
-            for s in range(nbacking):
+            dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
+            for s in range(ndbs):
                 archfile = os.path.join(dbarchive, "pequod_" + str(s))
                 system("rm -rf " + archfile + "; mkdir -p " + dbarchive)
                 cmd = "pg_dump -p " + str(dbport + s) + " -f " + archfile + " -a -F d pequod" 
