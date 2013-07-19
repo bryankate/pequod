@@ -6,7 +6,6 @@
 #include "json.hh"
 #include "pqtwitter.hh"
 #include "pqtwitternew.hh"
-#include "pqfacebook.hh"
 #include "pqhackernews.hh"
 #include "pqanalytics.hh"
 #include "pqclient.hh"
@@ -29,7 +28,6 @@ static Clp_Option options[] = {
     // modes (which builtin app to run
     { "twitter", 0, 1000, 0, Clp_Negate },
     { "twitternew", 0, 1001, 0, Clp_Negate },
-    { "facebook", 'f', 1002, 0, Clp_Negate },
     { "rwmicro", 0, 1003, 0, Clp_Negate },
     { "tests", 0, 1004, 0, 0 },
     { "hn", 'h', 1005, 0, Clp_Negate },
@@ -122,7 +120,7 @@ static Clp_Option options[] = {
     { "postlen", 0, 7005, Clp_ValInt, 0 },
 };
 
-enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
+enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
 enum { db_unknown, db_berkeley, db_postgres };
 
@@ -153,8 +151,6 @@ int main(int argc, char** argv) {
             mode = mode_twitter;
         else if (clp->option->long_name == String("twitternew"))
             mode = mode_twitternew;
-        else if (clp->option->long_name == String("facebook"))
-            mode = mode_facebook;
         else if (clp->option->long_name == String("rwmicro"))
             mode = mode_rwmicro;
         else if (clp->option->long_name == String("tests"))
@@ -496,12 +492,6 @@ int main(int argc, char** argv) {
 	        hr.run(tamer::event<>());
 	    }
         }
-    } else if (mode == mode_facebook) {
-        if (!tp_param.count("shape"))
-            tp_param.set("shape", 5);
-        pq::FacebookPopulator fp(tp_param);
-        pq::facebook_populate(server, fp);
-        pq::facebook_run(server, fp);
     } else if (mode == mode_analytics) {
         if (client_port >= 0)
             pq::run_analytics_remote(tp_param, client_port);
