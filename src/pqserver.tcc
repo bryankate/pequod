@@ -836,10 +836,10 @@ Json Server::stats() const {
         .set("server_max_rss_mb", maxrss_mb(ru.ru_maxrss))
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("server_real_time", to_real(tv - start_tv_))
-        .set("server_insert_time", insert_time_)
-        .set("server_evict_time", evict_time_)
-        .set("server_validate_time", validate_time_);
+        .set("server_wall_time", to_real(tv - start_tv_))
+        .set("server_wall_time_insert", insert_time_)
+        .set("server_wall_time_validate", validate_time_)
+        .set("server_wall_time_evict", evict_time_);
 
     if (enable_validation_logging) {
         uint32_t nclear = 0, ncompute = 0, nupdate = 0,
