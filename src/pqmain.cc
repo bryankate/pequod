@@ -94,8 +94,9 @@ static Clp_Option options[] = {
     { "celebrity4", 0, 4013, Clp_ValInt, 0 },
     { "postlimit", 0, 4014, Clp_ValInt, 0 },
     { "fetch", 0, 4015, 0, Clp_Negate },
-    { "full-scan", 0, 4016, 0, Clp_Negate },
-    { "binary", 0, 4017, 0, Clp_Negate },
+    { "prevalidate", 0, 4016, 0, Clp_Negate },
+    { "prevalidate-inactive", 0, 4017, 0, Clp_Negate },
+    { "binary", 0, 4018, 0, Clp_Negate },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -274,8 +275,10 @@ int main(int argc, char** argv) {
             tp_param.set("postlimit", clp->val.i);
         else if (clp->option->long_name == String("fetch"))
             tp_param.set("fetch", !clp->negated);
-        else if (clp->option->long_name == String("full-scan"))
-            tp_param.set("full_scan", !clp->negated);
+        else if (clp->option->long_name == String("prevalidate"))
+            tp_param.set("prevalidate", !clp->negated);
+        else if (clp->option->long_name == String("prevalidate-inactive"))
+              tp_param.set("prevalidate_inactive", !clp->negated);
         else if (clp->option->long_name == String("binary"))
             tp_param.set("binary", !clp->negated);
 
