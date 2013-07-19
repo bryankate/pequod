@@ -167,7 +167,9 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         // stuff the server does not know about
         if (j[2].is_o()) {
             if (j[2]["get_log"])
-                rj[3] = Json().set("backend", backend_).set("data", log_.as_json());
+                rj[3] = Json().set("backend", backend_)
+                              .set("data", log_.as_json())
+                              .set("internal", server.logs());
             else if (j[2]["write_log"])
                 log_.write_json(std::cerr);
             else if (j[2]["clear_log"])

@@ -115,9 +115,9 @@ class SinkRange : public ServerRangeBase, public Evictable {
     inline bool need_update() const;
     inline bool need_restart() const;
     bool update(Str first, Str last, Server& server,
-                uint64_t now, tamer::gather_rendezvous& gr);
+                uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr);
     bool restart(Str first, Str last, Server& server,
-                 uint64_t now, tamer::gather_rendezvous& gr);
+                 uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
@@ -147,7 +147,8 @@ class SinkRange : public ServerRangeBase, public Evictable {
     rblinks<SinkRange> rblinks_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
-                   Server& server, uint64_t now, tamer::gather_rendezvous& gr);
+                   Server& server, uint64_t now, uint32_t& log,
+                   tamer::gather_rendezvous& gr);
 };
 
 class JoinRange : public ServerRangeBase {
@@ -159,7 +160,8 @@ class JoinRange : public ServerRangeBase {
     inline size_t valid_ranges_size() const;
 
     bool validate(Str first, Str last, Server& server,
-                  uint64_t now, tamer::gather_rendezvous& gr);
+                  uint64_t now, uint32_t& log,
+                  tamer::gather_rendezvous& gr);
 
   public:
     rblinks<JoinRange> rblinks_;
@@ -169,7 +171,8 @@ class JoinRange : public ServerRangeBase {
     uint64_t flush_at_;
 
     inline bool validate_one(Str first, Str last, Server& server,
-                             uint64_t now, tamer::gather_rendezvous& gr);
+                             uint64_t now, uint32_t& log,
+                             tamer::gather_rendezvous& gr);
     struct validate_args;
     bool validate_step(validate_args& va, int joinpos);
     bool validate_filters(validate_args& va);

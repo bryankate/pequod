@@ -23,6 +23,9 @@ class Json;
 namespace pq {
 namespace bi = boost::intrusive;
 class Interconnect;
+class ValidateRecord;
+
+enum { enable_validation_logging = 1 };
 
 class Table : public Datum {
   public:
@@ -58,10 +61,11 @@ class Table : public Datum {
     size_t count(Str key) const;
     size_t size() const;
 
-    std::pair<bool, iterator> validate(Str first, Str last,
-                                       uint64_t now, tamer::gather_rendezvous& gr);
+    std::pair<bool, iterator> validate(Str first, Str last, uint64_t now,
+                                       uint32_t& log, tamer::gather_rendezvous& gr);
+
     inline std::pair<bool, iterator> validate(Str key, uint64_t now,
-                                              tamer::gather_rendezvous& gr);
+                                              uint32_t& log, tamer::gather_rendezvous& gr);
     void invalidate_dependents(Str key);
     void invalidate_dependents(Str first, Str last);
     void invalidate_remote(Str first, Str last);
@@ -220,6 +224,7 @@ class Server {
     inline void set_eviction_details(uint64_t low_water_mb, uint64_t high_water_mb);
 
     Json stats() const;
+    Json logs() const;
     void control(const Json& cmd);
 
     void print(std::ostream& stream);
@@ -230,6 +235,7 @@ class Server {
     mutable Table supertable_;
     uint64_t last_validate_at_;
     struct timeval start_tv_;
+    std::vector<ValidateRecord> validate_log_;
     double validate_time_;
     double insert_time_;
     double evict_time_;
@@ -247,6 +253,22 @@ class Server {
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
 };
+
+class ValidateRecord {
+  public:
+    enum { compute = 1, update = 2, restart = 4, fetch_remote = 8, fetch_persisted = 16 };
+
+    inline ValidateRecord(const uint32_t& time, const uint32_t& log);
+
+    inline const uint32_t& time() const;
+    inline bool is_set(const uint32_t& flag) const;
+    inline bool is_clear() const;
+
+  private:
+    uint32_t time_;
+    uint32_t log_;
+};
+
 
 inline bool operator<(const Table& a, const Table& b) {
     return a.key() < b.key();
@@ -440,12 +462,13 @@ inline size_t Server::count(Str first, Str last) const {
 }
 
 inline std::pair<bool, Table::iterator> Table::validate(Str key, uint64_t now,
+                                                        uint32_t& log,
                                                         tamer::gather_rendezvous& gr) {
     LocalStr<24> next_key;
     next_key.assign_uninitialized(key.length() + 1);
     memcpy(next_key.mutable_data(), key.data(), key.length());
     next_key.mutable_data()[key.length()] = 0;
-    return validate(key, next_key, now, gr);
+    return validate(key, next_key, now, log, gr);
 }
 
 inline void Table::unlink_source(SourceRange* r) {
@@ -651,6 +674,22 @@ inline bool Server::is_remote(int32_t owner) const {
 
 inline bool Server::is_owned_public(int32_t owner) const {
     return owner == me_;
+}
+
+inline ValidateRecord::ValidateRecord(const uint32_t& time, const uint32_t& log)
+    : time_(time), log_(log) {
+}
+
+inline const uint32_t& ValidateRecord::time() const {
+    return time_;
+}
+
+inline bool ValidateRecord::is_set(const uint32_t& flag) const {
+    return log_ & flag;
+}
+
+inline bool ValidateRecord::is_clear() const {
+    return !log_;
 }
 
 } // namespace

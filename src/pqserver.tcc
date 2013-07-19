@@ -289,12 +289,13 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
 }
 
 std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t now,
-                                                 tamer::gather_rendezvous& gr) {
+                                                 uint32_t& log, tamer::gather_rendezvous& gr) {
     Table* t = this;
     while (t->parent_->triecut_)
         t = t->parent_;
 
     bool completed = true;
+    bool fetching = false;
     int32_t owner = server_->owner_for(first);
 
     // todo: if we guarantee that a subtable is all remote, we can
@@ -309,14 +310,14 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                     break;
                 else {
                     t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
-                    completed = false;
+                    fetching = true;
                 }
             }
             have = r->iend();
 
             if (r->pending()) {
                 r->add_waiting(gr.make_event());
-                completed = false;
+                fetching = true;
             }
 
             if (r->evicted()) {
@@ -329,7 +330,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                                                           server_->me(), tamer::event<>());
                 t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
 
-                completed = false;
+                fetching = true;
                 delete rr;
             }
             else {
@@ -344,8 +345,11 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
 
         if (have < last) {
             t->fetch_remote(have, last, owner, gr.make_event());
-            completed = false;
+            fetching = true;
         }
+
+        if (fetching)
+            log |= ValidateRecord::fetch_remote;
     }
     else if (t->njoins_ != 0) {
         if (t->njoins_ == 1) {
@@ -365,7 +369,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         }
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
-            completed &= it->validate(first, last, *server_, now, gr);
+            completed &= it->validate(first, last, *server_, now, log, gr);
     }
     else if (server_->persistent_store()) {
         Str have = first;
@@ -385,7 +389,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
 
             if (r->pending()) {
                 r->add_waiting(gr.make_event());
-                completed = false;
+                fetching = true;
             }
 
             if (r->evicted()) {
@@ -399,7 +403,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
 
-                completed = false;
+                fetching = true;
                 delete pr;
             }
             else {
@@ -417,8 +421,12 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             persisted_ranges_.insert(*pr);
             server_->lru_add(pr);
         }
+
+        if (fetching)
+            log |= ValidateRecord::fetch_persisted;
     }
 
+    completed &= !fetching;
     return std::make_pair(completed, lower_bound(first));
 }
 
@@ -716,6 +724,7 @@ auto Server::create_table(Str tname) -> Table::local_iterator {
 tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     tvars {
         struct timeval tv[2];
+        uint32_t log = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(key);
@@ -724,12 +733,15 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     gettimeofday(&tv[0], NULL);
 
     do {
-        it = t->validate(key, next_validate_at(), gr);
+        it = t->validate(key, next_validate_at(), log, gr);
         twait(gr);
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
-    validate_time_ += to_real(tv[1] - tv[0]);
+    uint64_t difft = tv2us(tv[1] - tv[0]);
+    validate_time_ += fromus(difft);
+    if (enable_validation_logging)
+        validate_log_.emplace_back(difft, log);
 
     maybe_evict();
     done(it.second);
@@ -738,6 +750,7 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
 tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> done) {
     tvars {
         struct timeval tv[2];
+        uint32_t log = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(first, last);
@@ -746,12 +759,15 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     gettimeofday(&tv[0], NULL);
 
     do {
-        it = t->validate(first, last, next_validate_at(), gr);
+        it = t->validate(first, last, next_validate_at(), log, gr);
         twait(gr);
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
-    validate_time_ += to_real(tv[1] - tv[0]);
+    uint64_t difft = tv2us(tv[1] - tv[0]);
+    validate_time_ += fromus(difft);
+    if (enable_validation_logging)
+        validate_log_.emplace_back(difft, log);
 
     maybe_evict();
     done(it.second);
@@ -817,13 +833,43 @@ Json Server::stats() const {
 	.set("source_ranges_size", source_ranges_size)
 	.set("join_ranges_size", join_ranges_size)
 	.set("valid_ranges_size", sink_ranges_size)
+        .set("server_max_rss_mb", maxrss_mb(ru.ru_maxrss))
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
         .set("server_real_time", to_real(tv - start_tv_))
-        .set("server_validate_time", validate_time_)
         .set("server_insert_time", insert_time_)
         .set("server_evict_time", evict_time_)
-        .set("server_max_rss_mb", ru.ru_maxrss / 1024);
+        .set("server_validate_time", validate_time_);
+
+    if (enable_validation_logging) {
+        uint32_t nclear = 0, ncompute = 0, nupdate = 0,
+                 nrestart = 0, nremote = 0, npersisted = 0;
+
+        for (auto& v : validate_log_) {
+            if (v.is_clear()) {
+                ++nclear;
+                continue;
+            }
+            if (v.is_set(ValidateRecord::compute))
+                ++ncompute;
+            if (v.is_set(ValidateRecord::update))
+                ++nupdate;
+            if (v.is_set(ValidateRecord::restart))
+                ++nrestart;
+            if (v.is_set(ValidateRecord::fetch_remote))
+                ++nremote;
+            if (v.is_set(ValidateRecord::fetch_persisted))
+                ++npersisted;
+        }
+
+        answer.set("server_validate_nclear", nclear)
+              .set("server_validate_ncompute", ncompute)
+              .set("server_validate_nupdate", nupdate)
+              .set("server_validate_nrestart", nrestart)
+              .set("server_validate_nfetch_remote", nremote)
+              .set("server_validate_nfetch_persisted", npersisted);
+    }
+
     if (SourceRange::allocated_key_bytes)
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
     if (ServerRangeBase::allocated_key_bytes)
@@ -835,9 +881,30 @@ Json Server::stats() const {
     return answer.set("tables", tables);
 }
 
+Json Server::logs() const {
+    Json logs;
+
+    if (enable_validation_logging) {
+        Json l;
+        for (auto& v : validate_log_)
+            l.push_back(Json().set("time", v.time())
+                              .set("clear", v.is_clear())
+                              .set("compute", v.is_set(ValidateRecord::compute))
+                              .set("update", v.is_set(ValidateRecord::update))
+                              .set("restart", v.is_set(ValidateRecord::restart))
+                              .set("fetch_remote", v.is_set(ValidateRecord::fetch_remote))
+                              .set("fetch_persisted", v.is_set(ValidateRecord::fetch_persisted)));
+        logs.set("validation", l);
+    }
+
+    return logs;
+}
+
 void Server::control(const Json& cmd) {
     if (cmd["quit"])
         exit(0);
+    else if (cmd["clear_log"])
+        validate_log_.clear();
     else if (cmd["print"])
         print(std::cerr);
     else if (cmd["print_table_keys"]) {
