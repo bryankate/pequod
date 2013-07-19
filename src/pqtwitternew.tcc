@@ -93,6 +93,11 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
 
     assert(!(push_ && pull_));
 
+    if (pull_ || push_) {
+        prevalidate_ = false;
+        prevalidate_inactive_ = false;
+    }
+
     vector<double> op_weight(n_op, 0);
 
     // these are not percentages, but weights, so it is
