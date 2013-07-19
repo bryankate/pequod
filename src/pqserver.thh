@@ -25,7 +25,7 @@ namespace bi = boost::intrusive;
 class Interconnect;
 class ValidateRecord;
 
-enum { enable_validation_logging = 1 };
+enum { enable_validation_logging = 0 };
 
 class Table : public Datum {
   public:
