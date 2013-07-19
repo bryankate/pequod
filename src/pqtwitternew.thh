@@ -87,6 +87,8 @@ class TwitterNewPopulator {
     inline bool pull() const { return pull_; }
     inline bool pull_celeb() const { return celebthresh_; }
     inline bool fetch() const { return fetch_; }
+    inline bool prevalidate() const { return prevalidate_; }
+    inline bool prevalidate_inactive() const { return prevalidate_inactive_; }
     inline bool writearound() const { return writearound_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
@@ -124,6 +126,8 @@ class TwitterNewPopulator {
     bool push_;
     bool pull_;
     bool fetch_;
+    bool prevalidate_;
+    bool prevalidate_inactive_;
     bool writearound_;
     bool log_;
     bool synchronous_;
@@ -467,6 +471,7 @@ class TwitterNewRunner {
     S& server_;
     TwitterNewPopulator& tp_;
     std::deque<uint32_t> active_;
+    std::vector<uint32_t> inactive_;
     std::deque<uint32_t> loggedin_;
     uint32_t currtime_;
     tamer::event<> trigger_;
@@ -474,6 +479,7 @@ class TwitterNewRunner {
 
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
+    tamed void prevalidate(TwitterUser* user, event<> e);
     tamed void check(TwitterUser* user, uint32_t time,
                      uint32_t beg_scan, uint32_t end_scan, event<uint32_t> e);
     tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
@@ -496,6 +502,16 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
     server_.subscribe((tp_.push()) ? poster : subscriber,
                       (tp_.push()) ? subscriber : poster,
                       e);
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::prevalidate(TwitterUser* user, event<> done) {
+    tvars {
+        size_t count = 0;
+    }
+
+    twait { server_.timeline_add_count(user->uid(), 0, END_TIME, make_event(count)); }
+    done();
 }
 
 tamed template <typename S>
@@ -682,6 +698,14 @@ void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
     }
 }
 
+class RandomAdapter {
+  public:
+    RandomAdapter(boost::mt19937& gen) : gen_(gen) { }
+    uint32_t operator()(uint32_t arg) { return gen_() % arg; }
+  private:
+    boost::mt19937& gen_;
+};
+
 tamed template <typename S>
 void TwitterNewRunner<S>::run(tamer::event<> done) {
     tvars {
@@ -709,18 +733,34 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     gen.seed(13918 + tp_.groupid());
     periodic_logger(done);
 
-    // create a working set of already logged in users
-    if (tp_.verbose()) { std::cerr << "Logging in active users." << std::endl; }
+    // create a working set of users
+    if (tp_.verbose()) { std::cerr << "Selecting active users." << std::endl; }
     for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u) {
-        if (active_rng(gen) >= tp_.pct_active())
+        if (active_rng(gen) >= tp_.pct_active()) {
+            inactive_.push_back(u);
             continue;
+        }
 
-        check(tp_.managed_user(u), currtime_, 0, 0, gr.make_event(nread));
-        twait{ server_.pace(make_event()); }
+        if (tp_.prevalidate()) {
+            loggedin_.push_back(u);
+            prevalidate(tp_.managed_user(u), gr.make_event());
+            twait{ server_.pace(make_event()); }
+        }
+        else
+            active_.push_back(u);
     }
     twait(gr);
 
-    std::random_shuffle(loggedin_.begin(), loggedin_.end());
+    if (tp_.prevalidate_inactive()) {
+        for (u = 0; u != inactive_.size(); ++u) {
+            prevalidate(tp_.managed_user(inactive_[u]), gr.make_event());
+            twait{ server_.pace(make_event()); }
+        }
+        twait(gr);
+    }
+
+    std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
+    std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
     if (loggedin_.empty() && tp_.pct_active() > 0)
         assert(false && "There were no active users selected.");
 

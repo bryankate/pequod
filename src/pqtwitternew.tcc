@@ -75,6 +75,8 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
       fetch_(param["fetch"].as_b(false)),
+      prevalidate_(param["prevalidate"].as_b(true)),
+      prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
       writearound_(param["writearound"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
