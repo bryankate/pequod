@@ -206,7 +206,7 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
             break;
 
         // round robin connections with data to read
-        twait { tamer::at_asap(make_event()); }
+        //twait { tamer::at_asap(make_event()); }
     }
 
     cfd.close();
