@@ -86,13 +86,19 @@ class Restart {
     friend class SinkRange;
 };
 
-class SinkRange : public ServerRangeBase, public Evictable {
+class SinkRange : public pequod_set_base_hook, public KeyHook<SinkRange>, public Evictable {
   public:
     SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now);
     ~SinkRange();
 
     inline void ref();
     inline void deref();
+
+    typedef Str key_type;
+    inline key_type key() const;
+    inline Str ibegin() const;
+    inline Str iend() const;
+    inline ::interval<Str> interval() const;
 
     inline bool valid() const;
     void invalidate();
@@ -129,7 +135,11 @@ class SinkRange : public ServerRangeBase, public Evictable {
     static uint64_t invalidate_hit_keys;
     static uint64_t invalidate_miss_keys;
 
+  public:
+    pequod_set_member_hook member_hook_;
   private:
+    LocalStr<24> ibegin_;
+    LocalStr<24> iend_;
     Table* table_;
     mutable Datum* hint_;
     unsigned context_mask_;
@@ -143,8 +153,6 @@ class SinkRange : public ServerRangeBase, public Evictable {
     mutable local_vector<Datum*, 12> data_;
   protected:
     JoinRange* jr_;
-  public:
-    rblinks<SinkRange> rblinks_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
                    Server& server, uint64_t now, uint32_t& log,
@@ -167,7 +175,7 @@ class JoinRange : public ServerRangeBase {
     rblinks<JoinRange> rblinks_;
   private:
     Join* join_;
-    interval_tree<SinkRange> valid_ranges_;
+    boost::intrusive::set<SinkRange> valid_ranges_;
     uint64_t flush_at_;
 
     inline bool validate_one(Str first, Str last, Server& server,
@@ -292,6 +300,22 @@ inline void SinkRange::deref() {
         delete this;
 }
 
+inline SinkRange::key_type SinkRange::key() const {
+    return ibegin_;
+}
+
+inline Str SinkRange::ibegin() const {
+    return ibegin_;
+}
+
+inline Str SinkRange::iend() const {
+    return iend_;
+}
+
+inline ::interval<Str> SinkRange::interval() const {
+    return make_interval(ibegin(), iend());
+}
+
 inline bool SinkRange::valid() const {
     return table_;
 }
@@ -360,6 +384,10 @@ inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterat
 
 inline Datum* SinkRange::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
+}
+
+inline bool operator<(const SinkRange& a, const SinkRange& b) {
+    return a.key() < b.key();
 }
 
 inline Str IntermediateUpdate::context() const {

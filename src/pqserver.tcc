@@ -61,7 +61,7 @@ Table* Table::next_table_for(Str key) {
         if (Table** tp = subtables_.get_pointer(subtable_hash_for(key)))
             return *tp;
     } else {
-        auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+        auto it = store_.lower_bound(key.prefix(triecut_), KeyCompare());
         if (it != store_.end() && it->key() == key.prefix(triecut_))
             return &it->table();
     }
@@ -75,7 +75,7 @@ Table* Table::make_next_table_for(Str key) {
             return t;
     }
 
-    auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+    auto it = store_.lower_bound(key.prefix(triecut_), KeyCompare());
     if (it != store_.end() && it->key() == key.prefix(triecut_))
         return &it->table();
 
@@ -94,7 +94,7 @@ auto Table::lower_bound(Str key) -> iterator {
     int len;
  retry:
     len = tbl->triecut_ ? tbl->triecut_ : key.length();
-    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    auto it = tbl->store_.lower_bound(key.prefix(len), KeyCompare());
     if (len == tbl->triecut_ && it != tbl->store_.end() && it->key() == key.prefix(len)) {
         assert(it->is_table());
         tbl = static_cast<Table*>(it.operator->());
@@ -108,7 +108,7 @@ size_t Table::count(Str key) const {
     int len;
  retry:
     len = tbl->triecut_ ? tbl->triecut_ : key.length();
-    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    auto it = tbl->store_.lower_bound(key.prefix(len), KeyCompare());
     if (it != tbl->store_.end() && it->key() == key.prefix(len)) {
         if (len == tbl->triecut_) {
             assert(it->is_table());
@@ -189,7 +189,7 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
 auto Table::insert(Table& t) -> local_iterator {
     assert(!triecut_ || t.name().length() < triecut_);
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(t.name(), DatumCompare(), cd);
+    auto p = store_.insert_check(t.name(), KeyCompare(), cd);
     assert(p.second);
     return store_.insert_commit(t, cd);
 }
@@ -202,7 +202,7 @@ void Table::insert(Str key, String value) {
         server_->persistent_store()->enqueue(new PersistentWrite(key, value));
 
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    auto p = store_.insert_check(key, KeyCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
@@ -225,7 +225,7 @@ void Table::erase(Str key) {
                  server_->is_owned_public(server_->owner_for(key))))
         server_->persistent_store()->enqueue(new PersistentErase(key));
 
-    auto it = store_.find(key, DatumCompare());
+    auto it = store_.find(key, KeyCompare());
     if (it != store_.end())
         erase(iterator(this, it));
     ++nerase_;
@@ -238,16 +238,16 @@ std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink
     Datum* hint = sink->hint();
     if (!hint || !hint->valid()) {
         ++nmodify_nohint_;
-        p = store_.insert_check(key, DatumCompare(), cd);
+        p = store_.insert_check(key, KeyCompare(), cd);
     } else {
         p.first = store_.iterator_to(*hint);
         if (hint->key() == key)
             p.second = false;
         else if (hint == store_.rbegin().operator->())
-            p = store_.insert_check(store_.end(), key, DatumCompare(), cd);
+            p = store_.insert_check(store_.end(), key, KeyCompare(), cd);
         else {
             ++p.first;
-            p = store_.insert_check(p.first, key, DatumCompare(), cd);
+            p = store_.insert_check(p.first, key, KeyCompare(), cd);
         }
     }
     return p;
@@ -288,8 +288,15 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
     ++nmodify_;
 }
 
+static bool cross_table_warning = false;
+
 std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t now,
                                                  uint32_t& log, tamer::gather_rendezvous& gr) {
+    if (triecut_ && !cross_table_warning) {
+        std::cerr << "warning: [" << first << "," << last << ") crosses subtable boundary\n";
+        cross_table_warning = true;
+    }
+
     Table* t = this;
     while (t->parent_->triecut_)
         t = t->parent_;
@@ -353,7 +360,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
     }
     else if (t->njoins_ != 0) {
         if (t->njoins_ == 1) {
-            auto it = store_.lower_bound(first, DatumCompare());
+            auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
             if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
                 --itx;
@@ -471,7 +478,7 @@ inline void Table::invalidate_dependents_local(Str first, Str last) {
 }
 
 void Table::invalidate_dependents_down(Str first, Str last) {
-    for (auto it = store_.lower_bound(first.prefix(triecut_), DatumCompare());
+    for (auto it = store_.lower_bound(first.prefix(triecut_), KeyCompare());
          it != store_.end() && it->key() < last;
          ++it)
         if (it->is_table()) {

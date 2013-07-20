@@ -944,6 +944,32 @@ k|<author> = count v|<chapter>|<voter>\
     CHECK_EQ(k0->value(), "2");
 }
 
+void test_iupdate_t() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("\
+k|<author> = count v|<chapter>|<voter>\
+  using b|<author>|<book>, c|<book>|<chapter>\
+  where author:5, chapter:5t, book:5, voter:5"));
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    server.insert("b|u0000|bxxx1", "");
+    server.insert("c|bxxx1|c0001", "");
+    server.insert("v|c0001|u0001", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    auto k0 = server.find("k|u0000");
+    mandatory_assert(k0);
+    CHECK_EQ(k0->value(), "1");
+
+    server.insert("c|bxxx1|c0002", "");
+    server.insert("v|c0002|u0002", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    CHECK_EQ(k0->value(), "2");
+}
+
 void test_iupdate2() {
     pq::Server server;
     pq::Join j1;
@@ -1266,6 +1292,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
+    ADD_TEST(test_iupdate_t);
     ADD_TEST(test_celebrity);
     ADD_TEST(test_berkeleydb);
     ADD_EXP_TEST(test_postgres);

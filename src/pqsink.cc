@@ -54,7 +54,7 @@ inline bool JoinRange::validate_one(Str first, Str last, Server& server,
                      nullptr, SourceRange::notify_insert, log, gr);
     join_->sink().match_range(va.rm);
     va.sink = new SinkRange(this, va.rm, now);
-    //std::cerr << "validate_one " << first << ", " << last << " " << *join_ << "\n";
+    //std::cerr << "validate_one " << first << ", " << last << "\n";
     valid_ranges_.insert(*va.sink);
 
     if (join_->maintained())
@@ -80,10 +80,17 @@ bool JoinRange::validate(Str first, Str last, Server& server,
 
     bool complete = true;
     Str last_valid = first;
-    for (auto it = valid_ranges_.begin_overlaps(first, last);
-         it != valid_ranges_.end(); ) {
+    auto it = valid_ranges_.lower_bound(first, KeyCompare());
+    if (it != valid_ranges_.begin()) {
+        auto itx = it;
+        --itx;
+        if (itx->iend() > first)
+            it = itx;
+    }
+    while (it != valid_ranges_.end() && it->key() < last) {
         SinkRange* sink = it.operator->();
         if (sink->has_expired(now)) {
+            //std::cerr << "validate_skip " << sink->ibegin() << ", " << sink->iend() << " [" << first << "," << last << ")\n";
             ++it;
             sink->invalidate();
         } else {
@@ -290,9 +297,14 @@ Restart::Restart(SinkRange* sink, int joinpos, const Match& m, int notifier)
 }
 
 SinkRange::SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now)
-    : ServerRangeBase(rm.first, rm.last), table_(nullptr), hint_{nullptr},
+    : ibegin_(rm.first), iend_(rm.last), table_(nullptr), hint_{nullptr},
       dangerous_slot_(rm.dangerous_slot), expires_at_(0),
       refcount_(0), data_free_(uintptr_t(-1)), jr_(jr) {
+
+    if (!ibegin_.is_local())
+        ServerRangeBase::allocated_key_bytes += ibegin_.length();
+    if (!iend_.is_local())
+        ServerRangeBase::allocated_key_bytes += iend_.length();
 
     Join* j = jr_->join();
 
