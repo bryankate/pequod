@@ -761,7 +761,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
     std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
-    if (loggedin_.empty() && tp_.pct_active() > 0)
+    if (tp_.prevalidate() && loggedin_.empty() && tp_.pct_active() > 0)
         assert(false && "There were no active users selected.");
 
     log_.clear();
