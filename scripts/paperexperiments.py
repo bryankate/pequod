@@ -18,7 +18,7 @@ def define_experiments():
     # policy experiment
     # can be run on on a multiprocessor
     exp = {'name': "policy", 'defs': []}
-    users = "--nusers=twitter_graph_1.8M.dat"
+    users = "--graph=twitter_graph_1.8M.dat"
     for active in [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
         clientBase = "%s %s --pactive=%d --duration=50000000" % (clientCmd, users, active)
@@ -55,7 +55,7 @@ def define_experiments():
     # client push vs. pequod experiment
     # can be run on a multiprocessor
     exp = {'name': "client_push", 'defs': []}
-    users = "--nusers=twitter_graph_1.8M.dat"
+    users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --pactive=70 --duration=50000000" % (clientCmd, users)
     
@@ -94,7 +94,7 @@ def define_experiments():
     # --disable-value-sharing to produce the results for the different factors.
     # can be run on a multiprocessor
     exp = {'name': "optimization", 'defs': []}
-    users = "--nusers=twitter_graph_1.8M.dat"
+    users = "--graph=twitter_graph_1.8M.dat"
     
     exp['defs'].append(
         {'name': "pequod",
@@ -111,7 +111,7 @@ def define_experiments():
     # should be run both on a multiprocessor and in a distributed setup 
     # with one cache server and one or more backing servers that own all the base data
     exp = {'name': "computation", 'defs': []}
-    users = "--nusers=twitter_graph_1.8M.dat"
+    users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=100000" % (populateCmd, users),
     clientBase = "%s %s --no-prevalidate --pactive=70 --duration=50000000" % (clientCmd, users)
     
