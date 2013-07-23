@@ -242,7 +242,7 @@ void BerkeleyDBStore::run_monitor(pq::Server&) {
 
 #endif
 
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
 #include <iostream>
 
 PostgresStore::PostgresStore(String db, String host, uint32_t port)
@@ -434,7 +434,7 @@ PostgresListener::PostgresListener(pqxx::connection_base& conn, const std::strin
 }
 
 void PostgresListener::operator()(const std::string& payload, int32_t) {
-    std::cerr << "Notification: " << payload << std::endl;
+    //std::cerr << "Notification: " << payload << std::endl;
 
     Json j;
     j.assign_parse(payload);

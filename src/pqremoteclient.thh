@@ -26,8 +26,12 @@ class RemoteClient {
 
     tamed void count(const String& first, const String& last,
                      event<size_t> e);
+    tamed void count(const String& first, const String& last,
+                     const String& scanlast, event<size_t> e);
     tamed void add_count(const String& first, const String& last,
                          event<size_t> e);
+    tamed void add_count(const String& first, const String& last,
+                         const String& scanlast, event<size_t> e);
 
     template <typename R>
     inline void pace(tamer::preevent<R> done);
@@ -103,8 +107,11 @@ class RemoteClient {
       private:
         mutable Json result_;
     };
+
     tamed void scan(const String& first, const String& last,
                     event<scan_result> e);
+    tamed void scan(const String& first, const String& last,
+                    const String& scanlast, event<scan_result> e);
 
     tamed void stats(event<Json> e);
     tamed void control(const Json& cmd, event<Json> e);

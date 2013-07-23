@@ -69,11 +69,14 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       duration_(param["duration"].as_i(100000) / ngroups_),
       popduration_(param["popduration"].as_i(0)),
       postlimit_(param["postlimit"].as_i(0) / ngroups_),
+      initialize_(param["initialize"].as_b(true)),
       populate_(param["populate"].as_b(true)),
       execute_(param["execute"].as_b(true)),
       push_(param["push"].as_b(false)),
       pull_(param["pull"].as_b(false)),
       fetch_(param["fetch"].as_b(false)),
+      prevalidate_(param["prevalidate"].as_b(true)),
+      prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
       writearound_(param["writearound"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
@@ -89,6 +92,11 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       shape_(param["shape"].as_d(55)) {
 
     assert(!(push_ && pull_));
+
+    if (pull_ || push_) {
+        prevalidate_ = false;
+        prevalidate_inactive_ = false;
+    }
 
     vector<double> op_weight(n_op, 0);
 
@@ -287,6 +295,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
         TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
     }
     twait { mc->connect(make_event()); }
+    twait { tr->initialize(make_event()); }
     twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }
     delete tr;

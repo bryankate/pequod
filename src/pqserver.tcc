@@ -61,7 +61,7 @@ Table* Table::next_table_for(Str key) {
         if (Table** tp = subtables_.get_pointer(subtable_hash_for(key)))
             return *tp;
     } else {
-        auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+        auto it = store_.lower_bound(key.prefix(triecut_), KeyCompare());
         if (it != store_.end() && it->key() == key.prefix(triecut_))
             return &it->table();
     }
@@ -75,7 +75,7 @@ Table* Table::make_next_table_for(Str key) {
             return t;
     }
 
-    auto it = store_.lower_bound(key.prefix(triecut_), DatumCompare());
+    auto it = store_.lower_bound(key.prefix(triecut_), KeyCompare());
     if (it != store_.end() && it->key() == key.prefix(triecut_))
         return &it->table();
 
@@ -94,7 +94,7 @@ auto Table::lower_bound(Str key) -> iterator {
     int len;
  retry:
     len = tbl->triecut_ ? tbl->triecut_ : key.length();
-    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    auto it = tbl->store_.lower_bound(key.prefix(len), KeyCompare());
     if (len == tbl->triecut_ && it != tbl->store_.end() && it->key() == key.prefix(len)) {
         assert(it->is_table());
         tbl = static_cast<Table*>(it.operator->());
@@ -108,7 +108,7 @@ size_t Table::count(Str key) const {
     int len;
  retry:
     len = tbl->triecut_ ? tbl->triecut_ : key.length();
-    auto it = tbl->store_.lower_bound(key.prefix(len), DatumCompare());
+    auto it = tbl->store_.lower_bound(key.prefix(len), KeyCompare());
     if (it != tbl->store_.end() && it->key() == key.prefix(len)) {
         if (len == tbl->triecut_) {
             assert(it->is_table());
@@ -189,7 +189,7 @@ void Server::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
 auto Table::insert(Table& t) -> local_iterator {
     assert(!triecut_ || t.name().length() < triecut_);
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(t.name(), DatumCompare(), cd);
+    auto p = store_.insert_check(t.name(), KeyCompare(), cd);
     assert(p.second);
     return store_.insert_commit(t, cd);
 }
@@ -202,7 +202,7 @@ void Table::insert(Str key, String value) {
         server_->persistent_store()->enqueue(new PersistentWrite(key, value));
 
     store_type::insert_commit_data cd;
-    auto p = store_.insert_check(key, DatumCompare(), cd);
+    auto p = store_.insert_check(key, KeyCompare(), cd);
     Datum* d;
     if (p.second) {
 	d = new Datum(key, value);
@@ -225,7 +225,7 @@ void Table::erase(Str key) {
                  server_->is_owned_public(server_->owner_for(key))))
         server_->persistent_store()->enqueue(new PersistentErase(key));
 
-    auto it = store_.find(key, DatumCompare());
+    auto it = store_.find(key, KeyCompare());
     if (it != store_.end())
         erase(iterator(this, it));
     ++nerase_;
@@ -238,16 +238,16 @@ std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink
     Datum* hint = sink->hint();
     if (!hint || !hint->valid()) {
         ++nmodify_nohint_;
-        p = store_.insert_check(key, DatumCompare(), cd);
+        p = store_.insert_check(key, KeyCompare(), cd);
     } else {
         p.first = store_.iterator_to(*hint);
         if (hint->key() == key)
             p.second = false;
         else if (hint == store_.rbegin().operator->())
-            p = store_.insert_check(store_.end(), key, DatumCompare(), cd);
+            p = store_.insert_check(store_.end(), key, KeyCompare(), cd);
         else {
             ++p.first;
-            p = store_.insert_check(p.first, key, DatumCompare(), cd);
+            p = store_.insert_check(p.first, key, KeyCompare(), cd);
         }
     }
     return p;
@@ -288,13 +288,21 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
     ++nmodify_;
 }
 
+static bool cross_table_warning = false;
+
 std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t now,
-                                                 tamer::gather_rendezvous& gr) {
+                                                 uint32_t& log, tamer::gather_rendezvous& gr) {
+    if (triecut_ && !cross_table_warning) {
+        std::cerr << "warning: [" << first << "," << last << ") crosses subtable boundary\n";
+        cross_table_warning = true;
+    }
+
     Table* t = this;
     while (t->parent_->triecut_)
         t = t->parent_;
 
     bool completed = true;
+    bool fetching = false;
     int32_t owner = server_->owner_for(first);
 
     // todo: if we guarantee that a subtable is all remote, we can
@@ -309,14 +317,14 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                     break;
                 else {
                     t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
-                    completed = false;
+                    fetching = true;
                 }
             }
             have = r->iend();
 
             if (r->pending()) {
                 r->add_waiting(gr.make_event());
-                completed = false;
+                fetching = true;
             }
 
             if (r->evicted()) {
@@ -329,7 +337,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                                                           server_->me(), tamer::event<>());
                 t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
 
-                completed = false;
+                fetching = true;
                 delete rr;
             }
             else {
@@ -344,12 +352,15 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
 
         if (have < last) {
             t->fetch_remote(have, last, owner, gr.make_event());
-            completed = false;
+            fetching = true;
         }
+
+        if (fetching)
+            log |= ValidateRecord::fetch_remote;
     }
     else if (t->njoins_ != 0) {
         if (t->njoins_ == 1) {
-            auto it = store_.lower_bound(first, DatumCompare());
+            auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
             if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
                 --itx;
@@ -365,9 +376,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         }
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
                 it != t->join_ranges_.end(); ++it)
-            completed &= it->validate(first, last, *server_, now, gr);
+            completed &= it->validate(first, last, *server_, now, log, gr);
     }
-#if 0
     else if (server_->persistent_store()) {
         Str have = first;
         auto r = t->persisted_ranges_.begin_overlaps(first, last);
@@ -386,7 +396,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
 
             if (r->pending()) {
                 r->add_waiting(gr.make_event());
-                completed = false;
+                fetching = true;
             }
 
             if (r->evicted()) {
@@ -400,7 +410,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
 
-                completed = false;
+                fetching = true;
                 delete pr;
             }
             else {
@@ -418,9 +428,12 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             persisted_ranges_.insert(*pr);
             server_->lru_add(pr);
         }
-    }
-#endif
 
+        if (fetching)
+            log |= ValidateRecord::fetch_persisted;
+    }
+
+    completed &= !fetching;
     return std::make_pair(completed, lower_bound(first));
 }
 
@@ -465,7 +478,7 @@ inline void Table::invalidate_dependents_local(Str first, Str last) {
 }
 
 void Table::invalidate_dependents_down(Str first, Str last) {
-    for (auto it = store_.lower_bound(first.prefix(triecut_), DatumCompare());
+    for (auto it = store_.lower_bound(first.prefix(triecut_), KeyCompare());
          it != store_.end() && it->key() < last;
          ++it)
         if (it->is_table()) {
@@ -507,14 +520,15 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     pr->add_waiting(done);
     persisted_ranges_.insert(*pr);
 
-    std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
+    //std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
     twait {
         // BNK: this doesn't feel right. is tamer's event loop thread safe?
         op.set_trigger(make_event());
         server_->persistent_store()->enqueue(&op);
     }
 
-    std::cerr << "persisted data fetch: " << pr->interval() << " returned " << res.size() << " results" << std::endl;
+    //std::cerr << "persisted data fetch: " << pr->interval() << " returned "
+    //          << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -548,8 +562,8 @@ void Table::evict_persisted(PersistedRange* pr) {
         ++nevict_persistent_;
     }
 
-    std::cerr << "evicting persisted range " << pr->interval()
-              << ", keeping " << kept << " source ranges in place " << std::endl;
+    //std::cerr << "evicting persisted range " << pr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(pr);
 
@@ -573,14 +587,15 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     rr->add_waiting(done);
     remote_ranges_.insert(*rr);
 
-    std::cerr << "fetching remote data: " << rr->interval() << std::endl;
+    //std::cerr << "fetching remote data: " << rr->interval() << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
     twait { server_->interconnect(owner)->pace(make_event()); }
 
-    std::cerr << "remote data fetch: " << rr->interval() << " returned " << res.size() << " results" << std::endl;
+    //std::cerr << "remote data fetch: " << rr->interval() << " returned "
+    //          << res.size() << " results" << std::endl;
 
     // XXX: not sure if this is correct. what if the range goes outside this triecut?
     Table& sourcet = server_->make_table_for(first);
@@ -615,8 +630,8 @@ void Table::evict_remote(RemoteRange* rr) {
         ++nevict_remote_;
     }
 
-    std::cerr << "evicting remote range " << rr->interval()
-              << ", keeping " << kept << " source ranges in place " << std::endl;
+    //std::cerr << "evicting remote range " << rr->interval()
+    //          << ", keeping " << kept << " source ranges in place " << std::endl;
 
     server_->lru_remove(rr);
 
@@ -672,7 +687,7 @@ void Table::invalidate_remote(Str first, Str last) {
         if (rrange->pending())
             continue;
 
-        std::cerr << "invalidating remote range " << rrange->interval() << std::endl;
+        //std::cerr << "invalidating remote range " << rrange->interval() << std::endl;
         t->remote_ranges_.erase(*rrange);
         t->invalidate_dependents(rrange->ibegin(), rrange->iend());
 
@@ -691,10 +706,11 @@ void Table::invalidate_remote(Str first, Str last) {
 Server::Server()
     : persistent_store_(nullptr), writethrough_(false),
       supertable_(Str(), nullptr, this),
-      last_validate_at_(0), validate_time_(0), insert_time_(0),
+      last_validate_at_(0), validate_time_(0), insert_time_(0), evict_time_(0),
       part_(nullptr), me_(-1),
       prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
 
+    gettimeofday(&start_tv_, NULL);
     gen_.seed(112181);
 }
 
@@ -715,6 +731,7 @@ auto Server::create_table(Str tname) -> Table::local_iterator {
 tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     tvars {
         struct timeval tv[2];
+        uint32_t log = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(key);
@@ -723,12 +740,15 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     gettimeofday(&tv[0], NULL);
 
     do {
-        it = t->validate(key, next_validate_at(), gr);
+        it = t->validate(key, next_validate_at(), log, gr);
         twait(gr);
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
-    validate_time_ += to_real(tv[1] - tv[0]);
+    uint64_t difft = tv2us(tv[1] - tv[0]);
+    validate_time_ += fromus(difft);
+    if (enable_validation_logging)
+        validate_log_.emplace_back(difft, log);
 
     maybe_evict();
     done(it.second);
@@ -737,6 +757,7 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
 tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> done) {
     tvars {
         struct timeval tv[2];
+        uint32_t log = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(first, last);
@@ -745,30 +766,18 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     gettimeofday(&tv[0], NULL);
 
     do {
-        it = t->validate(first, last, next_validate_at(), gr);
+        it = t->validate(first, last, next_validate_at(), log, gr);
         twait(gr);
     } while(!it.first);
 
     gettimeofday(&tv[1], NULL);
-    validate_time_ += to_real(tv[1] - tv[0]);
+    uint64_t difft = tv2us(tv[1] - tv[0]);
+    validate_time_ += fromus(difft);
+    if (enable_validation_logging)
+        validate_log_.emplace_back(difft, log);
 
     maybe_evict();
     done(it.second);
-}
-
-tamed void Server::validate_count(Str first, Str last, tamer::event<size_t> done) {
-    tvars {
-        Table::iterator it;
-    }
-
-    twait { validate(first, last, make_event(it)); }
-    auto itend = make_table_for(first, last).end();
-    size_t n = 0;
-
-    for (; it != itend && it->key() < last; ++it)
-        ++n;
-
-    done(n);
 }
 
 void Table::add_stats(Json& j) const {
@@ -800,7 +809,10 @@ Json Server::stats() const {
     size_t store_size = 0, source_ranges_size = 0, join_ranges_size = 0,
            sink_ranges_size = 0, remote_ranges_size = 0, persisted_ranges_size = 0;
     struct rusage ru;
+    struct timeval tv;
+
     getrusage(RUSAGE_SELF, &ru);
+    gettimeofday(&tv, NULL);
 
     Json tables = Json::make_array();
     for (auto it = supertable_.lbegin(); it != supertable_.lend(); ++it) {
@@ -828,12 +840,43 @@ Json Server::stats() const {
 	.set("source_ranges_size", source_ranges_size)
 	.set("join_ranges_size", join_ranges_size)
 	.set("valid_ranges_size", sink_ranges_size)
+        .set("server_max_rss_mb", maxrss_mb(ru.ru_maxrss))
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("server_validate_time", validate_time_)
-        .set("server_insert_time", insert_time_)
-        .set("server_other_time", to_real(ru.ru_utime + ru.ru_stime) - validate_time_ - insert_time_)
-        .set("server_max_rss_mb", ru.ru_maxrss / 1024);
+        .set("server_wall_time", to_real(tv - start_tv_))
+        .set("server_wall_time_insert", insert_time_)
+        .set("server_wall_time_validate", validate_time_)
+        .set("server_wall_time_evict", evict_time_);
+
+    if (enable_validation_logging) {
+        uint32_t nclear = 0, ncompute = 0, nupdate = 0,
+                 nrestart = 0, nremote = 0, npersisted = 0;
+
+        for (auto& v : validate_log_) {
+            if (v.is_clear()) {
+                ++nclear;
+                continue;
+            }
+            if (v.is_set(ValidateRecord::compute))
+                ++ncompute;
+            if (v.is_set(ValidateRecord::update))
+                ++nupdate;
+            if (v.is_set(ValidateRecord::restart))
+                ++nrestart;
+            if (v.is_set(ValidateRecord::fetch_remote))
+                ++nremote;
+            if (v.is_set(ValidateRecord::fetch_persisted))
+                ++npersisted;
+        }
+
+        answer.set("server_validate_nclear", nclear)
+              .set("server_validate_ncompute", ncompute)
+              .set("server_validate_nupdate", nupdate)
+              .set("server_validate_nrestart", nrestart)
+              .set("server_validate_nfetch_remote", nremote)
+              .set("server_validate_nfetch_persisted", npersisted);
+    }
+
     if (SourceRange::allocated_key_bytes)
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
     if (ServerRangeBase::allocated_key_bytes)
@@ -845,9 +888,30 @@ Json Server::stats() const {
     return answer.set("tables", tables);
 }
 
+Json Server::logs() const {
+    Json logs;
+
+    if (enable_validation_logging) {
+        Json l;
+        for (auto& v : validate_log_)
+            l.push_back(Json().set("time", v.time())
+                              .set("clear", v.is_clear())
+                              .set("compute", v.is_set(ValidateRecord::compute))
+                              .set("update", v.is_set(ValidateRecord::update))
+                              .set("restart", v.is_set(ValidateRecord::restart))
+                              .set("fetch_remote", v.is_set(ValidateRecord::fetch_remote))
+                              .set("fetch_persisted", v.is_set(ValidateRecord::fetch_persisted)));
+        logs.set("validation", l);
+    }
+
+    return logs;
+}
+
 void Server::control(const Json& cmd) {
     if (cmd["quit"])
         exit(0);
+    else if (cmd["clear_log"])
+        validate_log_.clear();
     else if (cmd["print"])
         print(std::cerr);
     else if (cmd["print_table_keys"]) {

@@ -30,7 +30,7 @@ inline double fromus(uint64_t t) {
     return (double) t / 1000000.;
 }
 
-inline uint64_t tv2us(struct timeval &tv) {
+inline uint64_t tv2us(const timeval& tv) {
     return (uint64_t) tv.tv_sec * 1000000 + tv.tv_usec;
 }
 

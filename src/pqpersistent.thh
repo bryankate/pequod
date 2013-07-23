@@ -124,7 +124,7 @@ class BerkeleyDBStore : public pq::PersistentStore {
 #endif
 
 
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
 #include "pqxx/pqxx"
 #include "pqxx/connection"
 #include "pqxx/result"

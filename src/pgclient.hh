@@ -1,7 +1,11 @@
 #ifndef PGCLIENT_HH
 #define PGCLIENT_HH
+#if HAVE_LIBPQ
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
+#elif HAVE_LIBPQ_FE_H
+#include <libpq-fe.h>
+#endif
 #include <boost/random.hpp>
 #include "str.hh"
 #include "string.hh"

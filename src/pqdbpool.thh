@@ -1,0 +1,48 @@
+#ifndef PQDBPOOL_HH_
+#define PQDBPOOL_HH_
+
+#include "string.hh"
+#include <queue>
+#include <vector>
+#include <tamer/tamer.hh>
+#if HAVE_POSTGRESQL_LIBPQ_FE_H
+#include <postgresql/libpq-fe.h>
+#elif HAVE_LIBPQ_FE_H
+#include <libpq-fe.h>
+#endif
+
+namespace pq {
+
+class DBPool {
+  public:
+    DBPool(const String& host, uint32_t port);
+    DBPool(const String& host, uint32_t port, uint32_t min, uint32_t max);
+    ~DBPool();
+
+    void connect();
+    void clear();
+
+    tamed void insert(String key, String value, tamer::event<> e);
+    tamed void erase(String key, tamer::event<> e);
+
+  private:
+    String host_;
+    uint32_t port_;
+    uint32_t min_;
+    uint32_t max_;
+#if HAVE_LIBPQ
+    std::vector<PGconn*> conn_;
+    std::queue<PGconn*> pool_;
+    std::queue<tamer::event<PGconn*>> waiting_;
+
+    tamed void do_query(PGconn* conn, String query, tamer::event<> e);
+
+    void next_connection(tamer::event<PGconn*> e);
+    void replace_connection(PGconn* conn);
+    PGconn* connect_one();
+#endif
+};
+
+}
+
+#endif

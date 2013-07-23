@@ -46,7 +46,8 @@ void test_simple() {
     j.ref();
     server.add_join("t|", "t}", &j);
 
-    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00001}"), size_t(4));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001|0000000001", "t|00001}"), size_t(4));
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
@@ -97,7 +98,8 @@ void test_overlap() {
     j.ref();
     server.add_join("t|", "t}", &j);
 
-    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00003}"), size_t(7));
+    server.validate("t|00001|0000000001", "t|00003}");
+    CHECK_EQ(server.count("t|00001|0000000001", "t|00003}"), size_t(7));
     CHECK_EQ(server.count("t|00001", "t|00001}"), size_t(4));
     CHECK_EQ(server.count("t|00003", "t|00003}"), size_t(3));
 
@@ -158,10 +160,11 @@ void test_celebrity() {
     join[3].assign_parse("cs|<u>|<p> = using filter celeb|<p> copy s|<u>|<p> where u:5, p:5");
     server.add_join("cs|", "cs}", &join[3]);
 
-    server.validate_count("t|00001|0000000001", "t|00001}");
+    server.validate("t|00001|0000000001", "t|00001}");
     //for (auto it = server.begin(); it != server.end(); ++it)
     //    std::cerr << "  " << *it << "\n";
-    CHECK_EQ(server.validate_count("t|00001|0000000001", "t|00001}"), size_t(4));
+    server.validate("t|00001|0000000001", "t|00001}");
+    CHECK_EQ(server.count("t|00001|0000000001", "t|00001}"), size_t(4));
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
     server.insert("p|00002|0000000023", "As should this");
@@ -331,12 +334,18 @@ void test_count() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    CHECK_EQ(server.validate_count("e|", "e}"), size_t(4), "Count of recursive expansion failed.");
-    CHECK_EQ(server.validate_count("b|", "b}"), size_t(5));
-    CHECK_EQ(server.validate_count("b|00002|", "b|00002}"), size_t(4));
-    CHECK_EQ(server.validate_count("b|00002|0000000002", "b|00002|0000000015"), size_t(2), "\nWrong subrange count.");
-    CHECK_EQ(server.validate_count("c|", "c}"), size_t(4));
-    CHECK_EQ(server.validate_count("j|", "j}"), size_t(0));
+    server.validate("e|", "e}");
+    CHECK_EQ(server.count("e|", "e}"), size_t(4), "Count of recursive expansion failed.");
+    server.validate("b|", "b}");
+    CHECK_EQ(server.count("b|", "b}"), size_t(5));
+    server.validate("b|00002|", "b|00002}");
+    CHECK_EQ(server.count("b|00002|", "b|00002}"), size_t(4));
+    server.validate("b|00002|0000000002", "b|00002|0000000015");
+    CHECK_EQ(server.count("b|00002|0000000002", "b|00002|0000000015"), size_t(2), "\nWrong subrange count.");
+    server.validate("c|", "c}");
+    CHECK_EQ(server.count("c|", "c}"), size_t(4));
+    server.validate("j|", "j}");
+    CHECK_EQ(server.count("j|", "j}"), size_t(0));
 }
 
 void test_recursive() {
@@ -365,7 +374,8 @@ void test_recursive() {
     j2.ref();
     server.add_join("e|", "e}", &j2);
 
-    CHECK_EQ(server.validate_count("e|00003|0000000001", "e|00003}"), size_t(2));
+    server.validate("e|00003|0000000001", "e|00003}");
+    CHECK_EQ(server.count("e|00003|0000000001", "e|00003}"), size_t(2));
     CHECK_EQ(server.count("c|00001|0000000001", "c|00001}"), size_t(2));
 
     server.insert("b|00002|0000001000", "This should appear in c|00001 and e|00003");
@@ -934,6 +944,32 @@ k|<author> = count v|<chapter>|<voter>\
     CHECK_EQ(k0->value(), "2");
 }
 
+void test_iupdate_t() {
+    pq::Server server;
+    pq::Join j1;
+    CHECK_TRUE(j1.assign_parse("\
+k|<author> = count v|<chapter>|<voter>\
+  using b|<author>|<book>, c|<book>|<chapter>\
+  where author:5, chapter:5t, book:5, voter:5"));
+    j1.ref();
+    server.add_join("k|", "k}", &j1);
+
+    server.insert("b|u0000|bxxx1", "");
+    server.insert("c|bxxx1|c0001", "");
+    server.insert("v|c0001|u0001", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    auto k0 = server.find("k|u0000");
+    mandatory_assert(k0);
+    CHECK_EQ(k0->value(), "1");
+
+    server.insert("c|bxxx1|c0002", "");
+    server.insert("v|c0002|u0002", "");
+    server.validate("k|", "k}");
+    CHECK_EQ(server.count("k|", "k}"), size_t(1));
+    CHECK_EQ(k0->value(), "2");
+}
+
 void test_iupdate2() {
     pq::Server server;
     pq::Join j1;
@@ -1150,7 +1186,7 @@ void test_berkeleydb() {
 
 void test_postgres() {
     using namespace pq;
-#if HAVE_PQXX_NOTIFICATION
+#if HAVE_PQXX_PQXX
     // this will fail if postgres is not running or the pqunit db does not exist
     PostgresStore *dbi = new PostgresStore("pqunit", "127.0.0.1", 5432);
     String s1 = "xxx";
@@ -1256,6 +1292,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);
     ADD_TEST(test_iupdate4);
+    ADD_TEST(test_iupdate_t);
     ADD_TEST(test_celebrity);
     ADD_TEST(test_berkeleydb);
     ADD_EXP_TEST(test_postgres);
