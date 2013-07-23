@@ -21,7 +21,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     for active in [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
-        clientBase = "%s %s --pactive=%d --duration=50000000" % (clientCmd, users, active)
+        clientBase = "%s %s --pactive=%d --duration=10000000" % (clientCmd, users, active)
         
         exp['defs'].append(
             {'name': "hybrid_%d" % (active),
