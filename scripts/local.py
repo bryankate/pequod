@@ -18,6 +18,7 @@ parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching"
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
+parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu", default=1)
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
@@ -31,6 +32,7 @@ ncaching = options.ncaching
 startport = options.startport
 affinity = options.affinity
 startcpu = options.startcpu
+skipcpu = options.skipcpu
 perfserver = options.perfserver
 ngroups = options.ngroups
 dumpdb = options.dumpdb
@@ -155,7 +157,7 @@ for x in exps:
             fartfile = os.path.join(resdir, "fart_srv_")
   
             if affinity:
-                pin = "numactl -C " + str(startcpu + s) + " "
+                pin = "numactl -C " + str(startcpu + (s * skipcpu)) + " "
                 
             if s == perfserver:
                 perf = "perf record -g -o " + os.path.join(resdir, "perf-") + str(s) + ".dat "
@@ -179,7 +181,7 @@ for x in exps:
             fartfile = os.path.join(resdir, "fart_init.txt")
             
             if affinity:
-                pin = "numactl -C " + str(startcpu + nprocesses) + " "
+                pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
             
             full_cmd = pin + initcmd + " 2> " + fartfile
 
@@ -208,7 +210,7 @@ for x in exps:
                 popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
             
             if affinity:
-                pin = "numactl -C " + str(startcpu + nprocesses) + " "
+                pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
             
             full_cmd = pin + popcmd + " 2> " + fartfile
 
@@ -244,7 +246,7 @@ for x in exps:
                 clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
                 
             if affinity:
-                pin = "numactl -C " + str(startcpu + nprocesses + c) + " "
+                pin = "numactl -C " + str(startcpu + ((nprocesses + c) * skipcpu)) + " "
 
             full_cmd = pin + clientcmd + \
                 " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
