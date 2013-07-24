@@ -583,11 +583,14 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     }
 
     uint32_t s = 0;
-    for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s)
-        if (it->get("server_user_time")) {
-            (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
-            (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
-        }
+    for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s) {
+        (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
+        (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
+        (*it)["server_wall_time"] -= old_stats[s]["server_wall_time"];
+        (*it)["server_wall_time_insert"] -= old_stats[s]["server_wall_time_insert"];
+        (*it)["server_wall_time_validate"] -= old_stats[s]["server_wall_time_validate"];
+        (*it)["server_wall_time_evict"] -= old_stats[s]["server_wall_time_evict"];
+    }
     stats = Json().set("servers", stats);
 
     stats = Json().set("nposts", npost)
