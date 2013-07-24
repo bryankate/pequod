@@ -590,6 +590,7 @@ void TwitterRunner<S>::run(tamer::event<> done) {
         (*it)["server_wall_time_insert"] -= old_stats[s]["server_wall_time_insert"];
         (*it)["server_wall_time_validate"] -= old_stats[s]["server_wall_time_validate"];
         (*it)["server_wall_time_evict"] -= old_stats[s]["server_wall_time_evict"];
+        (*it)["server_wall_time_other"] -= old_stats[s]["server_wall_time_other"];
     }
     stats = Json().set("servers", stats);
 
