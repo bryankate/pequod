@@ -835,6 +835,8 @@ Json Server::stats() const {
         persisted_ranges_size += j["persisted_ranges_size"].to_i();
     }
 
+    double wall_time = to_real(tv - start_tv_);
+
     Json answer;
     answer.set("store_size", store_size)
 	.set("source_ranges_size", source_ranges_size)
@@ -843,10 +845,11 @@ Json Server::stats() const {
         .set("server_max_rss_mb", maxrss_mb(ru.ru_maxrss))
         .set("server_user_time", to_real(ru.ru_utime))
         .set("server_system_time", to_real(ru.ru_stime))
-        .set("server_wall_time", to_real(tv - start_tv_))
+        .set("server_wall_time", wall_time)
         .set("server_wall_time_insert", insert_time_)
         .set("server_wall_time_validate", validate_time_)
-        .set("server_wall_time_evict", evict_time_);
+        .set("server_wall_time_evict", evict_time_)
+        .set("server_wall_time_other", wall_time - insert_time_ - validate_time_ - evict_time_);
 
     if (enable_validation_logging) {
         uint32_t nclear = 0, ncompute = 0, nupdate = 0,
