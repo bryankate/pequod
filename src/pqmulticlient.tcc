@@ -107,11 +107,31 @@ tamed void MultiClient::erase(const String& key, event<> e) {
 }
 
 tamed void MultiClient::insert_db(const String& key, const String& value, event<> e) {
-    backend_for(key)->insert(key, value, e);
+    tvars {
+        Json j;
+        String query;
+    }
+
+    query = "WITH upsert AS (UPDATE cache SET value=\'" + value + "\' " +
+            "WHERE key=\'" + key + "\'" + " RETURNING cache.* ) "
+            "INSERT INTO cache "
+            "SELECT * FROM (SELECT \'" + key + "\' k, \'" + value + "\' v) AS tmp_table "
+            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)";
+
+    twait { backend_for(key)->execute(query, make_event(j)); }
+    e();
 }
 
 tamed void MultiClient::erase_db(const String& key, event<> e) {
-    backend_for(key)->erase(key, e);
+    tvars {
+        Json j;
+        String query;
+    }
+
+    query = "DELETE FROM cache WHERE key=\'" + key + "\'";
+
+    twait { backend_for(key)->execute(query, make_event(j)); }
+    e();
 }
 
 tamed void MultiClient::count(const String& first, const String& last,

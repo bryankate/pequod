@@ -2,6 +2,7 @@
 #define PQDBPOOL_HH_
 
 #include "string.hh"
+#include "json.hh"
 #include <queue>
 #include <vector>
 #include <tamer/tamer.hh>
@@ -22,8 +23,7 @@ class DBPool {
     void connect();
     void clear();
 
-    tamed void insert(String key, String value, tamer::event<> e);
-    tamed void erase(String key, tamer::event<> e);
+    tamed void execute(String query, tamer::event<Json> e);
 
   private:
     String host_;
@@ -34,8 +34,6 @@ class DBPool {
     std::vector<PGconn*> conn_;
     std::queue<PGconn*> pool_;
     std::queue<tamer::event<PGconn*>> waiting_;
-
-    tamed void do_query(PGconn* conn, String query, tamer::event<> e);
 
     void next_connection(tamer::event<PGconn*> e);
     void replace_connection(PGconn* conn);

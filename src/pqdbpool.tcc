@@ -45,57 +45,27 @@ void DBPool::clear() {
 }
 
 #if HAVE_LIBPQ
-tamed void DBPool::insert(String key, String value, event<> e) {
+tamed void DBPool::execute(String query, event<Json> e) {
     tvars {
         PGconn* conn;
-    }
-
-    twait { next_connection(make_event(conn)); }
-
-    char kbuff[256], vbuff[256];
-    int32_t err;
-
-    // todo: this does not handle strings with binary data!
-    size_t ksz = PQescapeStringConn(conn, kbuff, key.data(), key.length(), &err);
-    mandatory_assert(!err);
-    size_t vsz = PQescapeStringConn(conn, vbuff, value.data(), value.length(), &err);
-    mandatory_assert(!err);
-
-    Str k(kbuff, ksz);
-    Str v(vbuff, vsz);
-
-    do_query(conn,
-             "WITH upsert AS (UPDATE cache SET value=\'" + v + "\' " +
-             "WHERE key=\'" + k + "\'" + " RETURNING cache.* ) "
-             "INSERT INTO cache "
-             "SELECT * FROM (SELECT \'" + k + "\' k, \'" + v + "\' v) AS tmp_table "
-             "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)",
-             e);
-}
-
-tamed void DBPool::erase(String key, event<> e) {
-    tvars {
-        PGconn* conn;
-    }
-
-    twait { next_connection(make_event(conn)); }
-
-    char buff[256];
-    int32_t err;
-
-    // todo: this does not handle strings with binary data!
-    size_t sz = PQescapeStringConn(conn, buff, key.data(), key.length(), &err);
-    mandatory_assert(!err);
-
-    do_query(conn, "DELETE FROM cache WHERE key=\'" + Str(buff, sz) + "\'", e);
-}
-
-tamed void DBPool::do_query(PGconn* conn, String query, tamer::event<> e) {
-    tvars {
         int32_t err;
     }
 
+    twait { next_connection(make_event(conn)); }
+
+#if 0
+    {
+        // todo: this does not handle strings with binary data!
+        char buff[1024];
+        size_t sz = PQescapeStringConn(conn, buff, query.data(), query.length(), &err);
+        String q(buff, sz);
+
+        err = PQsendQuery(conn, q.c_str());
+    }
+#else
     err = PQsendQuery(conn, query.c_str());
+#endif
+
     mandatory_assert(err == 1 && "Could not send query to DB.");
 
     do {
@@ -105,16 +75,40 @@ tamed void DBPool::do_query(PGconn* conn, String query, tamer::event<> e) {
     } while(PQisBusy(conn));
 
     PGresult* result = PQgetResult(conn);
-    mandatory_assert(PQresultStatus(result) == PGRES_COMMAND_OK && "Error getting result of DB query.");
-    int32_t affected = String(PQcmdTuples(result)).to_i();
-    mandatory_assert(affected >= 0 && affected <= 1 && "Query should affect one row at most.");
+    ExecStatusType status = PQresultStatus(result);
+    Json ret;
+
+    switch(status) {
+        case PGRES_COMMAND_OK:
+            // command (e.g. insert, delete) returns no data
+            break;
+        case PGRES_TUPLES_OK: {
+            int32_t nrows = PQntuples(result);
+            int32_t ncols = PQnfields(result);
+
+            for (int32_t r = 0; r < nrows; ++r) {
+                ret.push_back(Json::make_array_reserve(ncols));
+                for (int32_t c = 0; c < ncols; ++c) {
+                    ret[r][c] = Str(PQgetvalue(result, r, c), PQgetlength(result, r, c));
+                }
+            }
+            break;
+        }
+        default: {
+            std::cerr << "Error getting result of DB query. " << std::endl
+                      << "  Status:  " << PQresStatus(status) << std::endl
+                      << "  Message: " << PQresultErrorMessage(result) << std::endl;
+            mandatory_assert(false);
+            break;
+        }
+    }
 
     PQclear(result);
     result = PQgetResult(conn);
     mandatory_assert(!result && "Should only be one result!");
 
     replace_connection(conn);
-    e();
+    e(ret);
 }
 
 void DBPool::next_connection(tamer::event<PGconn*> e) {
