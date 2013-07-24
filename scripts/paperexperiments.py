@@ -12,7 +12,7 @@ def define_experiments():
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
     populateCmd = "%s %s --no-initialize --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag)
+    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag) + \
                 "--ppost=1 --psubscribe=60 --plogin=5 --plogout=5 --psubscribe=10"
 
     # policy experiment
