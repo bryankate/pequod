@@ -1,5 +1,7 @@
 import aggregate_json
 from aggregate_json import aggregate_dir
+import gnuplotter
+from gnuplotter import make_gnuplot
 import sys
 import os
 from os import system
@@ -266,3 +268,7 @@ for x in exps:
         print "Done experiment. Results are stored at", resdir
         system("killall pqserver")
         system("killall postgres")
+    
+    if 'plot' in x:
+        make_gnuplot(x['name'], os.path.join(resdir, x['name']), x['plot'])
+        

@@ -12,7 +12,7 @@ def define_experiments():
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
     populateCmd = "%s %s --no-initialize --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag) + \
+    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag)
                 "--ppost=1 --psubscribe=60 --plogin=5 --plogout=5 --psubscribe=10"
 
     # policy experiment
@@ -49,6 +49,14 @@ def define_experiments():
              'initcmd': "%s" % (initCmd),
              'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
+    
+    exp['plot'] = {'type': "line",
+                   'data': [{'from': "client",
+                             'attr': "real_time"}],
+                   'lines': ["hybrid", "pull", "push"],
+                   'points': [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+                   'xlabel': "Percent Active",
+                   'ylabel': "Runtime (s)"}
     exps.append(exp)
     
     
@@ -85,6 +93,16 @@ def define_experiments():
          'initcmd': "%s --push" % (initCmd),
          'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
+    
+    exp['plot'] = {'type': "stackedbar",
+                   'data': [{'from': "server",
+                             'attr': "server_wall_time_insert"},
+                            {'from': "server",
+                             'attr': "server_wall_time_validate"},
+                            {'from': "server",
+                             'attr': "server_wall_time_other"}],
+                   'lines': ["pequod", "pequod_warm", "client_push"],
+                   'ylabel': "Runtime (s)"}
     exps.append(exp)
 
 
@@ -104,6 +122,16 @@ def define_experiments():
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
          'clientcmd': "%s %s --pactive=70 --duration=50000000" % (clientCmd, users)})
+    
+    exp['plot'] = {'type': "stackedbar",
+                   'data': [{'from': "server",
+                             'attr': "server_wall_time_insert"},
+                            {'from': "server",
+                             'attr': "server_wall_time_validate"},
+                            {'from': "server",
+                             'attr': "server_wall_time_other"}],
+                   'lines': ["pequod"],
+                   'ylabel': "Runtime (s)"}
     exps.append(exp)
     
     # computation experiment. 
