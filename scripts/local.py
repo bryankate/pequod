@@ -72,7 +72,7 @@ def prepare_experiment(xname, ename):
 
     resdir = os.path.join(uniquedir, xname, ename if ename else "")
     os.makedirs(resdir)
-    return resdir
+    return (os.path.join(uniquedir, xname), resdir)
 
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
@@ -80,6 +80,8 @@ exec(exph, globals())
 exph.close()
 
 for x in exps:
+    expdir = None
+    
     for e in x['defs']:
         expname = e['name'] if 'name' in e else None
         
@@ -89,7 +91,7 @@ for x in exps:
         elif not args and e.get("disabled"):
             continue
 
-        resdir = prepare_experiment(x["name"], expname)
+        (expdir, resdir) = prepare_experiment(x["name"], expname)
         part = options.part if options.part else e['def_part']
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
 
@@ -269,6 +271,6 @@ for x in exps:
         system("killall pqserver")
         system("killall postgres")
     
-    if 'plot' in x:
-        make_gnuplot(x['name'], os.path.join(resdir, x['name']), x['plot'])
+    if expdir and 'plot' in x:
+        make_gnuplot(x['name'], expdir, x['plot'])
         
