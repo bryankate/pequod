@@ -725,6 +725,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
+        double prevalidate_time = 0;
         tamer::gather_rendezvous gr;
     }
 
@@ -735,6 +736,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     gen.seed(13918 + tp_.groupid());
     periodic_logger(done);
+
+    gettimeofday(&tv[0], 0);
 
     // create a working set of users
     if (tp_.verbose()) { std::cerr << "Selecting active users." << std::endl; }
@@ -761,6 +764,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         }
         twait(gr);
     }
+
+    gettimeofday(&tv[1], 0);
+    if (tp_.prevalidate() || tp_.prevalidate_inactive())
+        prevalidate_time = to_real(tv[1] - tv[0]);
 
     std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
     std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
@@ -934,7 +941,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
          .set("nlogouts", nlogout)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-         .set("real_time", to_real(tv[1] - tv[0]));
+         .set("wall_time", to_real(tv[1] - tv[0]))
+         .set("wall_time_prevalidate", prevalidate_time);
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 
     done();
