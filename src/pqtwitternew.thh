@@ -79,6 +79,7 @@ class TwitterNewPopulator {
     inline uint32_t duration() const { return duration_; }
     inline uint32_t popduration() const { return popduration_; }
     inline uint32_t postlimit() const { return postlimit_; }
+    inline uint32_t checklimit() const { return checklimit_; }
     inline double pct_active() const { return pct_active_; }
     inline bool initialize() const { return initialize_; }
     inline bool populate() const { return populate_; }
@@ -120,6 +121,7 @@ class TwitterNewPopulator {
     uint32_t duration_;
     uint32_t popduration_;
     uint32_t postlimit_;
+    uint32_t checklimit_;
     bool initialize_;
     bool populate_;
     bool execute_;
@@ -716,6 +718,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t beg_time = this->currtime_;
         uint32_t end_time = beg_time + this->tp_.duration();
         uint32_t postlimit = this->tp_.postlimit();
+        uint32_t checklimit = this->tp_.checklimit();
         uint32_t u, beg_scan, end_scan, slot;
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
                  nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
@@ -774,7 +777,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
 
-    while (currtime_ < end_time && ((postlimit) ? (npost < postlimit) : true)) {
+    while (currtime_ < end_time &&
+           ((postlimit) ? (npost < postlimit) : true) &&
+           ((checklimit) ? (ncheck < checklimit) : true)) {
         user = nullptr;
 
         switch(tp_.rand_op(gen)) {
