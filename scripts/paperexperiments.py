@@ -55,7 +55,7 @@ def define_experiments():
     
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
-                             'attr': "real_time"}],
+                             'attr': "wall_time"}],
                    'lines': ["hybrid", "pull", "push"],
                    'points': [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                    'xlabel': "Percent Active",
