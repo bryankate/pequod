@@ -464,7 +464,7 @@ template <typename S>
 class TwitterNewDBShim {
   public:
     TwitterNewDBShim(S& server, TwitterNewPopulator& tp);
-
+    class iterator;
     class scanpair {
       public:
         scanpair() = default;
@@ -479,7 +479,7 @@ class TwitterNewDBShim {
         }
       private:
         const Json* it_;
-        friend class TwitterNewDBShim::iterator;
+        friend class iterator;
     };
     class iterator : public std::iterator<std::random_access_iterator_tag, scanpair> {
       public:
@@ -546,7 +546,7 @@ class TwitterNewDBShim {
     tamed void timeline_scan(uint32_t subscriber,
                        uint32_t start_time, uint32_t end_time,
                        event<scan_result> e);
-    void timeline_add_count(uint32_t subscriber,
+    tamed void timeline_add_count(uint32_t subscriber,
                             uint32_t start_time, uint32_t end_time,
                             event<size_t> e);
     inline void follower_scan(uint32_t poster, tamer::event<scan_result> e);
@@ -571,14 +571,20 @@ TwitterNewDBShim<S>::TwitterNewDBShim(S& server, TwitterNewPopulator& tp)
 tamed template <typename S>
 void TwitterNewDBShim<S>::initialize(tamer::event<> done) {
     tvars { Json j; }
+    server_.connect();
     twait {
-        server_.connect();
         server_.execute("PREPARE subscribe(int,int) AS "
                             "INSERT INTO s VALUES($1,$2)", make_event(j));
         server_.execute("PREPARE post(int,text,int) AS "
                             "INSERT INTO p VALUES($1,$2,to_timestamp($3))", make_event(j));
         server_.execute("PREPARE timeline_scan(int,int,int) AS "
                             "SELECT t.usr, t.poster, t.value, t.time "
+                            "FROM t "
+                            "WHERE t.user = $1 "
+                              "AND t.time > to_timestamp($2) "
+                              "AND t.time < to_timestamp($3)", make_event(j));
+        server_.execute("PREPARE timeline_add_count(int,int,int) AS "
+                            "SELECT COUNT(*) "
                             "FROM t "
                             "WHERE t.user = $1 "
                               "AND t.time > to_timestamp($2) "
@@ -635,7 +641,7 @@ void TwitterNewDBShim<S>::timeline_scan(uint32_t subscriber,
                                              tamer::event<scan_result> done) {
     tvars { Json j, rj; }
     twait {
-    server_.execute("EXECUTE timeline_scan(" + String(subscriber) + "," + String(start_time) +  "," + String(end_time) + ")", make_event(j));
+        server_.execute("EXECUTE timeline_scan(" + String(subscriber) + "," + String(start_time) +  "," + String(end_time) + ")", make_event(j));
     }
     std::vector<String> return_vector;
     for (auto it = j.abegin(); it < j.aend(); ) {
@@ -658,16 +664,17 @@ void TwitterNewDBShim<S>::timeline_scan(uint32_t subscriber,
     done(scan_result(Json(return_vector)));
 }
 
-template <typename S>
-inline void TwitterNewDBShim<S>::timeline_add_count(uint32_t subscriber,
+tamed template <typename S>
+void TwitterNewDBShim<S>::timeline_add_count(uint32_t subscriber,
                                                   uint32_t start_time, uint32_t end_time,
                                                   tamer::event<size_t> done) {
-    (void) subscriber;
-    (void) start_time;
-    (void) end_time;
-    (void) done;
-    // TODO: add this for testing string yo_i
-    assert(false && "Function not supported in this mode.");
+    tvars { Json j; }
+    twait {
+        server_.execute("EXECUTE timeline_add_count(" + String(subscriber) + "," + String(start_time) +  "," + String(end_time) + ")", make_event(j));
+    }
+    auto count = j[1].to_i();
+    std::cerr << "returning count(" << count << ")" << std::endl;
+    done(count);
 }
 
 template <typename S>
@@ -691,21 +698,21 @@ inline void TwitterNewDBShim<S>::post_scan(uint32_t poster,
 
 template <typename S>
 inline void TwitterNewDBShim<S>::pace(tamer::event<> done) {
-    (void) done;
-    mandatory_assert(false && "Function not supported in this mode.");
+    done();
+//    mandatory_assert(false && "Function not supported in this mode.");
 }
 
 template <typename S>
 inline void TwitterNewDBShim<S>::stats(tamer::event<Json> done) {
-    (void) done;
-    mandatory_assert(false && "Function not supported in this mode.");
+    done(Json());
+//    mandatory_assert(false && "Function not supported in this mode.");
 }
 
 template <typename S>
 inline void TwitterNewDBShim<S>::control(const Json& cmd, tamer::event<Json> done) {
     (void) cmd;
-    (void) done;
-    mandatory_assert(false && "Function not supported in this mode.");
+    done(Json());
+//    mandatory_assert(false && "Function not supported in this mode.");
 }
 
 
