@@ -1,6 +1,3 @@
-# open loop test definitions
-import copy
-
 exps = [{'name': "twitter", 'defs': []}]
 graphfile = "twitter_graph_40M.dat"
 

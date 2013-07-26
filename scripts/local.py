@@ -1,7 +1,5 @@
-import aggregate_json
-from aggregate_json import aggregate_dir
-import gnuplotter
-from gnuplotter import make_gnuplot
+#!/usr/bin/env python
+
 import sys
 import os
 from os import system
@@ -12,9 +10,14 @@ from time import sleep
 from optparse import OptionParser
 import json, fnmatch, re
 import socket
+import lib.aggregate
+from lib.aggregate import aggregate_dir
+import lib.gnuplotter
+from lib.gnuplotter import make_gnuplot
 
 parser = OptionParser()
-parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "testexperiments.py"))
+parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", 
+                  default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)

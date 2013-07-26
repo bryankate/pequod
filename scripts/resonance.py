@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import resonanceexperiments
 import os
 from os import system
 #import subprocess
@@ -12,6 +11,7 @@ import json, fnmatch, re
 import socket
 import stat
 from datetime import datetime
+import exp.resonanceexperiments
 
 nodes = {
 	'resonance':[
