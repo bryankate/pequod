@@ -19,9 +19,12 @@ def define_experiments():
     # can be run on on a multiprocessor
     exp = {'name': "policy", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
+    totalchecks = 100000000
+    
     for active in [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
-        clientBase = "%s %s --pactive=%d --duration=10000000" % (clientCmd, users, active)
+        clientBase = "%s %s --pactive=%d --duration=1000000000 --checklimit=%d" % \
+                     (clientCmd, users, active, active / 100.0 * totalchecks)
         
         exp['defs'].append(
             {'name': "hybrid_%d" % (active),
@@ -52,7 +55,7 @@ def define_experiments():
     
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
-                             'attr': "real_time"}],
+                             'attr': "wall_time"}],
                    'lines': ["hybrid", "pull", "push"],
                    'points': [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                    'xlabel': "Percent Active",
@@ -65,7 +68,7 @@ def define_experiments():
     exp = {'name': "client_push", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=0" % (populateCmd, users)
-    clientBase = "%s %s --pactive=70 --duration=50000000" % (clientCmd, users)
+    clientBase = "%s %s --pactive=70 --duration=100000000" % (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
@@ -121,7 +124,7 @@ def define_experiments():
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s %s --pactive=70 --duration=50000000" % (clientCmd, users)})
+         'clientcmd': "%s %s --pactive=70 --duration=100000000" % (clientCmd, users)})
     
     exp['plot'] = {'type': "stackedbar",
                    'data': [{'from': "server",
@@ -141,7 +144,7 @@ def define_experiments():
     exp = {'name': "computation", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=100000" % (populateCmd, users),
-    clientBase = "%s %s --no-prevalidate --pactive=70 --duration=50000000" % (clientCmd, users)
+    clientBase = "%s %s --no-prevalidate --pactive=70 --duration=100000000" % (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
