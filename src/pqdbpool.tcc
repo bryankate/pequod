@@ -142,7 +142,7 @@ PGconn* DBPool::connect_one() {
 }
 #else
 
-tamed void DBPool::execute(String key, String value, event<> e) {
+tamed void DBPool::execute(String query, event<Json> e) {
     mandatory_assert(false && "Database not configured.");
 }
 
