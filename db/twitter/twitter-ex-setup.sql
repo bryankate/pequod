@@ -18,10 +18,10 @@
 --OR
 --su - postgres -c "numactl -C 5 /usr/lib/postgresql/9.1/bin/pg_ctl -D /mnt/tmp -l /mnt/tmp/postgres.log start"
 
+DROP TRIGGER IF EXISTS update_timeline ON p;
 DROP TABLE IF EXISTS s;
 DROP TABLE IF EXISTS p;
 DROP TABLE IF EXISTS t;
-DROP TRIGGER IF EXISTS update_timeline;
 
 CREATE TABLE s (
 	usr INT,

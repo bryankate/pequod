@@ -18,6 +18,7 @@
 #include "hosts.hh"
 #include "partitioner.hh"
 #include "sock_helper.hh"
+#include "pqdbpool.hh"
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
@@ -98,6 +99,7 @@ static Clp_Option options[] = {
     { "prevalidate", 0, 4017, 0, Clp_Negate },
     { "prevalidate-inactive", 0, 4018, 0, Clp_Negate },
     { "binary", 0, 4019, 0, Clp_Negate },
+    { "dbshim", 0, 4020, 0, Clp_Negate },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -254,6 +256,8 @@ int main(int argc, char** argv) {
             tp_param.set("pread", clp->val.d);
         else if (clp->option->long_name == String("ppost"))
             tp_param.set("ppost", clp->val.d);
+        else if (clp->option->long_name == String("dbshim"))
+            tp_param.set("dbshim", !clp->negated);
         else if (clp->option->long_name == String("psubscribe"))
             tp_param.set("psubscribe", clp->val.d);
         else if (clp->option->long_name == String("plogin"))
@@ -440,6 +444,14 @@ int main(int argc, char** argv) {
             if (tp_param.get("writearound").as_b(false))
                 mandatory_assert(dbhosts && part);
             run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
+        } else if (tp_param.get("dbshim").as_b(true)) {
+            std::cerr << "dbshimming..." << std::endl;
+            pq::DBPool client("127.0.0.1",5432);
+            pq::TwitterNewDBShim<pq::DBPool> shim(client, *tp);
+            pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
+            tr.initialize(tamer::event<>());
+            tr.populate(tamer::event<>());
+            tr.run(tamer::event<>());
         }
         else {
             pq::DirectClient client(server);

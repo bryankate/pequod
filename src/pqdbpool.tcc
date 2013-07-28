@@ -142,11 +142,7 @@ PGconn* DBPool::connect_one() {
 }
 #else
 
-tamed void DBPool::insert(String key, String value, event<> e) {
-    mandatory_assert(false && "Database not configured.");
-}
-
-tamed void DBPool::erase(String key, event<> e) {
+tamed void DBPool::execute(String key, String value, event<> e) {
     mandatory_assert(false && "Database not configured.");
 }
 
