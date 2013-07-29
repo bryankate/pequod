@@ -311,6 +311,7 @@ tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port)
         TwitterNewRunner<TwitterNewDBShim<DBPool>>* tr = new TwitterNewRunner<TwitterNewDBShim<DBPool>>(*shim, tp);
     }
 
+    client->connect();
     twait { tr->initialize(tamer::event<>()); }
     twait { tr->populate(tamer::event<>()); }
     twait { tr->run(tamer::event<>()); }
