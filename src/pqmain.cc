@@ -443,9 +443,11 @@ int main(int argc, char** argv) {
                                              nbacking, hosts->count(), -1);
             if (tp_param.get("writearound").as_b(false))
                 mandatory_assert(dbhosts && part);
-            run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
-        } else if (tp_param.get("dbshim").as_b(true)) {
-            run_twitter_new_compare(*tp, client_port);
+
+            if (tp_param.get("dbshim").as_b(false))
+                run_twitter_new_compare(*tp, client_port);
+            else
+                run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
         }
         else {
             pq::DirectClient client(server);
