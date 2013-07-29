@@ -445,13 +445,7 @@ int main(int argc, char** argv) {
                 mandatory_assert(dbhosts && part);
             run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
         } else if (tp_param.get("dbshim").as_b(true)) {
-            std::cerr << "dbshimming..." << std::endl;
-            pq::DBPool client("127.0.0.1",5432);
-            pq::TwitterNewDBShim<pq::DBPool> shim(client, *tp);
-            pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
-            tr.initialize(tamer::event<>());
-            tr.populate(tamer::event<>());
-            tr.run(tamer::event<>());
+            run_twitter_new_compare(*tp, client_port);
         }
         else {
             pq::DirectClient client(server);

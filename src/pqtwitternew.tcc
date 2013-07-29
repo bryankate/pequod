@@ -304,4 +304,19 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
     delete mc;
 }
 
+tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port) {
+    tvars {
+        DBPool* client = new DBPool("127.0.0.1", client_port);
+        TwitterNewDBShim<DBPool>* shim = new TwitterNewDBShim<DBPool>(*client, tp);
+        TwitterNewRunner<TwitterNewDBShim<DBPool>>* tr = new TwitterNewRunner<TwitterNewDBShim<DBPool>>(*shim, tp);
+    }
+
+    twait { tr->initialize(tamer::event<>()); }
+    twait { tr->populate(tamer::event<>()); }
+    twait { tr->run(tamer::event<>()); }
+    delete tr;
+    delete shim;
+    delete client;
+}
+
 } // namespace pq

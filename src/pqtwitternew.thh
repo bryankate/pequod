@@ -580,13 +580,13 @@ void TwitterNewDBShim<S>::initialize(tamer::event<> done) {
         server_.execute("PREPARE timeline_scan(int,int,int) AS "
                             "SELECT t.usr, t.poster, t.value, t.time "
                             "FROM t "
-                            "WHERE t.user = $1 "
+                            "WHERE t.usr = $1 "
                               "AND t.time > to_timestamp($2) "
                               "AND t.time < to_timestamp($3)", make_event(j));
         server_.execute("PREPARE timeline_add_count(int,int,int) AS "
                             "SELECT COUNT(*) "
                             "FROM t "
-                            "WHERE t.user = $1 "
+                            "WHERE t.usr = $1 "
                               "AND t.time > to_timestamp($2) "
                               "AND t.time < to_timestamp($3)", make_event(j));
     }
@@ -1207,6 +1207,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Hosts* dbhosts,
                                   const Partitioner* part);
+
+tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port);
 
 } // namespace pq
 #endif
