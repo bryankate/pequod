@@ -97,12 +97,10 @@ for x in exps:
         (expdir, resdir) = prepare_experiment(x["name"], expname)
         part = options.part if options.part else e['def_part']
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
+        serverprocs = []
 
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
-        system("killall pqserver")
-        system("killall postgres")
-        sleep(3)
 
         dbhost = "127.0.0.1"
         dbport = 10000        
@@ -174,10 +172,10 @@ for x in exps:
             full_cmd = pin + perf + servercmd + serverargs + \
                 " -kl=" + str(startport + s) + \
                 " > " + outfile + str(s) + ".txt" + \
-                " 2> " + fartfile + str(s) + ".txt &"
+                " 2> " + fartfile + str(s) + ".txt"
 
             print full_cmd
-            system(full_cmd)
+            serverprocs.append(Popen(full_cmd, shell=True))
             
         dbfile.close()
         sleep(3)
@@ -267,12 +265,13 @@ for x in exps:
         for p in procs:
             p.wait()
     
+        for p in serverprocs + dbprocs:
+            p.kill()
+    
         if ngroups > 1:
             aggregate_dir(resdir)
     
         print "Done experiment. Results are stored at", resdir
-        system("killall pqserver")
-        system("killall postgres")
     
     if expdir and 'plot' in x:
         make_gnuplot(x['name'], expdir, x['plot'])
