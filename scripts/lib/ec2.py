@@ -87,4 +87,7 @@ def run_ssh_command_bg(machine, cmd):
                  shell=True)
 
 def run_ssh_command(machine, cmd):
-    run_ssh_command_bg(machine, cmd).wait()
+    return run_ssh_command_bg(machine, cmd).wait()
+    
+def test_ssh_connection(machine):
+    return run_ssh_command(machine, "echo 2>&1 \"%s is Live\"" % (machine)) == 0
