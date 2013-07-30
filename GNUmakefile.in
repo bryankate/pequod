@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = 326f5b81dd5d6dd7cbf2a8845fa81b7ed30f84de
+TAMER_COMMIT = c1d7d90e302008f2da099c05c308ce4f16ef5ac9
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = -lev -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
@@ -208,7 +208,7 @@ $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
 tamer-update:
-	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating tamer... 1>&2; cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
 	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
 $(OBJDIR)/stamp $(DEPSDIR)/stamp:
