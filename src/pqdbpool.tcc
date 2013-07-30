@@ -63,12 +63,9 @@ tamed void DBPool::execute(String query, event<Json> e) {
         err = PQsendQuery(conn, q.c_str());
     }
 #else
-    std::cerr << "sending query: " << query << std::endl;
     err = PQsendQuery(conn, query.c_str());
 #endif
 
-    if (err != 1)
-        std::cerr << "ERROR: " << PQerrorMessage(conn) << std::endl;
     mandatory_assert(err == 1 && "Could not send query to DB.");
 
     do {
@@ -80,8 +77,6 @@ tamed void DBPool::execute(String query, event<Json> e) {
     PGresult* result = PQgetResult(conn);
     ExecStatusType status = PQresultStatus(result);
     Json ret;
-
-    std::cerr << "result status: " << PQresStatus(status) << std::endl;
 
     switch(status) {
         case PGRES_COMMAND_OK:
