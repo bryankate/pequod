@@ -87,11 +87,13 @@ def prepare_instances(num, type, tag):
     
     for r in running_:
         r.update(True)
-        hosts_.append({'dns': r.public_dns_name, 'ip': r.private_ip_address})
+        hosts_.append({'id': r.id,
+                       'dns': r.public_dns_name, 
+                       'ip': r.private_ip_address})
     return hosts_
 
 def prepare_experiment(xname, ename):
-    global topdir, uniquedir, hostpath, hosts, running, nprocesses
+    global topdir, uniquedir, hostpath
     if topdir is None:
         topdir = "results"
 
@@ -123,7 +125,12 @@ backinghosts = prepare_instances(nbacking, ec2.INSTANCE_TYPE_BACKING, ['role', '
 cachehosts = prepare_instances(ncaching, ec2.INSTANCE_TYPE_CACHE, ['role', 'cache'])
 clienthosts = prepare_instances(ngroups, ec2.INSTANCE_TYPE_CLIENT, ['role', 'client'])
 
-# TODO: make an AMI with this stuff in it
+print "Testing SSH connections."
+for h in backinghosts + cachehosts + clienthosts:
+    while not ec2.test_ssh_connection(h['dns']):
+        print "Waiting for SSH access..."
+        sleep(5)
+
 debs = ("build-essential autoconf libtool git libev-dev libjemalloc-dev " +
         "flex bison libboost-dev libboost-thread-dev libboost-system-dev")
 
@@ -134,18 +141,17 @@ prepcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs + "; " + \
 
 prepprocs = []
 for n in newmachines:
+    print "Preparing new instance " + n.id + " (" + n.public_dns_name + ")."
     n.update(True)
-
-    print "Preparing new instance " + n.public_dns_name + "."
-    #ec2.scp_to(n.public_dns_name, ".ssh", "scripts/id_rsa_ec2")
     prepprocs.append(ec2.run_ssh_command_bg(n.public_dns_name, prepcmd))
                      
 for p in prepprocs:
     p.wait()
 
+exit(0)
 prepprocs = []
 for h in backinghosts + cachehosts + clienthosts:
-    print "Updating instance " + h['dns'] + "."
+    print "Updating instance " + h['id'] + " (" + h['dns'] + ")."
     prepprocs.append(ec2.run_ssh_command_bg(h['dns'], "cd pequod; git pull; make"))
     
 for p in prepprocs:
