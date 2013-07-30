@@ -197,6 +197,7 @@ auto Table::insert(Table& t) -> local_iterator {
 void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
 
+    //std::cerr << "INSERT: " << key << std::endl;
     if (unlikely(server_->writethrough() &&
                  server_->is_owned_public(server_->owner_for(key))))
         server_->persistent_store()->enqueue(new PersistentWrite(key, value));
@@ -765,6 +766,7 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
 
     gettimeofday(&tv[0], NULL);
 
+    //std::cerr << "VALIDATING: [" << first << ", " << last << ")" << std::endl;
     do {
         it = t->validate(first, last, next_validate_at(), log, gr);
         twait(gr);

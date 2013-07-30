@@ -346,7 +346,7 @@ void SinkRange::add_update(int joinpos, Str context, Str key, int notifier) {
 }
 
 void SinkRange::add_restart(int joinpos, const Match& m, int notifier) {
-    //std::cout << "adding restart with match " << m << std::endl;
+    //std::cerr << "adding restart with match " << m << std::endl;
     restarts_.push_back(new Restart(this, joinpos, m, notifier));
 }
 
@@ -384,6 +384,8 @@ bool SinkRange::update_iu(Str first, Str last, IntermediateUpdate* iu, bool& rem
     JoinRange::validate_args va(f, l, server, now, this, iu->notifier_, log, gr);
     join->assign_context(va.rm.match, context_);
     join->assign_context(va.rm.match, iu->context_);
+
+    //std::cerr << "UPDATE: [" << f << ", " << l << ")" << std::endl;
     if (!jr_->validate_step(va, iu->joinpos_ + 1))
         return false;
 
@@ -432,7 +434,8 @@ bool SinkRange::restart(Str first, Str last, Server& server,
         join->assign_context(va.rm.match, r->context_);
         va.rm.dangerous_slot = dangerous_slot_;
 
-        //std::cerr << "restarting validation " << va.rm.first << " " << va.rm.last << " " << va.rm.match << std::endl;
+        //std::cerr << "RESTART: [" << va.rm.first << ", " << va.rm.last
+        //          << ") match: " << va.rm.match << std::endl;
         complete &= jr_->validate_step(va, r->joinpos_);
         restarts_.pop_front();
         delete r;
