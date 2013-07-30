@@ -182,6 +182,10 @@ void TwitterNewPopulator::synthetic_subscriptions(generator_type& gen,
 	    if (in_group(i))
                 subs.push_back(std::make_pair(i, other));
             subvec[other / 32] |= 1U << (other % 32);
+
+#if TIMELINE_SANITY_CHECK
+            users_[other]->followers_.push_back(i);
+#endif
         }
     }
 
@@ -207,6 +211,10 @@ void TwitterNewPopulator::import_subscriptions(generator_type& gen,
         ++users_[user]->nfollowers_;
         if (in_group(follower))
             subs.push_back(std::make_pair(follower, user));
+
+#if TIMELINE_SANITY_CHECK
+        users_[user]->followers_.push_back(follower);
+#endif
     }
 
     finish_make_subscriptions(gen);

@@ -29,6 +29,8 @@ class TwitterNewPopulator;
 #define OVERLAP         0          // subtracted from last check time to define beg_scan
 #define SKEW            5000       // subtracted from now to define end_scan
 
+#define TIMELINE_SANITY_CHECK 1
+
 // Keep barebones info on each user.
 struct TwitterGraphNode {
   public:
@@ -45,6 +47,19 @@ struct TwitterGraphNode {
         inline bool operator() (const uint32_t& a, const TwitterGraphNode* b) const;
         uint32_t field_;
     };
+
+#if TIMELINE_SANITY_CHECK
+  public:
+    std::vector<uint32_t> followers_;
+    std::vector<uint32_t> posts_;
+    std::vector<std::pair<uint32_t, uint32_t>> timeline_;
+
+    static struct _TimelineCompare {
+        bool operator() (const std::pair<uint32_t, uint32_t>& left, uint32_t right) {
+            return left.first < right;
+        }
+    } TimelineCompare;
+#endif
 
   private:
     uint32_t uid_;
@@ -786,7 +801,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         size_t count = 0;
     }
 
-    if (tp_.fetch() || tp_.log()) {
+    if (tp_.fetch() || tp_.log() || TIMELINE_SANITY_CHECK) {
         twait { server_.timeline_scan(user->uid(), beg_scan, end_scan,
                                       make_event(sr)); }
         count = sr.size();
@@ -806,6 +821,37 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                     std::cerr << "  " << it->key() << ": " << it->value() << "\n";
             }
         }
+
+#if TIMELINE_SANITY_CHECK
+        {
+            auto tbegin = lower_bound(user->timeline_.begin(), user->timeline_.end(), beg_scan, TwitterUser::TimelineCompare);
+            auto tend = lower_bound(user->timeline_.begin(), user->timeline_.end(), end_scan, TwitterUser::TimelineCompare);
+            uint32_t nexpected = std::distance(tbegin, tend);
+
+            if (count < nexpected) {
+                std::cerr << "SANITY CHECK: Missing expected posts!"
+                          << " (user: " << user->uid() << " beg: " << beg_scan
+                          << " end: " << end_scan << ")" << std::endl;
+
+                std::cerr << "Expected Posts:" << std::endl;
+                while(tbegin != tend) {
+                    std::cerr << "  " << tbegin->first << " " << tbegin->second << std::endl;
+                    ++tbegin;
+                }
+
+                std::cerr << "Fetched Posts:" << std::endl;
+                for (auto it = sr.begin(); it != sr.end(); ++it)
+                    if (tp_.binary())
+                        std::cerr << "  " << read_in_net_order<uint32_t>(it->key().data() + 7)
+                                  << " " << read_in_net_order<uint32_t>(it->key().data() + 12) << std::endl;
+                    else
+                        std::cerr << "  " << Str(it->key().data() + 11, 10)
+                                  << " " << Str(it->key().data() + 22, 8) << std::endl;
+
+                mandatory_assert(false);
+            }
+        }
+#endif
     }
     else
         twait { server_.timeline_add_count(user->uid(), beg_scan, end_scan,
@@ -845,6 +891,19 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) 
         }
     }
 
+#if TIMELINE_SANITY_CHECK
+    {
+        TwitterUser* poster = tp_.managed_user(u);
+        poster->posts_.push_back(time);
+
+        for (auto& i : poster->followers_) {
+            TwitterUser* f = tp_.managed_user(i);
+            if (find(f->timeline_.begin(), f->timeline_.end(), std::make_pair(time, u)) == f->timeline_.end())
+                f->timeline_.push_back(std::make_pair(time, u));
+        }
+    }
+#endif
+
     twait(gr);
     e();
 }
@@ -859,7 +918,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
         tamer::gather_rendezvous gr;
     }
 
-    server_.post_scan(f, time - LOGIN_WINDOW, END_TIME, gr.make_event(sr));
+    server_.post_scan(f, time - LOGIN_WINDOW, time, gr.make_event(sr));
     twait(gr);
 
     for (auto it = sr.begin(); it != sr.end(); ++it) {
@@ -1008,13 +1067,12 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             continue;
         }
 
+        loggedin_.push_back(u);
+
         if (tp_.prevalidate()) {
-            loggedin_.push_back(u);
             prevalidate(tp_.managed_user(u), gr.make_event());
             twait{ server_.pace(make_event()); }
         }
-        else
-            active_.push_back(u);
     }
     twait(gr);
 
@@ -1030,9 +1088,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.prevalidate() || tp_.prevalidate_inactive())
         prevalidate_time = to_real(tv[1] - tv[0]);
 
-    std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
     std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
-    if (tp_.prevalidate() && loggedin_.empty() && tp_.pct_active() > 0)
+    if (loggedin_.empty() && tp_.pct_active() > 0)
         assert(false && "There were no active users selected.");
 
     log_.clear();
@@ -1072,6 +1129,23 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
                 if (tp_.push())
                     backfill(u, following, currtime_, gr.make_event(nbackpost));
+#if TIMELINE_SANITY_CHECK
+                {
+                    TwitterUser* f = tp_.managed_user(following);
+                    auto pbegin = lower_bound(f->posts_.begin(), f->posts_.end(), currtime_ - LOGIN_WINDOW);
+                    auto pend = lower_bound(f->posts_.begin(), f->posts_.end(), currtime_);
+
+                    if (find(f->followers_.begin(), f->followers_.end(), user->uid()) == f->followers_.end()) {
+                        f->followers_.push_back(user->uid());
+                        std::sort(f->followers_.begin(), f->followers_.end());
+                        while(pbegin != pend) {
+                            user->timeline_.push_back(std::make_pair(*pbegin, following));
+                            ++pbegin;
+                        }
+                        std::sort(user->timeline_.begin(), user->timeline_.end());
+                    }
+                }
+#endif
                 break;
 
             case op_logout:
@@ -1131,18 +1205,17 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
                 user->last_read_ = end_scan;
                 check(user, currtime_, beg_scan, end_scan, gr.make_event(nread));
-
-                if (tp_.synchronous())
-                    twait(gr);
-                else
-                    twait { server_.pace(make_event()); }
-
                 ++ncheck;
                 break;
 
             default:
                 assert(false && "Unknown operation.");
         }
+
+        if (tp_.synchronous())
+            twait(gr);
+        else
+            twait { server_.pace(make_event()); }
 
         ++currtime_;
 
