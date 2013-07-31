@@ -588,27 +588,23 @@ void TwitterNewDBShim<S>::initialize(tamer::event<> done) {
     tvars { Json j; }
 
     twait {
-        server_.execute("INSERT INTO s VALUES(1,2)", make_event(j));
-        server_.execute("INSERT INTO s VALUES(1,3)", make_event(j));
-        server_.execute("INSERT INTO s VALUES(1,4)", make_event(j));
-        server_.execute("INSERT INTO s VALUES(1,5)", make_event(j));
-
-//        server_.execute("PREPARE subscribe(int,int) AS "
-//                            "INSERT INTO s VALUES($1,$2)", make_event(j));
-//        server_.execute("PREPARE post(int,text,int) AS "
-//                            "INSERT INTO p VALUES($1,$2,to_timestamp($3))", make_event(j));
-//        server_.execute("PREPARE timeline_scan(int,int,int) AS "
-//                            "SELECT t.usr, t.poster, t.value, t.time "
-//                            "FROM t "
-//                            "WHERE t.usr = $1 "
-//                              "AND t.time > to_timestamp($2) "
-//                              "AND t.time < to_timestamp($3)", make_event(j));
-//        server_.execute("PREPARE timeline_add_count(int,int,int) AS "
-//                            "SELECT COUNT(*) "
-//                            "FROM t "
-//                            "WHERE t.usr = $1 "
-//                              "AND t.time > to_timestamp($2) "
-//                              "AND t.time < to_timestamp($3)", make_event(j));
+        server_.add_prepared_pool(std::vector<String>({
+        "PREPARE subscribe(int,int) AS "
+            "INSERT INTO s VALUES($1,$2)",
+        "PREPARE post(int,text,int) AS "
+            "INSERT INTO p VALUES($1,$2,to_timestamp($3))",
+        "PREPARE timeline_scan(int,int,int) AS "
+             "SELECT t.usr, t.poster, t.value, t.time "
+             "FROM t "
+             "WHERE t.usr = $1 "
+               "AND t.time > to_timestamp($2) "
+               "AND t.time < to_timestamp($3)",
+        "PREPARE timeline_add_count(int,int,int) AS "
+             "SELECT COUNT(*) "
+             "FROM t "
+             "WHERE t.usr = $1 "
+               "AND t.time > to_timestamp($2) "
+               "AND t.time < to_timestamp($3)" }), make_event());
     }
     done();
 }

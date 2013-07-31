@@ -46,12 +46,17 @@ void DBPool::clear() {
 
 #if HAVE_LIBPQ
 tamed void DBPool::execute(String query, event<Json> e) {
+    tvars { PGconn* conn; }
+    twait { next_connection(make_event(conn)); }
+    execute(conn, query, e); 
+    replace_connection(conn);
+}
+
+tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
     tvars {
-        PGconn* conn;
         int32_t err;
     }
 
-    twait { next_connection(make_event(conn)); }
 
 #if 0
     {
@@ -106,8 +111,6 @@ tamed void DBPool::execute(String query, event<Json> e) {
     PQclear(result);
     result = PQgetResult(conn);
     mandatory_assert(!result && "Should only be one result!");
-
-    replace_connection(conn);
     e(ret);
 }
 
@@ -140,6 +143,41 @@ PGconn* DBPool::connect_one() {
     mandatory_assert(PQstatus(conn) != CONNECTION_BAD);
     return conn;
 }
+
+tamed void DBPool::add_prepared_pool(std::vector<String> statements, tamer::event<> e) {
+    tvars {
+        std::vector<PGconn*> local_conns; 
+        int32_t i, outstanding_count;
+        PGconn* temp_conn;
+        Json j;
+        std::vector<PGconn*>::iterator c;
+        std::vector<String>::iterator s;
+    }
+
+    // force max connections
+    for ( i = max_ - conn_.size(); i > 0; --i) {
+        local_conns.push_back(connect_one());
+        conn_.push_back(local_conns.back());
+    }
+
+    // wait for existing outstanding connections
+    outstanding_count = max_ - local_conns.size();
+    for (i = 0; i < outstanding_count; ++i) {
+        twait { next_connection(make_event(temp_conn)); }     
+        local_conns.push_back(temp_conn);
+    }
+
+   // add the prepared statement to each connection
+    for (c = local_conns.begin(); c != local_conns.end(); ++c ){
+        for (s = statements.begin(); s != statements.end(); ++s) {
+            twait { execute(*c, *s, make_event(j)); }
+        }
+        // replace the connection
+        replace_connection(*c);
+       }
+   e();
+}
+
 #else
 
 tamed void DBPool::execute(String query, event<Json> e) {
