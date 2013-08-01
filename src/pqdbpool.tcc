@@ -48,8 +48,9 @@ void DBPool::clear() {
 tamed void DBPool::execute(String query, event<Json> e) {
     tvars { PGconn* conn; }
     twait { next_connection(make_event(conn)); }
-    execute(conn, query, e); 
+    twait { execute(conn, query, make_event(e.result())); }
     replace_connection(conn);
+    e.unblocker().trigger();
 }
 
 tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
