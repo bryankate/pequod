@@ -23,7 +23,7 @@ using tamer::event;
 using tamer::preevent;
 class TwitterNewPopulator;
 
-#define END_TIME        ((uint32_t)-1)
+#define END_TIME        2147483647
 #define BASE_TIME       1000000000
 #define LOGIN_WINDOW    1000000
 #define OVERLAP         0          // subtracted from last check time to define beg_scan
@@ -590,21 +590,21 @@ void TwitterNewDBShim<S>::initialize(tamer::event<> done) {
     twait {
         server_.add_prepared_pool(std::vector<String>({
         "PREPARE subscribe(int,int) AS "
-            "INSERT INTO s VALUES($1,$2)",
+            "INSERT INTO s SELECT $1,$2 WHERE NOT EXISTS (SELECT 1 FROM s WHERE usr = $1 AND poster = $2)",
         "PREPARE post(int,text,int) AS "
-            "INSERT INTO p VALUES($1,$2,to_timestamp($3))",
+            "INSERT INTO p VALUES($1,$2,$3)",
         "PREPARE timeline_scan(int,int,int) AS "
              "SELECT t.usr, t.poster, t.value, t.time "
              "FROM t "
              "WHERE t.usr = $1 "
-               "AND t.time > to_timestamp($2) "
-               "AND t.time < to_timestamp($3)",
+               "AND t.time >= $2 "
+               "AND t.time < $3",
         "PREPARE timeline_add_count(int,int,int) AS "
              "SELECT COUNT(*) "
              "FROM t "
              "WHERE t.usr = $1 "
-               "AND t.time > to_timestamp($2) "
-               "AND t.time < to_timestamp($3)" }), make_event());
+               "AND t.time >= $2 "
+               "AND t.time < $3" }), make_event());
     }
     done();
 }
@@ -630,7 +630,7 @@ void TwitterNewDBShim<S>::post(uint32_t poster, uint32_t time, const String& val
                                     bool celeb, tamer::event<> done) {
     tvars { Json j; }
     twait{
-        server_.execute("EXECUTE post(" + String(poster) + "," + String(value) +  "," + String(time) + ")", make_event(j));
+        server_.execute("EXECUTE post(" + String(poster) + ",'" + String(value) +  "'," + String(time) + ")", make_event(j));
     }
     done();
 }
@@ -660,22 +660,22 @@ void TwitterNewDBShim<S>::timeline_scan(uint32_t subscriber,
         server_.execute("EXECUTE timeline_scan(" + String(subscriber) + "," + String(start_time) +  "," + String(end_time) + ")", make_event(j));
     }
     std::vector<String> return_vector;
-    for (auto it = j.abegin(); it < j.aend(); ) {
-        auto usr = *it;
-        ++it;
-        auto poster = *it;
-        ++it;
-        auto value = *it;
-        ++it;
-        auto time = *it;
-        ++it;
-        std::cerr << "usr(" << usr << ") poster(" << poster << ") value(" << value << ") time(" << time << ")" << std::endl;
-        memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
-        write_in_net_order(buf_ + 2, usr.to_i());
-        write_in_net_order(buf_ + 7, poster.to_i());
-        write_in_net_order(buf_ + 12, time.to_i());
-        return_vector.push_back(buf_);
-        return_vector.push_back(value.to_s());
+    for (auto it = j.abegin(); it < j.aend(); ++it ) {
+        uint32_t usr = (*it)[0].to_i();
+        uint32_t poster = (*it)[1].to_i();
+        String value = (*it)[2].to_s();
+        uint32_t time = (*it)[3].to_i();
+	    if (tp_.binary()) {
+	        memcpy(buf_, "t|XXXX|XXXX|XXXX", 16);
+	        write_in_net_order(buf_ + 2, usr);
+	        write_in_net_order(buf_ + 7, poster);
+	        write_in_net_order(buf_ + 12, time);
+	    } else {
+	        sprintf(buf_, "t|%08u|%010u|%08u",
+	                usr, time, poster);
+	    }
+	    return_vector.push_back(buf_);
+	    return_vector.push_back(value);
     }
     done(scan_result(Json(return_vector)));
 }
@@ -688,8 +688,7 @@ void TwitterNewDBShim<S>::timeline_add_count(uint32_t subscriber,
     twait {
         server_.execute("EXECUTE timeline_add_count(" + String(subscriber) + "," + String(start_time) +  "," + String(end_time) + ")", make_event(j));
     }
-    auto count = j[1].to_i();
-    std::cerr << "returning count(" << count << ")" << std::endl;
+    auto count = j[0][0].to_i();
     done(count);
 }
 
