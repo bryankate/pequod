@@ -29,7 +29,7 @@ class TwitterNewPopulator;
 #define OVERLAP         0          // subtracted from last check time to define beg_scan
 #define SKEW            5000       // subtracted from now to define end_scan
 
-#define TIMELINE_SANITY_CHECK 0
+#define TIMELINE_SANITY_CHECK 1
 
 // Keep barebones info on each user.
 struct TwitterGraphNode {
@@ -1085,7 +1085,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t end_time = beg_time + this->tp_.duration();
         uint32_t postlimit = this->tp_.postlimit();
         uint32_t checklimit = this->tp_.checklimit();
-        uint32_t u, beg_scan, end_scan, slot;
+        uint32_t u, beg_scan, end_scan, slot, n;
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
                  nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
         TwitterUser* user = NULL;
@@ -1244,7 +1244,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     // each distributed experiment does roughly the same amount of work
     // despite differences in rpc ordering
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
-    for (u = 0; u < loggedin_.size(); ++u) {
+    n = loggedin_.size();
+    for (u = 0; u < n; ++u) {
         user = tp_.managed_user(loggedin_.front());
         loggedin_.pop_front();
         check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
