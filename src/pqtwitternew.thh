@@ -29,7 +29,7 @@ class TwitterNewPopulator;
 #define OVERLAP         0          // subtracted from last check time to define beg_scan
 #define SKEW            5000       // subtracted from now to define end_scan
 
-#define TIMELINE_SANITY_CHECK 1
+#define TIMELINE_SANITY_CHECK 0
 
 // Keep barebones info on each user.
 struct TwitterGraphNode {
