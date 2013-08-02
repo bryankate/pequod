@@ -5,6 +5,7 @@ import os
 from os import system
 import subprocess
 from subprocess import Popen
+import shutil
 import time
 from time import sleep
 from optparse import OptionParser
@@ -14,6 +15,7 @@ import lib.aggregate
 from lib.aggregate import aggregate_dir
 import lib.gnuplotter
 from lib.gnuplotter import make_gnuplot
+
 
 parser = OptionParser()
 parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", 
@@ -111,7 +113,28 @@ for x in exps:
         dbfile = open(dbhostpath, "w")
         dbprocs = []
         
+        dbcompare = True if 'def_db_compare' in e and e['def_db_compare'] else False
         dbmonitor = False
+
+        # redirect to temp fs for postgres
+        if e['def_db_in_memory']:
+            cmd = "mount | grep '/mnt/tmp' | grep -o '[0-9]\\+[kmg]'"
+            (a,_) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
+            if a:
+                if len(a) > 8:
+                    print "[[37;1minfo[0m] Memory FS is %s. (~%sGb)" % (a[:-1],a[:-8])
+                else:
+                    print "[[33;1mwarn[0m] Memory FS is small, %s is less than 1Gb memory." % (a[:-1])
+                (a,_) = Popen("df /mnt/tmp | grep -o '[0-9]\+%'", stdout=subprocess.PIPE, shell=True).communicate()
+                if a[0] is not "0":
+                    print "[[33;1mwarn[0m] /mnt/tmp is %s full." % (a[:-1])
+            else:
+                print "[[31mFAIL[0m] '/mnt/tmp' not found or missing size."
+                print "[[31mFAIL[0m] search command:\"%s\"." % (cmd)
+                exit()
+            dbenvpath = os.path.join("/mnt/tmp", dbenvpath)
+            os.makedirs(dbenvpath)
+
         if 'def_db_writearound' in e:
             dbmonitor = e['def_db_writearound']
 
@@ -135,19 +158,21 @@ for x in exps:
                         
                         if dbmonitor:
                             servercmd = servercmd + " --monitordb"
-                        
+
+
                         # start postgres server
                         fartfile = os.path.join(resdir, "fart_db_" + str(s) + ".txt")
                         dbpath = os.path.join(dbenvpath, "postgres_" + str(s))
                         os.makedirs(dbpath)
-                        
+
                         cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
                               " >> " + fartfile + " 2>> " + fartfile
                         print cmd
                         Popen(cmd, shell=True).wait()
                               
                         cmd = "postgres -h " + dbhost + " -p " + str(dbport + s) + \
-                              " -D " + dbpath + " -c synchronous_commit=off -c fsync=off" + \
+                              " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
+                              " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
                               " >> " + fartfile + " 2>> " + fartfile
                         print cmd
                         dbprocs.append(Popen(cmd, shell=True))
@@ -157,32 +182,40 @@ for x in exps:
                               " >> " + fartfile + " 2>> " + fartfile
                         print cmd
                         Popen(cmd, shell=True).wait()
-                
-            outfile = os.path.join(resdir, "output_srv_")
-            fartfile = os.path.join(resdir, "fart_srv_")
-  
-            if affinity:
-                pin = "numactl -C " + str(startcpu + (s * skipcpu)) + " "
-                
-            if s == perfserver:
-                perf = "perf record -g -o " + os.path.join(resdir, "perf-") + str(s) + ".dat "
-            else:
-                perf = ""
 
-            full_cmd = pin + perf + servercmd + serverargs + \
-                " -kl=" + str(startport + s) + \
-                " > " + outfile + str(s) + ".txt" + \
-                " 2> " + fartfile + str(s) + ".txt"
-
-            print full_cmd
-            serverprocs.append(Popen(full_cmd, shell=True))
+                        if dbcompare:
+                            #load the tables
+                            cmd = "psql -p %d pequod < %s >> %s 2>> %s" % (dbport+s, e['def_sql_script'], fartfile, fartfile)
+                            Popen(cmd, shell=True).wait()
+                
+            if not dbcompare:
+                outfile = os.path.join(resdir, "output_srv_")
+                fartfile = os.path.join(resdir, "fart_srv_")
+      
+                if affinity:
+                    pin = "numactl -C " + str(startcpu + (s * skipcpu)) + " "
+                    
+                if s == perfserver:
+                    perf = "perf record -g -o " + os.path.join(resdir, "perf-") + str(s) + ".dat "
+                else:
+                    perf = ""
+    
+                full_cmd = pin + perf + servercmd + serverargs + \
+                    " -kl=" + str(startport + s) + \
+                    " > " + outfile + str(s) + ".txt" + \
+                    " 2> " + fartfile + str(s) + ".txt"
+    
+                print full_cmd
+                serverprocs.append(Popen(full_cmd, shell=True))
             
         dbfile.close()
         sleep(3)
 
+
         if 'initcmd' in e:
             print "Initializing cache servers."
-            initcmd = e['initcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
+            connect_to = " -H=" + hostpath if not dbcompare else " -c=%d" % (dbport)
+            initcmd = e['initcmd'] + connect_to + " -B=" + str(nbacking)
             fartfile = os.path.join(resdir, "fart_init.txt")
             
             if affinity:
@@ -208,7 +241,8 @@ for x in exps:
         elif 'populatecmd' in e:
             print "Populating backend."
             procs = []
-            popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
+            connect_to = " -H=" + hostpath if not dbcompare else " -c=%d" % (dbport)
+            popcmd = e['populatecmd'] + connect_to + " -B=" + str(nbacking)
             fartfile = os.path.join(resdir, "fart_pop.txt")
             
             if dbmonitor:
@@ -241,7 +275,8 @@ for x in exps:
 
         print "Starting app clients."
         procs = []
-        clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
+        connect_to = " -H=" + hostpath if not dbcompare else " --dbshim -c=%d" % (dbport)
+        clientcmd = e['clientcmd'] + connect_to + " -B=" + str(nbacking)
         
         for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_")
@@ -266,11 +301,17 @@ for x in exps:
             p.wait()
     
         for p in serverprocs + dbprocs:
+            print p
             p.kill()
+            p.wait()
     
         if ngroups > 1:
             aggregate_dir(resdir)
     
+        # Save and clean up memory fs run
+# if e['def_db_in_memory']:
+#           shutil.rmtree(dbenvpath)
+
         print "Done experiment. Results are stored at", resdir
     
     if expdir and 'plot' in x:
