@@ -71,6 +71,54 @@ def define_experiments():
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
     
+    # read-write ratio experiment
+    # can be run on on a multiprocessor
+    exp = {'name': "writeratio", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    
+    points = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    for post in points:
+        popBase = "%s %s --popduration=0" % (populateCmd, users)
+        clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=100000000 " \
+                     "--ppost=%d --pread=100 --psubscribe=0 --plogin=0 --plogout=0" % \
+                     (clientCmd, users, post)
+        
+        exp['defs'].append(
+            {'name': "hybrid_%d" % (post),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'populatecmd': "%s" % (popBase),
+             'clientcmd': "%s --no-prevalidate" % (clientBase)})
+    
+        exp['defs'].append(
+            {'name': "push_%d" % (post),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'populatecmd': "%s" % (popBase),
+             'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
+        
+        exp['defs'].append(
+            {'name': "push_update_%d" % (post),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'populatecmd': "%s --pactive=70 --prevalidate-before-sub --prevalidate --prevalidate-inactive" % (popBase),
+             'clientcmd': "%s" % (clientBase)})
+    
+    exp['plot'] = {'type': "line",
+                   'data': [{'from': "client",
+                             'attr': "wall_time"}],
+                   'lines': ["hybrid", "push", "push_update"],
+                   'points': points,
+                   'xlabel': "Percent Active",
+                   'ylabel': "Runtime (s)"}
+    exps.append(exp)
+    
     
     # client push vs. pequod experiment
     # can be run on a multiprocessor
