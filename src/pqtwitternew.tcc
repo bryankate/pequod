@@ -78,6 +78,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       fetch_(param["fetch"].as_b(false)),
       prevalidate_(param["prevalidate"].as_b(true)),
       prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
+      prevalidate_before_sub_(param["prevalidate_before_sub"].as_b(false)),
       writearound_(param["writearound"].as_b(false)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
@@ -92,12 +93,15 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       max_subs_(param["max_subscriptions"].as_i(200)),
       shape_(param["shape"].as_d(55)) {
 
-    assert(!(push_ && pull_));
+    mandatory_assert(!(push_ && pull_));
 
     if (pull_ || push_) {
         prevalidate_ = false;
         prevalidate_inactive_ = false;
     }
+
+    if (prevalidate_before_sub_)
+        mandatory_assert(prevalidate_ || prevalidate_inactive_);
 
     vector<double> op_weight(n_op, 0);
 

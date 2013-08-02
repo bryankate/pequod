@@ -105,6 +105,7 @@ class TwitterNewPopulator {
     inline bool fetch() const { return fetch_; }
     inline bool prevalidate() const { return prevalidate_; }
     inline bool prevalidate_inactive() const { return prevalidate_inactive_; }
+    inline bool prevalidate_before_sub() const { return prevalidate_before_sub_; }
     inline bool writearound() const { return writearound_; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
@@ -145,6 +146,7 @@ class TwitterNewPopulator {
     bool fetch_;
     bool prevalidate_;
     bool prevalidate_inactive_;
+    bool prevalidate_before_sub_;
     bool writearound_;
     bool log_;
     bool synchronous_;
@@ -730,6 +732,13 @@ inline void TwitterNewDBShim<S>::control(const Json& cmd, tamer::event<Json> don
 //    mandatory_assert(false && "Function not supported in this mode.");
 }
 
+class RandomAdapter {
+  public:
+    RandomAdapter(boost::mt19937& gen) : gen_(gen) { }
+    uint32_t operator()(uint32_t arg) { return gen_() % arg; }
+  private:
+    boost::mt19937& gen_;
+};
 
 template <typename S>
 class TwitterNewRunner {
@@ -757,7 +766,8 @@ class TwitterNewRunner {
                      uint32_t beg_scan, uint32_t end_scan, event<uint32_t> e);
     tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
     tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<uint32_t> e);
-    tamed void periodic_logger(tamer::event<> done);
+    tamed void periodic_logger(event<> e);
+    tamed void select_active(event<> e);
 };
 
 template <typename S>
@@ -960,6 +970,13 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (!tp_.populate())
         goto finish;
 
+    // in some experiments we want to prevalidate before adding the
+    // subscriptions so that the first validation in the experiment for each
+    // user has to perform some updates. if we are not prevaldiating then
+    // there is no reason to select active users in this phase
+    if (tp_.prevalidate_before_sub())
+        twait { select_active(make_event()); }
+
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
     for (s = 0; s != subs.size(); ++s) {
         subscribe(subs[s].first, subs[s].second, currtime_, gr.make_event());
@@ -989,70 +1006,15 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 }
 
 tamed template <typename S>
-void TwitterNewRunner<S>::periodic_logger(tamer::event<> done) {
-    tvars {
-        struct rusage u, lu;
-        uint64_t now, before, utime, stime;
-        double scale = 1.0 / 10000;
-    }
-    before = 0;
-    memset(&lu, 0, sizeof(struct rusage));
-
-    while(done) {
-        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
-        now = tstamp();
-        utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
-        stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
-
-        log_.record_at("mem_max_rss_mb", now, maxrss_mb(u.ru_maxrss));
-        log_.record_at("utime_us", now, utime);
-        log_.record_at("stime_us", now, stime);
-        log_.record_at("cpu_pct", now, (before) ? ((utime + stime) * scale / fromus(now - before)) : 0);
-
-        lu = u;
-        before = now;
-        twait volatile { tamer::at_delay_sec(1, make_event()); }
-    }
-}
-
-class RandomAdapter {
-  public:
-    RandomAdapter(boost::mt19937& gen) : gen_(gen) { }
-    uint32_t operator()(uint32_t arg) { return gen_() % arg; }
-  private:
-    boost::mt19937& gen_;
-};
-
-tamed template <typename S>
-void TwitterNewRunner<S>::run(tamer::event<> done) {
+void TwitterNewRunner<S>::select_active(event<> done) {
     tvars {
         boost::mt19937 gen;
         boost::uniform_real<> active_rng(0,100);
-        struct rusage ru[2];
-        struct timeval tv[2];
-        uint32_t beg_time = this->currtime_;
-        uint32_t end_time = beg_time + this->tp_.duration();
-        uint32_t postlimit = this->tp_.postlimit();
-        uint32_t checklimit = this->tp_.checklimit();
-        uint32_t u, beg_scan, end_scan, slot;
-        uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
-                 nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
-        TwitterUser* user = NULL;
-        typename S::scan_result scan_result;
-        Json old_stats, stats, logs, j;
-        double prevalidate_time = 0;
+        uint32_t u;
         tamer::gather_rendezvous gr;
     }
 
-    if (!tp_.execute()) {
-        done();
-        return;
-    }
-
     gen.seed(13918 + tp_.groupid());
-    periodic_logger(done);
-
-    gettimeofday(&tv[0], 0);
 
     // create a working set of users
     if (tp_.verbose()) { std::cerr << "Selecting active users." << std::endl; }
@@ -1079,13 +1041,69 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait(gr);
     }
 
-    gettimeofday(&tv[1], 0);
-    if (tp_.prevalidate() || tp_.prevalidate_inactive())
-        prevalidate_time = to_real(tv[1] - tv[0]);
-
     std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
-    if (loggedin_.empty() && tp_.pct_active() > 0)
+    if (loggedin_.empty() && tp_.pct_active())
         assert(false && "There were no active users selected.");
+
+    done();
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::periodic_logger(event<> done) {
+    tvars {
+        struct rusage u, lu;
+        uint64_t now, before, utime, stime;
+        double scale = 1.0 / 10000;
+    }
+    before = 0;
+    memset(&lu, 0, sizeof(struct rusage));
+
+    while(done) {
+        mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
+        now = tstamp();
+        utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
+        stime = tv2us(u.ru_stime) - tv2us(lu.ru_stime);
+
+        log_.record_at("mem_max_rss_mb", now, maxrss_mb(u.ru_maxrss));
+        log_.record_at("utime_us", now, utime);
+        log_.record_at("stime_us", now, stime);
+        log_.record_at("cpu_pct", now, (before) ? ((utime + stime) * scale / fromus(now - before)) : 0);
+
+        lu = u;
+        before = now;
+        twait volatile { tamer::at_delay_sec(1, make_event()); }
+    }
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::run(tamer::event<> done) {
+    tvars {
+        boost::mt19937 gen;
+        struct rusage ru[2];
+        struct timeval tv[2];
+        uint32_t beg_time = this->currtime_;
+        uint32_t end_time = beg_time + this->tp_.duration();
+        uint32_t postlimit = this->tp_.postlimit();
+        uint32_t checklimit = this->tp_.checklimit();
+        uint32_t u, beg_scan, end_scan, slot;
+        uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
+                 nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
+        TwitterUser* user = NULL;
+        typename S::scan_result scan_result;
+        Json old_stats, stats, logs, j;
+        tamer::gather_rendezvous gr;
+    }
+
+    if (!tp_.execute()) {
+        done();
+        return;
+    }
+
+    if (loggedin_.empty())
+        twait { select_active(make_event()); }
+
+    gen.seed(13918 + tp_.groupid());
+    periodic_logger(done);
 
     log_.clear();
     if (!tp_.groupid())
@@ -1270,8 +1288,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
          .set("nlogouts", nlogout)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-         .set("wall_time", to_real(tv[1] - tv[0]))
-         .set("wall_time_prevalidate", prevalidate_time);
+         .set("wall_time", to_real(tv[1] - tv[0]));
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
 
     done();

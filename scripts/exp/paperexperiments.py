@@ -12,19 +12,19 @@ def define_experiments():
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
     populateCmd = "%s %s --no-initialize --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag) + \
-                "--ppost=1 --psubscribe=60 --plogin=5 --plogout=5 --psubscribe=10"
+    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag)
 
     # policy experiment
     # can be run on on a multiprocessor
     exp = {'name': "policy", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    totalchecks = 100000000
     
-    for active in [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
+    points = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    for active in points:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
-        clientBase = "%s %s --pactive=%d --duration=1000000000 --checklimit=%d" % \
-                     (clientCmd, users, active, active / 100.0 * totalchecks)
+        clientBase = "%s %s --pactive=%d --duration=1000000000 --postlimit=1000000 " \
+                     "--ppost=1 --pread=%d --psubscribe=0 --plogin=0 --plogout=0" % \
+                     (clientCmd, users, active, active)
         
         exp['defs'].append(
             {'name': "hybrid_%d" % (active),
@@ -52,12 +52,21 @@ def define_experiments():
              'initcmd': "%s" % (initCmd),
              'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
+        
+        exp['defs'].append(
+            {'name': "push_update_%s" % (str(active)),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'populatecmd': "%s --pactive=%d --prevalidate-before-sub --prevalidate --prevalidate-inactive" % (popBase, active),
+             'clientcmd': "%s" % (clientBase)})
     
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
                              'attr': "wall_time"}],
-                   'lines': ["hybrid", "pull", "push"],
-                   'points': [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+                   'lines': ["hybrid", "pull", "push", "push_update"],
+                   'points': points,
                    'xlabel': "Percent Active",
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
