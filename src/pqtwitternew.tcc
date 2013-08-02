@@ -180,7 +180,7 @@ void TwitterNewPopulator::synthetic_subscriptions(generator_type& gen,
 	    uint32_t other;
 	    do {
 		other = std::upper_bound(sub_prob, sub_prob + nusers_, gen()) - sub_prob;
-	    } while (subvec[other / 32] & (1U << (other % 32)));
+	    } while (other == i || (subvec[other / 32] & (1U << (other % 32))));
 
             ++users_[other]->nfollowers_;
 	    if (in_group(i))
