@@ -16,13 +16,18 @@ def define_experiments():
 
     # policy experiment
     # can be run on on a multiprocessor
+    #
+    # we set the number of operations so that there are 
+    # about 140 timeline checks per active user.
+    # the number of posts is fixed, so there ends up being a variable
+    # post:check ratio of 1:1 at 1% active users to 1:100 at 100% active users
     exp = {'name': "policy", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     
     points = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     for active in points:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
-        clientBase = "%s %s --pactive=%d --duration=1000000000 --postlimit=1000000 " \
+        clientBase = "%s %s --pactive=%d --duration=1000000000 --postlimit=2511834 " \
                      "--ppost=1 --pread=%d --psubscribe=0 --plogin=0 --plogout=0" % \
                      (clientCmd, users, active, active)
         
@@ -52,20 +57,11 @@ def define_experiments():
              'initcmd': "%s" % (initCmd),
              'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
-        
-        exp['defs'].append(
-            {'name': "push_update_%s" % (str(active)),
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s" % (initCmd),
-             'populatecmd': "%s --pactive=%d --prevalidate-before-sub --prevalidate --prevalidate-inactive" % (popBase, active),
-             'clientcmd': "%s" % (clientBase)})
     
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
                              'attr': "wall_time"}],
-                   'lines': ["hybrid", "pull", "push", "push_update"],
+                   'lines': ["hybrid", "pull", "push"],
                    'points': points,
                    'xlabel': "Percent Active",
                    'ylabel': "Runtime (s)"}
@@ -73,13 +69,17 @@ def define_experiments():
     
     # read-write ratio experiment
     # can be run on on a multiprocessor
+    #
+    # fix the %active at 70 and have each user do 140 timeline checks.
+    # vary the number of posts that are made so that the post:check ratio
+    # goes from 1:100 to 2:1
     exp = {'name': "writeratio", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     
-    points = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    points = [1, 25, 50, 75, 100, 200]
     for post in points:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
-        clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=100000000 " \
+        clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=175828366 " \
                      "--ppost=%d --pread=100 --psubscribe=0 --plogin=0 --plogout=0" % \
                      (clientCmd, users, post)
         
@@ -113,7 +113,7 @@ def define_experiments():
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
                              'attr': "wall_time"}],
-                   'lines': ["hybrid", "push", "push_update"],
+                   'lines': ["hybrid", "push"],
                    'points': points,
                    'xlabel': "Percent Active",
                    'ylabel': "Runtime (s)"}
@@ -122,10 +122,15 @@ def define_experiments():
     
     # client push vs. pequod experiment
     # can be run on a multiprocessor
+    #
+    # fix the %active at 70 and have each user perform 140 timeline checks.
+    # fix the post:check ratio at 1:100 
     exp = {'name': "client_push", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=0" % (populateCmd, users)
-    clientBase = "%s %s --pactive=70 --duration=100000000" % (clientCmd, users)
+    clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=175828366 " \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
@@ -173,6 +178,9 @@ def define_experiments():
     # can be run on a multiprocessor
     exp = {'name': "optimization", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=175828366 " \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
@@ -181,7 +189,7 @@ def define_experiments():
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s %s --pactive=70 --duration=100000000" % (clientCmd, users)})
+         'clientcmd': "%s" % (clientBase)})
     
     exp['plot'] = {'type': "stackedbar",
                    'data': [{'from': "server",
@@ -197,7 +205,11 @@ def define_experiments():
     # computation experiment. 
     # measure computation times inside the server and see that they are small.
     # should be run both on a multiprocessor and in a distributed setup 
-    # with one cache server and one or more backing servers that own all the base data
+    # with one cache server and one or more backing servers that own all the base data.
+    #
+    # the enable_validation_logging flag should be set to true and the 
+    # logs should be used to determine avg, stddev, and percentiles for
+    # the computation times.
     exp = {'name': "computation", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=100000" % (populateCmd, users),
@@ -220,6 +232,43 @@ def define_experiments():
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s" % (popBase),
          'clientcmd': "%s --synchronous" % (clientBase)})
+    exps.append(exp)
+    
+    # database as cache comparison experiment.
+    # can be run on a multiprocessor.
+    #
+    # the number of cache servers pequod uses should be the same as the number of 
+    # clients used to access postgres through the DBPool.
+    # fix %active at 70, post:check ratio at 1:100 and 140 timeline checks per user. 
+    exp = {'name': "dbcompare", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=175828366 " \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 (clientCmd, users)
+    
+    exp['defs'].append(
+        {'name': "pequod",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
+         'clientcmd': "%s" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "postgres",
+         'def_db_type': "postgres",
+         'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
+         'def_db_in_memory': True,
+         'def_db_compare': True,
+         'populatecmd': "%s %s --dbshim --initialize --popduration=0" % (populateCmd, users),
+         'clientcmd': "%s --dbshim --initialize" % (clientBase)})
+    
+    exp['plot'] = {'type': "bar",
+                   'data': [{'from': "client",
+                             'attr': "wall_time"}],
+                   'lines': ["pequod", "postgres"],
+                   'ylabel': "Runtime (s)"}
     exps.append(exp)
 
 define_experiments()
