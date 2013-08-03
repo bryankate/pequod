@@ -29,8 +29,10 @@ parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu",
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
+parser.add_option("-D", "--dbstartport", action="store", type="int", dest="dbstartport", default=10000)
 parser.add_option("-d", "--dumpdb", action="store_true", dest="dumpdb", default=False)
 parser.add_option("-l", "--loaddb", action="store_true", dest="loaddb", default=False)
+parser.add_option("-r", "--ramfs", action="store", type="string", dest="ramfs", default="/mnt/tmp")
 (options, args) = parser.parse_args()
 
 expfile = options.expfile
@@ -42,11 +44,14 @@ startcpu = options.startcpu
 skipcpu = options.skipcpu
 perfserver = options.perfserver
 ngroups = options.ngroups
+dbstartport = options.dbstartport
 dumpdb = options.dumpdb
 loaddb = options.loaddb
+ramfs = options.ramfs
 
 nprocesses = nbacking + ncaching
 ndbs = nbacking if nbacking > 0 else ncaching
+dbhost = "127.0.0.1"
 hosts = []
 pin = ""
 
@@ -57,7 +62,7 @@ begintime = time.time()
 localhost = socket.gethostname()
 
 def prepare_experiment(xname, ename):
-    global topdir, uniquedir, hostpath, begintime, nprocesses
+    global topdir, uniquedir, hostpath
     if topdir is None:
         topdir = "results"
 
@@ -79,6 +84,61 @@ def prepare_experiment(xname, ename):
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
 
+def check_database_env(expdef):
+    global dbenvpath
+    
+    # possibly redirect to ramfs
+    if 'def_db_in_memory' in expdef and expdef['def_db_in_memory']:
+        cmd = "mount | grep '" + ramfs + "' | grep -o '[0-9]\\+[kmg]'"
+        (a, _) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
+        if a:
+            if len(a) > 8:
+                print "[[37;1minfo[0m] Memory FS is %s. (~%sGb)" % (a[:-1],a[:-8])
+            else:
+                print "[[33;1mwarn[0m] Memory FS is small, %s is less than 1Gb memory." % (a[:-1])
+            (a,_) = Popen("df " + ramfs + " | grep -o '[0-9]\+%'", stdout=subprocess.PIPE, shell=True).communicate()
+            if a[0] is not "0":
+                print "[[33;1mwarn[0m] " + ramfs + " is %s full." % (a[:-1])
+        else:
+            print "[[31mFAIL[0m] '" + ramfs + "' not found or missing size."
+            print "[[31mFAIL[0m] search command:\"%s\"." % (cmd)
+            exit()
+        dbenvpath = os.path.join(ramfs, dbenvpath)
+
+def start_postgres(expdef, id):
+    global dbpath
+    
+    fartfile = os.path.join(resdir, "fart_db_" + str(id) + ".txt")
+    dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
+    os.makedirs(dbpath)
+
+    cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
+          " >> " + fartfile + " 2>> " + fartfile
+    print cmd
+    Popen(cmd, shell=True).wait()
+          
+    cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
+          " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
+          " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
+          " >> " + fartfile + " 2>> " + fartfile
+    print cmd
+    proc = Popen(cmd, shell=True)
+    sleep(2)
+    
+    cmd = "createdb -h " + dbhost + " -p " + str(dbstartport + id) + " pequod" + \
+          " >> " + fartfile + " 2>> " + fartfile
+    print cmd
+    Popen(cmd, shell=True).wait()
+
+    if 'def_db_sql_script' in expdef:
+        cmd = "psql -p %d pequod < %s >> %s 2>> %s" % \
+              (dbstartport + id, expdef['def_db_sql_script'], fartfile, fartfile)
+        
+        print cmd
+        Popen(cmd, shell=True).wait()
+        
+    return proc
+
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
 exec(exph, globals())
@@ -96,99 +156,60 @@ for x in exps:
         elif not args and e.get("disabled"):
             continue
 
-        (expdir, resdir) = prepare_experiment(x["name"], expname)
-        part = options.part if options.part else e['def_part']
-        serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-        serverprocs = []
-
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
-
-        dbhost = "127.0.0.1"
-        dbport = 10000        
-        dbenvpath = os.path.join(resdir, "store")
-        os.makedirs(dbenvpath)
-        
-        dbhostpath = os.path.join(resdir, "dbhosts.txt")
-        dbfile = open(dbhostpath, "w")
+             
+        (expdir, resdir) = prepare_experiment(x["name"], expname)
+        usedb = True if 'def_db_type' in e else False
+        dbcompare = True if 'def_db_compare' in e and e['def_db_compare'] else False
+        dbmonitor = True if 'def_db_writearound' in e and e['def_db_writearound'] else False
+        serverprocs = [] 
         dbprocs = []
         
-        dbcompare = True if 'def_db_compare' in e and e['def_db_compare'] else False
-        dbmonitor = False
-
-        # redirect to temp fs for postgres
-        if e['def_db_in_memory']:
-            cmd = "mount | grep '/mnt/tmp' | grep -o '[0-9]\\+[kmg]'"
-            (a,_) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
-            if a:
-                if len(a) > 8:
-                    print "[[37;1minfo[0m] Memory FS is %s. (~%sGb)" % (a[:-1],a[:-8])
-                else:
-                    print "[[33;1mwarn[0m] Memory FS is small, %s is less than 1Gb memory." % (a[:-1])
-                (a,_) = Popen("df /mnt/tmp | grep -o '[0-9]\+%'", stdout=subprocess.PIPE, shell=True).communicate()
-                if a[0] is not "0":
-                    print "[[33;1mwarn[0m] /mnt/tmp is %s full." % (a[:-1])
-            else:
-                print "[[31mFAIL[0m] '/mnt/tmp' not found or missing size."
-                print "[[31mFAIL[0m] search command:\"%s\"." % (cmd)
-                exit()
-            dbenvpath = os.path.join("/mnt/tmp", dbenvpath)
+        if usedb:
+            dbenvpath = os.path.join(resdir, "store")
+            check_database_env(e)
             os.makedirs(dbenvpath)
-
-        if 'def_db_writearound' in e:
-            dbmonitor = e['def_db_writearound']
-
-        for s in range(nprocesses):
-            if s < nbacking:
-                servercmd = e['backendcmd']
-            else:
-                servercmd = e['cachecmd']
-            
-            if s < ndbs:
-                if 'def_db_type' in e:
+        
+        # if we are comparing to a db, don't start any pequod servers
+        if dbcompare:
+            # db comparison requires exactly one abcking server (so that only
+            # one DB will be started) and > 0 caching servers (the number of 
+            # allowed connections). this is because we hack the script below
+            # that is meant to startup pequod servers. just go with it.
+            if ncaching < 1 or ngroups > 1:
+                print "ERROR: -b must == 1 and -c must be > 0 for DB comparison experiments"
+                exit(-1)
+                
+            dbprocs.append(start_postgres(e, 0))
+        else:
+            if usedb:
+                dbhostpath = os.path.join(resdir, "dbhosts.txt")
+                dbfile = open(dbhostpath, "w")
+                
+            for s in range(nprocesses):
+                if s < nbacking:
+                    servercmd = e['backendcmd']
+                else:
+                    servercmd = e['cachecmd']
+                
+                if usedb and s < ndbs:
                     if e['def_db_type'] == 'berkeleydb':
                         servercmd = servercmd + \
                             " --berkeleydb --dbname=pequod_" + str(s) + \
                             " --dbenvpath=" + dbenvpath
                     elif e['def_db_type'] == 'postgres':
-                        dbfile.write(dbhost + "\t" + str(dbport + s) + "\n");
                         servercmd = servercmd + \
                             " --postgres --dbname=pequod" + \
-                            " --dbhost=" + dbhost + " --dbport=" + str(dbport + s)
-                        
+                            " --dbhost=" + dbhost + " --dbport=" + str(dbstartport + s)
                         if dbmonitor:
                             servercmd = servercmd + " --monitordb"
-
-
-                        # start postgres server
-                        fartfile = os.path.join(resdir, "fart_db_" + str(s) + ".txt")
-                        dbpath = os.path.join(dbenvpath, "postgres_" + str(s))
-                        os.makedirs(dbpath)
-
-                        cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
-                              " >> " + fartfile + " 2>> " + fartfile
-                        print cmd
-                        Popen(cmd, shell=True).wait()
-                              
-                        cmd = "postgres -h " + dbhost + " -p " + str(dbport + s) + \
-                              " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
-                              " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-                              " >> " + fartfile + " 2>> " + fartfile
-                        print cmd
-                        dbprocs.append(Popen(cmd, shell=True))
-                        sleep(2)
-                        
-                        cmd = "createdb -h " + dbhost + " -p " + str(dbport + s) + " pequod" + \
-                              " >> " + fartfile + " 2>> " + fartfile
-                        print cmd
-                        Popen(cmd, shell=True).wait()
-
-                        if dbcompare:
-                            #load the tables
-                            cmd = "psql -p %d pequod < %s >> %s 2>> %s" % (dbport+s, e['def_sql_script'], fartfile, fartfile)
-                            Popen(cmd, shell=True).wait()
-                
-            if not dbcompare:
+    
+                        dbfile.write(dbhost + "\t" + str(dbstartport + s) + "\n");
+                        dbprocs.append(start_postgres(e, s))
+    
+                part = options.part if options.part else e['def_part']
+                serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
                 outfile = os.path.join(resdir, "output_srv_")
                 fartfile = os.path.join(resdir, "fart_srv_")
       
@@ -207,16 +228,22 @@ for x in exps:
     
                 print full_cmd
                 serverprocs.append(Popen(full_cmd, shell=True))
-            
-        dbfile.close()
+        
+            if usedb:
+                dbfile.close()
+                
         sleep(3)
 
 
         if 'initcmd' in e:
             print "Initializing cache servers."
-            connect_to = " -H=" + hostpath if not dbcompare else " -c=%d" % (dbport)
-            initcmd = e['initcmd'] + connect_to + " -B=" + str(nbacking)
+            initcmd = e['initcmd']
             fartfile = os.path.join(resdir, "fart_init.txt")
+            
+            if dbcompare:
+                initcmd = initcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+            else:
+                initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
             if affinity:
                 pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
@@ -240,10 +267,13 @@ for x in exps:
                 p.wait()
         elif 'populatecmd' in e:
             print "Populating backend."
-            procs = []
-            connect_to = " -H=" + hostpath if not dbcompare else " -c=%d" % (dbport)
-            popcmd = e['populatecmd'] + connect_to + " -B=" + str(nbacking)
+            popcmd = e['populatecmd']
             fartfile = os.path.join(resdir, "fart_pop.txt")
+            
+            if dbcompare:
+                popcmd = popcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+            else:
+                popcmd = popcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
             if dbmonitor:
                 popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
@@ -254,10 +284,7 @@ for x in exps:
             full_cmd = pin + popcmd + " 2> " + fartfile
 
             print full_cmd
-            procs.append(Popen(full_cmd, shell=True))
-
-            for p in procs:
-                p.wait()
+            Popen(full_cmd, shell=True).wait()
 
         if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Dumping backend database after population."
@@ -273,14 +300,19 @@ for x in exps:
             for p in procs:
                 p.wait()
 
+
         print "Starting app clients."
-        procs = []
-        connect_to = " -H=" + hostpath if not dbcompare else " --dbshim -c=%d" % (dbport)
-        clientcmd = e['clientcmd'] + connect_to + " -B=" + str(nbacking)
+        clientprocs = []
+        clientcmd = e['clientcmd']
         
         for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_")
             fartfile = os.path.join(resdir, "fart_app_")
+            
+            if dbcompare:
+                clientcmd = clientcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+            else:
+                clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
             if dbmonitor:
                 clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
@@ -294,23 +326,21 @@ for x in exps:
                 " 2> " + fartfile + str(c) + ".txt"
 
             print full_cmd
-            procs.append(Popen(full_cmd, shell=True));
+            clientprocs.append(Popen(full_cmd, shell=True));
             
         # wait for clients to finish
-        for p in procs:
+        for p in clientprocs:
             p.wait()
     
         for p in serverprocs + dbprocs:
-            print p
             p.kill()
             p.wait()
     
         if ngroups > 1:
             aggregate_dir(resdir)
     
-        # Save and clean up memory fs run
-# if e['def_db_in_memory']:
-#           shutil.rmtree(dbenvpath)
+        if usedb and 'def_db_in_memory' in e and e['def_db_in_memory']:
+           shutil.rmtree(dbenvpath)
 
         print "Done experiment. Results are stored at", resdir
     
