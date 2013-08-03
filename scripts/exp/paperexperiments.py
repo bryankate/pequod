@@ -178,13 +178,35 @@ def define_experiments():
     # can be run on a multiprocessor
     exp = {'name': "optimization", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
+    buildBase = "./configure --with-malloc=jemalloc"
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=175828366 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
-        {'name': "pequod",
+        {'name': "pequod-base",
          'def_part': partfunc,
+         'def_build': "%s --disable-hint --disable-value-sharing; make" % (buildBase),
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
+         'clientcmd': "%s" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "pequod-hint",
+         'def_part': partfunc,
+         'def_build': "%s --disable-value-sharing; make" % (buildBase),
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
+         'clientcmd': "%s" % (clientBase)})
+        
+    exp['defs'].append(
+        {'name': "pequod-hint-share",
+         'def_part': partfunc,
+         'def_build': "%s; make" % (buildBase),
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
@@ -198,7 +220,7 @@ def define_experiments():
                              'attr': "server_wall_time_validate"},
                             {'from': "server",
                              'attr': "server_wall_time_other"}],
-                   'lines': ["pequod"],
+                   'lines': ["pequod-base, pequod-hint, pequod-hint-share"],
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
     
@@ -212,8 +234,10 @@ def define_experiments():
     # the computation times.
     exp = {'name': "computation", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    popBase = "%s %s --popduration=100000" % (populateCmd, users),
-    clientBase = "%s %s --no-prevalidate --pactive=70 --duration=100000000" % (clientCmd, users)
+    popBase = "%s %s --popduration=1000000" % (populateCmd, users),
+    clientBase = "%s %s --no-prevalidate --pactive=70 --duration=1000000000 --checklimit=175828366 " \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
@@ -223,15 +247,6 @@ def define_experiments():
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s" % (popBase),
          'clientcmd': "%s" % (clientBase)})
-    
-    exp['defs'].append(
-        {'name': "pequod_sync",
-         'def_part': partfunc,
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s" % (popBase),
-         'clientcmd': "%s --synchronous" % (clientBase)})
     exps.append(exp)
     
     # database as cache comparison experiment.
