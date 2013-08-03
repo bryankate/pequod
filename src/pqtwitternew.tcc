@@ -316,9 +316,10 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
     delete mc;
 }
 
-tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port) {
+tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port,
+                                   uint32_t pool_min, uint32_t pool_max) {
     tvars {
-        DBPool* client = new DBPool("127.0.0.1", client_port);
+        DBPool* client = new DBPool("127.0.0.1", client_port, pool_min, pool_max);
         TwitterNewDBShim<DBPool>* shim = new TwitterNewDBShim<DBPool>(*client, tp);
         TwitterNewRunner<TwitterNewDBShim<DBPool>>* tr = new TwitterNewRunner<TwitterNewDBShim<DBPool>>(*shim, tp);
     }

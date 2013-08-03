@@ -1299,7 +1299,8 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Hosts* dbhosts,
                                   const Partitioner* part);
 
-tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port);
+tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port,
+                                   uint32_t pool_min, uint32_t pool_max);
 
 } // namespace pq
 #endif
