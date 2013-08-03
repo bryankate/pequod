@@ -88,7 +88,7 @@ def check_database_env(expdef):
     global dbenvpath
     
     # possibly redirect to ramfs
-    if 'def_db_in_memory' in expdef and expdef['def_db_in_memory']:
+    if expdef.get('def_db_in_memory'):
         cmd = "mount | grep '" + ramfs + "' | grep -o '[0-9]\\+[kmg]'"
         (a, _) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
         if a:
@@ -161,8 +161,8 @@ for x in exps:
              
         (expdir, resdir) = prepare_experiment(x["name"], expname)
         usedb = True if 'def_db_type' in e else False
-        dbcompare = True if 'def_db_compare' in e and e['def_db_compare'] else False
-        dbmonitor = True if 'def_db_writearound' in e and e['def_db_writearound'] else False
+        dbcompare = e.get('def_db_compare')
+        dbmonitor = e.get('def_db_writearound')
         serverprocs = [] 
         dbprocs = []
         
@@ -339,7 +339,7 @@ for x in exps:
         if ngroups > 1:
             aggregate_dir(resdir)
     
-        if usedb and 'def_db_in_memory' in e and e['def_db_in_memory']:
+        if usedb and e.get('def_db_in_memory'):
            shutil.rmtree(dbenvpath)
 
         print "Done experiment. Results are stored at", resdir
