@@ -71,13 +71,15 @@ static Clp_Option options[] = {
     { "dbenvpath", 0, 3016, Clp_ValString, 0 },
     { "dbhost", 0, 3017, Clp_ValString, 0 },
     { "dbport", 0, 3018, Clp_ValInt, 0 },
-    { "berkeleydb", 0, 3019, 0, Clp_Negate },
-    { "postgres", 0, 3020, 0, Clp_Negate },
-    { "monitordb", 0, 3021, 0, Clp_Negate },
-    { "mem-lo", 0, 3022, Clp_ValInt, 0 },
-    { "mem-hi", 0, 3023, Clp_ValInt, 0 },
-    { "evict-inline", 0, 3024, 0, Clp_Negate },
-    { "evict-periodic", 0, 3025, 0, Clp_Negate },
+    { "dbpool-min", 0, 3019, Clp_ValInt, 0 },
+    { "dbpool-max", 0, 3020, Clp_ValInt, 0 },
+    { "berkeleydb", 0, 3021, 0, Clp_Negate },
+    { "postgres", 0, 3022, 0, Clp_Negate },
+    { "monitordb", 0, 3023, 0, Clp_Negate },
+    { "mem-lo", 0, 3024, Clp_ValInt, 0 },
+    { "mem-hi", 0, 3025, Clp_ValInt, 0 },
+    { "evict-inline", 0, 3026, 0, Clp_Negate },
+    { "evict-periodic", 0, 3027, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -233,6 +235,10 @@ int main(int argc, char** argv) {
             dbhost = clp->val.s;
         else if (clp->option->long_name == String("dbport"))
             dbport = clp->val.i;
+        else if (clp->option->long_name == String("dbpool-min"))
+            tp_param.set("dbpool_min", clp->val.i);
+        else if (clp->option->long_name == String("dbpool-max"))
+            tp_param.set("dbpool_max", clp->val.i);
         else if (clp->option->long_name == String("berkeleydb"))
             db = db_berkeley;
         else if (clp->option->long_name == String("postgres"))
@@ -448,7 +454,9 @@ int main(int argc, char** argv) {
                 mandatory_assert(dbhosts && part);
 
             if (tp_param.get("dbshim").as_b(false))
-                run_twitter_new_compare(*tp, client_port);
+                run_twitter_new_compare(*tp, client_port,
+                                        tp_param.get("dbpool_min").as_i(1),
+                                        tp_param.get("dbpool_max").as_i(10));
             else
                 run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
         }
