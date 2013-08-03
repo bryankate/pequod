@@ -158,6 +158,14 @@ for x in exps:
 
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
+        
+        if 'def_build' in e:
+            fartfile = os.path.join(resdir, "fart_build.txt")
+            fd = open(fartfile, "w")
+
+            print e['def_build']
+            Popen(e['def_build'], stdout=fd, stderr=fd, shell=True).wait()
+            fd.close()
              
         (expdir, resdir) = prepare_experiment(x["name"], expname)
         usedb = True if 'def_db_type' in e else False
