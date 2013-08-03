@@ -6,7 +6,7 @@ using namespace tamer;
 namespace pq {
 
 DBPool::DBPool(const String& host, uint32_t port)
-    : host_(host), port_(port), min_(5), max_(10) {
+    : host_(host), port_(port), min_(1), max_(10) {
 }
 
 DBPool::DBPool(const String& host, uint32_t port, uint32_t min, uint32_t max)
