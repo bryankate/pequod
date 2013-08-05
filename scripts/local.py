@@ -179,14 +179,12 @@ for x in exps:
             check_database_env(e)
             os.makedirs(dbenvpath)
         
-        # if we are comparing to a db, don't start any pequod servers
         if dbcompare:
-            # db comparison requires exactly one abcking server (so that only
-            # one DB will be started) and > 0 caching servers (the number of 
-            # allowed connections). this is because we hack the script below
-            # that is meant to startup pequod servers. just go with it.
+            # if we are comparing to a db, don't start any pequod servers.
+            # the number of caching servers (-c) will be used as the number 
+            # of simultaneous connections to the database.
             if ncaching < 1 or ngroups > 1:
-                print "ERROR: -b must == 1 and -c must be > 0 for DB comparison experiments"
+                print "ERROR: -c must be > 0 for DB comparison experiments"
                 exit(-1)
                 
             dbprocs.append(start_postgres(e, 0))
