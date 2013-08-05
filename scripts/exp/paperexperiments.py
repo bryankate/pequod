@@ -186,7 +186,7 @@ def define_experiments():
     exp['defs'].append(
         {'name': "pequod-base",
          'def_part': partfunc,
-         'def_build': "%s --disable-hint --disable-value-sharing; make" % (buildBase),
+         'def_build': "%s --disable-hint --disable-value-sharing; make -j1" % (buildBase),
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
@@ -196,7 +196,7 @@ def define_experiments():
     exp['defs'].append(
         {'name': "pequod-hint",
          'def_part': partfunc,
-         'def_build': "%s --disable-value-sharing; make" % (buildBase),
+         'def_build': "%s --disable-value-sharing; make -j1" % (buildBase),
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
@@ -206,7 +206,7 @@ def define_experiments():
     exp['defs'].append(
         {'name': "pequod-hint-share",
          'def_part': partfunc,
-         'def_build': "%s; make" % (buildBase),
+         'def_build': "%s; make -j1" % (buildBase),
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
