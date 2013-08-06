@@ -309,14 +309,14 @@ for x in exps:
 
         print "Starting app clients."
         clientprocs = []
-        clientcmd = e['clientcmd']
         
         for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_")
             fartfile = os.path.join(resdir, "fart_app_")
+            clientcmd = e['clientcmd']
             
             if dbcompare:
-                clientcmd = clientcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+                clientcmd = clientcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching / ngroups)
             else:
                 clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
