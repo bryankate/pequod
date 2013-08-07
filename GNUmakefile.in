@@ -128,6 +128,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqsink.o \
 	$(OBJDIR)/pqserver.o \
+	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqtwitter.o \
         $(OBJDIR)/pqtwitternew.o \
 	$(OBJDIR)/pqhackernews.o \
@@ -135,7 +136,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
 	$(OBJDIR)/pqunit.o \
-	$(OBJDIR)/mpfd.o \
+	$(OBJDIR)/pqunit2.o \
 	$(OBJDIR)/pqremoteclient.o \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
