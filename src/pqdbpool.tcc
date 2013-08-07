@@ -1,5 +1,7 @@
 #include "pqdbpool.hh"
 #include "str.hh"
+#include "time.hh"
+#include <sstream>
 
 using namespace tamer;
 
@@ -53,11 +55,37 @@ tamed void DBPool::execute(String query, event<Json> e) {
     e.unblocker().trigger();
 }
 
-tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
-    tvars {
-        int32_t err;
-    }
+void DBPool::execute(PGconn* conn, String query, event<Json> e) {
 
+    if (query_buffer.size() == 0)
+        first_insert = tstamp();
+
+    query_buffer.push_back(query);
+    event_buffer.push_back(e);
+
+    if (query_buffer.size() < 25 && ((tstamp() - first_insert) < 200))
+        return;
+    else
+        do_execute(conn); 
+
+}
+
+tamed void DBPool::do_execute(PGconn* conn) {
+
+    tvars {
+       int32_t err;
+       std::stringstream queries(std::ios_base::app | std::ios_base::out);
+       std::deque<event<Json>> events(this->event_buffer.begin(), this->event_buffer.end());
+       PGresult* result;
+       ExecStatusType status;
+       Json ret;
+    }
+    event_buffer.clear();
+
+    while (!query_buffer.empty()){
+        queries << query_buffer.front() << ";";
+        query_buffer.pop_front();
+    }
 
 #if 0
     {
@@ -69,50 +97,54 @@ tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
         err = PQsendQuery(conn, q.c_str());
     }
 #else
-    err = PQsendQuery(conn, query.c_str());
+    std::cerr << queries.str() << std::endl;
+    err = PQsendQuery(conn, queries.str().c_str());
 #endif
 
     mandatory_assert(err == 1 && "Could not send query to DB.");
 
     do {
-        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
-        err = PQconsumeInput(conn);
-        mandatory_assert(err == 1 && "Error reading data from DB.");
-    } while(PQisBusy(conn));
+	    do { 
+            std::cerr << "here" << std::endl;
+	        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
+	        err = PQconsumeInput(conn);
+	        mandatory_assert(err == 1 && "Error reading data from DB.");
+	    } while(PQisBusy(conn));
 
-    PGresult* result = PQgetResult(conn);
-    ExecStatusType status = PQresultStatus(result);
-    Json ret;
-
-    switch(status) {
-        case PGRES_COMMAND_OK:
-            // command (e.g. insert, delete) returns no data
-            break;
-        case PGRES_TUPLES_OK: {
-            int32_t nrows = PQntuples(result);
-            int32_t ncols = PQnfields(result);
-
-            for (int32_t r = 0; r < nrows; ++r) {
-                ret.push_back(Json::make_array_reserve(ncols));
-                for (int32_t c = 0; c < ncols; ++c) {
-                    ret[r][c] = Str(PQgetvalue(result, r, c), PQgetlength(result, r, c));
-                }
-            }
-            break;
-        }
-        default: {
-            std::cerr << "Error getting result of DB query. " << std::endl
-                      << "  Status:  " << PQresStatus(status) << std::endl
-                      << "  Message: " << PQresultErrorMessage(result) << std::endl;
-            mandatory_assert(false);
-            break;
-        }
-    }
-
-    PQclear(result);
-    result = PQgetResult(conn);
-    mandatory_assert(!result && "Should only be one result!");
-    e(ret);
+	    result = PQgetResult(conn);
+	    status = PQresultStatus(result);
+	    ret.clear();
+	
+	    switch(status) {
+	        case PGRES_COMMAND_OK:
+	            // command (e.g. insert, delete) returns no data
+	            break;
+	        case PGRES_TUPLES_OK: {
+	            int32_t nrows = PQntuples(result);
+	            int32_t ncols = PQnfields(result);
+	
+	            for (int32_t r = 0; r < nrows; ++r) {
+	                ret.push_back(Json::make_array_reserve(ncols));
+	                for (int32_t c = 0; c < ncols; ++c) {
+	                    ret[r][c] = Str(PQgetvalue(result, r, c), PQgetlength(result, r, c));
+	                }
+	            }
+	            break;
+	        }
+	        default: {
+	            std::cerr << "Error getting result of DB query. " << std::endl
+	                      << "  Status:  " << PQresStatus(status) << std::endl
+	                      << "  Message: " << PQresultErrorMessage(result) << std::endl;
+	            mandatory_assert(false);
+	            break;
+	        }
+	    }
+        events.front()(ret);
+        events.pop_front();
+	    PQclear(result);
+	    result = PQgetResult(conn);
+    } while (result);
+    mandatory_assert(!result && "More results!?!");
 }
 
 void DBPool::next_connection(tamer::event<PGconn*> e) {

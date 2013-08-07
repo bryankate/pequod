@@ -21,7 +21,7 @@ def aggregate(*file_names):
 	output["nlogouts"] = 0
 	output["user_time"] = 0
 	output["system_time"] = 0
-	output["real_time"] = 0
+	output["wall_time"] = 0
 	count = 0
 	for f in file_names:
 		fd=open(f)
@@ -41,12 +41,12 @@ def aggregate(*file_names):
 		output["nlogouts"] += structured_obj["nlogouts"]
 		output["user_time"] += structured_obj["user_time"]
 		output["system_time"] += structured_obj["system_time"]
-		output["real_time"] += structured_obj["real_time"]
+		output["wall_time"] += structured_obj["wall_time"]
 		fd.close()
 	
 	output["user_time"] /= float(len(file_names))
 	output["system_time"] /= float(len(file_names)) 
-	output["real_time"] /= float(len(file_names)) 
+	output["wall_time"] /= float(len(file_names)) 
 	return output
 
 def aggregate_dir(dir):
