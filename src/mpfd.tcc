@@ -28,6 +28,13 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
+void msgpack_fd::flush(tamer::event<> done) {
+    if (wrsize_ == 0)
+        done();
+    else
+        flushelem_.push_back(flushelem{std::move(done), wrpos_ + wrsize_});
+}
+
 bool msgpack_fd::read_one_message() {
     assert(rdquota_ != 0);
 
@@ -185,6 +192,11 @@ void msgpack_fd::write_once() {
             assert(wrelem_.size() == 1);
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
+        }
+        while (!flushelem_.empty()
+               && (ssize_t) (wrpos_ - flushelem_.front().pos) >= 0) {
+            flushelem_.front().e.trigger();
+            flushelem_.pop_front();
         }
         if (pace_recovered())
             pacer_();
