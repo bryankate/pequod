@@ -45,8 +45,6 @@ class DBPool {
     uint64_t first_insert;
     std::deque<String> query_buffer;
     std::deque<tamer::event<Json>> event_buffer;
-  public:
-    tamed void add_prepared_pool(std::vector<String> statements, tamer::event<> e);
 #endif
 };
 
