@@ -69,3 +69,53 @@ void test_mpfd() {
     } else
         test_mpfd_server(listenfd);
 }
+
+
+namespace {
+tamed void test_mpfd2_client(tamer::fd rfd, tamer::fd wfd) {
+    tvars { msgpack_fd* mpfd; int ret; Json j[10];
+        std::string fill((size_t) 8192, 'x'); }
+    mpfd = new msgpack_fd(rfd, wfd);
+    twait {
+        for (int i = 0; i < 10; ++i)
+            mpfd->call(Json::make_array(1, i, "Foo", fill), make_event(j[i]));
+    }
+    for (int i = 0; i < 10; ++i) {
+        if (j[i].is_a())
+            j[i].resize(3);
+        std::cerr << j[i] << '\n';
+    }
+}
+
+tamed void test_mpfd2_server(tamer::fd rfd, tamer::fd wfd) {
+    tvars { msgpack_fd* mpfd; int ret; int n = 0; Json j; }
+    mpfd = new msgpack_fd(rfd, wfd);
+    while ((rfd || wfd) && n < 6) {
+        twait { mpfd->read_request(make_event(j)); }
+        if (n == 5) {
+            std::cout << getpid() << " shutdown\n";
+            rfd.close();
+        }
+        if (j && j.is_a())
+            mpfd->write(Json::make_array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
+        ++n;
+    }
+    twait { mpfd->flush(make_event()); }
+    twait { tamer::at_delay_sec(10, make_event()); }
+    delete mpfd;
+    rfd.close();
+    wfd.close();
+    exit(0);
+}
+}
+
+void test_mpfd2() {
+    tamer::fd c2p[2], p2c[2];
+    tamer::fd::pipe(c2p);
+    tamer::fd::pipe(p2c);
+    pid_t p = fork();
+    if (p != 0)
+        test_mpfd2_client(p2c[0], c2p[1]);
+    else
+        test_mpfd2_server(c2p[0], p2c[1]);
+}

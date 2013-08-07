@@ -1158,6 +1158,7 @@ void test_redis() {
 } // namespace
 
 extern void test_mpfd();
+extern void test_mpfd2();
 
 void unit_tests(const std::set<String> &testcases) {
     std::vector<std::pair<String, test_func> > tests_;
@@ -1192,6 +1193,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
     ADD_OTHER_TEST(test_mpfd);
+    ADD_OTHER_TEST(test_mpfd2);
     size_t ntests = 0;
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
