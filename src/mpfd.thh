@@ -55,9 +55,9 @@ class msgpack_fd {
     tamer::event<> pacer_;
 
     void check() const;
-    bool dispatch(Json* result_pointer);
-    inline bool read_until_request(Json* result_pointer);
-    bool read_one_message(Json* result_pointer);
+    bool dispatch(bool exit_on_request);
+    inline bool read_until_request(bool exit_on_request);
+    bool read_one_message();
     void write_once();
     inline bool need_pace() const;
     inline bool pace_recovered() const;
@@ -83,9 +83,10 @@ void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
         swap(*receiver.result_pointer(), rdreqq_.front());
         rdreqq_.pop_front();
         receiver.unblock();
-    } else if (read_until_request(receiver.result_pointer()))
+    } else if (read_until_request(true)) {
+        swap(*receiver.result_pointer(), rdparser_.result());
         receiver.unblock();
-    else
+    } else
         rdreqwait_.push_back(receiver);
 }
 
@@ -98,12 +99,12 @@ inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
         rdreply_seq_ = seq;
     if (done || !rdreplywait_.empty())
         rdreplywait_.push_back(std::move(done));
-    read_until_request(0);
+    read_until_request(false);
 }
 
-inline bool msgpack_fd::read_until_request(Json* result_pointer) {
-    while (rdquota_ && read_one_message(result_pointer))
-        if (dispatch(result_pointer))
+inline bool msgpack_fd::read_until_request(bool exit_on_request) {
+    while (rdquota_ && read_one_message())
+        if (dispatch(exit_on_request))
             return true;
     return false;
 }
