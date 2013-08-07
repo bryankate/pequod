@@ -44,9 +44,13 @@ class msgpack_fd {
     int rdquota_;
     msgpack::streaming_parser rdparser_;
 
+    struct replyelem {
+        tamer::event<Json> e;
+        size_t pos;
+    };
     std::deque<tamer::event<Json> > rdreqwait_;
     std::deque<Json> rdreqq_;
-    std::deque<tamer::event<Json> > rdreplywait_;
+    std::deque<replyelem> rdreplywait_;
     unsigned long rdreply_seq_;
     tamer::event<> rdwake_;
     tamer::event<> rdkill_;
@@ -99,7 +103,7 @@ inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
     if (rdreplywait_.empty())
         rdreply_seq_ = seq;
     if (done || !rdreplywait_.empty())
-        rdreplywait_.push_back(std::move(done));
+        rdreplywait_.push_back(replyelem{std::move(done), wrpos_ + wrsize_});
     read_until_request(false);
 }
 

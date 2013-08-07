@@ -98,8 +98,8 @@ tamed void msgpack_fd::reader_coroutine() {
     for (auto& e : rdreqwait_)
         e.unblock();
     rdreqwait_.clear();
-    for (auto& e : rdreplywait_)
-        e.unblock();
+    for (auto& re : rdreplywait_)
+        re.e.unblock();
     rdreplywait_.clear();
     kill();                     // avoid leak of active event
 }
@@ -113,11 +113,11 @@ bool msgpack_fd::dispatch(bool exit_on_request) {
         && result[0].as_i() < 0) {
         unsigned long seq = result[1].as_i();
         if (seq >= rdreply_seq_ && seq < rdreply_seq_ + rdreplywait_.size()) {
-            tamer::event<Json>& done = rdreplywait_[seq - rdreply_seq_];
-            if (done.result_pointer())
-                swap(*done.result_pointer(), result);
-            done.unblock();
-            while (!rdreplywait_.empty() && !rdreplywait_.front()) {
+            replyelem& done = rdreplywait_[seq - rdreply_seq_];
+            if (done.e.result_pointer())
+                swap(*done.e.result_pointer(), result);
+            done.e.unblock();
+            while (!rdreplywait_.empty() && !rdreplywait_.front().e) {
                 rdreplywait_.pop_front();
                 ++rdreply_seq_;
             }
