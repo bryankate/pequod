@@ -211,6 +211,8 @@ class Json {
     template <typename T, typename... U>
     inline Json& insert_back(T first, U... rest);
 
+    void resize(size_type n);
+
     inline Json* array_data();
 
     // Iteration
@@ -1073,6 +1075,9 @@ class Json_proxy_base {
 #endif
     void pop_back() {
 	value().pop_back();
+    }
+    void resize(Json::size_type n) {
+        value().resize(n);
     }
     void unparse(StringAccum& sa) const {
 	return cvalue().unparse(sa);
