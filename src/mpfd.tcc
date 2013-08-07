@@ -173,17 +173,16 @@ void msgpack_fd::write_once() {
     wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
+        wrpos_ += amt;
         wrsize_ -= amt;
         while (wrelem_.size() > 1
                && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
-            wrpos_ += wrelem_.front().sa.length();
             amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
             wrelem_.pop_front();
         }
         wrelem_.front().pos += amt;
         if (wrelem_.front().pos == wrelem_.front().sa.length()) {
             assert(wrelem_.size() == 1);
-            wrpos_ += wrelem_.front().sa.length();
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
         }
