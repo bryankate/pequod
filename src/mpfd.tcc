@@ -48,7 +48,7 @@ bool msgpack_fd::read_one_message() {
             rdpos_ = rdlen_ = 0;
         }
 
-        ssize_t amt = ::read(fd_.value(),
+        ssize_t amt = ::read(rfd_.value(),
                              const_cast<char*>(rdbuf_.data()) + rdpos_,
                              rdcap - rdpos_);
 
@@ -56,9 +56,9 @@ bool msgpack_fd::read_one_message() {
             rdlen_ += amt;
         else {
             if (amt == 0)
-                fd_.close();
+                rfd_.close();
             else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-                fd_.close(-errno);
+                rfd_.close(-errno);
             rdquota_ = 0;
             rdwake_();          // wake up coroutine [if it's sleeping]
             return false;
@@ -86,11 +86,11 @@ tamed void msgpack_fd::reader_coroutine() {
 
     kill = rdkill_ = tamer::make_event(rendez);
 
-    while (kill && fd_) {
+    while (kill && rfd_) {
         if (rdquota_ == 0 && rdpos_ != rdlen_)
             twait { tamer::at_asap(make_event()); }
         else if (rdquota_ == 0)
-            twait { tamer::at_fd_read(fd_.value(), make_event()); }
+            twait { tamer::at_fd_read(rfd_.value(), make_event()); }
         else if (rdreqwait_.empty() && rdreplywait_.empty())
             twait { rdwake_ = make_event(); }
 
@@ -176,7 +176,7 @@ void msgpack_fd::write_once() {
         total += iov[i].iov_len;
     }
 
-    ssize_t amt = writev(fd_.value(), iov, iov_count);
+    ssize_t amt = writev(wfd_.value(), iov, iov_count);
     wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
@@ -201,9 +201,9 @@ void msgpack_fd::write_once() {
         if (pace_recovered())
             pacer_();
     } else if (amt == 0)
-        fd_.close();
+        wfd_.close();
     else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-        fd_.close(-errno);
+        wfd_.close(-errno);
 }
 
 tamed void msgpack_fd::writer_coroutine() {
@@ -214,11 +214,11 @@ tamed void msgpack_fd::writer_coroutine() {
 
     kill = wrkill_ = tamer::make_event(rendez);
 
-    while (kill && fd_) {
+    while (kill && wfd_) {
         if (wrelem_.size() == 1 && wrelem_.front().sa.empty())
             twait { wrwake_ = make_event(); }
         else if (wrblocked_) {
-            twait { tamer::at_fd_write(fd_.value(), make_event()); }
+            twait { tamer::at_fd_write(wfd_.value(), make_event()); }
             wrblocked_ = false;
         } else
             write_once();

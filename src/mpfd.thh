@@ -11,6 +11,7 @@
 class msgpack_fd {
   public:
     inline msgpack_fd(tamer::fd fd);
+    inline msgpack_fd(tamer::fd rfd, tamer::fd wfd);
     ~msgpack_fd();
 
     void write(const Json& j);
@@ -24,7 +25,8 @@ class msgpack_fd {
     inline Json status() const;
 
   private:
-    tamer::fd fd_;
+    tamer::fd wfd_;
+    tamer::fd rfd_;
 
     enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
     struct wrelem {
@@ -79,8 +81,8 @@ class msgpack_fd {
     msgpack_fd& operator=(const msgpack_fd&) = delete;
 };
 
-inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : fd_(fd), wrpos_(0), wrsize_(0), wrblocked_(false),
+inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd)
+    : wfd_(wfd), rfd_(rfd), wrpos_(0), wrsize_(0), wrblocked_(false),
       rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
       rdquota_(rdbatch), rdreply_seq_(0) {
     wrelem_.push_back(wrelem());
@@ -89,6 +91,10 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd)
 
     writer_coroutine();
     reader_coroutine();
+}
+
+inline msgpack_fd::msgpack_fd(tamer::fd fd)
+    : msgpack_fd(fd, fd) {
 }
 
 template <typename R>
