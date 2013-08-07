@@ -16,10 +16,10 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = c1d7d90e302008f2da099c05c308ce4f16ef5ac9
+TAMER_COMMIT = 798736ef67d0b6c92567ddeff1a72f20129ff67e
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
-LIBS = -lev @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
+LIBS = `$(TAMER) -l` @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@
 
 CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
