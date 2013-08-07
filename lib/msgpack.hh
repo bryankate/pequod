@@ -224,7 +224,6 @@ class streaming_parser {
   public:
     inline streaming_parser();
     inline void reset();
-    inline void reset(Json& j);
 
     inline bool complete() const;
     inline bool done() const;
@@ -403,12 +402,6 @@ inline streaming_parser::streaming_parser()
 inline void streaming_parser::reset() {
     state_ = st_normal;
     stack_.clear();
-}
-
-inline void streaming_parser::reset(Json& j) {
-    state_ = st_normal;
-    stack_.clear();
-    swap(json_, j);
 }
 
 inline bool streaming_parser::complete() const {

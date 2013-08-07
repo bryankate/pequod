@@ -28,7 +28,7 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
-bool msgpack_fd::read_one_message(Json* result_pointer) {
+bool msgpack_fd::read_one_message() {
     assert(rdquota_ != 0);
 
  readmore:
@@ -59,13 +59,6 @@ bool msgpack_fd::read_one_message(Json* result_pointer) {
     }
 
     // process new data
-    if (rdparser_.complete()) {
-        if (result_pointer)
-            rdparser_.reset(*result_pointer);
-        else
-            rdparser_.reset();
-    }
-
     rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_, rdlen_ - rdpos_,
                                 rdbuf_);
 
@@ -96,8 +89,8 @@ tamed void msgpack_fd::reader_coroutine() {
 
         rdquota_ = rdbatch;
         while (rdquota_ && (!rdreqwait_.empty() || !rdreplywait_.empty())
-               && read_one_message(0))
-            dispatch(0);
+               && read_one_message())
+            dispatch(false);
         if (pace_recovered())
             pacer_();
     }
@@ -105,25 +98,26 @@ tamed void msgpack_fd::reader_coroutine() {
     for (auto& e : rdreqwait_)
         e.unblock();
     rdreqwait_.clear();
-    for (auto& e : rdreplywait_)
-        e.unblock();
+    for (auto& re : rdreplywait_)
+        re.e.unblock();
     rdreplywait_.clear();
     kill();                     // avoid leak of active event
 }
 
-bool msgpack_fd::dispatch(Json* result_pointer) {
+bool msgpack_fd::dispatch(bool exit_on_request) {
     Json& result = rdparser_.result();
     if (!rdparser_.done())
         result = Json();        // XXX reset connection
+    rdparser_.reset();
     if (result.is_a() && result[0].is_i() && result[1].is_i()
         && result[0].as_i() < 0) {
         unsigned long seq = result[1].as_i();
         if (seq >= rdreply_seq_ && seq < rdreply_seq_ + rdreplywait_.size()) {
-            tamer::event<Json>& done = rdreplywait_[seq - rdreply_seq_];
-            if (done.result_pointer())
-                swap(*done.result_pointer(), result);
-            done.unblock();
-            while (!rdreplywait_.empty() && !rdreplywait_.front()) {
+            replyelem& done = rdreplywait_[seq - rdreply_seq_];
+            if (done.e.result_pointer())
+                swap(*done.e.result_pointer(), result);
+            done.e.unblock();
+            while (!rdreplywait_.empty() && !rdreplywait_.front().e) {
                 rdreplywait_.pop_front();
                 ++rdreply_seq_;
             }
@@ -136,10 +130,9 @@ bool msgpack_fd::dispatch(Json* result_pointer) {
         done.unblock();
         rdreqwait_.pop_front();
         return false;
-    } else if (result_pointer) {
-        swap(*result_pointer, result);
+    } else if (exit_on_request)
         return true;
-    } else {
+    else {
         rdreqq_.push_back(std::move(result));
         return false;
     }
@@ -183,12 +176,14 @@ void msgpack_fd::write_once() {
         wrsize_ -= amt;
         while (wrelem_.size() > 1
                && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
+            wrpos_ += wrelem_.front().sa.length();
             amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
             wrelem_.pop_front();
         }
         wrelem_.front().pos += amt;
         if (wrelem_.front().pos == wrelem_.front().sa.length()) {
             assert(wrelem_.size() == 1);
+            wrpos_ += wrelem_.front().sa.length();
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
         }
