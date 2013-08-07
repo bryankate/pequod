@@ -185,6 +185,10 @@ tamed void DBPool::execute(String query, event<Json> e) {
     mandatory_assert(false && "Database not configured.");
 }
 
+tamed void DBPool::add_prepared_pool(std::vector<String> statements, tamer::event<> e) {
+    mandatory_assert(false && "Database not configured.");
+}
+
 #endif
 
 }

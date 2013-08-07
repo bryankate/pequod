@@ -24,6 +24,7 @@ class DBPool {
     void clear();
 
     tamed void execute(String query, tamer::event<Json> e);
+    tamed void add_prepared_pool(std::vector<String> statements, tamer::event<> e);
 
   private:
     String host_;
@@ -39,8 +40,6 @@ class DBPool {
     void replace_connection(PGconn* conn);
     PGconn* connect_one();
     tamed void execute(PGconn* existing_conn, String query, tamer::event<Json> e);
-  public:
-    tamed void add_prepared_pool(std::vector<String> statements, tamer::event<> e);
 #endif
 };
 
