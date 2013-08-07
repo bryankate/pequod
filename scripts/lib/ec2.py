@@ -1,6 +1,7 @@
 import sys
 import os.path
-from os import listdir, system
+from os import listdir, system, chmod
+import stat
 from time import sleep
 import subprocess
 from subprocess import Popen
@@ -9,12 +10,12 @@ from boto.ec2.connection import EC2Connection
 
 AWS_ACCESS_KEY_ID = 'AKIAJSSPS6LP2VMU4WUA'
 AWS_SECRET_ACCESS_KEY = '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'
-SSH_KEY="scripts/pequod.pem"
+SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "pequod.pem")
 
 AMI_ID = 'ami-c30360aa'
-INSTANCE_TYPE_BACKING = 't1.micro'
-INSTANCE_TYPE_CACHE = 't1.micro'
-INSTANCE_TYPE_CLIENT = 't1.micro'
+INSTANCE_TYPE_BACKING = 'm1.small'
+INSTANCE_TYPE_CACHE = 'm1.small'
+INSTANCE_TYPE_CLIENT = 'm1.small'
 
 conn = None
 
@@ -22,6 +23,7 @@ def connect():
     global conn
     if conn is None:
         conn = EC2Connection(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    chmod(SSH_KEY, stat.S_IREAD | stat.S_IWRITE)
 
 def checkout_machines(num, type):
     print "Checking out %s machines." % (num)
