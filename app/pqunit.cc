@@ -19,8 +19,6 @@
 namespace  {
 
 typedef void (*test_func)();
-std::vector<std::pair<String, test_func> > tests_;
-std::vector<std::pair<String, test_func> > exptests_;
 
 void test_simple() {
     pq::Server server;
@@ -1272,9 +1270,16 @@ void test_redis() {
 
 } // namespace
 
+extern void test_mpfd();
+extern void test_mpfd2();
+
 void unit_tests(const std::set<String> &testcases) {
+    std::vector<std::pair<String, test_func> > tests_;
+    std::vector<std::pair<String, test_func> > exptests_;
+    std::vector<std::pair<String, test_func> > othertests_;
 #define ADD_TEST(test) tests_.push_back(std::pair<String, test_func>(#test, test))
 #define ADD_EXP_TEST(test) exptests_.push_back(std::pair<String, test_func>(#test, test))
+#define ADD_OTHER_TEST(test) othertests_.push_back(std::pair<String, test_func>(#test, test))
     ADD_TEST(test_simple);
     ADD_TEST(test_overlap);
     ADD_TEST(test_expansion);
@@ -1302,15 +1307,26 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
+    ADD_OTHER_TEST(test_mpfd);
+    ADD_OTHER_TEST(test_mpfd2);
+    size_t ntests = 0;
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
             t.second();
+            ++ntests;
         }
     for (auto& t : exptests_)
         if (testcases.find(t.first) != testcases.end()) {
             std::cerr << "Testing " << t.first << std::endl;
             t.second();
+            ++ntests;
         }
-    std::cerr << "PASS" << std::endl;
+    if (ntests)
+        std::cerr << "PASS" << std::endl;
+    for (auto& t : othertests_)
+        if (testcases.find(t.first) != testcases.end()) {
+            std::cerr << "Testing " << t.first << std::endl;
+            t.second();
+        }
 }

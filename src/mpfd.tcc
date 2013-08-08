@@ -5,6 +5,24 @@
 #define IOV_MAX 1024
 #endif
 
+void msgpack_fd::initialize() {
+    wrpos_ = 0;
+    wrsize_ = 0;
+    wrblocked_ = false;
+    rdbuf_ = String::make_uninitialized(rdcap);
+    rdpos_ = 0;
+    rdlen_ = 0;
+    rdquota_ = rdbatch;
+    rdreply_seq_ = 0;
+
+    wrelem_.push_back(wrelem());
+    wrelem_.back().sa.reserve(wrcap);
+    wrelem_.back().pos = 0;
+
+    writer_coroutine();
+    reader_coroutine();
+}
+
 msgpack_fd::~msgpack_fd() {
     wrkill_();
     rdkill_();
@@ -28,6 +46,13 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
+void msgpack_fd::flush(tamer::event<> done) {
+    if (wrsize_ == 0)
+        done();
+    else
+        flushelem_.push_back(flushelem{std::move(done), wrpos_ + wrsize_});
+}
+
 bool msgpack_fd::read_one_message() {
     assert(rdquota_ != 0);
 
@@ -41,7 +66,7 @@ bool msgpack_fd::read_one_message() {
             rdpos_ = rdlen_ = 0;
         }
 
-        ssize_t amt = ::read(fd_.value(),
+        ssize_t amt = ::read(rfd_.value(),
                              const_cast<char*>(rdbuf_.data()) + rdpos_,
                              rdcap - rdpos_);
 
@@ -49,9 +74,9 @@ bool msgpack_fd::read_one_message() {
             rdlen_ += amt;
         else {
             if (amt == 0)
-                fd_.close();
+                rfd_.close();
             else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-                fd_.close(-errno);
+                rfd_.close(-errno);
             rdquota_ = 0;
             rdwake_();          // wake up coroutine [if it's sleeping]
             return false;
@@ -79,11 +104,11 @@ tamed void msgpack_fd::reader_coroutine() {
 
     kill = rdkill_ = tamer::make_event(rendez);
 
-    while (kill && fd_) {
+    while (kill && rfd_) {
         if (rdquota_ == 0 && rdpos_ != rdlen_)
             twait { tamer::at_asap(make_event()); }
         else if (rdquota_ == 0)
-            twait { tamer::at_fd_read(fd_.value(), make_event()); }
+            twait { tamer::at_fd_read(rfd_.value(), make_event()); }
         else if (rdreqwait_.empty() && rdreplywait_.empty())
             twait { rdwake_ = make_event(); }
 
@@ -169,30 +194,34 @@ void msgpack_fd::write_once() {
         total += iov[i].iov_len;
     }
 
-    ssize_t amt = writev(fd_.value(), iov, iov_count);
+    ssize_t amt = writev(wfd_.value(), iov, iov_count);
     wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
+        wrpos_ += amt;
         wrsize_ -= amt;
         while (wrelem_.size() > 1
                && amt >= wrelem_.front().sa.length() - wrelem_.front().pos) {
-            wrpos_ += wrelem_.front().sa.length();
             amt -= wrelem_.front().sa.length() - wrelem_.front().pos;
             wrelem_.pop_front();
         }
         wrelem_.front().pos += amt;
         if (wrelem_.front().pos == wrelem_.front().sa.length()) {
             assert(wrelem_.size() == 1);
-            wrpos_ += wrelem_.front().sa.length();
             wrelem_.front().sa.clear();
             wrelem_.front().pos = 0;
+        }
+        while (!flushelem_.empty()
+               && (ssize_t) (wrpos_ - flushelem_.front().pos) >= 0) {
+            flushelem_.front().e.trigger();
+            flushelem_.pop_front();
         }
         if (pace_recovered())
             pacer_();
     } else if (amt == 0)
-        fd_.close();
+        wfd_.close();
     else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-        fd_.close(-errno);
+        wfd_.close(-errno);
 }
 
 tamed void msgpack_fd::writer_coroutine() {
@@ -203,11 +232,11 @@ tamed void msgpack_fd::writer_coroutine() {
 
     kill = wrkill_ = tamer::make_event(rendez);
 
-    while (kill && fd_) {
+    while (kill && wfd_) {
         if (wrelem_.size() == 1 && wrelem_.front().sa.empty())
             twait { wrwake_ = make_event(); }
         else if (wrblocked_) {
-            twait { tamer::at_fd_write(fd_.value(), make_event()); }
+            twait { tamer::at_fd_write(wfd_.value(), make_event()); }
             wrblocked_ = false;
         } else
             write_once();

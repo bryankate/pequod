@@ -11,29 +11,37 @@
 class msgpack_fd {
   public:
     inline msgpack_fd(tamer::fd fd);
+    inline msgpack_fd(tamer::fd rfd, tamer::fd wfd);
     ~msgpack_fd();
 
     void write(const Json& j);
     template <typename R>
     void read_request(tamer::preevent<R, Json> done);
     inline void call(const Json& j, tamer::event<Json> reply);
+    void flush(tamer::event<> done);
     template <typename R>
     inline void pace(tamer::preevent<R> done);
 
     inline Json status() const;
 
   private:
-    tamer::fd fd_;
+    tamer::fd wfd_;
+    tamer::fd rfd_;
 
     enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
     struct wrelem {
         StringAccum sa;
         int pos;
     };
+    struct flushelem {
+        tamer::event<> e;
+        size_t pos;
+    };
     std::deque<wrelem> wrelem_;
     size_t wrpos_;
     size_t wrsize_;
     bool wrblocked_;
+    std::deque<flushelem> flushelem_;
     tamer::event<> wrwake_;
     tamer::event<> wrkill_;
 
@@ -68,18 +76,20 @@ class msgpack_fd {
     inline bool pace_recovered() const;
     tamed void writer_coroutine();
     tamed void reader_coroutine();
+
+    msgpack_fd(const msgpack_fd&) = delete;
+    msgpack_fd& operator=(const msgpack_fd&) = delete;
+    void initialize();
 };
 
-inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : fd_(fd), wrpos_(0), wrsize_(0), wrblocked_(false),
-      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
-      rdquota_(rdbatch), rdreply_seq_(0) {
-    wrelem_.push_back(wrelem());
-    wrelem_.back().sa.reserve(wrcap);
-    wrelem_.back().pos = 0;
+inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd)
+    : wfd_(wfd), rfd_(rfd) {
+    initialize();
+}
 
-    writer_coroutine();
-    reader_coroutine();
+inline msgpack_fd::msgpack_fd(tamer::fd fd)
+    : wfd_(fd), rfd_(fd) {
+    initialize();
 }
 
 template <typename R>

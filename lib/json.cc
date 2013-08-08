@@ -316,6 +316,15 @@ void Json::clear() {
     }
 }
 
+/** @brief Resize the array Json to size @a n. */
+void Json::resize(size_type n) {
+    uniqueify_array(false, n);
+    while (u_.a.a->size > n && u_.a.a->size > 0) {
+        --u_.a.a->size;
+        u_.a.a->a[u_.a.a->size].~Json();
+    }
+}
+
 
 // Primitives
 

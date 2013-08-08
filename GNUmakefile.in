@@ -13,11 +13,11 @@ builddir = .
 
 OBJDIR = obj
 
-TAMER_COMMIT = c1d7d90e302008f2da099c05c308ce4f16ef5ac9
+TAMER_COMMIT = 798736ef67d0b6c92567ddeff1a72f20129ff67e
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
-LIBS = -lev -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
+LIBS = $(TAMER) -l -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
 
 CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -162,6 +162,7 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
         $(OBJDIR)/pqremoteclient.o \
         $(OBJDIR)/pqinterconnect.o \
         $(OBJDIR)/pqunit.o \
+        $(OBJDIR)/pqunit2.o \
         $(OBJDIR)/pqtwitter.o \
         $(OBJDIR)/pqtwitternew.o \
         $(OBJDIR)/pqhackernews.o \
