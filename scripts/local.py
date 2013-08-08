@@ -120,6 +120,7 @@ def start_postgres(expdef, id):
     cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
           " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
           " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
+          " -c shared_buffers=4GB  -c bgwriter_delay=10000" + \
           " >> " + fartfile + " 2>> " + fartfile
     print cmd
     proc = Popen(cmd, shell=True)
@@ -133,6 +134,13 @@ def start_postgres(expdef, id):
     if 'def_db_sql_script' in expdef:
         cmd = "psql -p %d pequod < %s >> %s 2>> %s" % \
               (dbstartport + id, expdef['def_db_sql_script'], fartfile, fartfile)
+        
+        print cmd
+        Popen(cmd, shell=True).wait()
+        
+    if 'def_db_s_import' in expdef:
+        cmd = "pg_restore -a -p %d -d pequod -Fc %s >> %s 2>> %s" % \
+              (dbstartport + id, expdef['def_db_s_import'], fartfile, fartfile)
         
         print cmd
         Popen(cmd, shell=True).wait()
@@ -183,7 +191,7 @@ for x in exps:
             # if we are comparing to a db, don't start any pequod servers.
             # the number of caching servers (-c) will be used as the number 
             # of simultaneous connections to the database.
-            if ncaching < 1 or ngroups > 1:
+            if ncaching < 1:
                 print "ERROR: -c must be > 0 for DB comparison experiments"
                 exit(-1)
                 

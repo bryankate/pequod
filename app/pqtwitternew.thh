@@ -591,6 +591,7 @@ void TwitterNewDBShim<S>::initialize(tamer::event<> done) {
 
     twait {
         server_.add_prepared_pool(std::vector<String>({
+        "SET session CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED",
         "PREPARE subscribe(int,int) AS "
             "INSERT INTO s SELECT $1,$2 WHERE NOT EXISTS (SELECT 1 FROM s WHERE usr = $1 AND poster = $2)",
         "PREPARE post(int,text,int) AS "
@@ -941,7 +942,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
 
 tamed template <typename S>
 void TwitterNewRunner<S>::initialize(tamer::event<> done) {
-    if (tp_.initialize() && !tp_.groupid())
+    if (tp_.initialize())
         twait { server_.initialize(make_event()); }
     done();
 }

@@ -7,12 +7,14 @@ def define_experiments():
     binary = True
     binaryflag = "" if binary else "--no-binary"
     partfunc = "twitternew" if binary else "twitternew-text"
+    fetch = "--fetch"
+#     fetch = ""
     
     serverCmd = "./obj/pqserver"
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
     populateCmd = "%s %s --no-initialize --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s --fetch --no-initialize --no-populate " % (appCmd, binaryflag)
+    clientCmd = "%s %s %s --no-initialize --no-populate " % (appCmd, binaryflag, fetch)
 
     # policy experiment
     # can be run on on a multiprocessor
@@ -207,6 +209,7 @@ def define_experiments():
     # fix %active at 70, post:check ratio at 1:100 and 50 timeline checks per user. 
     exp = {'name': "dbcompare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
+#     users = "--nusers=100000"
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
                  (clientCmd, users)
@@ -224,9 +227,10 @@ def define_experiments():
         {'name': "postgres",
          'def_db_type': "postgres",
          'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
+         'def_db_s_import': "scripts/exp/nusers100k-s.dmp",
          'def_db_in_memory': True,
          'def_db_compare': True,
-         'populatecmd': "%s %s --dbshim --initialize --popduration=0" % (populateCmd, users),
+#          'populatecmd': "%s %s --dbshim --initialize --popduration=0" % (populateCmd, users),
          'clientcmd': "%s --dbshim --initialize" % (clientBase)})
     
     exp['plot'] = {'type': "bar",
