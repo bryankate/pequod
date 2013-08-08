@@ -431,4 +431,11 @@ AC_CHECK_HEADER([boost/accumulators/accumulators.hpp], [:], [AC_MSG_ERROR([<boos
 AC_CHECK_HEADER([boost/random.hpp], [:], [AC_MSG_ERROR([<boost/random.hpp> not found])])
 AC_CHECK_HEADER([boost/intrusive/set.hpp], [:], [AC_MSG_ERROR([<boost/intrusive/set.hpp> not found])])
 
+AC_CHECK_LIB([boost_system-mt], [_ZTIN5boost6system14error_categoryE],
+	[BOOST_LIBS="-lboost_system-mt -lboost_thread-mt"],
+  [AC_CHECK_LIB([boost_system], [_ZTIN5boost6system14error_categoryE],
+	[BOOST_LIBS="-lboost_system -lboost_thread"],
+        [AC_MSG_ERROR([Usable -lboost_system not found])])])
+AC_SUBST([BOOST_LIBS])
+
 AC_OUTPUT
