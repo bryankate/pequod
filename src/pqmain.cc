@@ -98,10 +98,8 @@ static Clp_Option options[] = {
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
-static char envstr[] = "TAMER_NOLIBEVENT=1";
 
 int main(int argc, char** argv) {
-    putenv(envstr);
     tamer::initialize();
 
     int mode = mode_unknown, listen_port = 8000, client_port = -1;
