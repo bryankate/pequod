@@ -1,7 +1,7 @@
-#include "pqrwmicro.hh"
+#include "rwmicro.hh"
 #include <tamer/tamer.hh>
-#include "hashclient.hh"
-#include "pqtwitter.hh"
+#include "redisadapter.hh"
+#include "twittershim.hh"
 #include "pqremoteclient.hh"
 
 namespace pq {

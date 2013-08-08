@@ -1,0 +1,54 @@
+// -*- mode: c++ -*-
+#ifndef HASHTABLE_ADAPTER_HH
+#define HASHTABLE_ADAPTER_HH
+
+#include <tamer/tamer.hh>
+#include "hashtable.hh"
+#include "str.hh"
+#include "string.hh"
+
+namespace pq {
+
+class BuiltinHashClient {
+  public:
+    BuiltinHashClient() {
+        h_.rehash(2000000);
+    }
+    void set(const Str k, const Str v, tamer::event<> e) {
+        h_[k] = v;
+        e();
+    }
+    void append(const Str k, const Str v, tamer::event<> e) {
+        auto& ev = h_[k];
+        ev.append(v);
+        e();
+    }
+    void get(const Str k, int32_t offset, tamer::event<String> e) {
+        auto it = h_.find(k);
+        if (it == h_.end())
+            e(String());
+        else {
+            mandatory_assert(it->second.length() >= offset);
+            e(String(it->second.data() + offset, it->second.length() - offset));
+        }
+    }
+    void done_get(String) {
+    }
+    void increment(const Str k, tamer::event<> e) {
+        auto& ev = h_[k];
+        if (ev.empty())
+            ev = String(1);
+        else
+            ev = String(ev.to_i() + 1);
+        e();
+    }
+    void pace(tamer::event<> done) {
+        done();
+    }
+  private:
+    HashTable<String, String> h_;
+};
+
+}
+
+#endif

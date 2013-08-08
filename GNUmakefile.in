@@ -95,25 +95,38 @@ $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
 $(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
 $(OBJDIR)/pqunit2.cc: $(top_srcdir)/app/pqunit2.tcc
-$(OBJDIR)/pqhackernews.cc: $(top_srcdir)/app/pqhackernews.tcc
-$(OBJDIR)/pqhackernews.hh: $(top_srcdir)/app/pqhackernews.thh
-$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/app/pqrwmicro.tcc
-$(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/app/pqrwmicro.thh
-$(OBJDIR)/pqtwitter.cc: $(top_srcdir)/app/pqtwitter.tcc
-$(OBJDIR)/pqtwitter.hh: $(top_srcdir)/app/pqtwitter.thh
-$(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/app/pqtwitternew.tcc
-$(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/app/pqtwitternew.thh
-$(OBJDIR)/pqanalytics.cc: $(top_srcdir)/app/pqanalytics.tcc
-$(OBJDIR)/pqanalytics.hh: $(top_srcdir)/app/pqanalytics.thh
-$(OBJDIR)/hnshim.hh: $(top_srcdir)/app/hnshim.thh
-$(OBJDIR)/hashclient.cc: $(top_srcdir)/app/hashclient.tcc
-$(OBJDIR)/hashclient.hh: $(top_srcdir)/app/hashclient.thh
-$(OBJDIR)/redisfd.hh: $(top_srcdir)/app/redisfd.thh
-$(OBJDIR)/redisfd.cc: $(top_srcdir)/app/redisfd.tcc
+$(OBJDIR)/hackernews.cc: $(top_srcdir)/app/hackernews.tcc
+$(OBJDIR)/hackernews.hh: $(top_srcdir)/app/hackernews.thh
+$(OBJDIR)/hackernewsshim.hh: $(top_srcdir)/app/hackernewsshim.thh
+$(OBJDIR)/rwmicro.cc: $(top_srcdir)/app/rwmicro.tcc
+$(OBJDIR)/rwmicro.hh: $(top_srcdir)/app/rwmicro.thh
+$(OBJDIR)/twitter.cc: $(top_srcdir)/app/twitter.tcc
+$(OBJDIR)/twitter.hh: $(top_srcdir)/app/twitter.thh
+$(OBJDIR)/twittershim.hh: $(top_srcdir)/app/twittershim.thh
+$(OBJDIR)/twitternew.cc: $(top_srcdir)/app/twitternew.tcc
+$(OBJDIR)/twitternew.hh: $(top_srcdir)/app/twitternew.thh
+$(OBJDIR)/twitternewshim.hh: $(top_srcdir)/app/twitternewshim.thh
+$(OBJDIR)/analytics.cc: $(top_srcdir)/app/analytics.tcc
+$(OBJDIR)/analytics.hh: $(top_srcdir)/app/analytics.thh
+$(OBJDIR)/redisadapter.hh: $(top_srcdir)/app/redisadapter.thh
+$(OBJDIR)/redisadapter.cc: $(top_srcdir)/app/redisadapter.tcc
+$(OBJDIR)/memcacheadapter.hh: $(top_srcdir)/app/memcacheadapter.thh
+$(OBJDIR)/hashtableadapter.hh: $(top_srcdir)/app/hashtableadapter.thh
 $(OBJDIR)/pqinfo.cc: $(top_srcdir)/app/pqinfo.tcc
 
-
-$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
+$(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
+                    $(OBJDIR)/pqclient.hh \
+                    $(OBJDIR)/pqpersistent.hh \
+                    $(OBJDIR)/pqdbpool.hh \
+                    $(OBJDIR)/twitter.hh \
+                    $(OBJDIR)/hackernews.hh \
+                    $(OBJDIR)/twitternew.hh \
+                    $(OBJDIR)/analytics.hh \
+                    $(OBJDIR)/rwmicro.hh \
+                    $(OBJDIR)/hashtableadapter.hh \
+                    $(OBJDIR)/memcacheadapter.hh \
+                    $(OBJDIR)/redisadapter.hh
+$(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqinterconnect.hh 
 $(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
@@ -121,18 +134,25 @@ $(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
+$(OBJDIR)/pqclient.o: $(OBJDIR)/pqclient.hh
 $(OBJDIR)/pqinterconnect.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqmulticlient.o: $(OBJDIR)/pqmulticlient.hh
+$(OBJDIR)/pqmulticlient.o: $(OBJDIR)/pqmulticlient.hh 
 $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteclient.o: $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqunit.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqpersistent.hh $(OBJDIR)/redisadapter.hh
+$(OBJDIR)/twitter.hh: $(OBJDIR)/twittershim.hh
+$(OBJDIR)/twitter.o: $(OBJDIR)/twitter.hh $(OBJDIR)/pqmulticlient.hh
+$(OBJDIR)/twittershim.hh: $(OBJDIR)/pqclient.hh
+$(OBJDIR)/twitternew.o: $(OBJDIR)/twitternew.hh $(OBJDIR)/pqmulticlient.hh
+$(OBJDIR)/twitternew.hh: $(OBJDIR)/twitternewshim.hh
+$(OBJDIR)/analytics.o: $(OBJDIR)/analytics.hh $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/hackernews.o: $(OBJDIR)/hackernews.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/redisadapter.hh
+$(OBJDIR)/hackernews.hh: $(OBJDIR)/hackernewsshim.hh
+$(OBJDIR)/rwmicro.o: $(OBJDIR)/rwmicro.hh $(OBJDIR)/twittershim.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/redisadapter.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
+$(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -164,18 +184,16 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
         $(OBJDIR)/pqmulticlient.o \
         $(OBJDIR)/pqremoteclient.o \
         $(OBJDIR)/pqinterconnect.o \
+        $(OBJDIR)/pqdbpool.o \
         $(OBJDIR)/pqunit.o \
         $(OBJDIR)/pqunit2.o \
-        $(OBJDIR)/pqtwitter.o \
-        $(OBJDIR)/pqtwitternew.o \
-        $(OBJDIR)/pqhackernews.o \
-        $(OBJDIR)/pqanalytics.o \
-        $(OBJDIR)/pqfacebook.o \
-	$(OBJDIR)/pqdbpool.o \
-	$(OBJDIR)/redisclient.o \
-	$(OBJDIR)/redisfd.o \
-	$(OBJDIR)/hashclient.o \
-	$(OBJDIR)/pqrwmicro.o 
+        $(OBJDIR)/twitter.o \
+        $(OBJDIR)/twitternew.o \
+        $(OBJDIR)/hackernews.o \
+        $(OBJDIR)/analytics.o \
+        $(OBJDIR)/facebook.o \
+        $(OBJDIR)/rwmicro.o \
+	$(OBJDIR)/redisadapter.o
 
 PQMAIN_OBJS = $(PQSERVER_OBJS) \
 	$(OBJDIR)/pqmain.o

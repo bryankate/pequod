@@ -1,0 +1,74 @@
+// -*- mode: c++ -*-
+#ifndef MEMCACHE_ADAPTER_HH
+#define MEMCACHE_ADAPTER_HH
+
+#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#include "check.hh"
+#include "str.hh"
+#include "string.hh"
+#include <tamer/tamer.hh>
+#include <libmemcached/memcached.hpp>
+
+namespace pq {
+
+class MemcachedClient {
+  public:
+    MemcachedClient() {
+        const char *config = "--SERVER=localhost --BINARY-PROTOCOL";
+        c_ = ::memcached(config, strlen(config));
+        mandatory_assert(c_);
+        expire_at_ = ::time(NULL) + 20 * 60 * 60; // never expire
+    }
+    void set(const Str k, const Str v, tamer::event<> e) {
+        auto r = memcached_set(c_, k.data(), k.length(),
+                               v.data(), v.length(), expire_at_, 0);
+        check_error(r);
+        e();
+    }
+    void append(const Str k, const Str v, tamer::event<> e) {
+        auto r = memcached_append(c_, k.data(), k.length(),
+                                  v.data(), v.length(), expire_at_, 0);
+        if (r == MEMCACHED_NOTSTORED)
+            set(k, v, e);
+        else {
+            check_error(r);
+            e();
+        }
+    }
+    void get(const Str okey, int32_t offset, tamer::event<String> e) {
+        String k(okey);
+        k += String("@");
+        k += String(offset);
+        uint32_t flags;
+        memcached_return_t error;
+        size_t value_length;
+        const char *v = memcached_get(c_, k.data(), k.length(), &value_length, &flags,
+                                      &error);
+        if (error != MEMCACHED_SUCCESS)
+            e(String());
+        else
+            e(String(v, value_length));
+        delete v;
+    }
+    void done_get(String) {
+    }
+    void increment(const Str, tamer::event<> e) {
+        mandatory_assert(0, "unimplemented: need to change the server side");
+        e();
+    }
+    void pace(tamer::event<> done) {
+        done();
+    }
+  private:
+    void check_error(memcached_return_t r) {
+        if (r != MEMCACHED_SUCCESS) {
+            std::cerr << memcached_strerror(NULL, r) << std::endl;
+            mandatory_assert(0);
+        }
+    }
+    memcached_st *c_;
+    time_t expire_at_;
+};
+#endif
+
+#endif

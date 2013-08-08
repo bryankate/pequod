@@ -1,24 +1,24 @@
-#include <boost/random/random_number_generator.hpp>
-#include <unistd.h>
-#include <set>
-#include "pqserver.hh"
-#include "pqpersistent.hh"
-#include "json.hh"
-#include "pqtwitter.hh"
-#include "pqtwitternew.hh"
-#include "pqfacebook.hh"
-#include "pqhackernews.hh"
-#include "pqanalytics.hh"
-#include "pqclient.hh"
 #include "clp.h"
 #include "time.hh"
-#include "hashclient.hh"
-#include "hnshim.hh"
-#include "pqrwmicro.hh"
+#include "json.hh"
 #include "hosts.hh"
 #include "partitioner.hh"
 #include "sock_helper.hh"
-#include "pqdbpool.hh"
+#include "pqserver.hh"
+#include "pqpersistent.hh"
+#include "pqclient.hh"
+#include "twitter.hh"
+#include "twitternew.hh"
+#include "facebook.hh"
+#include "hackernews.hh"
+#include "analytics.hh"
+#include "rwmicro.hh"
+#include "redisadapter.hh"
+#include "memcacheadapter.hh"
+#include "hashtableadapter.hh"
+#include <boost/random/random_number_generator.hpp>
+#include <unistd.h>
+#include <set>
 
 #if HAVE_POSTGRESQL_LIBPQ_FE_H
 #include <postgresql/libpq-fe.h>
@@ -462,7 +462,7 @@ int main(int argc, char** argv) {
         }
         else {
             pq::DirectClient client(server);
-            pq::TwitterNewShim<pq::DirectClient> shim(client, *tp);
+            pq::TwitterNewShim<pq::DirectClient, pq::TwitterNewPopulator> shim(client, *tp);
             pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
             tr.initialize(tamer::event<>());
             tr.populate(tamer::event<>());

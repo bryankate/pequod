@@ -1,14 +1,60 @@
 // -*- mode: c++ -*-
-#ifndef PEQUOD_REDIS_FD_HH
-#define PEQUOD_REDIS_FD_HH 1
+#ifndef REDIS_ADAPTER_HH
+#define REDIS_ADAPTER_HH
+
+#include "json.hh"
+#include "str.hh"
+#include "string.hh"
 #include <tamer/tamer.hh>
 #include <tamer/fd.hh>
 #include <sys/uio.h>
-#include "redisclient.hh"
-#include "json.hh"
-#include "string.hh"
 #include <vector>
 #include <deque>
+
+namespace pq {
+
+class RedisReplyParser {
+  public:
+    RedisReplyParser();
+    int consume(const char* buf, size_t length);
+    bool complete();
+    void reset();
+    bool has_value();
+    String& value();
+  private:
+    enum { Type, ReadVStr, VStrLF, BVStr, BVStrCR, BVStrLF, Done};
+    char type_;
+    int state_;
+    int bstr_len_;
+    int bstr_pos_;
+    String v_;
+};
+
+class RedisCommand {
+  public:
+    static String make_get(const String& k);
+    static String make_getrange(const String& k, int begin, int end);
+    static String make_set(const String& k, const String& v);
+    static String make_append(const String& k, const String& v);
+    static String make_incr(const String& k);
+};
+
+class RedisSyncClient {
+  public:
+    RedisSyncClient();
+    void get(const String& k, String& v);
+    void getrange(const String& k, int begin, int end, String& v);
+    void set(const String& k, const String& v);
+    void append(const String& k, const String& v, int& newlen);
+    void incr(const String& k, int& newv);
+  private:
+    void read_reply(String& v);
+    void read_till_cr(String& v);
+    void readn(void* buf, size_t count);
+    void skipcrlf();
+    void writen(const void* buf, size_t count);
+    int fd_;
+};
 
 class redis_fd {
   public:
@@ -61,6 +107,25 @@ class redis_fd {
     tamed void reader_coroutine();
 };
 
+class RedisfdHashClient {
+  public:
+    RedisfdHashClient(tamer::fd fd) : fd_(fd) {}
+    void get(Str k, tamer::event<String> e);
+    void get(Str k, int begin, tamer::event<String> e) {
+        getrange(k, begin, -1, e);
+    }
+    void getrange(Str k, int begin, int end, tamer::event<String> e);
+    tamed void set(Str k, Str v, tamer::event<> e);
+    tamed void append(Str k, Str v, tamer::event<> e);
+    void done_get(String) {
+    }
+    tamed void increment(Str k, tamer::event<> e);
+    void pace(tamer::event<> done);
+  private:
+    redis_fd fd_;
+};
+
+
 inline redis_fd::redis_fd(tamer::fd fd)
     : fd_(fd), wrsize_(0), wrblocked_(false),
       rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
@@ -98,6 +163,8 @@ inline Json redis_fd::status() const {
     return Json().set("buffered_write_bytes", wrsize_)
         .set("buffered_read_bytes", rdlen_ - rdpos_)
         .set("waiting_readers", rdwait_.size());
+}
+
 }
 
 tamed void test_redis_async();

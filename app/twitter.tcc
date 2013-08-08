@@ -1,5 +1,5 @@
 // -*- mode: c++ -*-
-#include "pqtwitter.hh"
+#include "twitter.hh"
 #include "json.hh"
 #include "pqjoin.hh"
 #include "pqmulticlient.hh"

@@ -1,4 +1,4 @@
-#include "pqanalytics.hh"
+#include "analytics.hh"
 #include <tamer/tamer.hh>
 #include "pqremoteclient.hh"
 

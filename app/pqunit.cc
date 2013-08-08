@@ -12,8 +12,7 @@
 #include "json.hh"
 #include "time.hh"
 #include "check.hh"
-#include "redisclient.hh"
-#include "redisfd.hh"
+#include "redisadapter.hh"
 #include "pqpersistent.hh"
 
 namespace  {

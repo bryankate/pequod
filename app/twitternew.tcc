@@ -1,5 +1,5 @@
 // -*- mode: c++ -*-
-#include "pqtwitternew.hh"
+#include "twitternew.hh"
 #include "json.hh"
 #include "pqjoin.hh"
 #include "pqmulticlient.hh"
@@ -299,13 +299,15 @@ void TwitterNewPopulator::print_subscription_statistics(ostream& stream) {
     std::sort(users_.begin(), users_.end(), TwitterGraphNode::Compare(TwitterGraphNode::comp_uid));
 }
 
+typedef pq::TwitterNewShim<pq::MultiClient, pq::TwitterNewPopulator> remote_shim_type;
+
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Hosts* dbhosts,
                                   const Partitioner* part) {
     tvars {
         MultiClient* mc = new MultiClient(hosts, dbhosts, part, client_port);
-        TwitterNewShim<MultiClient>* shim = new TwitterNewShim<MultiClient>(*mc, tp);
-        TwitterNewRunner<TwitterNewShim<MultiClient>>* tr = new TwitterNewRunner<TwitterNewShim<MultiClient> >(*shim, tp);
+        remote_shim_type* shim = new remote_shim_type(*mc, tp);
+        TwitterNewRunner<remote_shim_type>* tr = new TwitterNewRunner<remote_shim_type>(*shim, tp);
     }
     twait { mc->connect(make_event()); }
     twait { tr->initialize(make_event()); }
@@ -316,12 +318,14 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
     delete mc;
 }
 
+typedef pq::TwitterNewDBShim<pq::DBPool, pq::TwitterNewPopulator> compare_shim_type;
+
 tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port,
                                    uint32_t pool_min, uint32_t pool_max) {
     tvars {
         DBPool* client = new DBPool("127.0.0.1", client_port, pool_min, pool_max);
-        TwitterNewDBShim<DBPool>* shim = new TwitterNewDBShim<DBPool>(*client, tp);
-        TwitterNewRunner<TwitterNewDBShim<DBPool>>* tr = new TwitterNewRunner<TwitterNewDBShim<DBPool>>(*shim, tp);
+        compare_shim_type* shim = new compare_shim_type(*client, tp);
+        TwitterNewRunner<compare_shim_type>* tr = new TwitterNewRunner<compare_shim_type>(*shim, tp);
     }
 
     client->connect(); 

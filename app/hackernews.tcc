@@ -1,6 +1,6 @@
-#include "pqhackernews.hh"
+#include "hackernews.hh"
 #include "pqmulticlient.hh"
-#include "hashclient.hh"
+#include "redisadapter.hh"
 
 namespace pq {
 

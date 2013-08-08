@@ -10,12 +10,11 @@
 #include <sys/resource.h>
 #include <tamer/tamer.hh>
 #include "json.hh"
-#include "pqjoin.hh"
 #include "json.hh"
 #include "time.hh"
 #include "sp_key.hh"
-#include "hnpopulator.hh"
-#include "hnshim.hh"
+#include "hackernewspopulator.hh"
+#include "hackernewsshim.hh"
 #include "pqlog.hh"
 #include "pqmemory.hh"
 

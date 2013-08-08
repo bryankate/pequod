@@ -1,5 +1,5 @@
-#ifndef HNPOPULATOR_HH
-#define HNPOPULATOR_HH
+#ifndef PQHACKERNEWS_POPULATOR_HH
+#define PQHACKERNEWS_POPULATOR_HH
 #include <utility>
 #include <vector>
 #include <map>

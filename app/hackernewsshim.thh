@@ -1,5 +1,7 @@
-#ifndef HN_CLIENT_HH
-#define HN_CLIENT_HH
+// -*- mode: c++ -*-
+#ifndef PQHACKERNEWS_SHIM_HH
+#define PQHACKERNEWS_SHIM_HH
+
 #include "check.hh"
 #include <tamer/tamer.hh>
 
