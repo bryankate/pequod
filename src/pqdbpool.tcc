@@ -79,12 +79,9 @@ tamed void DBPool::execute(String query, event<Json> e) {
 
 tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
 
-//     std::cerr << "adding(" << query << ")" << std::endl;
-// 
-//     query_buffer.push_back(query);
-//     event_buffer.push_back(e);
-// 
-//     twait { do_execute(conn, query_buffer.front, event_buffer, make_event()); }
+    tvars { std::deque<event<Json>> wrapper; }
+    wrapper.push_back(e);
+    twait { do_execute(conn, query.c_str(), wrapper, make_event()); }
 }
 
 tamed void DBPool::do_execute(PGconn* conn, std::string q_set, std::deque<event<Json>> events, event<> e) {
@@ -96,10 +93,6 @@ tamed void DBPool::do_execute(PGconn* conn, std::string q_set, std::deque<event<
        ExecStatusType status;
        Json ret;
     }
-
-    result_count = events.size();
-
-    std::cerr << "processing " << result_count << " queries" << std::endl;
 
 #if 0
     {
@@ -158,7 +151,6 @@ tamed void DBPool::do_execute(PGconn* conn, std::string q_set, std::deque<event<
         events.pop_front();
 	    PQclear(result);
     };
-    //mandatory_assert(!result && "More results!?!");
     e();
 }
 
