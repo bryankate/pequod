@@ -118,18 +118,20 @@ $(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh
+$(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
+$(OBJDIR)/pqinterconnect.o: $(OBJDIR)/pqinterconnect.hh
+$(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/pqmulticlient.o: $(OBJDIR)/pqmulticlient.hh
+$(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
+$(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
+$(OBJDIR)/pqremoteclient.o: $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqtwitter.o: $(OBJDIR)/pqtwitter.cc $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqtwitternew.o: $(OBJDIR)/pqtwitternew.cc $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqanalytics.o: $(OBJDIR)/pqanalytics.cc $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqhackernews.o: $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/mpfd.hh
-$(OBJDIR)/util.o: $(PROTOGENDIR)/gstore.px.hh
-$(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
-$(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
-$(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
-$(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
 
 COMMON_OBJS = \
