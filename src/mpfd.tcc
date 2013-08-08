@@ -5,6 +5,24 @@
 #define IOV_MAX 1024
 #endif
 
+void msgpack_fd::initialize() {
+    wrpos_ = 0;
+    wrsize_ = 0;
+    wrblocked_ = false;
+    rdbuf_ = String::make_uninitialized(rdcap);
+    rdpos_ = 0;
+    rdlen_ = 0;
+    rdquota_ = rdbatch;
+    rdreply_seq_ = 0;
+
+    wrelem_.push_back(wrelem());
+    wrelem_.back().sa.reserve(wrcap);
+    wrelem_.back().pos = 0;
+
+    writer_coroutine();
+    reader_coroutine();
+}
+
 msgpack_fd::~msgpack_fd() {
     wrkill_();
     rdkill_();
