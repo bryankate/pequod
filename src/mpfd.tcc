@@ -58,6 +58,13 @@ void msgpack_fd::flush(tamer::event<> done) {
     flush(tamer::unbind<bool>(done));
 }
 
+inline void msgpack_fd::check_coroutines() {
+    if (rdquota_ == 0 || !rfd_)
+        rdwake_();
+    if (!wfd_)
+        wrwake_();
+}
+
 bool msgpack_fd::read_one_message() {
     assert(rdquota_ != 0);
 
@@ -83,7 +90,7 @@ bool msgpack_fd::read_one_message() {
             else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                 rfd_.close(-errno);
             rdquota_ = 0;
-            rdwake_();          // wake up coroutine [if it's sleeping]
+            check_coroutines(); // wake up coroutine [if it's sleeping]
             return false;
         }
     }
@@ -228,8 +235,7 @@ void msgpack_fd::write_once() {
             wfd_.close();
         else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
             wfd_.close(-errno);
-        if (!wfd_)
-            wrwake_();          // ensure coroutine is awake
+        check_coroutines();     // ensure coroutine is awake
     }
 }
 
