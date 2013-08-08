@@ -94,7 +94,7 @@ $(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
 $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
 $(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
-$(OBJDIR)/pqunit2.cc: $(top_srcdir)/app/pqunit2.tcc
+$(OBJDIR)/pqunit2.cc: $(top_srcdir)/src/pqunit2.tcc
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/app/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/app/pqhackernews.thh
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/app/pqrwmicro.tcc
@@ -190,7 +190,7 @@ HASHTIMER_OBJS = $(PQSERVER_OBJS) \
 
 $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-	
+
 $(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
