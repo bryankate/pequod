@@ -17,7 +17,7 @@ TAMER_COMMIT = 798736ef67d0b6c92567ddeff1a72f20129ff67e
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
-LIBS = $(TAMER) -l -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
+LIBS = `$(TAMER) -l` -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
 
 CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -94,6 +94,7 @@ $(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
 $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
 $(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
+$(OBJDIR)/pqunit2.cc: $(top_srcdir)/app/pqunit2.tcc
 $(OBJDIR)/pqhackernews.cc: $(top_srcdir)/app/pqhackernews.tcc
 $(OBJDIR)/pqhackernews.hh: $(top_srcdir)/app/pqhackernews.thh
 $(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/app/pqrwmicro.tcc
