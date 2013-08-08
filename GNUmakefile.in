@@ -11,17 +11,15 @@ DEPCFLAGS = -MD -MF $(DEPSDIR)/$*.d -MP
 top_srcdir = @top_srcdir@
 builddir = .
 
-SRCDIR = $(top_srcdir)/src
 OBJDIR = obj
-PROTOSRCDIR = $(top_srcdir)/proto
-PROTOGENDIR = $(OBJDIR)
 
 TAMER_COMMIT = c1d7d90e302008f2da099c05c308ce4f16ef5ac9
 
-INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
+INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
+           -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
 LIBS = -lev -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
 
-CXXFLAGS += -I/opt/local/include -I$(top_srcdir)/src -I$(top_srcdir)/tamer -fno-omit-frame-pointer
+CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
 
 @DEFAULT_MALLOC_ASSIGNMENT@
@@ -41,7 +39,7 @@ ifdef ITRACE
   CXXFLAGS += -DIVAL_TRACE
 endif
 
-CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CXXFLAGS)
+CXXCOMPILE = $(CXX) $(DEFS) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
 
 TAMER = tamer/compiler/tamer
@@ -49,21 +47,22 @@ TAMERFLAGS = @TAMERFLAGS@
 LIBTAMER = tamer/tamer/.libs/libtamer.a
 
 
-all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo $(OBJDIR)/hashtimer
-
-$(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h: $(PROTOSRCDIR)/%.proto \
-		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp
-	protoc --cpp_out=$(PROTOGENDIR) --python_out=exp -I$(PROTOSRCDIR) $<
-
-$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh: $(PROTOSRCDIR)/%.proto \
-		$(PROTOGENDIR)/stamp $(DEPSDIR)/stamp $(PROTOSRCDIR)/protox.pl
-	$(PROTOSRCDIR)/protox.pl --cpp_out=$(PROTOGENDIR) $<
+all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo 
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.c config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.o: $(top_srcdir)/app/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+        
+$(OBJDIR)/%.cc: $(top_srcdir)/app/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
+	$(TAMER) $(TAMERFLAGS) -F .deps/$*.cc.d -o $@ $<
+
+$(OBJDIR)/%.hh: $(top_srcdir)/app/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
+	$(TAMER) $(TAMERFLAGS) -F .deps/$*.hh.d -o $@ $<
 
 $(OBJDIR)/%.o: $(top_srcdir)/src/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
@@ -85,8 +84,6 @@ $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
 $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
 $(OBJDIR)/pqpersistent.cc: $(top_srcdir)/src/pqpersistent.tcc
 $(OBJDIR)/pqpersistent.hh: $(top_srcdir)/src/pqpersistent.thh
-$(OBJDIR)/pqhackernews.cc: $(top_srcdir)/src/pqhackernews.tcc
-$(OBJDIR)/pqhackernews.hh: $(top_srcdir)/src/pqhackernews.thh
 $(OBJDIR)/pqclient.cc: $(top_srcdir)/src/pqclient.tcc
 $(OBJDIR)/pqclient.hh: $(top_srcdir)/src/pqclient.thh
 $(OBJDIR)/pqremoteclient.cc: $(top_srcdir)/src/pqremoteclient.tcc
@@ -97,20 +94,23 @@ $(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
 $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
 $(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
-$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/src/pqrwmicro.tcc
-$(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/src/pqrwmicro.thh
-$(OBJDIR)/pqtwitter.cc: $(top_srcdir)/src/pqtwitter.tcc
-$(OBJDIR)/pqtwitter.hh: $(top_srcdir)/src/pqtwitter.thh
-$(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/src/pqtwitternew.tcc
-$(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/src/pqtwitternew.thh
-$(OBJDIR)/pqanalytics.cc: $(top_srcdir)/src/pqanalytics.tcc
-$(OBJDIR)/pqanalytics.hh: $(top_srcdir)/src/pqanalytics.thh
-$(OBJDIR)/hnshim.hh: $(top_srcdir)/src/hnshim.thh
-$(OBJDIR)/hashclient.cc: $(top_srcdir)/src/hashclient.tcc
-$(OBJDIR)/hashclient.hh: $(top_srcdir)/src/hashclient.thh
-$(OBJDIR)/redisfd.hh: $(top_srcdir)/src/redisfd.thh
-$(OBJDIR)/redisfd.cc: $(top_srcdir)/src/redisfd.tcc
-$(OBJDIR)/pqinfo.cc: $(top_srcdir)/src/pqinfo.tcc
+$(OBJDIR)/pqhackernews.cc: $(top_srcdir)/app/pqhackernews.tcc
+$(OBJDIR)/pqhackernews.hh: $(top_srcdir)/app/pqhackernews.thh
+$(OBJDIR)/pqrwmicro.cc: $(top_srcdir)/app/pqrwmicro.tcc
+$(OBJDIR)/pqrwmicro.hh: $(top_srcdir)/app/pqrwmicro.thh
+$(OBJDIR)/pqtwitter.cc: $(top_srcdir)/app/pqtwitter.tcc
+$(OBJDIR)/pqtwitter.hh: $(top_srcdir)/app/pqtwitter.thh
+$(OBJDIR)/pqtwitternew.cc: $(top_srcdir)/app/pqtwitternew.tcc
+$(OBJDIR)/pqtwitternew.hh: $(top_srcdir)/app/pqtwitternew.thh
+$(OBJDIR)/pqanalytics.cc: $(top_srcdir)/app/pqanalytics.tcc
+$(OBJDIR)/pqanalytics.hh: $(top_srcdir)/app/pqanalytics.thh
+$(OBJDIR)/hnshim.hh: $(top_srcdir)/app/hnshim.thh
+$(OBJDIR)/hashclient.cc: $(top_srcdir)/app/hashclient.tcc
+$(OBJDIR)/hashclient.hh: $(top_srcdir)/app/hashclient.thh
+$(OBJDIR)/redisfd.hh: $(top_srcdir)/app/redisfd.thh
+$(OBJDIR)/redisfd.cc: $(top_srcdir)/app/redisfd.tcc
+$(OBJDIR)/pqinfo.cc: $(top_srcdir)/app/pqinfo.tcc
+
 
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqtwitter.hh $(OBJDIR)/pqhackernews.hh $(OBJDIR)/pqtwitternew.hh $(OBJDIR)/pqanalytics.hh $(OBJDIR)/pqrwmicro.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqinterconnect.hh $(OBJDIR)/hnshim.hh $(OBJDIR)/hashclient.hh $(OBJDIR)/redisfd.hh
 $(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
@@ -151,22 +151,22 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/pqjoin.o \
 	$(OBJDIR)/pqsource.o \
 	$(OBJDIR)/pqsink.o \
-	$(OBJDIR)/pqpersistent.o \
 	$(OBJDIR)/pqserver.o \
-	$(OBJDIR)/pqpartition.o \
-	$(OBJDIR)/pqtwitter.o \
-	$(OBJDIR)/pqtwitternew.o \
-	$(OBJDIR)/pqhackernews.o \
-	$(OBJDIR)/pqanalytics.o \
-	$(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqserverloop.o \
-        $(OBJDIR)/pqmemory.o \
-	$(OBJDIR)/pqunit.o \
 	$(OBJDIR)/mpfd.o \
-	$(OBJDIR)/pqclient.o \
-	$(OBJDIR)/pqmulticlient.o \
-	$(OBJDIR)/pqremoteclient.o \
-	$(OBJDIR)/pqinterconnect.o \
+	$(OBJDIR)/pqpersistent.o \
+	$(OBJDIR)/pqpartition.o \
+        $(OBJDIR)/pqmemory.o \
+        $(OBJDIR)/pqclient.o \
+        $(OBJDIR)/pqmulticlient.o \
+        $(OBJDIR)/pqremoteclient.o \
+        $(OBJDIR)/pqinterconnect.o \
+        $(OBJDIR)/pqunit.o \
+        $(OBJDIR)/pqtwitter.o \
+        $(OBJDIR)/pqtwitternew.o \
+        $(OBJDIR)/pqhackernews.o \
+        $(OBJDIR)/pqanalytics.o \
+        $(OBJDIR)/pqfacebook.o \
 	$(OBJDIR)/pqdbpool.o \
 	$(OBJDIR)/redisclient.o \
 	$(OBJDIR)/redisfd.o \
@@ -186,6 +186,9 @@ HASHTIMER_OBJS = $(PQSERVER_OBJS) \
 
 $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+	
+$(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
@@ -194,12 +197,6 @@ $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/pgbench: $(COMMON_OBJS) $(OBJDIR)/pgbench.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
