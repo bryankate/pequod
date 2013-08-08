@@ -18,6 +18,7 @@ class msgpack_fd {
     template <typename R>
     void read_request(tamer::preevent<R, Json> done);
     inline void call(const Json& j, tamer::event<Json> reply);
+    void flush(tamer::event<bool> done);
     void flush(tamer::event<> done);
     template <typename R>
     inline void pace(tamer::preevent<R> done);
@@ -34,8 +35,8 @@ class msgpack_fd {
         int pos;
     };
     struct flushelem {
-        tamer::event<> e;
-        size_t pos;
+        tamer::event<bool> e;
+        size_t wpos;
     };
     std::deque<wrelem> wrelem_;
     size_t wrpos_;
@@ -54,7 +55,7 @@ class msgpack_fd {
 
     struct replyelem {
         tamer::event<Json> e;
-        size_t pos;
+        size_t wpos;
     };
     std::deque<tamer::event<Json> > rdreqwait_;
     std::deque<Json> rdreqq_;

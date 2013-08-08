@@ -1,6 +1,7 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
 #include <limits.h>
+#include <tamer/adapter.hh>
 #ifndef IOV_MAX
 #define IOV_MAX 1024
 #endif
@@ -46,11 +47,15 @@ void msgpack_fd::write(const Json& j) {
         write_once();
 }
 
-void msgpack_fd::flush(tamer::event<> done) {
+void msgpack_fd::flush(tamer::event<bool> done) {
     if (wrsize_ == 0)
-        done();
+        done(true);
     else
         flushelem_.push_back(flushelem{std::move(done), wrpos_ + wrsize_});
+}
+
+void msgpack_fd::flush(tamer::event<> done) {
+    flush(tamer::unbind<bool>(done));
 }
 
 bool msgpack_fd::read_one_message() {
@@ -212,16 +217,20 @@ void msgpack_fd::write_once() {
             wrelem_.front().pos = 0;
         }
         while (!flushelem_.empty()
-               && (ssize_t) (wrpos_ - flushelem_.front().pos) >= 0) {
-            flushelem_.front().e.trigger();
+               && (ssize_t) (wrpos_ - flushelem_.front().wpos) >= 0) {
+            flushelem_.front().e.trigger(true);
             flushelem_.pop_front();
         }
         if (pace_recovered())
             pacer_();
-    } else if (amt == 0)
-        wfd_.close();
-    else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-        wfd_.close(-errno);
+    } else {
+        if (amt == 0)
+            wfd_.close();
+        else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+            wfd_.close(-errno);
+        if (!wfd_)
+            wrwake_();          // ensure coroutine is awake
+    }
 }
 
 tamed void msgpack_fd::writer_coroutine() {
@@ -242,5 +251,11 @@ tamed void msgpack_fd::writer_coroutine() {
             write_once();
     }
 
+    for (auto& e : flushelem_)
+        e.e.trigger((ssize_t) (wrpos_ - e.wpos) >= 0);
+    flushelem_.clear();
+    for (auto& e : rdreplywait_)
+        if ((ssize_t) (wrpos_ - e.wpos) < 0)
+            e.e.trigger(Json());
     kill();
 }

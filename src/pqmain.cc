@@ -132,10 +132,7 @@ enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
 enum { db_unknown, db_berkeley, db_postgres };
 
-static char envstr[] = "TAMER_NOLIBEVENT=1";
-
 int main(int argc, char** argv) {
-    putenv(envstr);
     tamer::initialize();
 
     int mode = mode_unknown, db = db_unknown;

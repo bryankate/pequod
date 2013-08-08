@@ -13,11 +13,11 @@ builddir = .
 
 OBJDIR = obj
 
-TAMER_COMMIT = 798736ef67d0b6c92567ddeff1a72f20129ff67e
+TAMER_COMMIT = 8b37569ce2884ce4dccc9b4ca2cd146693a5b685
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
-LIBS = `$(TAMER) -l` -lboost_system-mt -lboost_thread-mt @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
+LIBS = `$(TAMER) -l` @BOOST_LIBS@ @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @DB_CXX_LIB@ @PQXX_LIB@
 
 CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -94,7 +94,7 @@ $(OBJDIR)/pqinterconnect.cc: $(top_srcdir)/src/pqinterconnect.tcc
 $(OBJDIR)/pqinterconnect.hh: $(top_srcdir)/src/pqinterconnect.thh
 $(OBJDIR)/pqdbpool.cc: $(top_srcdir)/src/pqdbpool.tcc
 $(OBJDIR)/pqdbpool.hh: $(top_srcdir)/src/pqdbpool.thh
-$(OBJDIR)/pqunit2.cc: $(top_srcdir)/app/pqunit2.tcc
+$(OBJDIR)/pqunit2.cc: $(top_srcdir)/src/pqunit2.tcc
 $(OBJDIR)/hackernews.cc: $(top_srcdir)/app/hackernews.tcc
 $(OBJDIR)/hackernews.hh: $(top_srcdir)/app/hackernews.thh
 $(OBJDIR)/hackernewsshim.hh: $(top_srcdir)/app/hackernewsshim.thh
@@ -208,7 +208,7 @@ HASHTIMER_OBJS = $(PQSERVER_OBJS) \
 
 $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-	
+
 $(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 

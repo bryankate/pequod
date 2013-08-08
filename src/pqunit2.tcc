@@ -1,6 +1,7 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
 #include "check.hh"
+#include <fcntl.h>
 
 namespace {
 void small_socket_buffer(int f) {
@@ -72,18 +73,26 @@ void test_mpfd() {
 
 
 namespace {
+tamed void one_test_mpfd2_client(msgpack_fd* mpfd, Json req, Json& reply,
+                                 tamer::event<> done) {
+    twait { mpfd->call(req, make_event(reply)); }
+    if (reply.is_a())
+        reply.resize(3);
+    std::cerr << reply << '\n';
+    done();
+}
+
 tamed void test_mpfd2_client(tamer::fd rfd, tamer::fd wfd) {
     tvars { msgpack_fd* mpfd; int ret; Json j[10];
         std::string fill((size_t) 8192, 'x'); }
+#ifdef F_SETPIPE_SZ
+    fcntl(rfd.value(), F_SETPIPE_SZ, (int) 4096);
+    fcntl(wfd.value(), F_SETPIPE_SZ, (int) 4096);
+#endif
     mpfd = new msgpack_fd(rfd, wfd);
     twait {
         for (int i = 0; i < 10; ++i)
-            mpfd->call(Json::make_array(1, i, "Foo", fill), make_event(j[i]));
-    }
-    for (int i = 0; i < 10; ++i) {
-        if (j[i].is_a())
-            j[i].resize(3);
-        std::cerr << j[i] << '\n';
+            one_test_mpfd2_client(mpfd, Json::make_array(1, i, "Foo", fill), j[i], make_event());
     }
 }
 
@@ -92,18 +101,13 @@ tamed void test_mpfd2_server(tamer::fd rfd, tamer::fd wfd) {
     mpfd = new msgpack_fd(rfd, wfd);
     while ((rfd || wfd) && n < 6) {
         twait { mpfd->read_request(make_event(j)); }
-        if (n == 5) {
-            std::cout << getpid() << " shutdown\n";
-            rfd.close();
-        }
         if (j && j.is_a())
             mpfd->write(Json::make_array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
         ++n;
     }
     twait { mpfd->flush(make_event()); }
-    twait { tamer::at_delay_sec(10, make_event()); }
-    delete mpfd;
     rfd.close();
+    twait { tamer::at_delay_sec(10, make_event()); }
     wfd.close();
     exit(0);
 }

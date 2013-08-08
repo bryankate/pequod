@@ -120,7 +120,8 @@ def start_postgres(expdef, id):
     cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
           " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
           " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-          " -c shared_buffers=4GB  -c bgwriter_delay=10000" + \
+          " -c shared_buffers=24GB  -c bgwriter_delay=10000" + \
+          " -c checkpoint_segments=600 " + \
           " >> " + fartfile + " 2>> " + fartfile
     print cmd
     proc = Popen(cmd, shell=True)
