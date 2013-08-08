@@ -40,8 +40,8 @@ class DBPool {
     void next_connection(tamer::event<PGconn*> e);
     void replace_connection(PGconn* conn);
     PGconn* connect_one();
-    void execute(PGconn* existing_conn, String query, tamer::event<Json> e);
-    tamed void do_execute(PGconn* conn);
+    tamed void execute(PGconn* existing_conn, String query, tamer::event<Json> e);
+    tamed void do_execute(PGconn* conn, std::string q_set, std::deque<tamer::event<Json>> events, tamer::event<> e);
     uint64_t first_insert;
     std::deque<String> query_buffer;
     std::deque<tamer::event<Json>> event_buffer;

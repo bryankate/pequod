@@ -48,44 +48,58 @@ void DBPool::clear() {
 
 #if HAVE_LIBPQ
 tamed void DBPool::execute(String query, event<Json> e) {
-    tvars { PGconn* conn; }
-    twait { next_connection(make_event(conn)); }
-    twait { execute(conn, query, make_event(e.result())); }
-    replace_connection(conn);
-    e.unblocker().trigger();
-}
 
-void DBPool::execute(PGconn* conn, String query, event<Json> e) {
+    tvars {
+       PGconn* conn;
+       std::deque<event<Json>> do_events;
+       std::stringstream queries(std::ios_base::app | std::ios_base::out);
+    }
 
     if (query_buffer.size() == 0)
         first_insert = tstamp();
 
+
     query_buffer.push_back(query);
     event_buffer.push_back(e);
 
-    if (query_buffer.size() < 25 && ((tstamp() - first_insert) < 200))
+    if (query_buffer.size() < 250 && ((tstamp() - first_insert) < 200))
         return;
-    else
-        do_execute(conn); 
-
+    else {
+        for(auto i = 0; !query_buffer.empty() && i < 250; ++i) {
+            queries << query_buffer.front() << ";";
+            query_buffer.pop_front();
+            do_events.push_back(event_buffer.front());
+            event_buffer.pop_front();
+        }
+	    twait { next_connection(make_event(conn)); }
+	    twait { do_execute(conn, queries.str(), do_events, make_event()); }
+	    replace_connection(conn);
+    }
 }
 
-tamed void DBPool::do_execute(PGconn* conn) {
+tamed void DBPool::execute(PGconn* conn, String query, event<Json> e) {
+
+//     std::cerr << "adding(" << query << ")" << std::endl;
+// 
+//     query_buffer.push_back(query);
+//     event_buffer.push_back(e);
+// 
+//     twait { do_execute(conn, query_buffer.front, event_buffer, make_event()); }
+}
+
+tamed void DBPool::do_execute(PGconn* conn, std::string q_set, std::deque<event<Json>> events, event<> e) {
 
     tvars {
        int32_t err;
-       std::stringstream queries(std::ios_base::app | std::ios_base::out);
-       std::deque<event<Json>> events(this->event_buffer.begin(), this->event_buffer.end());
+       int32_t result_count = 0;
        PGresult* result;
        ExecStatusType status;
        Json ret;
     }
-    event_buffer.clear();
 
-    while (!query_buffer.empty()){
-        queries << query_buffer.front() << ";";
-        query_buffer.pop_front();
-    }
+    result_count = events.size();
+
+    std::cerr << "processing " << result_count << " queries" << std::endl;
 
 #if 0
     {
@@ -97,21 +111,22 @@ tamed void DBPool::do_execute(PGconn* conn) {
         err = PQsendQuery(conn, q.c_str());
     }
 #else
-    std::cerr << queries.str() << std::endl;
-    err = PQsendQuery(conn, queries.str().c_str());
+    err = PQsendQuery(conn, q_set.c_str());
 #endif
 
+    if (err != 1)
+        std::cerr << "Err: " <<  PQerrorMessage(conn) << std::endl;
     mandatory_assert(err == 1 && "Could not send query to DB.");
 
-    do {
-	    do { 
-            std::cerr << "here" << std::endl;
+    for(;;) {
+	    err = PQconsumeInput(conn);
+	    mandatory_assert(err == 1 && "Error reading data from DB.");
+	    if (PQisBusy(conn)) 
 	        twait { tamer::at_fd_read(PQsocket(conn), make_event()); }
-	        err = PQconsumeInput(conn);
-	        mandatory_assert(err == 1 && "Error reading data from DB.");
-	    } while(PQisBusy(conn));
 
 	    result = PQgetResult(conn);
+        if (!result)
+            break;
 	    status = PQresultStatus(result);
 	    ret.clear();
 	
@@ -142,9 +157,9 @@ tamed void DBPool::do_execute(PGconn* conn) {
         events.front()(ret);
         events.pop_front();
 	    PQclear(result);
-	    result = PQgetResult(conn);
-    } while (result);
-    mandatory_assert(!result && "More results!?!");
+    };
+    //mandatory_assert(!result && "More results!?!");
+    e();
 }
 
 void DBPool::next_connection(tamer::event<PGconn*> e) {
