@@ -8,7 +8,7 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
                          const Hosts* hosts, const Hosts* dbhosts,
                          const Partitioner* part) {
     tvars {
-        MultiClient* mc = new MultiClient(hosts, dbhosts, part, client_port);
+        MultiClient* mc = new MultiClient(hosts, part, client_port);
         PQHackerNewsShim<MultiClient>* shim = new PQHackerNewsShim<MultiClient>(*mc, hp.writearound());
         HackernewsRunner<PQHackerNewsShim<MultiClient>>* hr = new HackernewsRunner<PQHackerNewsShim<MultiClient> >(*shim, hp);
         double start, midway, end;

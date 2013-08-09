@@ -142,7 +142,7 @@ tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
                               const Hosts* hosts, const Hosts* dbhosts,
                               const Partitioner* part) {
     tvars {
-        MultiClient* mc = new MultiClient(hosts, dbhosts, part, client_port);
+        MultiClient* mc = new MultiClient(hosts, part, client_port);
         TwitterShim<MultiClient>* shim = new TwitterShim<MultiClient>(*mc, tp.writearound());
         TwitterRunner<TwitterShim<MultiClient>>* tr = new TwitterRunner<TwitterShim<MultiClient> >(*shim, tp);
     }
