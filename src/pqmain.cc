@@ -6,11 +6,13 @@
 #include "sock_helper.hh"
 #include "pqserver.hh"
 #include "pqpersistent.hh"
+#include "pqdbpool.hh"
 #include "pqclient.hh"
 #include "twitter.hh"
 #include "twitternew.hh"
 #include "facebook.hh"
 #include "hackernews.hh"
+#include "hackernewsshim.hh"
 #include "analytics.hh"
 #include "rwmicro.hh"
 #include "redisadapter.hh"
@@ -73,7 +75,7 @@ static Clp_Option options[] = {
     { "dbport", 0, 3018, Clp_ValInt, 0 },
     { "dbpool-min", 0, 3019, Clp_ValInt, 0 },
     { "dbpool-max", 0, 3020, Clp_ValInt, 0 },
-    { "berkeleydb", 0, 3021, 0, Clp_Negate },
+    { "dbpool-depth", 0, 3021, Clp_ValInt, 0 },
     { "postgres", 0, 3022, 0, Clp_Negate },
     { "monitordb", 0, 3023, 0, Clp_Negate },
     { "mem-lo", 0, 3024, Clp_ValInt, 0 },
@@ -130,7 +132,7 @@ static Clp_Option options[] = {
 
 enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
        mode_analytics, mode_listen, mode_tests, mode_rwmicro };
-enum { db_unknown, db_berkeley, db_postgres };
+enum { db_unknown, db_postgres };
 
 int main(int argc, char** argv) {
     tamer::initialize();
@@ -139,16 +141,13 @@ int main(int argc, char** argv) {
     int listen_port = 8000, client_port = -1, nbacking = 0;
     bool kill_old_server = false;
     String hostfile, dbhostfile, partfunc;
-    std::string dbname = "pequod", dbenvpath = "db/localEnv", dbhost = "127.0.0.1";
-    uint32_t dbport = 5432;
+    pq::DBPoolParams db_param;
     bool monitordb = false;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     std::set<String> testcases;
-
-    (void)dbhost; (void)dbport; (void)dbname; (void)dbenvpath;
 
     while (Clp_Next(clp) != Clp_Done) {
         // modes
@@ -225,19 +224,17 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("execute"))
             tp_param.set("execute", !clp->negated);
         else if (clp->option->long_name == String("dbname"))
-            dbname = clp->val.s;
-        else if (clp->option->long_name == String("dbenvpath"))
-            dbenvpath = clp->val.s;
+            db_param.dbname = clp->val.s;
         else if (clp->option->long_name == String("dbhost"))
-            dbhost = clp->val.s;
+            db_param.host = clp->val.s;
         else if (clp->option->long_name == String("dbport"))
-            dbport = clp->val.i;
+            db_param.port = clp->val.i;
         else if (clp->option->long_name == String("dbpool-min"))
-            tp_param.set("dbpool_min", clp->val.i);
+            db_param.min = clp->val.i;
         else if (clp->option->long_name == String("dbpool-max"))
-            tp_param.set("dbpool_max", clp->val.i);
-        else if (clp->option->long_name == String("berkeleydb"))
-            db = db_berkeley;
+            db_param.max = clp->val.i;
+        else if (clp->option->long_name == String("dbpool-depth"))
+            db_param.pipeline_depth = clp->val.i;
         else if (clp->option->long_name == String("postgres"))
             db = db_postgres;
         else if (clp->option->long_name == String("monitordb"))
@@ -347,16 +344,9 @@ int main(int argc, char** argv) {
 
     if (db != db_unknown) {
         pq::PersistentStore* pstore = nullptr;
-        if (db == db_berkeley) {
-#if HAVE_DB_CXX_H
-            pstore = new BerkeleyDBStore(dbenvpath, dbname + ".db");
-#else
-            mandatory_assert(false && "Not configured for BerkeleyDB.");
-#endif
-        }
-        else if (db == db_postgres) {
+        if (db == db_postgres) {
 #if HAVE_PQXX_PQXX
-            pstore = new PostgresStore(dbname, dbhost, dbport);
+            pstore = new PostgresStore(db_param.dbname, db_param.host, db_param.port);
 #else
             mandatory_assert(false && "Not configured for PostgreSQL.");
 #endif
@@ -451,11 +441,9 @@ int main(int argc, char** argv) {
                 mandatory_assert(dbhosts && part);
 
             if (tp_param.get("dbshim").as_b(false))
-                run_twitter_new_compare(*tp, client_port,
-                                        tp_param.get("dbpool_min").as_i(1),
-                                        tp_param.get("dbpool_max").as_i(10));
+                run_twitter_new_compare(*tp, db_param);
             else
-                run_twitter_new_remote(*tp, client_port, hosts, dbhosts, part);
+                run_twitter_new_remote(*tp, client_port, hosts, part, dbhosts, &db_param);
         }
         else {
             pq::DirectClient client(server);
@@ -488,7 +476,7 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["pg"]) {
-#if HAVE_POSTGRESQL_LIBPQ_FE_H
+#if HAVE_LIBPQ
             pq::PostgresClient client;
             pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
             pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
