@@ -37,20 +37,6 @@ if test "$ac_cv_have_memcached" = yes; then
 fi
 AC_SUBST([MEMCACHED_LIB])
 
-AC_ARG_WITH([db_cxx],
-    [AS_HELP_STRING([--with-db_cxx],
-    [enable db backend if available])],
-    [], [with_db_cxx=no])
-DB_CXX_LIB=
-if test "x$with_db_cxx" != "xno"; then
-    AC_SEARCH_LIBS([__db_open], [db_cxx], [ac_cv_have_db_cxx=yes], [ac_cv_have_db_cxx=no])
-    if test "$ac_cv_have_db_cxx" = yes; then
-        AC_CHECK_HEADERS([db_cxx.h])
-        DB_CXX_LIB="-ldb_cxx"
-    fi
-fi
-AC_SUBST([DB_CXX_LIB])
-
 POSTGRES_LIBS=
 AC_CHECK_HEADERS([postgresql/libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
 AC_CHECK_HEADERS([libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
@@ -261,8 +247,7 @@ elif test "$ac_kvdb_malloc" = tcmalloc -o "$ac_kvdb_malloc" = jemalloc -o "$ac_k
     :
 elif test "$ac_kvdb_malloc" = yes -o "$ac_kvdb_malloc" = default; then
     AC_MSG_CHECKING([for malloc library])
-    if test -n "$have_flow"; then ac_kvdb_malloc=flow;
-    elif test -n "$have_jemalloc"; then ac_kvdb_malloc=jemalloc;
+    if test -n "$have_jemalloc"; then ac_kvdb_malloc=jemalloc;
     elif test -n "$have_tcmalloc_minimal"; then ac_kvdb_malloc=tcmalloc;
     else ac_kvdb_malloc=malloc; fi
     AC_MSG_RESULT([$ac_kvdb_malloc])
