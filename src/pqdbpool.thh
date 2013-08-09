@@ -3,6 +3,7 @@
 
 #include "string.hh"
 #include "json.hh"
+#include "time.hh"
 #include <queue>
 #include <vector>
 #include <tamer/tamer.hh>
@@ -14,24 +15,43 @@
 
 namespace pq {
 
+struct DBPoolParams {
+    DBPoolParams();
+
+    String dbname;
+    String host;
+    uint32_t port;
+    uint32_t min;
+    uint32_t max;
+    uint32_t pipeline_depth;
+    uint32_t pipeline_timeout;
+};
+
 class DBPool {
 
   public:
     DBPool(const String& host, uint32_t port);
-    DBPool(const String& host, uint32_t port, uint32_t min, uint32_t max);
+    DBPool(const DBPoolParams& params);
     ~DBPool();
 
     void connect();
     void clear();
 
-    tamed void execute(String query, tamer::event<Json> e);
-    tamed void add_prepared_pool(std::vector<String> statements, tamer::event<> e);
+    tamed void execute(Str query, tamer::event<Json> e);
+    tamed void add_prepared(const std::vector<String>& statements, tamer::event<> e);
+
+    inline void maybe_flush();
+    tamed void flush();
 
   private:
-    String host_;
-    uint32_t port_;
-    uint32_t min_;
-    uint32_t max_;
+    typedef std::vector<String> query_pipe_t;
+    typedef std::vector<tamer::event<Json>> event_pipe_t;
+
+    DBPoolParams params_;
+    query_pipe_t query_buffer_;
+    event_pipe_t event_buffer_;
+    uint64_t oldest_;
+
 #if HAVE_LIBPQ
     std::vector<PGconn*> conn_;
     std::queue<PGconn*> pool_;
@@ -40,13 +60,22 @@ class DBPool {
     void next_connection(tamer::event<PGconn*> e);
     void replace_connection(PGconn* conn);
     PGconn* connect_one();
-    tamed void execute(PGconn* existing_conn, String query, tamer::event<Json> e);
-    tamed void do_execute(PGconn* conn, std::string q_set, std::deque<tamer::event<Json>> events, tamer::event<> e);
-    uint64_t first_insert;
-    std::deque<String> query_buffer;
-    std::deque<tamer::event<Json>> event_buffer;
+
+    tamed void execute_pipeline(PGconn* conn,
+                                const query_pipe_t& queries,
+                                event_pipe_t& events,
+                                tamer::event<> e);
 #endif
 };
+
+
+inline void DBPool::maybe_flush() {
+    if (query_buffer_.size() < params_.pipeline_depth && oldest_ &&
+        ((tstamp() - oldest_) < params_.pipeline_timeout))
+        return;
+
+    flush();
+}
 
 }
 
