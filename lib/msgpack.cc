@@ -3,11 +3,16 @@ namespace msgpack {
 
 namespace {
 const uint8_t nbytes[] = {
-    /* 0xC0-0xC9 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    /* 0xCA float */ 5, /* 0xCB double */ 9,
+    /* 0xC0-0xC3 */ 0, 0, 0, 0,
+    /* 0xC4-0xC6 fbin8-fbin32 */ 2, 3, 5,
+    /* 0xC7-0xC9 fext */ 0, 0, 0,
+    /* 0xCA ffloat32 */ 5,
+    /* 0xCB ffloat64 */ 9,
     /* 0xCC-0xD3 ints */ 2, 3, 5, 9, 2, 3, 5, 9,
-    /* 0xD4-0xD9 */ 0, 0, 0, 0, 0, 0,
-    /* 0xDA-0xDF */ 3, 5, 3, 5, 3, 5
+    /* 0xD4-0xD8 ffixext */ 0, 0, 0, 0, 0,
+    /* 0xD9-0xDB fstr8-fstr32 */ 2, 3, 5,
+    /* 0xDC-0xDD farray16-farray32 */ 3, 5,
+    /* 0xDE-0xDF fmap16-fmap32 */ 3, 5
 };
 
 template <typename T> T grab(const uint8_t* x) {
@@ -52,17 +57,17 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
     }
 
     while (first != last) {
-        if ((uint8_t) (*first + 0x20) < 0xA0) {
+        if ((uint8_t) (*first + format::nfixnegint) < format::nfixint) {
             j = Json(int(int8_t(*first)));
             ++first;
-        } else if (*first == 0xC0) {
+        } else if (*first == format::fnull) {
             j = Json();
             ++first;
-        } else if ((*first | 1) == 0xC3) {
-            j = Json(bool(*first == 0xC3));
+        } else if ((uint8_t) (*first - format::ffalse) < 2) {
+            j = Json(bool(*first - format::ffalse));
             ++first;
-        } else if ((uint8_t) (*first - 0x80) < 0x10) {
-            n = *first - 0x80;
+        } else if ((uint8_t) (*first - format::ffixmap) < format::nfixmap) {
+            n = *first - format::ffixmap;
             ++first;
         map:
             if (stack_.empty() && json_.is_o()) {
@@ -70,8 +75,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_object();
-        } else if ((uint8_t) (*first - 0x90) < 0x10) {
-            n = *first - 0x90;
+        } else if ((uint8_t) (*first - format::ffixarray) < format::nfixarray) {
+            n = *first - format::ffixarray;
             ++first;
         array:
             if (stack_.empty() && json_.is_a()) {
@@ -79,8 +84,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_array_reserve(n);
-        } else if ((uint8_t) (*first - 0xA0) < 0x20) {
-            n = *first - 0xA0;
+        } else if ((uint8_t) (*first - format::ffixstr) < format::nfixstr) {
+            n = *first - format::ffixstr;
             ++first;
         raw:
             if (last - first < n) {
@@ -97,7 +102,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             }
             first += n;
         } else {
-            uint8_t type = *first - 0xC0;
+            uint8_t type = *first - format::fnull;
             if (!nbytes[type])
                 goto error;
             if (last - first < nbytes[type]) {
@@ -107,52 +112,58 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             }
             first += nbytes[type];
             switch (type) {
-            case 0x0A:
+            case format::ffloat32 - format::fnull:
                 j = Json(grab<float>(first - 4));
                 break;
-            case 0x0B:
+            case format::ffloat64 - format::fnull:
                 j = Json(grab<double>(first - 8));
                 break;
-            case 0x0C:
+            case format::fuint8 - format::fnull:
                 j = Json(first[-1]);
                 break;
-            case 0x0D:
+            case format::fuint16 - format::fnull:
                 j = Json(grab<uint16_t>(first - 2));
                 break;
-            case 0x0E:
+            case format::fuint32 - format::fnull:
                 j = Json(grab<uint32_t>(first - 4));
                 break;
-            case 0x0F:
+            case format::fuint64 - format::fnull:
                 j = Json(grab<uint64_t>(first - 8));
                 break;
-            case 0x10:
+            case format::fint8 - format::fnull:
                 j = Json(int8_t(first[-1]));
                 break;
-            case 0x11:
+            case format::fint16 - format::fnull:
                 j = Json(grab<int16_t>(first - 2));
                 break;
-            case 0x12:
+            case format::fint32 - format::fnull:
                 j = Json(grab<int32_t>(first - 4));
                 break;
-            case 0x13:
+            case format::fint64 - format::fnull:
                 j = Json(grab<int64_t>(first - 8));
                 break;
-            case 0x1A:
+            case format::fbin8 - format::fnull:
+            case format::fstr8 - format::fnull:
+                n = first[-1];
+                goto raw;
+            case format::fbin16 - format::fnull:
+            case format::fstr16 - format::fnull:
                 n = grab<uint16_t>(first - 2);
                 goto raw;
-            case 0x1B:
+            case format::fbin32 - format::fnull:
+            case format::fstr32 - format::fnull:
                 n = grab<uint32_t>(first - 4);
                 goto raw;
-            case 0x1C:
+            case format::farray16 - format::fnull:
                 n = grab<uint16_t>(first - 2);
                 goto array;
-            case 0x1D:
+            case format::farray32 - format::fnull:
                 n = grab<uint32_t>(first - 4);
                 goto array;
-            case 0x1E:
+            case format::fmap16 - format::fnull:
                 n = grab<uint16_t>(first - 2);
                 goto map;
-            case 0x1F:
+            case format::fmap32 - format::fnull:
                 n = grab<uint32_t>(first - 4);
                 goto map;
             }
@@ -199,14 +210,17 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
 
 parser& parser::parse(Str& x) {
     uint32_t len;
-    if ((uint32_t) *s_ - 0xA0 < 32) {
-        len = *s_ - 0xA0;
+    if ((uint32_t) *s_ - format::ffixstr < format::nfixstr) {
+        len = *s_ - format::ffixstr;
         ++s_;
-    } else if (*s_ == 0xDA) {
+    } else if (*s_ == format::fbin8 || *s_ == format::fstr8) {
+        len = s_[1];
+        s_ += 2;
+    } else if (*s_ == format::fbin16 || *s_ == format::fstr16) {
         len = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
         s_ += 3;
     } else {
-        assert(*s_ == 0xDB);
+        assert(*s_ == format::fbin32 || *s_ == format::fstr32);
         len = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
         s_ += 5;
     }
@@ -227,9 +241,9 @@ parser& parser::parse(String& x) {
 
 void compact_unparser::unparse(StringAccum& sa, const Json& j) {
     if (j.is_null())
-        sa << '\xC0';
+        sa << (char) format::fnull;
     else if (j.is_b())
-        sa << (char) ('\xC2' + j.as_b());
+        sa << (char) (format::ffalse + j.as_b());
     else if (j.is_i()) {
         uint8_t* x = (uint8_t*) sa.reserve(9);
         sa.adjust_length(unparse(x, (int64_t) j.as_i()) - x);
@@ -241,15 +255,15 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
         sa.adjust_length(unparse(x, j.as_s()) - x);
     } else if (j.is_a()) {
         uint8_t* x = (uint8_t*) sa.reserve(5);
-        if (j.size() < 16) {
-            *x = 0x90 + j.size();
+        if (j.size() < format::nfixarray) {
+            *x = format::ffixarray + j.size();
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
-            *x = 0xDC;
+            *x = format::farray16;
             *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
             sa.adjust_length(3);
         } else {
-            *x = 0xDD;
+            *x = format::farray32;
             *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
             sa.adjust_length(5);
         }
@@ -257,15 +271,15 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
             unparse(sa, *it);
     } else if (j.is_o()) {
         uint8_t* x = (uint8_t*) sa.reserve(5);
-        if (j.size() < 16) {
-            *x = 0x80 + j.size();
+        if (j.size() < format::nfixmap) {
+            *x = format::ffixmap + j.size();
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
-            *x = 0xDE;
+            *x = format::fmap16;
             *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
             sa.adjust_length(3);
         } else {
-            *x = 0xDF;
+            *x = format::fmap32;
             *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
             sa.adjust_length(5);
         }
@@ -275,7 +289,7 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
             unparse(sa, it.value());
         }
     } else
-        sa << '\xC0';
+        sa << format::fnull;
 }
 
-}
+} // namespace msgpack
