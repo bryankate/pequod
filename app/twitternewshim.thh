@@ -398,7 +398,7 @@ inline void TwitterNewShim<S,P>::pace(tamer::preevent<R> done) {
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::flush(tamer::preevent<R> done) {
-    done();
+    server_.flush(done);
 }
 
 template <typename S, typename P> template <typename R>
