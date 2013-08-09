@@ -445,6 +445,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
         if (tp_.is_celebrity(u))
             server_.mark_celebrity(u, gr.make_event());
+    twait { server_.flush(make_event()); }
     twait(gr);
 
     if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
@@ -455,6 +456,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 
         twait{ server_.pace(make_event()); }
     }
+    twait { server_.flush(make_event()); }
     twait(gr);
 
     twait { server_.control(Json().set("flush_db_queue", true), make_event(j)); }
@@ -490,6 +492,7 @@ void TwitterNewRunner<S>::select_active(event<> done) {
             twait{ server_.pace(make_event()); }
         }
     }
+    twait { server_.flush(make_event()); }
     twait(gr);
 
     if (tp_.prevalidate_inactive()) {
@@ -497,6 +500,7 @@ void TwitterNewRunner<S>::select_active(event<> done) {
             prevalidate(tp_.managed_user(inactive_[u]), gr.make_event());
             twait{ server_.pace(make_event()); }
         }
+        twait { server_.flush(make_event()); }
         twait(gr);
     }
 
@@ -684,8 +688,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 assert(false && "Unknown operation.");
         }
 
-        if (tp_.synchronous())
+        if (tp_.synchronous()) {
+            twait { server_.flush(make_event()); }
             twait(gr);
+        }
         else
             twait { server_.pace(make_event()); }
 
@@ -697,6 +703,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 std::cerr << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
         }
     }
+    twait { server_.flush(make_event()); }
     twait(gr);
 
     // do a final scan for every loggedin user. this helps to ensure that
@@ -709,6 +716,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         loggedin_.pop_front();
         check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
     }
+    twait { server_.flush(make_event()); }
     twait(gr);
 
     getrusage(RUSAGE_SELF, &ru[1]);
@@ -754,12 +762,15 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     done();
 }
 
-tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
-                                  const Hosts* hosts, const Hosts* dbhosts,
-                                  const Partitioner* part);
 
-tamed void run_twitter_new_compare(TwitterNewPopulator& tp, int32_t client_port,
-                                   uint32_t pool_min, uint32_t pool_max);
+class DBPoolParams;
+
+tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
+                                  const Hosts* hosts, const Partitioner* part,
+                                  const Hosts* dbhosts, const DBPoolParams* dbparams);
+
+tamed void run_twitter_new_compare(TwitterNewPopulator& tp,
+                                   const DBPoolParams& dbparams);
 
 } // namespace pq
 #endif
