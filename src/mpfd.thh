@@ -75,6 +75,7 @@ class msgpack_fd {
     void write_once();
     inline bool need_pace() const;
     inline bool pace_recovered() const;
+    inline void check_coroutines();
     tamed void writer_coroutine();
     tamed void reader_coroutine();
 
