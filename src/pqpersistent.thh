@@ -93,37 +93,8 @@ class PersistentStoreThread {
 
 }
 
-#if HAVE_DB_CXX_H
-#include <db_cxx.h>
 
-class BerkeleyDBStore : public pq::PersistentStore {
-
-  public:
-    BerkeleyDBStore(std::string eH = "./db/localEnv",
-                    std::string dbN = "pequod.db",
-                    uint32_t e_flags = BerkeleyDBStore::env_flags_,
-                    uint32_t d_flags = BerkeleyDBStore::db_flags_);
-    ~BerkeleyDBStore();
-
-    virtual int32_t put(Str, Str);
-    virtual void erase(Str);
-    virtual String get(Str);
-    virtual void scan(Str, Str, pq::PersistentStore::ResultSet&);
-    virtual void run_monitor(pq::Server& server);
-
-  private:
-    static const uint32_t env_flags_ = DB_CREATE | DB_INIT_MPOOL;
-    static const uint32_t db_flags_ = DB_CREATE;
-    static const uint32_t cursor_flags_ = DB_CURSOR_BULK;
-    std::string env_home_, db_name_;
-    DbEnv *env_;
-    Db *dbh_;
-
-    void init(uint32_t, uint32_t);
-};
-#endif
-
-
+// XXX: todo: replace libpqxx with DBPool
 #if HAVE_PQXX_PQXX
 #include "pqxx/pqxx"
 #include "pqxx/connection"
