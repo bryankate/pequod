@@ -230,8 +230,12 @@ def define_experiments():
          'def_db_s_import': "scripts/exp/nusers100k-s.dmp",
          'def_db_in_memory': True,
          'def_db_compare': True,
-#          'populatecmd': "%s %s --dbshim --initialize --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s --dbshim --initialize" % (clientBase)})
+         'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
+                         "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
+                         "-c shared_buffers=24GB  -c bgwriter_delay=10000" + \
+                         "-c checkpoint_segments=600 ",
+#          'populatecmd': "%s %s --dbshim --dbpool-max=10 --dbpool-depth=100 --initialize --popduration=0" % (populateCmd, users),
+         'clientcmd': "%s --dbshim --dbpool-depth=100 --initialize" % (clientBase)})
     
     exp['plot'] = {'type': "bar",
                    'data': [{'from': "client",

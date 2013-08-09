@@ -33,11 +33,12 @@ def define_experiments():
                  'defs': [{'def_part': partfunc,
                            'def_db_type': "postgres",
                            'def_db_writearound': True,
+                           'def_db_flags': "-c synchronous_commit=off -c fsync=off",
                            'backendcmd': "%s" % (serverCmd),
                            'cachecmd': "%s" % (serverCmd),
                            'initcmd': "%s" % (initCmd),
-                           'populatecmd': "%s %s" % (populateCmd, users),
-                           'clientcmd': "%s" % (clientBase)}]})
+                           'populatecmd': "%s %s --dbpool-max=5 --dbpool-depth=10" % (populateCmd, users),
+                           'clientcmd': "%s --dbpool-max=5 --dbpool-depth=10" % (clientBase)}]})
     
     exps.append({'name': "postgres", 
                  'defs': [{'def_part': partfunc,
@@ -45,10 +46,13 @@ def define_experiments():
                            #'def_db_in_memory': True,
                            'def_db_compare': True,
                            'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
+                           'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
+                                           "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
+                                           "-c bgwriter_delay=10000 -c checkpoint_segments=600",
                            'backendcmd': "%s" % (serverCmd),
                            'cachecmd': "%s" % (serverCmd),
-                           'populatecmd': "%s" % (postgresPopulateCmd),
-                           'clientcmd': "%s" % (postgresClientCmd)}]})
+                           'populatecmd': "%s --dbpool-max=5 --dbpool-depth=100" % (postgresPopulateCmd),
+                           'clientcmd': "%s --dbpool-depth=100" % (postgresClientCmd)}]})
     
     exps.append({'name': "eviction", 
                  'defs': [{'def_part': partfunc,

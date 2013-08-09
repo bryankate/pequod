@@ -116,12 +116,10 @@ def start_postgres(expdef, id):
           " >> " + fartfile + " 2>> " + fartfile
     print cmd
     Popen(cmd, shell=True).wait()
-          
+
+    dbflags = expdef.get('def_db_flags')
     cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
-          " -D " + dbpath + " -c synchronous_commit=off -c fsync=off " + \
-          " -c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-          " -c shared_buffers=24GB  -c bgwriter_delay=10000" + \
-          " -c checkpoint_segments=600 " + \
+          " -D " + dbpath + " " + dbflags + \
           " >> " + fartfile + " 2>> " + fartfile
     print cmd
     proc = Popen(cmd, shell=True)
@@ -325,7 +323,7 @@ for x in exps:
             clientcmd = e['clientcmd']
             
             if dbcompare:
-                clientcmd = clientcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching / ngroups)
+                clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching / ngroups)
             else:
                 clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
