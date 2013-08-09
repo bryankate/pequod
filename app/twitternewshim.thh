@@ -45,6 +45,8 @@ class TwitterNewShim {
     template <typename R>
     inline void pace(tamer::preevent<R> done);
     template <typename R>
+    inline void flush(tamer::preevent<R> done);
+    template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
     template <typename R>
     inline void control(const Json& cmd, tamer::preevent<R, Json> e);
@@ -150,6 +152,7 @@ class TwitterNewDBShim {
     inline void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan,
                           tamer::event<scan_result> e);
     inline void pace(tamer::event<> done);
+    inline void flush(tamer::event<> done);
     inline void stats(tamer::event<Json> e);
     inline void control(const Json& cmd, tamer::event<Json> e);
 
@@ -394,6 +397,11 @@ inline void TwitterNewShim<S,P>::pace(tamer::preevent<R> done) {
 }
 
 template <typename S, typename P> template <typename R>
+inline void TwitterNewShim<S,P>::flush(tamer::preevent<R> done) {
+    done();
+}
+
+template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::stats(tamer::preevent<R, Json> done) {
     server_.stats(done);
 }
@@ -414,7 +422,7 @@ void TwitterNewDBShim<S,P>::initialize(tamer::event<> done) {
     tvars { Json j; }
 
     twait {
-        server_.add_prepared_pool(std::vector<String>({
+        server_.add_prepared(std::vector<String>({
         "SET session CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED",
         "PREPARE subscribe(int,int) AS "
             "INSERT INTO s SELECT $1,$2 WHERE NOT EXISTS (SELECT 1 FROM s WHERE usr = $1 AND poster = $2)",
@@ -540,8 +548,14 @@ inline void TwitterNewDBShim<S,P>::post_scan(uint32_t poster,
 
 template <typename S, typename P>
 inline void TwitterNewDBShim<S,P>::pace(tamer::event<> done) {
+    server_.maybe_flush();
     done();
-//    mandatory_assert(false && "Function not supported in this mode.");
+}
+
+template <typename S, typename P>
+inline void TwitterNewDBShim<S,P>::flush(tamer::event<> done) {
+    server_.flush();
+    done();
 }
 
 template <typename S, typename P>
