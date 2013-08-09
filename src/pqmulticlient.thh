@@ -15,8 +15,9 @@ namespace pq {
 // todo: make DB client templated
 class MultiClient {
   public:
-    MultiClient(const Hosts* hosts, const Hosts* dbhosts,
-                const Partitioner* part, int colocateCacheServer);
+    MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer);
+    MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer,
+                const Hosts* dbhosts, const DBPoolParams* dbparams);
     ~MultiClient();
 
     tamed void connect(tamer::event<> done);
@@ -59,11 +60,12 @@ class MultiClient {
     inline DBPool* backend_for(const String &key) const;
 
     const Hosts* hosts_;
-    const Hosts* dbhosts_;
     const Partitioner* part_;
     std::vector<RemoteClient*> clients_;
     RemoteClient* localNode_;
     int colocateCacheServer_;
+    const Hosts* dbhosts_;
+    const DBPoolParams* dbparams_;
     std::vector<DBPool*> dbclients_;
 };
 

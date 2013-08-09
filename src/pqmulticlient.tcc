@@ -3,10 +3,17 @@
 
 namespace pq {
 
-MultiClient::MultiClient(const Hosts* hosts, const Hosts* dbhosts,
-                         const Partitioner* part, int colocateCacheServer)
-    : hosts_(hosts), dbhosts_(dbhosts), part_(part), localNode_(nullptr),
-      colocateCacheServer_(colocateCacheServer) {
+MultiClient::MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer)
+    : hosts_(hosts), part_(part), localNode_(nullptr),
+      colocateCacheServer_(colocateCacheServer),
+      dbhosts_(nullptr), dbparams_(nullptr) {
+}
+
+MultiClient::MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer,
+                         const Hosts* dbhosts, const DBPoolParams* dbparams)
+    : hosts_(hosts), part_(part), localNode_(nullptr),
+      colocateCacheServer_(colocateCacheServer),
+      dbhosts_(dbhosts), dbparams_(dbparams) {
 }
 
 MultiClient::~MultiClient() {
@@ -52,7 +59,10 @@ tamed void MultiClient::connect(tamer::event<> done) {
     if (dbhosts_ && part_) {
         for (i = 0; i < dbhosts_->size(); ++i) {
             h = dbhosts_->get_by_seqid(i);
-            DBPool* pool = new DBPool(h->name(), h->port());
+            DBPoolParams par = (dbparams_) ? *dbparams_ : DBPoolParams();
+            par.host = h->name();
+            par.port = h->port();
+            DBPool* pool = new DBPool(par);
             pool->connect();
             dbclients_.push_back(pool);
         }
