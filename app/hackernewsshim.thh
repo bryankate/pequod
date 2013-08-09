@@ -3,6 +3,7 @@
 #define PQHACKERNEWS_SHIM_HH
 
 #include "check.hh"
+#include "pgclient.hh"
 #include <tamer/tamer.hh>
 
 namespace pq {
@@ -427,8 +428,7 @@ void PQHackerNewsShim<S>::vote(uint32_t voter, uint32_t author, uint32_t aid,
 }
 
 
-#if HAVE_POSTGRESQL_LIBPQ_FE_H
-#include <postgresql/libpq-fe.h>
+#if HAVE_LIBPQ
 template <typename C>
 class SQLHackernewsShim {
   public:
@@ -607,9 +607,8 @@ class SQLHackernewsShim {
     bool mk_;
     bool push_;
 };
-
 #endif
 
-};
+}
 
 #endif
