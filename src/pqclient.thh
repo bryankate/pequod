@@ -33,6 +33,7 @@ class DirectClient {
                          const String& scanlast, tamer::event<size_t> e);
 
     inline void pace(tamer::event<> done);
+    inline void flush(tamer::event<> done);
 
     typedef Table::iterator iterator;
     class scan_result {
@@ -86,6 +87,8 @@ class DirectClient {
 
     template <typename R>
     inline void pace(preevent<R> done);
+    template <typename R>
+    inline void flush(preevent<R> done);
 
     template <typename R>
     inline void scan(const String& first, const String& last,
@@ -162,6 +165,10 @@ inline size_t DirectClient::scan_result::size() const {
 }
 
 inline void DirectClient::pace(event<> done) {
+    done();
+}
+
+inline void DirectClient::flush(event<> done) {
     done();
 }
 
@@ -249,6 +256,11 @@ inline void DirectClient::scan(const String& first, const String& last,
 
 template <typename R>
 inline void DirectClient::pace(preevent<R> done) {
+    done();
+}
+
+template <typename R>
+inline void DirectClient::flush(preevent<R> done) {
     done();
 }
 

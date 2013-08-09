@@ -54,6 +54,7 @@ class MultiClient {
     tamed void control(const Json& cmd, event<Json> e);
 
     tamed void pace(tamer::event<> done);
+    tamed void flush(tamer::event<> done);
 
   private:
     inline RemoteClient* cache_for(const String &key) const;

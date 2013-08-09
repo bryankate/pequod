@@ -220,4 +220,10 @@ tamed void MultiClient::pace(tamer::event<> done) {
     done();
 }
 
+tamed void MultiClient::flush(tamer::event<> done) {
+    for (auto& d : dbclients_)
+        d->flush();
+    done();
+}
+
 }
