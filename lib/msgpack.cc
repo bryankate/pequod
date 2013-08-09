@@ -14,10 +14,6 @@ const uint8_t nbytes[] = {
     /* 0xDC-0xDD farray16-farray32 */ 3, 5,
     /* 0xDE-0xDF fmap16-fmap32 */ 3, 5
 };
-
-template <typename T> T grab(const uint8_t* x) {
-    return net_to_host_order(*reinterpret_cast<const T*>(x));
-}
 }
 
 const uint8_t* streaming_parser::consume(const uint8_t* first,
@@ -113,34 +109,34 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             first += nbytes[type];
             switch (type) {
             case format::ffloat32 - format::fnull:
-                j = Json(grab<float>(first - 4));
+                j = Json(read_in_net_order<float>(first - 4));
                 break;
             case format::ffloat64 - format::fnull:
-                j = Json(grab<double>(first - 8));
+                j = Json(read_in_net_order<double>(first - 8));
                 break;
             case format::fuint8 - format::fnull:
                 j = Json(first[-1]);
                 break;
             case format::fuint16 - format::fnull:
-                j = Json(grab<uint16_t>(first - 2));
+                j = Json(read_in_net_order<uint16_t>(first - 2));
                 break;
             case format::fuint32 - format::fnull:
-                j = Json(grab<uint32_t>(first - 4));
+                j = Json(read_in_net_order<uint32_t>(first - 4));
                 break;
             case format::fuint64 - format::fnull:
-                j = Json(grab<uint64_t>(first - 8));
+                j = Json(read_in_net_order<uint64_t>(first - 8));
                 break;
             case format::fint8 - format::fnull:
                 j = Json(int8_t(first[-1]));
                 break;
             case format::fint16 - format::fnull:
-                j = Json(grab<int16_t>(first - 2));
+                j = Json(read_in_net_order<int16_t>(first - 2));
                 break;
             case format::fint32 - format::fnull:
-                j = Json(grab<int32_t>(first - 4));
+                j = Json(read_in_net_order<int32_t>(first - 4));
                 break;
             case format::fint64 - format::fnull:
-                j = Json(grab<int64_t>(first - 8));
+                j = Json(read_in_net_order<int64_t>(first - 8));
                 break;
             case format::fbin8 - format::fnull:
             case format::fstr8 - format::fnull:
@@ -148,23 +144,23 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 goto raw;
             case format::fbin16 - format::fnull:
             case format::fstr16 - format::fnull:
-                n = grab<uint16_t>(first - 2);
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto raw;
             case format::fbin32 - format::fnull:
             case format::fstr32 - format::fnull:
-                n = grab<uint32_t>(first - 4);
+                n = read_in_net_order<uint32_t>(first - 4);
                 goto raw;
             case format::farray16 - format::fnull:
-                n = grab<uint16_t>(first - 2);
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto array;
             case format::farray32 - format::fnull:
-                n = grab<uint32_t>(first - 4);
+                n = read_in_net_order<uint32_t>(first - 4);
                 goto array;
             case format::fmap16 - format::fnull:
-                n = grab<uint16_t>(first - 2);
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto map;
             case format::fmap32 - format::fnull:
-                n = grab<uint32_t>(first - 4);
+                n = read_in_net_order<uint32_t>(first - 4);
                 goto map;
             }
         }
@@ -217,11 +213,11 @@ parser& parser::parse(Str& x) {
         len = s_[1];
         s_ += 2;
     } else if (*s_ == format::fbin16 || *s_ == format::fstr16) {
-        len = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+        len = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
     } else {
         assert(*s_ == format::fbin32 || *s_ == format::fstr32);
-        len = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+        len = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
     }
     x.assign(reinterpret_cast<const char*>(s_), len);
@@ -260,11 +256,11 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
             *x = format::farray16;
-            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
+            write_in_net_order<uint16_t>(x + 1, (uint16_t) j.size());
             sa.adjust_length(3);
         } else {
             *x = format::farray32;
-            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
+            write_in_net_order<uint32_t>(x + 1, (uint32_t) j.size());
             sa.adjust_length(5);
         }
         for (auto it = j.cabegin(); it != j.caend(); ++it)
@@ -276,11 +272,11 @@ void compact_unparser::unparse(StringAccum& sa, const Json& j) {
             sa.adjust_length(1);
         } else if (j.size() < 65536) {
             *x = format::fmap16;
-            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
+            write_in_net_order<uint16_t>(x + 1, (uint16_t) j.size());
             sa.adjust_length(3);
         } else {
             *x = format::fmap32;
-            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
+            write_in_net_order<uint32_t>(x + 1, (uint32_t) j.size());
             sa.adjust_length(5);
         }
         for (auto it = j.cobegin(); it != j.coend(); ++it) {
