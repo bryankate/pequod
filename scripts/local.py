@@ -254,7 +254,7 @@ for x in exps:
             fartfile = os.path.join(resdir, "fart_init.txt")
             
             if dbcompare:
-                initcmd = initcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+                initcmd = initcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching)
             else:
                 initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
@@ -284,7 +284,7 @@ for x in exps:
             fartfile = os.path.join(resdir, "fart_pop.txt")
             
             if dbcompare:
-                popcmd = popcmd + " -c=%d --dbpool-max=%d" % (dbstartport, ncaching)
+                popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching)
             else:
                 popcmd = popcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             

@@ -433,17 +433,16 @@ int main(int argc, char** argv) {
             tp_param.set("shape", 8);
         pq::TwitterNewPopulator *tp = new pq::TwitterNewPopulator(tp_param);
 
-        if (client_port >= 0 || hosts) {
+        if (tp_param.get("dbshim").as_b(false))
+            run_twitter_new_compare(*tp, db_param);
+        else if (client_port >= 0 || hosts) {
             if (hosts)
                 part = pq::Partitioner::make((tp->binary()) ? "twitternew" : "twitternew-text",
                                              nbacking, hosts->count(), -1);
             if (tp_param.get("writearound").as_b(false))
                 mandatory_assert(dbhosts && part);
 
-            if (tp_param.get("dbshim").as_b(false))
-                run_twitter_new_compare(*tp, db_param);
-            else
-                run_twitter_new_remote(*tp, client_port, hosts, part, dbhosts, &db_param);
+            run_twitter_new_remote(*tp, client_port, hosts, part, dbhosts, &db_param);
         }
         else {
             pq::DirectClient client(server);
