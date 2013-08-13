@@ -17,7 +17,7 @@ TAMER_COMMIT = 8b37569ce2884ce4dccc9b4ca2cd146693a5b685
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
-LIBS = `$(TAMER) -l` @BOOST_LIBS@ @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @PQXX_LIB@
+LIBS = `$(TAMER) -l` @BOOST_LIBS@ @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@ @HIREDIS_LIB@ @PQXX_LIB@
 
 CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib

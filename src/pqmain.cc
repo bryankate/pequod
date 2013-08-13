@@ -22,12 +22,6 @@
 #include <unistd.h>
 #include <set>
 
-#if HAVE_POSTGRESQL_LIBPQ_FE_H
-#include <postgresql/libpq-fe.h>
-#include "pgclient.hh"
-#endif
-
-
 static Clp_Option options[] = {
     // modes (which builtin app to run
     { "twitter", 0, 1000, 0, Clp_Negate },
@@ -41,7 +35,9 @@ static Clp_Option options[] = {
 #if HAVE_LIBMEMCACHED_MEMCACHED_HPP
     { "memcached", 0, 1009, 0, Clp_Negate },
 #endif
+#if HAVE_HIREDIS_HIREDIS_H
     { "redis", 0, 1010, 0, Clp_Negate},
+#endif
 
     // rpc params
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
@@ -485,7 +481,11 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["redis"])
+#if HAVE_HIREDIS_HIREDIS_H
             run_hn_remote_redis(*hp);
+#else
+        mandatory_assert(false);
+#endif
 	else {
 	    if (client_port >= 0 || hosts) {
 	        if (hosts)
@@ -523,8 +523,13 @@ int main(int argc, char** argv) {
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
             rw.safe_run();
-        } else if (tp_param["redis"])
-            pq::run_rwmicro_redisfd(tp_param);
+        }
+        else if (tp_param["redis"])
+#if HAVE_HIREDIS_HIREDIS_H
+            pq::run_rwmicro_redis(tp_param);
+#else
+            mandatory_assert(false);
+#endif
         else if (client_port >= 0)
             pq::run_rwmicro_pqremote(tp_param, client_port);
         else {
