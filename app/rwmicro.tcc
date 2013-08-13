@@ -6,19 +6,14 @@
 
 namespace pq {
 
-typedef pq::TwitterHashShim<pq::RedisfdHashClient> redis_shim_type;
+typedef pq::TwitterHashShim<pq::RedisClient> redis_shim_type;
 
-tamed void run_rwmicro_redisfd(Json& tp_param) {
-    tvars {
-        pq::RedisfdHashClient* client;
-        tamer::fd fd;
-        redis_shim_type* shim;
-        pq::RwMicro<redis_shim_type> *rw;
-    }
-    twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, 6379, make_event(fd)); }
-    client = new pq::RedisfdHashClient(fd);
-    shim = new redis_shim_type(*client);
-    rw = new pq::RwMicro<redis_shim_type>(tp_param, *shim);
+tamed void run_rwmicro_redis(Json& tp_param) {
+    pq::RedisClient* client = new pq::RedisClient();
+    redis_shim_type* shim = new redis_shim_type(*client);
+    pq::RwMicro<redis_shim_type>* rw = new pq::RwMicro<redis_shim_type>(tp_param, *shim);
+
+    client->connect();
     rw->safe_run();
 }
 

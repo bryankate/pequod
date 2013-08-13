@@ -210,7 +210,7 @@ void RwMicro<S>::run(tamer::event<> e) {
     e();
 }
 
-tamed void run_rwmicro_redisfd(Json& tp_param);
+tamed void run_rwmicro_redis(Json& tp_param);
 tamed void run_rwmicro_pqremote(Json& tp_param, int client_port);
 
 };

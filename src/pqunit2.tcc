@@ -1,5 +1,6 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
+#include "redisadapter.hh"
 #include "check.hh"
 #include <fcntl.h>
 
@@ -122,4 +123,48 @@ void test_mpfd2() {
         test_mpfd2_client(p2c[0], c2p[1]);
     else
         test_mpfd2_server(c2p[0], p2c[1]);
+}
+
+tamed void test_redis() {
+#if HAVE_HIREDIS_HIREDIS_H
+    tvars {
+        pq::RedisClient client;
+        String v;
+        int32_t newlen = -1;
+    }
+    client.connect();
+
+    twait { client.set("hello", "world", make_event()); }
+    twait { client.get("hello", make_event(v)); }
+    CHECK_EQ(v, "world");
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "");
+
+    twait { client.append("k2", "abc", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 3);
+
+    twait { client.append("k2", "def", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 6);
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "abcdef");
+
+    twait { client.getrange("k2", 1, -1, make_event(v)); }
+    CHECK_EQ(v, "bcdef");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "1");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "2");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "3");
+#endif
 }
