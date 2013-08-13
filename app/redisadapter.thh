@@ -2,171 +2,127 @@
 #ifndef REDIS_ADAPTER_HH
 #define REDIS_ADAPTER_HH
 
+#if HAVE_HIREDIS_HIREDIS_H
 #include "json.hh"
 #include "str.hh"
 #include "string.hh"
-#include <tamer/tamer.hh>
-#include <tamer/fd.hh>
-#include <sys/uio.h>
+#include "hosts.hh"
+#include "partitioner.hh"
 #include <vector>
-#include <deque>
+#include <tamer/tamer.hh>
+#include "hiredis/hiredis.h"
+#include "hiredis/async.h"
 
 namespace pq {
 
-class RedisReplyParser {
+class RedisClient {
   public:
-    RedisReplyParser();
-    int consume(const char* buf, size_t length);
-    bool complete();
-    void reset();
-    bool has_value();
-    String& value();
-  private:
-    enum { Type, ReadVStr, VStrLF, BVStr, BVStrCR, BVStrLF, Done};
-    char type_;
-    int state_;
-    int bstr_len_;
-    int bstr_pos_;
-    String v_;
-};
+    RedisClient();
+    RedisClient(String host, uint32_t port);
+    ~RedisClient();
 
-class RedisCommand {
-  public:
-    static String make_get(const String& k);
-    static String make_getrange(const String& k, int begin, int end);
-    static String make_set(const String& k, const String& v);
-    static String make_append(const String& k, const String& v);
-    static String make_incr(const String& k);
-};
+    void connect();
+    void clear();
 
-class RedisSyncClient {
-  public:
-    RedisSyncClient();
-    void get(const String& k, String& v);
-    void getrange(const String& k, int begin, int end, String& v);
-    void set(const String& k, const String& v);
-    void append(const String& k, const String& v, int& newlen);
-    void incr(const String& k, int& newv);
-  private:
-    void read_reply(String& v);
-    void read_till_cr(String& v);
-    void readn(void* buf, size_t count);
-    void skipcrlf();
-    void writen(const void* buf, size_t count);
-    int fd_;
-};
-
-class redis_fd {
-  public:
-    inline redis_fd(tamer::fd fd);
-    ~redis_fd();
-
-    inline void call(const Str j, tamer::event<String> reply);
-    inline void pace(tamer::event<> done);
-
-    inline Json status() const;
-
-  private:
-    void read(tamer::event<String> receiver);
-    void write(const Str req);
-
-    tamer::fd fd_;
-
-    enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
-    struct wrelem {
-        StringAccum sa;
-        int pos;
-    };
-    std::deque<wrelem> wrelem_;
-    size_t wrsize_;
-    bool wrblocked_;
-    tamer::event<> wrwake_;
-    tamer::event<> wrkill_;
-
-    enum { rdcap = 1 << 17 };
-    String rdbuf_;
-    size_t rdpos_;
-    size_t rdlen_;
-    bool rdblocked_;
-    pq::RedisReplyParser rdparser_;
-
-    std::deque<tamer::event<String> > rdwait_;
-    tamer::event<> rdwake_;
-    tamer::event<> rdkill_;
-
-    enum { wrpacelim = 1 << 20, rdpacelim = 1 << 10 };
-    enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 9 };
-    tamer::event<> pacer_;
-
-    void check() const;
-    bool read_once(String* receiver);
-    void write_once();
-    inline bool need_pace() const;
-    inline bool pace_recovered() const;
-    tamed void writer_coroutine();
-    tamed void reader_coroutine();
-};
-
-class RedisfdHashClient {
-  public:
-    RedisfdHashClient(tamer::fd fd) : fd_(fd) {}
     void get(Str k, tamer::event<String> e);
-    void get(Str k, int begin, tamer::event<String> e) {
-        getrange(k, begin, -1, e);
-    }
-    void getrange(Str k, int begin, int end, tamer::event<String> e);
-    tamed void set(Str k, Str v, tamer::event<> e);
-    tamed void append(Str k, Str v, tamer::event<> e);
-    void done_get(String) {
-    }
-    tamed void increment(Str k, tamer::event<> e);
-    void pace(tamer::event<> done);
+    void get(Str k, int32_t begin, tamer::event<String> e);
+    void getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e);
+    void set(Str k, Str v, tamer::event<> e);
+    void append(Str k, Str v, tamer::event<> e);
+    void increment(Str k, tamer::event<> e);
+    void length(Str k, tamer::event<int32_t> e);
+
+    // only here for interface compliance
+    void done_get(Str k);
+    void pace(tamer::event<> e);
+
   private:
-    redis_fd fd_;
+    redisAsyncContext* ctx_;
+    String host_;
+    uint32_t port_;
 };
 
+void redis_cb_void(redisAsyncContext* c, void* reply, void* privdata);
+void redis_cb_string(redisAsyncContext* c, void* reply, void* privdata);
+void redis_cb_int32(redisAsyncContext* c, void* reply, void* privdata);
 
-inline redis_fd::redis_fd(tamer::fd fd)
-    : fd_(fd), wrsize_(0), wrblocked_(false),
-      rdbuf_(String::make_uninitialized(rdcap)), rdpos_(0), rdlen_(0),
-      rdblocked_(false) {
-    wrelem_.push_back(wrelem());
-    wrelem_.back().sa.reserve(wrcap);
-    wrelem_.back().pos = 0;
 
-    writer_coroutine();
-    reader_coroutine();
+class RedisMultiClient {
+  public:
+    RedisMultiClient(const Hosts* hosts, const Partitioner* part);
+
+    void connect();
+    void clear();
+
+    inline void get(Str k, tamer::event<String> e);
+    inline void get(Str k, int32_t begin, tamer::event<String> e);
+    inline void getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e);
+    inline void set(Str k, Str v, tamer::event<> e);
+    inline void append(Str k, Str v, tamer::event<> e);
+    inline void increment(Str k, tamer::event<> e);
+    inline void length(Str k, tamer::event<int32_t> e);
+
+  private:
+    const Hosts* hosts_;
+    const Partitioner* part_;
+    std::vector<RedisClient*> clients_;
+
+    inline RedisClient* cache_for(Str k);
+};
+
+inline void RedisMultiClient::get(Str k, tamer::event<String> e) {
+    cache_for(k)->get(k, e);
 }
 
-inline void redis_fd::call(const Str req, tamer::event<String> done) {
-    write(req);
-    read(done);
+inline void RedisMultiClient::get(Str k, int32_t begin, tamer::event<String> e) {
+    cache_for(k)->get(k, begin, e);
 }
 
-inline bool redis_fd::need_pace() const {
-    return wrsize_ > wrpacelim && rdwait_.size() > rdpacelim;
+inline void RedisMultiClient::getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e) {
+    cache_for(k)->getrange(k, begin, end, e);
 }
 
-inline bool redis_fd::pace_recovered() const {
-    return wrsize_ <= wrpacerecover && rdwait_.size() <= rdpacerecover;
+inline void RedisMultiClient::set(Str k, Str v, tamer::event<> e) {
+    cache_for(k)->set(k, v, e);
 }
 
-inline void redis_fd::pace(tamer::event<> done) {
-    if (need_pace())
-        pacer_ = tamer::distribute(pacer_, std::move(done));
-    else
-        done();
+inline void RedisMultiClient::append(Str k, Str v, tamer::event<> e) {
+    cache_for(k)->append(k, v, e);
 }
 
-inline Json redis_fd::status() const {
-    //check();
-    return Json().set("buffered_write_bytes", wrsize_)
-        .set("buffered_read_bytes", rdlen_ - rdpos_)
-        .set("waiting_readers", rdwait_.size());
+inline void RedisMultiClient::increment(Str k, tamer::event<> e) {
+    cache_for(k)->increment(k, e);
 }
 
+inline void RedisMultiClient::length(Str k, tamer::event<int32_t> e) {
+    cache_for(k)->length(k, e);
 }
 
-tamed void test_redis_async();
+inline RedisClient* RedisMultiClient::cache_for(Str key) {
+    int32_t owner = part_->owner(key);
+    assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
+    return clients_[owner];
+}
 
+
+struct RedisAdapterState {
+    RedisAdapterState(redisAsyncContext *c);
+
+    redisAsyncContext *context;
+    volatile bool reading;
+    volatile bool writing;
+    tamer::event<int32_t> read_event;
+    tamer::event<int32_t> write_event;
+};
+
+tamed void redis_tamer_add_read(void* privdata);
+void redis_tamer_del_read(void* privdata);
+tamed void redis_tamer_add_write(void* privdata);
+void redis_tamer_del_write(void* privdata);
+void redis_tamer_cleanup(void* privdata);
+int32_t redis_tamer_attach(redisAsyncContext* ac);
+
+}
+
+#endif
 #endif
