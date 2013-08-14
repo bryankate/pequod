@@ -106,14 +106,12 @@ def check_database_env(expdef):
         dbenvpath = os.path.join(ramfs, dbenvpath)
 
 def start_postgres(expdef, id):
-    global dbpath
-    
     fartfile = os.path.join(resdir, "fart_db_" + str(id) + ".txt")
     dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
     os.makedirs(dbpath)
 
     cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
-          " >> " + fartfile + " 2>> " + fartfile
+          " > " + fartfile + " 2> " + fartfile
     print cmd
     Popen(cmd, shell=True).wait()
 
@@ -146,6 +144,26 @@ def start_postgres(expdef, id):
         
     return proc
 
+def start_redis(expdef, id):
+    fartfile = os.path.join(resdir, "fart_redis_" + str(id) + ".txt")
+    datadir = os.path.join(dbenvpath, "redis_" + str(id))
+    os.makedirs(datadir)
+    
+    conf = "dir " + datadir + "\n" + \
+           "port " + str(startport + id) + "\n" + \
+           "pidfile " + os.path.join(dbenvpath, "redis.pid." + str(id)) + "\n" + \
+           "include " + os.path.join(os.path.dirname(os.path.realpath(__file__)), "exp", "redis.conf")
+           
+    confpath = os.path.join(dbenvpath, "redis_" + str(id) + ".conf")
+    conffile = open(confpath, "w")
+    conffile.write(conf)
+    conffile.close()
+    
+    cmd = "redis-server " + confpath + " > " + fartfile + " 2> " + fartfile
+    
+    print cmd
+    return Popen(cmd, shell=True)
+
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
 exec(exph, globals())
@@ -176,12 +194,13 @@ for x in exps:
              
         (expdir, resdir) = prepare_experiment(x["name"], expname)
         usedb = True if 'def_db_type' in e else False
+        rediscompare = e.get('def_redis_compare')
         dbcompare = e.get('def_db_compare')
         dbmonitor = e.get('def_db_writearound')
         serverprocs = [] 
         dbprocs = []
         
-        if usedb:
+        if usedb or rediscompare:
             dbenvpath = os.path.join(resdir, "store")
             check_database_env(e)
             os.makedirs(dbenvpath)
@@ -195,6 +214,15 @@ for x in exps:
                 exit(-1)
                 
             dbprocs.append(start_postgres(e, 0))
+            
+        elif rediscompare:
+            if ncaching < 1:
+                print "ERROR: -c must be > 0 for redis comparison experiments"
+                exit(-1)
+                
+            for s in range(ncaching):
+                dbprocs.append(start_redis(e, s))
+                
         else:
             if usedb:
                 dbhostpath = os.path.join(resdir, "dbhosts.txt")
@@ -246,7 +274,7 @@ for x in exps:
                 dbfile.close()
                 
         sleep(3)
-
+        exit(-1)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
