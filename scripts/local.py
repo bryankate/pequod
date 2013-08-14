@@ -274,7 +274,6 @@ for x in exps:
                 dbfile.close()
                 
         sleep(3)
-        exit(-1)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
