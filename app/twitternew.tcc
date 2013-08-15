@@ -339,6 +339,7 @@ tamed void run_twitter_new_dbshim(TwitterNewPopulator& tp,
     delete client;
 }
 
+#if HAVE_HIREDIS_HIREDIS_H
 typedef pq::TwitterNewRedisShim<pq::RedisMultiClient, pq::TwitterNewPopulator> redis_shim_type;
 
 tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
@@ -357,5 +358,10 @@ tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
     delete shim;
     delete mc;
 }
+#else
+void run_twitter_new_redis(TwitterNewPopulator&, const Hosts*, const Partitioner*) {
+    mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
 
 } // namespace pq

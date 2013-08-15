@@ -484,11 +484,7 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["redis"])
-#if HAVE_HIREDIS_HIREDIS_H
             run_hn_remote_redis(*hp);
-#else
-        mandatory_assert(false);
-#endif
 	else {
 	    if (client_port >= 0 || hosts) {
 	        if (hosts)
@@ -528,11 +524,7 @@ int main(int argc, char** argv) {
             rw.safe_run();
         }
         else if (tp_param["redis"])
-#if HAVE_HIREDIS_HIREDIS_H
             pq::run_rwmicro_redis(tp_param);
-#else
-            mandatory_assert(false);
-#endif
         else if (client_port >= 0)
             pq::run_rwmicro_pqremote(tp_param, client_port);
         else {

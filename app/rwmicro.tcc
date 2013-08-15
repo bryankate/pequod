@@ -6,6 +6,7 @@
 
 namespace pq {
 
+#if HAVE_HIREDIS_HIREDIS_H
 typedef pq::TwitterHashShim<pq::RedisClient> redis_shim_type;
 
 tamed void run_rwmicro_redis(Json& tp_param) {
@@ -16,6 +17,11 @@ tamed void run_rwmicro_redis(Json& tp_param) {
     client->connect();
     rw->safe_run();
 }
+#else
+void run_rwmicro_redis(Json&) {
+    mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
 
 typedef pq::TwitterShim<pq::RemoteClient> pq_shim_type;
 

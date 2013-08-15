@@ -125,8 +125,8 @@ void test_mpfd2() {
         test_mpfd2_server(c2p[0], p2c[1]);
 }
 
-tamed void test_redis() {
 #if HAVE_HIREDIS_HIREDIS_H
+tamed void test_redis() {
     tvars {
         pq::RedisClient client;
         String v;
@@ -186,5 +186,7 @@ tamed void test_redis() {
     results.clear();
     twait { client.zrangebyscore("ss0", 1, 3, make_event(results)); }
     CHECK_EQ(results.size(), (uint32_t)4);
-#endif
 }
+#else
+void test_redis() { }
+#endif

@@ -24,6 +24,7 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
     delete mc;
 }
 
+#if HAVE_HIREDIS_HIREDIS_H
 typedef pq::HashHackerNewsShim<pq::RedisClient> redis_shim_type;
 
 tamed void run_hn_remote_redis(HackernewsPopulator& hp) {
@@ -40,5 +41,10 @@ tamed void run_hn_remote_redis(HackernewsPopulator& hp) {
     delete shim;
     delete client;
 }
+#else
+void run_hn_remote_redis(HackernewsPopulator&) {
+    mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
 
 }
