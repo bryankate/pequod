@@ -170,7 +170,7 @@ def define_experiments():
                              'attr': "server_wall_time_validate"},
                             {'from': "server",
                              'attr': "server_wall_time_other"}],
-                   'lines': ["pequod-base, pequod-hint, pequod-hint-share"],
+                   'lines': ["pequod-base", "pequod-hint", "pequod-hint-share"],
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
     
