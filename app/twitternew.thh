@@ -777,8 +777,11 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Partitioner* part,
                                   const Hosts* dbhosts, const DBPoolParams* dbparams);
 
-tamed void run_twitter_new_compare(TwitterNewPopulator& tp,
-                                   const DBPoolParams& dbparams);
+tamed void run_twitter_new_dbshim(TwitterNewPopulator& tp,
+                                  const DBPoolParams& dbparams);
+
+tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
+                                 const Hosts* hosts, const Partitioner* part);
 
 } // namespace pq
 #endif

@@ -4,6 +4,7 @@
 #include "pqjoin.hh"
 #include "pqmulticlient.hh"
 #include "pqdbpool.hh"
+#include "redisadapter.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -319,14 +320,14 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
     delete mc;
 }
 
-typedef pq::TwitterNewDBShim<pq::DBPool, pq::TwitterNewPopulator> compare_shim_type;
+typedef pq::TwitterNewDBShim<pq::DBPool, pq::TwitterNewPopulator> dbshim_shim_type;
 
-tamed void run_twitter_new_compare(TwitterNewPopulator& tp,
-                                   const DBPoolParams& dbparams) {
+tamed void run_twitter_new_dbshim(TwitterNewPopulator& tp,
+                                  const DBPoolParams& dbparams) {
     tvars {
         DBPool* client = new DBPool(dbparams);
-        compare_shim_type* shim = new compare_shim_type(*client, tp);
-        TwitterNewRunner<compare_shim_type>* tr = new TwitterNewRunner<compare_shim_type>(*shim, tp);
+        dbshim_shim_type* shim = new dbshim_shim_type(*client, tp);
+        TwitterNewRunner<dbshim_shim_type>* tr = new TwitterNewRunner<dbshim_shim_type>(*shim, tp);
     }
 
     client->connect(); 
@@ -336,6 +337,25 @@ tamed void run_twitter_new_compare(TwitterNewPopulator& tp,
     delete tr;
     delete shim;
     delete client;
+}
+
+typedef pq::TwitterNewRedisShim<pq::RedisMultiClient, pq::TwitterNewPopulator> redis_shim_type;
+
+tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
+                                 const Hosts* hosts, const Partitioner* part) {
+    tvars {
+        RedisMultiClient* mc = new RedisMultiClient(hosts, part);
+        redis_shim_type* shim = new redis_shim_type(*mc, tp);
+        TwitterNewRunner<redis_shim_type>* tr = new TwitterNewRunner<redis_shim_type>(*shim, tp);
+    }
+
+    mc->connect();
+    twait { tr->initialize(make_event()); }
+    twait { tr->populate(make_event()); }
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete mc;
 }
 
 } // namespace pq
