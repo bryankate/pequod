@@ -17,6 +17,8 @@ namespace pq {
 
 class RedisClient {
   public:
+    typedef std::vector<String> result_set;
+
     RedisClient();
     RedisClient(String host, uint32_t port);
     ~RedisClient();
@@ -31,6 +33,8 @@ class RedisClient {
     void append(Str k, Str v, tamer::event<> e);
     void increment(Str k, tamer::event<> e);
     void length(Str k, tamer::event<int32_t> e);
+    void zadd(Str k, Str v, int32_t score, tamer::event<> e);
+    void zrangebyscore(Str k, int32_t begin, int32_t end, tamer::event<result_set> e);
 
     // only here for interface compliance
     void done_get(Str k);
@@ -45,10 +49,13 @@ class RedisClient {
 void redis_cb_void(redisAsyncContext* c, void* reply, void* privdata);
 void redis_cb_string(redisAsyncContext* c, void* reply, void* privdata);
 void redis_cb_int32(redisAsyncContext* c, void* reply, void* privdata);
+void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata);
 
 
 class RedisMultiClient {
   public:
+    typedef RedisClient::result_set result_set;
+
     RedisMultiClient(const Hosts* hosts, const Partitioner* part);
 
     void connect();
@@ -61,6 +68,8 @@ class RedisMultiClient {
     inline void append(Str k, Str v, tamer::event<> e);
     inline void increment(Str k, tamer::event<> e);
     inline void length(Str k, tamer::event<int32_t> e);
+    void zadd(Str k, Str v, int32_t score, tamer::event<> e);
+    void zrangebyscore(Str k, int32_t begin, int32_t end, tamer::event<result_set> e);
 
   private:
     const Hosts* hosts_;
@@ -96,6 +105,15 @@ inline void RedisMultiClient::increment(Str k, tamer::event<> e) {
 
 inline void RedisMultiClient::length(Str k, tamer::event<int32_t> e) {
     cache_for(k)->length(k, e);
+}
+
+inline void RedisMultiClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
+    cache_for(k)->zadd(k, v, score, e);
+}
+
+inline void RedisMultiClient::zrangebyscore(Str k, int32_t begin, int32_t end,
+                                            tamer::event<result_set> e) {
+    cache_for(k)->zrangebyscore(k, begin, end, e);
 }
 
 inline RedisClient* RedisMultiClient::cache_for(Str key) {

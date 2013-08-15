@@ -83,6 +83,23 @@ void RedisClient::length(Str k, tamer::event<int32_t> e) {
     mandatory_assert(err == REDIS_OK);
 }
 
+void RedisClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
+    tamer::event<>* payload = new tamer::event<>(e);
+    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "ZADD %b %s %b",
+                                    k.data(), k.length(),
+                                    String(score).c_str(), // hiredis chokes on %d between %b args...
+                                    v.data(), v.length());
+    mandatory_assert(err == REDIS_OK);
+}
+
+void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
+                                tamer::event<result_set> e) {
+    tamer::event<result_set>* payload = new tamer::event<result_set>(e);
+    int32_t err = redisAsyncCommand(ctx_, redis_cb_set, payload, "ZRANGEBYSCORE %b %d (%d",
+                                    k.data(), k.length(), begin, end);
+    mandatory_assert(err == REDIS_OK);
+}
+
 void RedisClient::done_get(Str) {
 }
 
@@ -116,6 +133,19 @@ void redis_cb_int32(redisAsyncContext* c, void* reply, void* privdata) {
     redis_check_reply(c, reply);
     tamer::event<int32_t>* e = (tamer::event<int32_t>*)privdata;
     e->trigger(((redisReply*)reply)->integer);
+    delete e;
+}
+
+void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata) {
+    redis_check_reply(c, reply);
+    redisReply* r = (redisReply*)reply;
+    tamer::event<RedisClient::result_set>* e = (tamer::event<RedisClient::result_set>*)privdata;
+
+    RedisClient::result_set& result = e->result();
+    for (uint32_t i = 0; i < r->elements; ++i)
+        result.push_back(r->element[i]->str);
+
+    e->unblocker().trigger();
     delete e;
 }
 
