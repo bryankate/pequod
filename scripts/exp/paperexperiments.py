@@ -201,15 +201,16 @@ def define_experiments():
     exps.append(exp)
     
    
-    # database as cache comparison experiment.
+    # cache comparison experiment
     # can be run on a multiprocessor.
     #
     # the number of cache servers pequod uses should be the same as the number of 
-    # clients used to access postgres through the DBPool.
+    # clients used to access postgres through the DBPool and the same as the
+    # number of redis instances.
     # fix %active at 70, post:check ratio at 1:100 and 50 timeline checks per user. 
-    exp = {'name': "dbcompare", 'defs': []}
+    exp = {'name': "compare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-#     users = "--nusers=100000"
+    popBase = "%s %s --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
                  (clientCmd, users)
@@ -220,27 +221,42 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
+         'populatecmd': "%s" % (popBase),
          'clientcmd': "%s" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "pequod-client-push",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'populatecmd': "%s --push" % (popBase),
+         'clientcmd': "%s --push" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "redis",
+         'def_part': partfunc,
+         'def_redis_compare': True,
+         'populatecmd': "%s --push --redis" % (popBase),
+         'clientcmd': "%s --push --redis" % (clientBase)})
     
     exp['defs'].append(
         {'name': "postgres",
          'def_db_type': "postgres",
          'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
-         'def_db_s_import': "scripts/exp/nusers100k-s.dmp",
          'def_db_in_memory': True,
          'def_db_compare': True,
          'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
                          "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
                          "-c shared_buffers=24GB  -c bgwriter_delay=10000" + \
                          "-c checkpoint_segments=600 ",
-#          'populatecmd': "%s %s --dbshim --dbpool-max=10 --dbpool-depth=100 --initialize --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s --dbshim --dbpool-depth=100 --initialize" % (clientBase)})
+         'populatecmd': "%s --initialize --dbshim --dbpool-max=10 --dbpool-depth=100 " % (popBase),
+         'clientcmd': "%s --initialize --dbshim --dbpool-depth=100" % (clientBase)})
     
     exp['plot'] = {'type': "bar",
                    'data': [{'from': "client",
                              'attr': "wall_time"}],
-                   'lines': ["pequod", "postgres"],
+                   'lines': ["pequod", "pequod-client-push", "redis", "postgres"],
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
     
