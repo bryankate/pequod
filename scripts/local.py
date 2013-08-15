@@ -22,7 +22,7 @@ parser.add_option("-e", "--expfile", action="store", type="string", dest="expfil
                   default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
-parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)
+parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=7000)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu", default=1)
