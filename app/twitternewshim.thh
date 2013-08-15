@@ -550,6 +550,7 @@ inline void TwitterNewDBShim<S,P>::control(const Json& cmd, tamer::event<Json> d
 //    mandatory_assert(false && "Function not supported in this mode.");
 }
 
+
 template <typename S, typename P>
 TwitterNewRedisShim<S,P>::TwitterNewRedisShim(S& server, P& tp)
     : server_(server), tp_(tp) {
@@ -581,9 +582,7 @@ inline void TwitterNewRedisShim<S,P>::mark_celebrity(uint32_t, tamer::preevent<R
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewRedisShim<S,P>::post(uint32_t poster, uint32_t time, const String& value,
-                                           bool celeb, tamer::preevent<R> done) {
-    mandatory_assert(!celeb && "Unsupported by Redis shim.");
-
+                                           bool, tamer::preevent<R> done) {
     if (tp_.binary()) {
         memcpy(buf_, "p|XXXX XXXX ", 12);
         memcpy(buf_ + 12, value.data(), value.length());
@@ -602,7 +601,7 @@ inline void TwitterNewRedisShim<S,P>::prepare_push_post(uint32_t poster, uint32_
                                                         const String& value) {
     if (tp_.binary()) {
         memcpy(buf_, "t|XXXX XXXX|XXXX ", 17);
-        memcpy(buf_ + 16, value.data(), value.length());
+        memcpy(buf_ + 17, value.data(), value.length());
         write_in_net_order(buf_ + 7, time);
         write_in_net_order(buf_ + 12, poster);
     }
