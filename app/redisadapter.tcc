@@ -171,6 +171,10 @@ RedisMultiClient::RedisMultiClient(const Hosts* hosts, const Partitioner* part)
     : hosts_(hosts), part_(part) {
 }
 
+RedisMultiClient::~RedisMultiClient() {
+    clear();
+}
+
 void RedisMultiClient::connect() {
     for (auto& h : hosts_->all()) {
         RedisClient* c = new RedisClient(h.name(), h.port());

@@ -59,6 +59,7 @@ class RedisMultiClient {
     typedef RedisClient::result_set result_set;
 
     RedisMultiClient(const Hosts* hosts, const Partitioner* part);
+    ~RedisMultiClient();
 
     void connect();
     void clear();
