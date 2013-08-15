@@ -183,7 +183,8 @@ for x in exps:
 
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
-        
+        (expdir, resdir) = prepare_experiment(x["name"], expname)
+                
         if 'def_build' in e:
             fartfile = os.path.join(resdir, "fart_build.txt")
             fd = open(fartfile, "w")
@@ -192,7 +193,6 @@ for x in exps:
             Popen(e['def_build'], stdout=fd, stderr=fd, shell=True).wait()
             fd.close()
              
-        (expdir, resdir) = prepare_experiment(x["name"], expname)
         usedb = True if 'def_db_type' in e else False
         rediscompare = e.get('def_redis_compare')
         dbcompare = e.get('def_db_compare')
