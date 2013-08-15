@@ -224,7 +224,7 @@ class TwitterNewRunner {
     tamed void prevalidate(TwitterUser* user, event<> e);
     tamed void check(TwitterUser* user, uint32_t time,
                      uint32_t beg_scan, uint32_t end_scan, event<uint32_t> e);
-    tamed void post(uint32_t u, uint32_t time, Str value, event<> e);
+    tamed void post(uint32_t u, uint32_t time, String value, event<> e);
     tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<uint32_t> e);
     tamed void periodic_logger(event<> e);
     tamed void select_active(event<> e);
@@ -330,7 +330,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
 }
 
 tamed template <typename S>
-void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, Str value, event<> e) {
+void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> e) {
     tvars {
         uint32_t s;
         typename S::scan_result sr;
