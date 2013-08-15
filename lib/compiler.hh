@@ -835,43 +835,21 @@ MAKE_ALIASABLE(long);
 MAKE_ALIASABLE(unsigned long);
 MAKE_ALIASABLE(long long);
 MAKE_ALIASABLE(unsigned long long);
-MAKE_ALIASABLE(float);
-MAKE_ALIASABLE(double);
 #undef MAKE_ALIASABLE
 
 template <typename T>
-inline void write_in_host_order(char* s, T x) {
-    *reinterpret_cast<typename make_aliasable<T>::type*>(s) = x;
-}
-
-template <typename T>
-inline void write_in_host_order(uint8_t* s, T x) {
-    write_in_host_order(reinterpret_cast<char*>(s), x);
-}
-
-template <typename T>
-inline T read_in_host_order(const char* s) {
-    return *reinterpret_cast<const typename make_aliasable<T>::type*>(s);
-}
-
-template <typename T>
-inline T read_in_host_order(const uint8_t* s) {
-    return read_in_host_order<T>(reinterpret_cast<const char*>(s));
-}
-
-template <typename T>
 inline void write_in_net_order(char* s, T x) {
-    write_in_host_order<T>(s, host_to_net_order(x));
+    *reinterpret_cast<typename make_aliasable<T>::type*>(s) = host_to_net_order(x);
 }
 
 template <typename T>
 inline void write_in_net_order(uint8_t* s, T x) {
-    write_in_host_order(reinterpret_cast<char*>(s), x);
+    write_in_net_order(reinterpret_cast<char*>(s), x);
 }
 
 template <typename T>
 inline T read_in_net_order(const char* s) {
-    return net_to_host_order(read_in_host_order<T>(s));
+    return net_to_host_order(*reinterpret_cast<const typename make_aliasable<T>::type*>(s));
 }
 
 template <typename T>
