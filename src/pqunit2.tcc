@@ -168,6 +168,14 @@ tamed void test_redis() {
     twait { client.get("k0", make_event(v)); }
     CHECK_EQ(v, "3");
 
+    twait { client.sadd("s0", "b", make_event()); }
+    twait { client.sadd("s0", "c", make_event()); }
+    twait { client.sadd("s0", "a", make_event()); }
+    twait { client.sadd("s0", "d", make_event()); }
+    twait { client.smembers("s0", make_event(results)); }
+    CHECK_EQ(results.size(), (uint32_t)4);
+
+    results.clear();
     twait { client.zadd("ss0", "b", 1, make_event()); }
     twait { client.zadd("ss0", "c", 1, make_event()); }
     twait { client.zadd("ss0", "a", 1, make_event()); }
@@ -178,7 +186,5 @@ tamed void test_redis() {
     results.clear();
     twait { client.zrangebyscore("ss0", 1, 3, make_event(results)); }
     CHECK_EQ(results.size(), (uint32_t)4);
-
-    client.clear();
 #endif
 }

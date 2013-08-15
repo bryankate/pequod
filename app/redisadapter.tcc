@@ -51,44 +51,61 @@ void RedisClient::get(Str k, int32_t begin, tamer::event<String> e) {
 void RedisClient::getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e) {
     tamer::event<String>* payload = new tamer::event<String>(e);
     int32_t err = redisAsyncCommand(ctx_, redis_cb_string, payload, "GETRANGE %b %d %d",
-                                    k.data(), k.length(), begin, end);
+                                    k.data(), (size_t)k.length(), begin, end);
     mandatory_assert(err == REDIS_OK);
 }
 
 void RedisClient::set(Str k, Str v, tamer::event<> e) {
     tamer::event<>* payload = new tamer::event<>(e);
     int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "SET %b %b",
-                                    k.data(), k.length(), v.data(), v.length());
+                                    k.data(), (size_t)k.length(),
+                                    v.data(), (size_t)v.length());
     mandatory_assert(err == REDIS_OK);
 }
 
 void RedisClient::append(Str k, Str v, tamer::event<> e) {
     tamer::event<>* payload = new tamer::event<>(e);
     int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "APPEND %b %b",
-                                    k.data(), k.length(), v.data(), v.length());
+                                    k.data(), (size_t)k.length(),
+                                    v.data(), (size_t)v.length());
     mandatory_assert(err == REDIS_OK);
 }
 
 void RedisClient::increment(Str k, tamer::event<> e) {
     tamer::event<>* payload = new tamer::event<>(e);
     int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "INCR %b",
-                                    k.data(), k.length());
+                                    k.data(), (size_t)k.length());
     mandatory_assert(err == REDIS_OK);
 }
 
 void RedisClient::length(Str k, tamer::event<int32_t> e) {
     tamer::event<int32_t>* payload = new tamer::event<int32_t>(e);
     int32_t err =  redisAsyncCommand(ctx_, redis_cb_int32, payload, "STRLEN %b",
-                                     k.data(), k.length());
+                                     k.data(), (size_t)k.length());
+    mandatory_assert(err == REDIS_OK);
+}
+
+void RedisClient::sadd(Str k, Str v, tamer::event<> e) {
+    tamer::event<>* payload = new tamer::event<>(e);
+    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "SADD %b %b",
+                                    k.data(), (size_t)k.length(),
+                                    v.data(), (size_t)v.length());
+    mandatory_assert(err == REDIS_OK);
+}
+
+void RedisClient::smembers(Str k, tamer::event<result_set> e) {
+    tamer::event<result_set>* payload = new tamer::event<result_set>(e);
+    int32_t err = redisAsyncCommand(ctx_, redis_cb_set, payload, "SMEMBERS %b",
+                                    k.data(), (size_t)k.length());
     mandatory_assert(err == REDIS_OK);
 }
 
 void RedisClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
     tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "ZADD %b %s %b",
-                                    k.data(), k.length(),
-                                    String(score).c_str(), // hiredis chokes on %d between %b args...
-                                    v.data(), v.length());
+    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "ZADD %b %d %b",
+                                    k.data(), (size_t)k.length(),
+                                    score,
+                                    v.data(), (size_t)v.length());
     mandatory_assert(err == REDIS_OK);
 }
 
@@ -96,7 +113,7 @@ void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
                                 tamer::event<result_set> e) {
     tamer::event<result_set>* payload = new tamer::event<result_set>(e);
     int32_t err = redisAsyncCommand(ctx_, redis_cb_set, payload, "ZRANGEBYSCORE %b %d (%d",
-                                    k.data(), k.length(), begin, end);
+                                    k.data(), (size_t)k.length(), begin, end);
     mandatory_assert(err == REDIS_OK);
 }
 
