@@ -6,25 +6,48 @@
 #include <vector>
 namespace msgpack {
 
+namespace format {
+    enum {
+        ffixuint = 0x00, nfixuint = 0x80,
+        ffixmap = 0x80, nfixmap = 0x10,
+        ffixarray = 0x90, nfixarray = 0x10,
+        ffixstr = 0xA0, nfixstr = 0x20,
+        fnull = 0xC0,
+        ffalse = 0xC2, ftrue = 0xC3,
+        fbin8 = 0xC4, fbin16 = 0xC5, fbin32 = 0xC6,
+        fext8 = 0xC7, fext16 = 0xC8, fext32 = 0xC9,
+        ffloat32 = 0xCA, ffloat64 = 0xCB,
+        fuint8 = 0xCC, fuint16 = 0xCD, fuint32 = 0xCE, fuint64 = 0xCF,
+        fint8 = 0xD0, fint16 = 0xD1, fint32 = 0xD2, fint64 = 0xD3,
+        ffixext1 = 0xD4, ffixext2 = 0xD5, ffixext4 = 0xD6,
+        ffixext8 = 0xD7, ffixext16 = 0xD8,
+        fstr8 = 0xD9, fstr16 = 0xDA, fstr32 = 0xDB,
+        farray16 = 0xDC, farray32 = 0xDD,
+        fmap16 = 0xDE, fmap32 = 0xDF,
+        ffixnegint = 0xE0, nfixnegint = 0x20,
+        nfixint = nfixuint + nfixnegint
+    };
+}
+
 class compact_unparser {
   public:
     inline uint8_t* unparse_null(uint8_t* s) {
-	*s++ = 0xC0;
+	*s++ = format::fnull;
 	return s;
     }
     inline uint8_t* unparse(uint8_t* s, uint32_t x) {
         if (x < 128)
             *s++ = x;
         else if (x < 256) {
-            *s++ = 0xCC;
+            *s++ = format::fuint8;
             *s++ = x;
         } else if (x < 65536) {
-            *s++ = 0xCD;
-            *reinterpret_cast<uint16_t*>(s) = host_to_net_order((uint16_t) x);
+            *s++ = format::fuint16;
+            write_in_net_order<uint16_t>(s, (uint16_t) x);
             s += 2;
         } else {
-            *s++ = 0xCE;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order(x);
+            *s++ = format::fuint32;
+            write_in_net_order<uint32_t>(s, x);
             s += 4;
         }
         return s;
@@ -33,7 +56,7 @@ class compact_unparser {
         return unparse(s, x);
     }
     inline uint8_t* unparse_tiny(uint8_t* s, int x) {
-        assert((uint32_t) x + 32 < 160);
+        assert((uint32_t) x + format::nfixnegint < format::nfixint);
         *s++ = x;
         return s;
     }
@@ -41,24 +64,24 @@ class compact_unparser {
         if (x < 4294967296ULL)
             return unparse(s, (uint32_t) x);
         else {
-            *s++ = 0xCF;
-            *reinterpret_cast<uint64_t*>(s) = host_to_net_order(x);
+            *s++ = format::fuint64;
+            write_in_net_order<uint64_t>(s, x);
             return s + 8;
         }
     }
     inline uint8_t* unparse(uint8_t* s, int32_t x) {
-        if ((uint32_t) x + 32 < 160)
+        if ((uint32_t) x + format::nfixnegint < format::nfixint)
             *s++ = x;
         else if ((uint32_t) x + 128 < 256) {
-            *s++ = 0xD0;
+            *s++ = format::fint8;
             *s++ = x;
         } else if ((uint32_t) x + 32768 < 65536) {
-            *s++ = 0xD1;
-            *reinterpret_cast<int16_t*>(s) = host_to_net_order((int16_t) x);
+            *s++ = format::fint16;
+            write_in_net_order<int16_t>(s, (int16_t) x);
             s += 2;
         } else {
-            *s++ = 0xD2;
-            *reinterpret_cast<int32_t*>(s) = host_to_net_order(x);
+            *s++ = format::fint32;
+            write_in_net_order<int32_t>(s, x);
             s += 4;
         }
         return s;
@@ -70,30 +93,33 @@ class compact_unparser {
         if (x + 2147483648ULL < 4294967296ULL)
             return unparse(s, (int32_t) x);
         else {
-            *s++ = 0xD3;
-            *reinterpret_cast<int64_t*>(s) = host_to_net_order(x);
+            *s++ = format::fint64;
+            write_in_net_order<int64_t>(s, x);
             return s + 8;
         }
     }
     inline uint8_t* unparse(uint8_t* s, double x) {
-        *s++ = 0xCB;
-        *reinterpret_cast<double*>(s) = host_to_net_order(x);
+        *s++ = format::ffloat64;
+        write_in_net_order<double>(s, x);
         return s + 8;
     }
     inline uint8_t* unparse(uint8_t* s, bool x) {
-        *s++ = 0xC2 + x;
+        *s++ = format::ffalse + x;
         return s;
     }
     inline uint8_t* unparse(uint8_t* s, const char *data, int len) {
-        if (len < 32)
+        if (len < format::nfixstr)
             *s++ = 0xA0 + len;
-        else if (len < 65536) {
-            *s++ = 0xDA;
-            *reinterpret_cast<uint16_t*>(s) = host_to_net_order((uint16_t) len);
+        else if (len < 256) {
+            *s++ = format::fstr8;
+            *s++ = len;
+        } else if (len < 65536) {
+            *s++ = format::fstr16;
+            write_in_net_order<uint16_t>(s, (uint16_t) len);
             s += 2;
         } else {
-            *s++ = 0xDB;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order((uint32_t) len);
+            *s++ = format::fstr32;
+            write_in_net_order<uint32_t>(s, len);
             s += 4;
         }
         memcpy(s, data, len);
@@ -107,15 +133,15 @@ class compact_unparser {
     }
     template <typename T>
     inline uint8_t* unparse(uint8_t* s, const ::std::vector<T>& x) {
-        if (x.size() < 16)
-            *s++ = 0x90 + x.size();
+        if (x.size() < format::nfixarray)
+            *s++ = format::ffixarray + x.size();
         else if (x.size() < 65536) {
-            *s++ = 0xDC;
-            *reinterpret_cast<uint16_t*>(s) = host_to_net_order((uint16_t) x.size());
+            *s++ = format::farray16;
+            write_in_net_order<uint16_t>(s, (uint16_t) x.size());
             s += 2;
         } else {
-            *s++ = 0xDD;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order((uint32_t) x.size());
+            *s++ = format::farray32;
+            write_in_net_order<uint32_t>(s, (uint32_t) x.size());
             s += 4;
         }
         for (typename ::std::vector<T>::const_iterator it = x.begin();
@@ -130,69 +156,69 @@ class compact_unparser {
 class fast_unparser {
   public:
     inline uint8_t* unparse_null(uint8_t* s) {
-	*s++ = 0xC0;
+	*s++ = format::fnull;
 	return s;
     }
     inline uint8_t* unparse(uint8_t* s, uint32_t x) {
-        *s++ = 0xCE;
-        *reinterpret_cast<uint32_t*>(s) = host_to_net_order(x);
+        *s++ = format::fuint8;
+        write_in_net_order<uint32_t>(s, x);
         return s + 4;
     }
     inline uint8_t* unparse_small(uint8_t* s, uint32_t x) {
         if (x < 128)
             *s++ = x;
         else {
-            *s++ = 0xCE;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order(x);
+            *s++ = format::fuint8;
+            write_in_net_order<uint32_t>(s, x);
             s += 4;
         }
         return s;
     }
     inline uint8_t* unparse_tiny(uint8_t* s, int x) {
-        assert((uint32_t) x + 32 < 160);
+        assert((uint32_t) x + format::nfixnegint < format::nfixint);
         *s++ = x;
         return s;
     }
     inline uint8_t* unparse(uint8_t* s, uint64_t x) {
-        *s++ = 0xCF;
-        *reinterpret_cast<uint64_t*>(s) = host_to_net_order(x);
+        *s++ = format::fuint64;
+        write_in_net_order<uint64_t>(s, x);
         return s + 8;
     }
     inline uint8_t* unparse(uint8_t* s, int32_t x) {
-        *s++ = 0xD2;
-        *reinterpret_cast<int32_t*>(s) = host_to_net_order(x);
+        *s++ = format::fint32;
+        write_in_net_order<int32_t>(s, x);
         return s + 4;
     }
     inline uint8_t* unparse_small(uint8_t* s, int32_t x) {
-        if ((uint32_t) x + 32 < 160)
+        if ((uint32_t) x + format::nfixnegint < format::nfixint)
             *s++ = x;
         else {
-            *s++ = 0xD2;
-            *reinterpret_cast<int32_t*>(s) = host_to_net_order(x);
+            *s++ = format::fint32;
+            write_in_net_order<int32_t>(s, x);
             s += 4;
         }
         return s;
     }
     inline uint8_t* unparse(uint8_t* s, int64_t x) {
-        *s++ = 0xD3;
-        *reinterpret_cast<int64_t*>(s) = host_to_net_order(x);
+        *s++ = format::fint64;
+        write_in_net_order<int64_t>(s, x);
         return s + 8;
     }
     inline uint8_t* unparse(uint8_t* s, double x) {
-        *s++ = 0xCB;
-        *reinterpret_cast<double*>(s) = host_to_net_order(x);
+        *s++ = format::ffloat64;
+        write_in_net_order<double>(s, x);
         return s + 8;
     }
     inline uint8_t* unparse(uint8_t* s, bool x) {
-        *s++ = 0xC2 + x;
+        *s++ = format::ffalse + x;
         return s;
     }
     inline uint8_t* unparse(uint8_t* s, const char *data, int len) {
-        if (len < 32)
+        if (len < format::nfixstr)
             *s++ = 0xA0 + len;
         else {
-            *s++ = 0xDB;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order((uint32_t) len);
+            *s++ = format::fstr32;
+            write_in_net_order<uint32_t>(s, (uint32_t) len);
             s += 4;
         }
         memcpy(s, data, len);
@@ -206,11 +232,11 @@ class fast_unparser {
     }
     template <typename T>
     inline uint8_t* unparse(uint8_t* s, const ::std::vector<T>& x) {
-        if (x.size() < 16)
-            *s++ = 0x90 + x.size();
+        if (x.size() < format::nfixarray)
+            *s++ = format::ffixarray + x.size();
         else {
-            *s++ = 0xDD;
-            *reinterpret_cast<uint32_t*>(s) = host_to_net_order((uint32_t) x.size());
+            *s++ = format::farray32;
+            write_in_net_order<uint32_t>(s, (uint32_t) x.size());
             s += 4;
         }
         for (typename ::std::vector<T>::const_iterator it = x.begin();
@@ -229,8 +255,8 @@ class streaming_parser {
     inline bool done() const;
     inline bool error() const;
 
-    inline size_t consume(const char* first, size_t length, const String& str);
     inline size_t consume(const char* first, size_t length);
+    inline size_t consume(const char* first, size_t length, const String& str);
     inline const uint8_t* consume(const uint8_t* first, const uint8_t* last);
     inline const char* consume(const char* first, const char* last);
     const uint8_t* consume(const uint8_t* first, const uint8_t* last,
@@ -266,14 +292,14 @@ class parser {
         return reinterpret_cast<const char*>(s_);
     }
     inline bool try_parse_null() {
-	if (*s_ == 0xC0) {
+	if (*s_ == format::fnull) {
 	    ++s_;
 	    return true;
 	} else
 	    return false;
     }
     inline int parse_tiny_int() {
-        assert((uint32_t) (int8_t) *s_ + 32 < 160);
+        assert((uint32_t) (int8_t) *s_ + format::nfixnegint < format::nfixint);
         return (int8_t) *s_++;
     }
     inline parser& parse_tiny_int(int& x) {
@@ -282,11 +308,11 @@ class parser {
     }
     template <typename T>
     inline parser& parse_int(T& x) {
-        if ((uint32_t) (int8_t) *s_ + 32 < 160) {
+        if ((uint32_t) (int8_t) *s_ + format::nfixnegint < format::nfixint) {
             x = (int8_t) *s_;
             ++s_;
         } else {
-            assert((uint32_t) *s_ - 0xCC < 8);
+            assert((uint32_t) *s_ - format::fuint8 < 8);
             hard_parse_int(x);
         }
         return *this;
@@ -310,14 +336,14 @@ class parser {
         return parse_int(x);
     }
     inline parser& parse(bool& x) {
-        assert((uint32_t) *s_ - 0xC2 < 2);
-        x = *s_ != 0xC2;
+        assert((uint32_t) *s_ - format::ffalse < 2);
+        x = *s_ - format::ffalse;
         ++s_;
         return *this;
     }
     inline parser& parse(double& x) {
-        assert(*s_ == 0xCB);
-        x = net_to_host_order(*reinterpret_cast<const double*>(s_ + 1));
+        assert(*s_ == format::ffloat64);
+        x = read_in_net_order<double>(s_ + 1);
         s_ += 9;
         return *this;
     }
@@ -333,36 +359,36 @@ class parser {
 template <typename T>
 void parser::hard_parse_int(T& x) {
     switch (*s_) {
-    case 0xCC:
+    case format::fuint8:
         x = s_[1];
         s_ += 2;
         break;
-    case 0xCD:
-        x = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+    case format::fuint16:
+        x = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
         break;
-    case 0xCE:
-        x = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+    case format::fuint32:
+        x = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
         break;
-    case 0xCF:
-        x = net_to_host_order(*reinterpret_cast<const uint64_t*>(s_ + 1));
+    case format::fuint64:
+        x = read_in_net_order<uint64_t>(s_ + 1);
         s_ += 9;
         break;
-    case 0xD0:
+    case format::fint8:
         x = (int8_t) s_[1];
         s_ += 2;
         break;
-    case 0xD1:
-        x = net_to_host_order(*reinterpret_cast<const int16_t*>(s_ + 1));
+    case format::fint16:
+        x = read_in_net_order<int16_t>(s_ + 1);
         s_ += 3;
         break;
-    case 0xD2:
-        x = net_to_host_order(*reinterpret_cast<const int32_t*>(s_ + 1));
+    case format::fint32:
+        x = read_in_net_order<int32_t>(s_ + 1);
         s_ += 5;
         break;
-    case 0xD3:
-        x = net_to_host_order(*reinterpret_cast<const int64_t*>(s_ + 1));
+    case format::fint64:
+        x = read_in_net_order<int64_t>(s_ + 1);
         s_ += 9;
         break;
     }
@@ -377,15 +403,15 @@ inline String compact_unparser::unparse(const Json& j) {
 template <typename T>
 parser& parser::parse(::std::vector<T>& x) {
     uint32_t sz;
-    if ((uint32_t) *s_ - 0x90 < 16) {
-        sz = *s_ - 0x90;
+    if ((uint32_t) *s_ - format::ffixarray < format::nfixarray) {
+        sz = *s_ - format::ffixarray;
         ++s_;
-    } else if (*s_ == 0xDC) {
-        sz = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+    } else if (*s_ == format::farray16) {
+        sz = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
     } else {
-        assert(*s_ == 0xDD);
-        sz = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+        assert(*s_ == format::farray32);
+        sz = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
     }
     for (; sz != 0; --sz) {
@@ -447,5 +473,5 @@ inline const Json& streaming_parser::result() const {
     return json_;
 }
 
-}
+} // namespace msgpack
 #endif

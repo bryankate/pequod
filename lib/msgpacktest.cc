@@ -79,7 +79,8 @@ int main(int argc, char** argv) {
         std::cerr << "\n";
         msgpack::streaming_parser a;
         Json j = Json::make_array(0, 0, 0);
-        a.reset(j);
+        swap(j, a.result());
+        a.reset();
         a.consume("\x91\xC2", 2);
         assert(a.done() && a.result().unparse() == "[false]");
         a.reset();
