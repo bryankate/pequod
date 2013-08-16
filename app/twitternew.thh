@@ -731,7 +731,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     gettimeofday(&tv[1], 0);
 
     twait { server_.stats(make_event(stats)); }
-    twait { server_.control(Json().set("get_log", true), make_event(logs)); }
+    twait { server_.control(Json().set("print_validation_log", true)
+                                  .set("get_log", true), make_event(logs)); }
 
     if (!stats.is_array()) {
         old_stats = Json::make_array(old_stats);
