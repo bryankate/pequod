@@ -86,7 +86,7 @@ class TwitterNewDBShim {
                           tamer::event<scan_result> e);
     inline void pace(tamer::event<> done);
     inline void flush(tamer::event<> done);
-    inline void stats(tamer::event<Json> e);
+    tamed void stats(tamer::event<Json> e);
     inline void control(const Json& cmd, tamer::event<Json> e);
 
   private:
@@ -398,10 +398,7 @@ TwitterNewDBShim<S,P>::TwitterNewDBShim(S& server, P& tp)
 
 tamed template <typename S, typename P>
 void TwitterNewDBShim<S,P>::initialize(tamer::event<> done) {
-    tvars { Json j; }
-
-    twait {
-        server_.add_prepared(std::vector<String>({
+    tvars { std::vector<String> statements({
         "SET session CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED",
         "PREPARE subscribe(int,int) AS "
             "INSERT INTO s SELECT $1,$2 WHERE NOT EXISTS (SELECT 1 FROM s WHERE usr = $1 AND poster = $2)",
@@ -418,7 +415,10 @@ void TwitterNewDBShim<S,P>::initialize(tamer::event<> done) {
              "FROM t "
              "WHERE t.usr = $1 "
                "AND t.time >= $2 "
-               "AND t.time < $3" }), make_event());
+               "AND t.time < $3" }); }
+
+    twait {
+        server_.add_prepared(statements, make_event());
     }
     done();
 }
@@ -537,10 +537,30 @@ inline void TwitterNewDBShim<S,P>::flush(tamer::event<> done) {
     done();
 }
 
-template <typename S, typename P>
-inline void TwitterNewDBShim<S,P>::stats(tamer::event<Json> done) {
-    done(Json());
-//    mandatory_assert(false && "Function not supported in this mode.");
+tamed template <typename S, typename P>
+void TwitterNewDBShim<S,P>::stats(tamer::event<Json> done) {
+    tvars { Json j, rj; }
+    twait {
+        server_.execute("SELECT s.*, p.*, t.* "
+                        "FROM "
+                            "(SELECT count(*) FROM p) p, "
+                            "(SELECT count(*) FROM s) s, "
+                            "(SELECT count(*) FROM t) t",
+                        make_event(j));
+    }
+
+    uint32_t s_keys = 0;
+    uint32_t p_keys = 0;
+    uint32_t t_keys = 0;
+    for (auto it = j.abegin(); it < j.aend(); ++it ) {
+        s_keys = (*it)[0].to_i();
+        p_keys = (*it)[1].to_i();
+        t_keys = (*it)[2].to_i();
+    }
+    rj.set("tables", Json::make_array().push_back(Json().set("name", "p").set("store_size", p_keys))
+                                       .push_back(Json().set("name", "s").set("store_size", s_keys))
+                                       .push_back(Json().set("name", "t").set("store_size", t_keys)));
+    done(rj);
 }
 
 template <typename S, typename P>

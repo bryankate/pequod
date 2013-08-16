@@ -584,7 +584,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (!tp_.groupid())
         twait { server_.control(Json().set("clear_log", true), make_event(j)); }
 
-    twait { server_.stats(make_event(old_stats)); }
+    server_.stats(gr.make_event(old_stats));
+    twait { drain(gr, make_event()); }
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
@@ -730,7 +731,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
 
-    twait { server_.stats(make_event(stats)); }
+    server_.stats(gr.make_event(stats));
+    twait { drain(gr, make_event()); }
     twait { server_.control(Json().set("print_validation_log", true)
                                   .set("get_log", true), make_event(logs)); }
 

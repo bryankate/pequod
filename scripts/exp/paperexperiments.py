@@ -248,7 +248,7 @@ def define_experiments():
          'def_db_compare': True,
          'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
                          "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-                         "-c shared_buffers=24GB  -c bgwriter_delay=10000" + \
+                         "-c shared_buffers=24GB  -c bgwriter_delay=10000 " + \
                          "-c checkpoint_segments=600 ",
          'populatecmd': "%s --initialize --dbshim --dbpool-max=10 --dbpool-depth=100 " % (popBase),
          'clientcmd': "%s --initialize --dbshim --dbpool-depth=100" % (clientBase)})
