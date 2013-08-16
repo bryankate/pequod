@@ -209,7 +209,7 @@ def define_experiments():
     # fix %active at 70, post:check ratio at 1:100 and 50 timeline checks per user. 
     exp = {'name': "dbcompare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-#     users = "--nusers=100000"
+    users = "--nusers=100000"
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
                  (clientCmd, users)
@@ -227,14 +227,13 @@ def define_experiments():
         {'name': "postgres",
          'def_db_type': "postgres",
          'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
-         'def_db_s_import': "scripts/exp/nusers100k-s.dmp",
          'def_db_in_memory': True,
          'def_db_compare': True,
          'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
                          "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-                         "-c shared_buffers=24GB  -c bgwriter_delay=10000" + \
+                         "-c shared_buffers=24GB  -c bgwriter_delay=10000 " + \
                          "-c checkpoint_segments=600 ",
-#          'populatecmd': "%s %s --dbshim --dbpool-max=10 --dbpool-depth=100 --initialize --popduration=0" % (populateCmd, users),
+         'populatecmd': "%s %s --dbshim --dbpool-max=10 --dbpool-depth=100 --initialize --popduration=0" % (populateCmd, users),
          'clientcmd': "%s --dbshim --dbpool-depth=100 --initialize" % (clientBase)})
     
     exp['plot'] = {'type': "bar",
