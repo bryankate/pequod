@@ -29,6 +29,7 @@ parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngro
 parser.add_option("-t", "--terminate", action="store_true", dest="terminate", default=False)
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
+parser.add_option("-R", "--keepalive", action="store_true", dest="keepalive", default=False)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
 (options, args) = parser.parse_args()
@@ -43,6 +44,7 @@ terminate = options.terminate
 preponly = options.preponly
 justkill = options.kill
 ondemand = options.ondemand
+keepalive = options.keepalive
 user = options.user
 startport = 9000
 
@@ -64,13 +66,16 @@ if (justkill):
 running = []
 newmachines = []
 
-def prepare_instances(num, cluster, type, tag):
+def prepare_instances(num, cluster, type, roletag):
     global running, newmachines
     
     machines = int(math.ceil(num / float(cluster)))
-    running_ = ec2.get_running_instances(type, tag)
+    running_ = ec2.get_running_instances(type, roletag)
     pending_ = []
     
+    if len(running_) < machines:
+        running_ += ec2.get_running_instances(type, ['role', 'none'])
+        
     if len(running_) < machines:
         nstarted = len(running_)
         
@@ -123,7 +128,7 @@ def prepare_instances(num, cluster, type, tag):
         
         for p in pending_:
             if ec2.is_running(p):
-                p.add_tag(tag[0], tag[1])
+                p.add_tag(roletag[0], roletag[1])
             else:
                 again.append(p)
         
@@ -131,11 +136,14 @@ def prepare_instances(num, cluster, type, tag):
         sleep(5)
         
     hosts_ = []
-    running_ = ec2.get_running_instances(type, tag)
+    running_ = ec2.get_running_instances(type, roletag) + \
+               ec2.get_running_instances(type, ['role', 'none'])
+    running_ = running_[0:machines]
     running += running_
     
     for r in running_:
         r.update(True)
+        r.add_tag(roletag[0], roletag[1])
         hosts_.append({'id': r.id,
                        'dns': r.public_dns_name, 
                        'ip': r.private_ip_address})
@@ -332,9 +340,10 @@ for x in exps:
         
 # cleanup
 for r in running:
-    r.remove_tag('role')
+    r.add_tag('role', 'none')
 
-if terminate:
-    ec2.terminate_machines(running)
-else:
-    ec2.shutdown_machines(running)
+if not keepalive:
+    if terminate:
+        ec2.terminate_machines(running)
+    else:
+        ec2.shutdown_machines(running)
