@@ -24,21 +24,27 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
     delete mc;
 }
 
-typedef pq::HashHackerNewsShim<pq::RedisfdHashClient> redis_shim_type;
+#if HAVE_HIREDIS_HIREDIS_H
+typedef pq::HashHackerNewsShim<pq::RedisClient> redis_shim_type;
 
 tamed void run_hn_remote_redis(HackernewsPopulator& hp) {
     tvars {
-        tamer::fd fd;
-        pq::RedisfdHashClient* client;
-        redis_shim_type* shim;
-        pq::HackernewsRunner<redis_shim_type>* hr;
+        pq::RedisClient* client = new pq::RedisClient();
+        redis_shim_type* shim = new redis_shim_type(*client);
+        pq::HackernewsRunner<redis_shim_type>* hr = new pq::HackernewsRunner<redis_shim_type>(*shim, hp);
     }
-    twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, 6379, make_event(fd)); }
-    client = new pq::RedisfdHashClient(fd);
-    shim = new redis_shim_type(*client);
-    hr = new pq::HackernewsRunner<redis_shim_type>(*shim, hp);
+
+    client->connect();
     twait { hr->populate(make_event()); }
     twait { hr->run(make_event()); }
+    delete hr;
+    delete shim;
+    delete client;
 }
+#else
+void run_hn_remote_redis(HackernewsPopulator&) {
+    mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
 
 }

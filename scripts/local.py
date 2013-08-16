@@ -22,7 +22,7 @@ parser.add_option("-e", "--expfile", action="store", type="string", dest="expfil
                   default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
-parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=9000)
+parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=7000)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu", default=1)
@@ -106,14 +106,12 @@ def check_database_env(expdef):
         dbenvpath = os.path.join(ramfs, dbenvpath)
 
 def start_postgres(expdef, id):
-    global dbpath
-    
     fartfile = os.path.join(resdir, "fart_db_" + str(id) + ".txt")
     dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
     os.makedirs(dbpath)
 
     cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
-          " >> " + fartfile + " 2>> " + fartfile
+          " > " + fartfile + " 2> " + fartfile
     print cmd
     Popen(cmd, shell=True).wait()
 
@@ -146,6 +144,26 @@ def start_postgres(expdef, id):
         
     return proc
 
+def start_redis(expdef, id):
+    fartfile = os.path.join(resdir, "fart_redis_" + str(id) + ".txt")
+    datadir = os.path.join(dbenvpath, "redis_" + str(id))
+    os.makedirs(datadir)
+    
+    conf = "dir " + datadir + "\n" + \
+           "port " + str(startport + id) + "\n" + \
+           "pidfile " + os.path.join(dbenvpath, "redis.pid." + str(id)) + "\n" + \
+           "include " + os.path.join(os.path.dirname(os.path.realpath(__file__)), "exp", "redis.conf")
+           
+    confpath = os.path.join(dbenvpath, "redis_" + str(id) + ".conf")
+    conffile = open(confpath, "w")
+    conffile.write(conf)
+    conffile.close()
+    
+    cmd = "redis-server " + confpath + " > " + fartfile + " 2> " + fartfile
+    
+    print cmd
+    return Popen(cmd, shell=True)
+
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
 exec(exph, globals())
@@ -165,7 +183,8 @@ for x in exps:
 
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
-        
+        (expdir, resdir) = prepare_experiment(x["name"], expname)
+                
         if 'def_build' in e:
             fartfile = os.path.join(resdir, "fart_build.txt")
             fd = open(fartfile, "w")
@@ -174,14 +193,14 @@ for x in exps:
             Popen(e['def_build'], stdout=fd, stderr=fd, shell=True).wait()
             fd.close()
              
-        (expdir, resdir) = prepare_experiment(x["name"], expname)
         usedb = True if 'def_db_type' in e else False
+        rediscompare = e.get('def_redis_compare')
         dbcompare = e.get('def_db_compare')
         dbmonitor = e.get('def_db_writearound')
         serverprocs = [] 
         dbprocs = []
         
-        if usedb:
+        if usedb or rediscompare:
             dbenvpath = os.path.join(resdir, "store")
             check_database_env(e)
             os.makedirs(dbenvpath)
@@ -195,6 +214,15 @@ for x in exps:
                 exit(-1)
                 
             dbprocs.append(start_postgres(e, 0))
+            
+        elif rediscompare:
+            if ncaching < 1:
+                print "ERROR: -c must be > 0 for redis comparison experiments"
+                exit(-1)
+                
+            for s in range(ncaching):
+                dbprocs.append(start_redis(e, s))
+                
         else:
             if usedb:
                 dbhostpath = os.path.join(resdir, "dbhosts.txt")
@@ -246,7 +274,6 @@ for x in exps:
                 dbfile.close()
                 
         sleep(3)
-
 
         if 'initcmd' in e:
             print "Initializing cache servers."

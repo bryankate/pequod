@@ -4,6 +4,7 @@
 
 #include "json.hh"
 #include "string.hh"
+#include "pqremoteclient.hh"
 #include <tamer/tamer.hh>
 
 namespace pq {
@@ -62,78 +63,10 @@ class TwitterNewShim {
 template <typename S, typename P>
 class TwitterNewDBShim {
   public:
+    typedef RemoteClient::iterator iterator;
+    typedef RemoteClient::scan_result scan_result;
+
     TwitterNewDBShim(S& server, P& tp);
-    class iterator;
-    class scanpair {
-      public:
-        scanpair() = default;
-        scanpair(const Json* it)
-            : it_(it) {
-        }
-        const String& key() const {
-            return it_[0].as_s();
-        }
-        const String& value() const {
-            return it_[1].as_s();
-        }
-      private:
-        const Json* it_;
-        friend class iterator;
-    };
-    class iterator : public std::iterator<std::random_access_iterator_tag, scanpair> {
-      public:
-        iterator() = default;
-        explicit iterator(const Json* it)
-            : it_(it) {
-        }
-
-        void operator++() {
-            it_.it_ += 2;
-        }
-        void operator--() {
-            it_.it_ -= 2;
-        }
-        size_t operator-(iterator x) const {
-            return (it_.it_ - x.it_.it_) / 2;
-        }
-
-        bool operator==(iterator x) const {
-            return it_.it_ == x.it_.it_;
-        }
-        bool operator!=(iterator x) const {
-            return it_.it_ != x.it_.it_;
-        }
-
-        scanpair operator*() const {
-            return it_;
-        }
-        const scanpair* operator->() const {
-            return &it_;
-        }
-      private:
-        scanpair it_;
-    };
-    class scan_result {
-      public:
-        scan_result() = default;
-        inline scan_result(Json&& x)
-            : result_(std::move(x)) {
-        }
-        inline iterator begin() const {
-            return iterator(result_.array_data());
-        }
-        inline iterator end() const {
-            return iterator(result_.array_data() + result_.size());
-        }
-        inline void flush() {
-            result_.clear();
-        }
-        inline size_t size() const {
-            return result_.size() / 2;
-        }
-      private:
-        mutable Json result_;
-    };
 
     tamed void initialize(tamer::event<> e);
 
@@ -161,6 +94,52 @@ class TwitterNewDBShim {
     P& tp_;
     char buf_[256];
     String value_;
+};
+
+
+template <typename S, typename P>
+class TwitterNewRedisShim {
+  public:
+    typedef RemoteClient::iterator iterator;
+    typedef RemoteClient::scan_result scan_result;
+
+    TwitterNewRedisShim(S& server, P& tp);
+
+    template <typename R>
+    inline void initialize(tamer::preevent<R> e);
+    template <typename R>
+    inline void subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> e);
+    template <typename R>
+    inline void mark_celebrity(uint32_t poster, tamer::preevent<R> done);
+    template <typename R>
+    inline void post(uint32_t poster, uint32_t time, const String& value, bool celeb, tamer::preevent<R> e);
+    inline void prepare_push_post(uint32_t poster, uint32_t time, const String& value);
+    template <typename R>
+    inline void push_post(uint32_t subscriber, tamer::preevent<R> e);
+    tamed void timeline_scan(uint32_t subscriber,
+                             uint32_t start_time, uint32_t end_time,
+                             event<scan_result> e);
+    tamed void timeline_add_count(uint32_t subscriber,
+                                  uint32_t start_time, uint32_t end_time,
+                                  event<size_t> e);
+    tamed void follower_scan(uint32_t poster, event<scan_result> e);
+    tamed void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan,
+                         event<scan_result> e);
+    template <typename R>
+    inline void pace(tamer::preevent<R> done);
+    template <typename R>
+    inline void flush(tamer::preevent<R> done);
+    template <typename R>
+    inline void stats(tamer::preevent<R, Json> e);
+    template <typename R>
+    inline void control(const Json& cmd, tamer::preevent<R, Json> e);
+
+  private:
+    S& server_;
+    P& tp_;
+    char buf_[256];
+    String value_;
+    uint32_t time_;
 };
 
 
@@ -592,6 +571,209 @@ inline void TwitterNewDBShim<S,P>::control(const Json& cmd, tamer::event<Json> d
 }
 
 
+template <typename S, typename P>
+TwitterNewRedisShim<S,P>::TwitterNewRedisShim(S& server, P& tp)
+    : server_(server), tp_(tp) {
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::initialize(tamer::preevent<R> done) {
+    done();
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
+    if (tp_.binary()) {
+        memcpy(buf_, "s|XXXX XXXX", 11);
+        write_in_net_order(buf_ + 2, subscriber);
+        write_in_net_order(buf_ + 7, poster);
+        server_.sadd(Str(buf_, 6), Str(buf_ + 7, 4), done);
+    }
+    else {
+        sprintf(buf_, "s|%08u %08u", subscriber, poster);
+        server_.sadd(Str(buf_, 10), Str(buf_ + 11, 8), done);
+    }
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::mark_celebrity(uint32_t, tamer::preevent<R>) {
+    mandatory_assert(false && "Unsupported by Redis shim.");
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::post(uint32_t poster, uint32_t time, const String& value,
+                                           bool, tamer::preevent<R> done) {
+    if (tp_.binary()) {
+        memcpy(buf_, "p|XXXX XXXX ", 12);
+        memcpy(buf_ + 12, value.data(), value.length());
+        write_in_net_order(buf_ + 2, poster);
+        write_in_net_order(buf_ + 7, time);
+        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 5 + value.length()), time, done);
+    }
+    else {
+        sprintf(buf_, "p|%08u %010u %s", poster, time, value.c_str());
+        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 11 + value.length()), time, done);
+    }
+}
+
+template <typename S, typename P>
+inline void TwitterNewRedisShim<S,P>::prepare_push_post(uint32_t poster, uint32_t time,
+                                                        const String& value) {
+    if (tp_.binary()) {
+        memcpy(buf_, "t|XXXX XXXX|XXXX ", 17);
+        memcpy(buf_ + 17, value.data(), value.length());
+        write_in_net_order(buf_ + 7, time);
+        write_in_net_order(buf_ + 12, poster);
+    }
+    else
+        sprintf(buf_, "t|%08u %010u|%08u %s", 0, time, poster, value.c_str());
+
+    value_ = value;
+    time_ = time;
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
+    if (tp_.binary()) {
+        write_in_net_order(buf_ + 2, subscriber);
+        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 10 + value_.length()), time_, done);
+    }
+    else {
+        sprintf(buf_ + 2, "%08u", subscriber);
+        buf_[10] = ' '; // replace terminating null
+        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 20 + value_.length()), time_, done);
+    }
+}
+
+tamed template <typename S, typename P>
+void TwitterNewRedisShim<S,P>::timeline_scan(uint32_t subscriber,
+                                             uint32_t start_time, uint32_t end_time,
+                                             event<scan_result> done) {
+    tvars {
+        typename S::result_set results;
+        std::vector<String> ret;
+        char buf[256];
+        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
+        uint32_t postersz = (this->tp_.binary()) ? 9 : 19;
+    }
+
+    if (tp_.binary()) {
+        memcpy(buf, "t|XXXX|", 7);
+        write_in_net_order(buf_ + 2, subscriber);
+    }
+    else
+        sprintf(buf, "t|%08u|", subscriber);
+
+    twait { server_.zrangebyscore(Str(buf, prefixsz), start_time, end_time, make_event(results)); }
+
+    for (auto& t : results) {
+        memcpy(buf + prefixsz + 1, t.data(), postersz);
+        ret.push_back(buf);
+        ret.push_back(Str(t.data() + postersz + 1, t.length() - postersz - 1));
+    }
+
+    done(scan_result(Json(ret)));
+}
+
+tamed template <typename S, typename P>
+void TwitterNewRedisShim<S,P>::timeline_add_count(uint32_t subscriber,
+                                                  uint32_t start_time, uint32_t end_time,
+                                                  event<size_t> done) {
+    tvars {
+        typename S::result_set results;
+        char buf[256];
+        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
+    }
+
+    if (tp_.binary()) {
+        memcpy(buf, "t|XXXX|", 7);
+        write_in_net_order(buf_ + 2, subscriber);
+    }
+    else
+        sprintf(buf, "t|%08u|", subscriber);
+
+    twait { server_.zrangebyscore(Str(buf, prefixsz), start_time, end_time, make_event(results)); }
+
+    done(done.result() + results.size());
+}
+
+tamed template <typename S, typename P>
+void TwitterNewRedisShim<S,P>::follower_scan(uint32_t poster,
+                                             event<scan_result> done) {
+    tvars {
+        typename S::result_set results;
+        std::vector<String> ret;
+        char buf[256];
+        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
+    }
+
+    if (tp_.binary()) {
+        memcpy(buf, "s|XXXX|", 7);
+        write_in_net_order(buf + 2, poster);
+    }
+    else
+        sprintf(buf, "s|%08u|", poster);
+
+    twait { server_.smembers(Str(buf, prefixsz), make_event(results)); }
+
+    for (auto& s : results) {
+        memcpy(buf + prefixsz + 1, s.data(), s.length());
+        ret.push_back(buf);
+        ret.push_back("1");
+    }
+
+    done(scan_result(Json(ret)));
+}
+
+tamed template <typename S, typename P>
+void TwitterNewRedisShim<S,P>::post_scan(uint32_t poster,
+                                         uint32_t start_time, uint32_t end_time,
+                                         event<scan_result> done) {
+    tvars {
+        typename S::result_set results;
+        std::vector<String> ret;
+        char buf[256];
+        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
+        uint32_t timesz = (this->tp_.binary()) ? 4 : 10;
+    }
+
+    if (tp_.binary()) {
+        memcpy(buf, "p|XXXX|", 7);
+        write_in_net_order(buf + 2, poster);
+    }
+    else
+        sprintf(buf, "p|%08u|", poster);
+
+    twait { server_.zrangebyscore(Str(buf, prefixsz), start_time, end_time, make_event(results)); }
+
+    for (auto& t : results) {
+        memcpy(buf + prefixsz + 1, t.data(), timesz);
+        ret.push_back(buf);
+        ret.push_back(Str(t.data() + timesz + 1, t.length() - timesz - 1));
+    }
+
+    done(scan_result(Json(ret)));
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::pace(tamer::preevent<R> done) {
+    done();
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::flush(tamer::preevent<R> done) {
+    done();
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::stats(tamer::preevent<R, Json> done) {
+    done(Json());
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewRedisShim<S,P>::control(const Json&, tamer::preevent<R, Json> done) {
+    done(Json());
+}
 
 }
 

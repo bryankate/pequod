@@ -1233,42 +1233,9 @@ void test_postgres() {
 #endif
 }
 
-void test_redis() {
-    pq::RedisSyncClient client;
-    client.set("hello", "world");
-    String v;
-    client.get("hello", v);
-    CHECK_EQ(v, "world");
-
-
-    client.get("k2", v);
-    CHECK_EQ(v, "");
-    int newlen = -1;
-    client.append("k2", "abc", newlen);
-    CHECK_EQ(newlen, 3);
-
-    client.append("k2", "def", newlen);
-    CHECK_EQ(newlen, 6);
-
-    client.get("k2", v);
-    CHECK_EQ(v, "abcdef");
-
-    client.getrange("k2", 1, -1, v);
-    CHECK_EQ(v, "bcdef");
-
-    int newv;
-    client.incr("k0", newv);
-    CHECK_EQ(newv, 1);
-
-    client.incr("k0", newv);
-    CHECK_EQ(newv, 2);
-
-    client.incr("k0", newv);
-    CHECK_EQ(newv, 3);
-}
-
 } // namespace
 
+extern void test_redis();
 extern void test_mpfd();
 extern void test_mpfd2();
 
@@ -1301,7 +1268,6 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_berkeleydb);
     ADD_EXP_TEST(test_postgres);
     ADD_EXP_TEST(test_redis);
-    ADD_EXP_TEST(test_redis_async);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);

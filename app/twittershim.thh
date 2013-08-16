@@ -14,7 +14,7 @@ namespace pq {
 template <typename S>
 class TwitterShim {
   public:
-    TwitterShim(S& server, bool writearound);
+    TwitterShim(S& server);
 
     tamed inline void get_follower(uint32_t poster, tamer::event<std::vector<uint32_t> > e);
     template <typename R>
@@ -51,7 +51,6 @@ class TwitterShim {
 
   private:
     S& server_;
-    bool writearound_;
     char buf_[key_capacity];
     String value_;
     std::vector<bool> celeb_;
@@ -102,8 +101,8 @@ class TwitterHashShim {
 
 
 template <typename S>
-TwitterShim<S>::TwitterShim(S& server, bool writearound)
-    : server_(server), writearound_(writearound) {
+TwitterShim<S>::TwitterShim(S& server)
+    : server_(server) {
 }
 
 tamed template <typename S>
@@ -123,10 +122,7 @@ inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::vect
 template <typename S> template <typename R>
 inline void TwitterShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "f|%05u|%05u", poster, subscriber);
-    if (writearound_)
-        server_.insert_db(Str(buf_, 13), Str("1", 1), done);
-    else
-        server_.insert(Str(buf_, 13), Str("1", 1), done);
+    server_.insert(Str(buf_, 13), Str("1", 1), done);
 }
 
 tamed template <typename S>
@@ -217,30 +213,21 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
 template <typename S> template <typename R>
 inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "s|%05u|%05u", subscriber, poster);
-    if (writearound_)
-        server_.insert_db(Str(buf_, 13), Str("1", 1), done);
-    else
-        server_.insert(Str(buf_, 13), Str("1", 1), done);
+    server_.insert(Str(buf_, 13), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
     celeb_[poster] = true;
     sprintf(buf_, "c|%05u", poster);
-    if (writearound_)
-        server_.insert_db(Str(buf_, 7), Str("1", 1), done);
-    else
-        server_.insert(Str(buf_, 7), Str("1", 1), done);
+    server_.insert(Str(buf_, 7), Str("1", 1), done);
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
     bool nonceleb = celeb_.empty() || !celeb_[poster];
     sprintf(buf_, "cp|%05u|%010u", poster, time);
-    if (writearound_)
-        server_.insert_db(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
-    else
-        server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
+    server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
 }
 
 template <typename S>

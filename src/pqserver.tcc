@@ -894,39 +894,35 @@ Json Server::stats() const {
 }
 
 Json Server::logs() const {
-    Json logs;
-
-    if (enable_validation_logging) {
-        Json l;
-        for (auto& v : validate_log_)
-            l.push_back(Json().set("time", v.time())
-                              .set("clear", v.is_clear())
-                              .set("compute", v.is_set(ValidateRecord::compute))
-                              .set("update", v.is_set(ValidateRecord::update))
-                              .set("restart", v.is_set(ValidateRecord::restart))
-                              .set("fetch_remote", v.is_set(ValidateRecord::fetch_remote))
-                              .set("fetch_persisted", v.is_set(ValidateRecord::fetch_persisted)));
-        logs.set("validation", l);
-    }
-
-    return logs;
+    return Json();
 }
 
 void Server::control(const Json& cmd) {
     if (cmd["quit"])
         exit(0);
-    else if (cmd["clear_log"])
+    if (cmd["clear_log"])
         validate_log_.clear();
-    else if (cmd["print"])
+    if (enable_validation_logging && cmd["print_validation_log"]) {
+        std::cerr << "VALIDATION LOG:" << std::endl << validate_log_.size() << std::endl;
+        for (auto& v : validate_log_)
+            std::cerr << v.time() << " "
+                      << v.is_clear() << " "
+                      << v.is_set(ValidateRecord::compute) << " "
+                      << v.is_set(ValidateRecord::update) << " "
+                      << v.is_set(ValidateRecord::restart) << " "
+                      << v.is_set(ValidateRecord::fetch_remote) << " "
+                      << v.is_set(ValidateRecord::fetch_persisted) << " " << std::endl;
+    }
+    if (cmd["print"])
         print(std::cerr);
-    else if (cmd["print_table_keys"]) {
+    if (cmd["print_table_keys"]) {
         String tname = table_name(cmd["print_table_keys"].as_s());
         assert(tname);
         Table& t = table(tname);
         for (auto it = t.begin(); it != t.end(); ++it)
             std::cerr << it->key() << std::endl;
     }
-    else if (cmd["flush_db_queue"]) {
+    if (cmd["flush_db_queue"]) {
         if (persistent_store_)
             persistent_store_->flush();
     }

@@ -6,21 +6,22 @@
 
 namespace pq {
 
-typedef pq::TwitterHashShim<pq::RedisfdHashClient> redis_shim_type;
+#if HAVE_HIREDIS_HIREDIS_H
+typedef pq::TwitterHashShim<pq::RedisClient> redis_shim_type;
 
-tamed void run_rwmicro_redisfd(Json& tp_param) {
-    tvars {
-        pq::RedisfdHashClient* client;
-        tamer::fd fd;
-        redis_shim_type* shim;
-        pq::RwMicro<redis_shim_type> *rw;
-    }
-    twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, 6379, make_event(fd)); }
-    client = new pq::RedisfdHashClient(fd);
-    shim = new redis_shim_type(*client);
-    rw = new pq::RwMicro<redis_shim_type>(tp_param, *shim);
+tamed void run_rwmicro_redis(Json& tp_param) {
+    pq::RedisClient* client = new pq::RedisClient();
+    redis_shim_type* shim = new redis_shim_type(*client);
+    pq::RwMicro<redis_shim_type>* rw = new pq::RwMicro<redis_shim_type>(tp_param, *shim);
+
+    client->connect();
     rw->safe_run();
 }
+#else
+void run_rwmicro_redis(Json&) {
+    mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
 
 typedef pq::TwitterShim<pq::RemoteClient> pq_shim_type;
 
@@ -33,7 +34,7 @@ tamed void run_rwmicro_pqremote(Json& tp_param, int client_port) {
     }
     twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, client_port, make_event(fd)); }
     rc = new RemoteClient(fd);
-    shim = new pq_shim_type(*rc, tp_param["writearound"].as_b(false));
+    shim = new pq_shim_type(*rc);
     rw = new pq::RwMicro<pq_shim_type>(tp_param, *shim);
     rw->safe_run();
 }

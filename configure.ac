@@ -37,6 +37,9 @@ if test "$ac_cv_have_memcached" = yes; then
 fi
 AC_SUBST([MEMCACHED_LIB])
 
+AC_CHECK_HEADERS([hiredis/hiredis.h], [HIREDIS_LIB="-lhiredis"], [HIREDIS_LIB=])
+AC_SUBST([HIREDIS_LIB])
+
 POSTGRES_LIBS=
 AC_CHECK_HEADERS([postgresql/libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])
 AC_CHECK_HEADERS([libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have libpq.])])

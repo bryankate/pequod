@@ -1,5 +1,6 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
+#include "redisadapter.hh"
 #include "check.hh"
 #include <fcntl.h>
 
@@ -123,3 +124,69 @@ void test_mpfd2() {
     else
         test_mpfd2_server(c2p[0], p2c[1]);
 }
+
+#if HAVE_HIREDIS_HIREDIS_H
+tamed void test_redis() {
+    tvars {
+        pq::RedisClient client;
+        String v;
+        int32_t newlen = -1;
+        std::vector<String> results;
+    }
+    client.connect();
+
+    twait { client.set("hello", "world", make_event()); }
+    twait { client.get("hello", make_event(v)); }
+    CHECK_EQ(v, "world");
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "");
+
+    twait { client.append("k2", "abc", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 3);
+
+    twait { client.append("k2", "def", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 6);
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "abcdef");
+
+    twait { client.getrange("k2", 1, -1, make_event(v)); }
+    CHECK_EQ(v, "bcdef");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "1");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "2");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "3");
+
+    twait { client.sadd("s0", "b", make_event()); }
+    twait { client.sadd("s0", "c", make_event()); }
+    twait { client.sadd("s0", "a", make_event()); }
+    twait { client.sadd("s0", "d", make_event()); }
+    twait { client.smembers("s0", make_event(results)); }
+    CHECK_EQ(results.size(), (uint32_t)4);
+
+    results.clear();
+    twait { client.zadd("ss0", "b", 1, make_event()); }
+    twait { client.zadd("ss0", "c", 1, make_event()); }
+    twait { client.zadd("ss0", "a", 1, make_event()); }
+    twait { client.zadd("ss0", "d", 2, make_event()); }
+    twait { client.zrangebyscore("ss0", 1, 2, make_event(results)); }
+    CHECK_EQ(results.size(), (uint32_t)3);
+
+    results.clear();
+    twait { client.zrangebyscore("ss0", 1, 3, make_event(results)); }
+    CHECK_EQ(results.size(), (uint32_t)4);
+}
+#else
+void test_redis() { }
+#endif

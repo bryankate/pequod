@@ -49,10 +49,14 @@ def define_experiments():
                            'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
                                            "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
                                            "-c bgwriter_delay=10000 -c checkpoint_segments=600",
-                           'backendcmd': "%s" % (serverCmd),
-                           'cachecmd': "%s" % (serverCmd),
                            'populatecmd': "%s --dbpool-max=5 --dbpool-depth=100" % (postgresPopulateCmd),
                            'clientcmd': "%s --dbpool-depth=100" % (postgresClientCmd)}]})
+    
+    exps.append({'name': "redis", 
+                 'defs': [{'def_part': partfunc,
+                           'def_redis_compare': True,
+                           'populatecmd': "%s %s --push --redis" % (populateCmd, users),
+                           'clientcmd': "%s --push --redis" % (clientBase)}]})
     
     exps.append({'name': "eviction", 
                  'defs': [{'def_part': partfunc,
