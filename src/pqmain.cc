@@ -472,15 +472,7 @@ int main(int argc, char** argv) {
             mandatory_assert(false);
 #endif
         } else if (tp_param["pg"]) {
-#if HAVE_LIBPQ
-            pq::PostgresClient client;
-            pq::SQLHackernewsShim<pq::PostgresClient> shim(client);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
-            hr.populate(tamer::event<>());
-            hr.run(tamer::event<>());
-#else
-            mandatory_assert(false);
-#endif
+            run_hn_remote_db(*hp, db_param);
         } else if (tp_param["redis"])
             run_hn_remote_redis(*hp);
 	else {

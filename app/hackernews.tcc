@@ -1,6 +1,7 @@
 #include "hackernews.hh"
 #include "pqmulticlient.hh"
 #include "redisadapter.hh"
+#include "pqdbpool.hh"
 
 namespace pq {
 
@@ -23,6 +24,25 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
     delete shim;
     delete mc;
 }
+
+
+typedef pq::SQLHackerNewsShim<pq::DBPool> db_shim_type;
+
+tamed void run_hn_remote_db(HackernewsPopulator& hp, const DBPoolParams& dbparams) {
+    tvars {
+        pq::DBPool* client = new pq::DBPool(dbparams);
+        db_shim_type* shim = new db_shim_type(*client);
+        pq::HackernewsRunner<db_shim_type>* hr = new pq::HackernewsRunner<db_shim_type>(*shim, hp);
+    }
+
+    client->connect();
+    twait { hr->populate(make_event()); }
+    twait { hr->run(make_event()); }
+    delete hr;
+    delete shim;
+    delete client;
+}
+
 
 #if HAVE_HIREDIS_HIREDIS_H
 typedef pq::HashHackerNewsShim<pq::RedisClient> redis_shim_type;

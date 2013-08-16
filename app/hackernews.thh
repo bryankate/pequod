@@ -21,6 +21,7 @@
 namespace pq {
 using tamer::event;
 using tamer::preevent;
+using tamer::gather_rendezvous;
 class Hosts;
 class Partitioner;
 
@@ -38,6 +39,7 @@ class HackernewsRunner {
     tamed void read_article(uint32_t aid, event<> e);
 
     tamed void periodic_logger(event<> e);
+    tamed void drain(gather_rendezvous& r, event<> e);
 
     S& server_;
     HackernewsPopulator& hp_;
@@ -100,6 +102,20 @@ void HackernewsRunner<S>::periodic_logger(event<> e) {
 }
 
 tamed template <typename S>
+void HackernewsRunner<S>::drain(gather_rendezvous& r, event<> e) {
+    // we are waiting for the "top level" events gathered in the
+    // rendezvous r to be triggered. however, some shim layers may buffer
+    // I/O, causing the program to hang if not flushed. it is possible
+    // for some lower level events that are triggered by the flushing
+    // to generate more I/O, hence the need for the loop.
+    while(r.has_waiting()) {
+        twait { server_.flush(make_event()); }
+        twait { tamer::at_delay_msec(10, make_event()); }
+    }
+    e();
+}
+
+tamed template <typename S>
 void HackernewsRunner<S>::populate(event<> e) {
     tvars {
         boost::mt19937 gen;
@@ -142,7 +158,7 @@ void HackernewsRunner<S>::populate(event<> e) {
                 }
                 twait { server_.pace(make_event()); }
             }
-            twait(gr);
+            twait { drain(gr, make_event()); }
         }
     }
 
@@ -179,7 +195,9 @@ void HackernewsRunner<S>::run(event<> e) {
 
     log_.clear();
     twait { server_.control(Json().set("clear_log", true), make_event(j)); }
-    twait { server_.stats(make_event(old_stats)); }
+    server_.stats(gr.make_event(old_stats));
+    twait { drain(gr, make_event()); }
+
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], NULL);
 
@@ -208,10 +226,13 @@ void HackernewsRunner<S>::run(event<> e) {
             twait { server_.pace(make_event()); }
         }
     }
-    twait(gr);
+    twait { drain(gr, make_event()); }
+
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], NULL);
-    twait { server_.stats(make_event(stats)); }
+
+    server_.stats(gr.make_event(stats));
+    twait { drain(gr, make_event()); }
     twait { server_.control(Json().set("get_log", true), make_event(logs)); }
 
     if (!stats.is_array()) {
@@ -250,6 +271,10 @@ void HackernewsRunner<S>::run(event<> e) {
 tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
                          const Hosts* hosts, const Hosts* dbhosts,
                          const Partitioner* part);
+
+class DBPoolParams;
+tamed void run_hn_remote_db(HackernewsPopulator& hp, const DBPoolParams& dbparams);
+
 tamed void run_hn_remote_redis(HackernewsPopulator& hp);
 
 };
