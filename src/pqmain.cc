@@ -414,12 +414,10 @@ int main(int argc, char** argv) {
         } else if (client_port >= 0 || hosts) {
             if (hosts)
                 part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
-            if (tp_param.get("writearound").as_b(false))
-                mandatory_assert(dbhosts && part);
             run_twitter_remote(tp, client_port, hosts, dbhosts, part);
         } else {
             pq::DirectClient dc(server);
-            pq::TwitterShim<pq::DirectClient> shim(dc, tp.writearound());
+            pq::TwitterShim<pq::DirectClient> shim(dc);
             pq::TwitterRunner<decltype(shim)> tr(shim, tp);
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
@@ -529,7 +527,7 @@ int main(int argc, char** argv) {
             pq::run_rwmicro_pqremote(tp_param, client_port);
         else {
             pq::DirectClient client(server);
-            pq::TwitterShim<pq::DirectClient> shim(client, tp_param["writearound"].as_b(false));
+            pq::TwitterShim<pq::DirectClient> shim(client);
             pq::RwMicro<decltype(shim)> rw(tp_param, shim);
             rw.safe_run();
         }

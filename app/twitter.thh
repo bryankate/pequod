@@ -32,7 +32,6 @@ class TwitterPopulator {
     inline uint32_t psubscribe() const;
     inline bool push() const;
     inline bool pull() const;
-    inline bool writearound() const;
     inline bool log() const;
     inline bool fetch() const;
     inline bool synchronous() const;
@@ -53,7 +52,6 @@ class TwitterPopulator {
     uint32_t nusers_;
     bool push_;
     bool pull_;
-    bool writearound_;
     bool log_;
     bool fetch_;
     bool synchronous_;
@@ -120,10 +118,6 @@ inline bool TwitterPopulator::push() const {
 
 inline bool TwitterPopulator::pull() const {
     return pull_;
-}
-
-inline bool TwitterPopulator::writearound() const {
-    return writearound_;
 }
 
 inline bool TwitterPopulator::log() const {
