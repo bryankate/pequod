@@ -28,6 +28,8 @@ parser.add_option("-f", "--part", action="store", type="string", dest="part", de
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
 parser.add_option("-t", "--terminate", action="store_true", dest="terminate", default=False)
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
+parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
+parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
 (options, args) = parser.parse_args()
 
@@ -39,6 +41,8 @@ ccaching = options.ccaching
 ngroups = options.ngroups
 terminate = options.terminate
 preponly = options.preponly
+justkill = options.kill
+ondemand = options.ondemand
 user = options.user
 startport = 9000
 
@@ -46,8 +50,16 @@ topdir = None
 uniquedir = None
 hostpath = None
 
-# startup machines on EC2
+def kill():
+    print "Going nuclear on EC2"
+    ec2.terminate_machines(ec2.get_all_instances())
+    ec2.cancel_spot_requests(ec2.get_all_spot_requests())
+    exit(0)
+
 ec2.connect()
+
+if (justkill):
+    kill()
 
 running = []
 newmachines = []
@@ -70,7 +82,38 @@ def prepare_instances(num, cluster, type, tag):
             nstarted += ntostart
         
         if nstarted < machines:
-            checkedout = ec2.checkout_machines(machines - nstarted, type)
+            if ondemand:
+                checkedout = ec2.checkout_machines(machines - nstarted, type)
+            else:
+                requests = ec2.request_machines(machines - nstarted, type)
+                rids = [r.id for r in requests]
+
+                while(True):
+                    print "Waiting for spot instance fulfillment..."
+                    open = False
+
+                    requests = ec2.update_spot_requests(rids)
+                    if len(requests) != len(rids):
+                        print "Problem updating spot request state!"
+                        kill()
+                    
+                    for r in requests:
+                        if r.state == 'active':
+                            continue
+                        elif r.state == 'open':
+                            if r.status == 'price-too-low':
+                                print "You bid too low!"
+                                kill()
+                            open = True
+                        else:
+                            print "Bad spot request state: (" + r.id + ", " + r.state + ")"
+                            kill()
+                    if not open:
+                        break
+                    sleep(10)
+                    
+                checkedout = ec2.get_instances([r.instance_id for r in requests])
+            
             pending_ += checkedout
             newmachines += checkedout
     
@@ -181,7 +224,7 @@ for p in prepprocs:
 print "Checking that pequod is built on all servers."
 for h in backinghosts + cachehosts + clienthosts:
     if ec2.run_ssh_command(h['dns'], 'cd pequod; ./obj/pqserver foo 2> /dev/null') != 0:
-        print "Instance " + h['id'] + "(" + h['dns'] + ") does not have pqserver!"
+        print "Instance " + h['id'] + " (" + h['dns'] + ") does not have pqserver!"
         exit(-1)
 
 if (preponly):
