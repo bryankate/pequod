@@ -70,13 +70,14 @@ def prepare_instances(num, cluster, type, roletag):
     global running, newmachines
     
     machines = int(math.ceil(num / float(cluster)))
-    running_ = ec2.get_running_instances(type, roletag)
+    running_ = ec2.get_running_instances(type, ['role', roletag])
     pending_ = []
     
     if len(running_) < machines:
         running_ += ec2.get_running_instances(type, ['role', 'none'])
         
     if len(running_) < machines:
+        print "Adding machines for role: " + roletag
         nstarted = len(running_)
         
         stopped_ = ec2.get_stopped_instances(type)
@@ -121,6 +122,8 @@ def prepare_instances(num, cluster, type, roletag):
             
             pending_ += checkedout
             newmachines += checkedout
+    else:
+        print "Using existing machines for role: " + roletag
     
     while (pending_):
         print "Waiting for machines to start..."
@@ -128,7 +131,7 @@ def prepare_instances(num, cluster, type, roletag):
         
         for p in pending_:
             if ec2.is_running(p):
-                p.add_tag(roletag[0], roletag[1])
+                p.add_tag('role', roletag)
             else:
                 again.append(p)
         
@@ -136,14 +139,14 @@ def prepare_instances(num, cluster, type, roletag):
         sleep(5)
         
     hosts_ = []
-    running_ = ec2.get_running_instances(type, roletag) + \
+    running_ = ec2.get_running_instances(type, ['role', roletag]) + \
                ec2.get_running_instances(type, ['role', 'none'])
     running_ = running_[0:machines]
     running += running_
     
     for r in running_:
         r.update(True)
-        r.add_tag(roletag[0], roletag[1])
+        r.add_tag('role', roletag)
         hosts_.append({'id': r.id,
                        'dns': r.public_dns_name, 
                        'ip': r.private_ip_address})
@@ -193,9 +196,9 @@ exph = open(expfile, "r")
 exec(exph, globals())
 exph.close()
 
-backinghosts = prepare_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, ['role', 'backing'])
-cachehosts = prepare_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, ['role', 'cache'])
-clienthosts = prepare_instances(ngroups, 1, ec2.INSTANCE_TYPE_CLIENT, ['role', 'client'])
+backinghosts = prepare_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
+cachehosts = prepare_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, 'cache')
+clienthosts = prepare_instances(ngroups, 1, ec2.INSTANCE_TYPE_CLIENT, 'client')
 serverconns = []
 
 print "Testing SSH connections."
