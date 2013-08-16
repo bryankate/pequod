@@ -133,7 +133,11 @@ tamed void DBPool::execute_pipeline(PGconn* conn,
                 for (int32_t r = 0; r < nrows; ++r) {
                     ret.push_back(Json::make_array_reserve(ncols));
                     for (int32_t c = 0; c < ncols; ++c) {
-                        ret[r][c] = Str(PQgetvalue(result, r, c), PQgetlength(result, r, c));
+                        if (PQgetisnull(result, r, c))
+                            ret[r][c] = Json::null_json;
+                        else
+                            ret[r][c] = Str(PQgetvalue(result, r, c),
+                                            PQgetlength(result, r, c));
                     }
                 }
                 break;
