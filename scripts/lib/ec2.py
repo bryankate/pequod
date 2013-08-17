@@ -5,6 +5,7 @@ import stat
 from time import sleep
 import subprocess
 from subprocess import Popen
+import shlex
 import boto
 from boto.ec2.connection import EC2Connection
 
@@ -162,16 +163,19 @@ def cancel_spot_requests(requests):
             conn.cancel_spot_instance_requests([r.id])
     
 def scp_to(machine, tofile, fromfile):
-    Popen("scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ubuntu@%s:%s" % (SSH_KEY, fromfile, machine, tofile),
-          shell=True).wait()
+    cmd = "scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ubuntu@%s:%s" % \
+          (SSH_KEY, fromfile, machine, tofile)
+    Popen(cmd, shell=True).wait()
 
 def scp_from(machine, fromfile, tofile):
-    Popen("scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ubuntu@%s:%s %s" % (SSH_KEY, machine, fromfile, tofile),
-          shell=True).wait()
+    cmd = "scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ubuntu@%s:%s %s" % \
+          (SSH_KEY, machine, fromfile, tofile)
+    Popen(cmd, shell=True).wait()
 
 def run_ssh_command_bg(machine, cmd):
-    return Popen("ssh -A -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s ubuntu@%s \"%s\"" % (SSH_KEY, machine, cmd),
-                 shell=True)
+    sshcmd = "ssh -A -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s ubuntu@%s \"%s\"" % \
+             (SSH_KEY, machine, cmd)
+    return Popen(shlex.split(sshcmd))
 
 def run_ssh_command(machine, cmd):
     return run_ssh_command_bg(machine, cmd).wait()
