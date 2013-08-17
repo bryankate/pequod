@@ -69,6 +69,9 @@ newmachines = []
 def prepare_instances(num, cluster, type, roletag):
     global running, newmachines
     
+    if num == 0:
+        return []
+    
     machines = int(math.ceil(num / float(cluster)))
     running_ = ec2.get_running_instances(type, ['role', roletag])
     pending_ = []
@@ -163,7 +166,7 @@ def add_server_hosts(hfile, num, cluster, hosts):
     c = 0
     for s in range(num):
         hfile.write(hosts[h]['ip'] + "\t" + str(startport + s) + "\n")
-        serverconns.append([hosts[h]['ip'], startport + s])
+        serverconns.append([hosts[h]['dns'], startport + s])
         c += 1
         if c % cluster == 0:
             h += 1 
@@ -215,26 +218,18 @@ prepcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs + "; " + \
           "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
           "cd pequod; git checkout multi2; autoconf < configure.ac; ./bootstrap.sh; ./configure --with-malloc=jemalloc; make"
 
-prepprocs = []
 for n in newmachines:
     print "Preparing new instance " + n.id + " (" + n.public_dns_name + ")."
     n.update(True)
-    prepprocs.append(ec2.run_ssh_command_bg(n.public_dns_name, prepcmd))
-                     
-for p in prepprocs:
-    p.wait()
+    ec2.run_ssh_command(n.public_dns_name, prepcmd)
 
-prepprocs = []
 for h in backinghosts + cachehosts + clienthosts:
     print "Updating instance " + h['id'] + " (" + h['dns'] + ")."
-    prepprocs.append(ec2.run_ssh_command_bg(h['dns'], "cd pequod; git pull -q; make -s"))
-    
-for p in prepprocs:
-    p.wait()
+    ec2.run_ssh_command(h['dns'], "cd pequod; git pull -q; make -s")
 
 print "Checking that pequod is built on all servers."
 for h in backinghosts + cachehosts + clienthosts:
-    if ec2.run_ssh_command(h['dns'], 'cd pequod; ./obj/pqserver foo 2> /dev/null') != 0:
+    if ec2.run_ssh_command(h['dns'], "cd pequod; ./obj/pqserver foo 2> /dev/null") != 0:
         print "Instance " + h['id'] + " (" + h['dns'] + ") does not have pqserver!"
         exit(-1)
 
@@ -255,11 +250,7 @@ for x in exps:
 
         (expdir, resdir) = prepare_experiment(x["name"], expname)
         remote_resdir = os.path.join("pequod", resdir)
-        
-        part = options.part if options.part else e['def_part']
-        serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-        outfile = os.path.join(resdir, "output_srv_")
-        fartfile = os.path.join(resdir, "fart_srv_")
+        logfd = open(os.path.join(resdir, "cmd_log.txt"), "w")
             
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
@@ -269,17 +260,23 @@ for x in exps:
             ec2.run_ssh_command(h['dns'], "mkdir -p " + remote_resdir)
             ec2.scp_to(h['dns'], os.path.join("pequod", hostpath), hostpath)
 
+        part = options.part if options.part else e['def_part']
+        serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
+        outfile = os.path.join(resdir, "output_srv_")
+        fartfile = os.path.join(resdir, "fart_srv_")
+
         serverprocs = []
         for s in range(nbacking + ncaching):
             servercmd = e['backendcmd'] if s < nbacking else e['cachecmd']
             conn = serverconns[s]
             
             full_cmd = servercmd + serverargs + \
-                " -kl=" + conn[1] + \
+                " -kl=" + str(conn[1]) + \
                 " > " + outfile + str(s) + ".txt" + \
                 " 2> " + fartfile + str(s) + ".txt"
 
             print full_cmd
+            logfd.write(conn[0] + ": " + full_cmd + "\n")
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; " + full_cmd))
 
         sleep(3)
@@ -292,6 +289,7 @@ for x in exps:
             full_cmd = initcmd + " 2> " + fartfile
 
             print full_cmd
+            logfd.write(clienthosts[0]['dns'] + ": " + full_cmd + "\n")
             ec2.run_ssh_command(clienthosts[0]['dns'], "cd pequod; " + full_cmd)
 
         if 'populatecmd' in e:
@@ -303,6 +301,7 @@ for x in exps:
             full_cmd = popcmd + " 2> " + fartfile
 
             print full_cmd
+            logfd.write(clienthosts[0]['dns'] + ": " + full_cmd + "\n")
             ec2.run_ssh_command(clienthosts[0]['dns'], "cd pequod; " + full_cmd)
 
         print "Starting app clients."
@@ -318,6 +317,7 @@ for x in exps:
                 " 2> " + fartfile + str(c) + ".txt"
 
             print full_cmd
+            logfd.write(clienthosts[c]['dns'] + ": " + full_cmd + "\n")
             clientprocs.append(ec2.run_ssh_command_bg(clienthosts[c]['dns'], 
                                                       "cd pequod; " + full_cmd))
             
