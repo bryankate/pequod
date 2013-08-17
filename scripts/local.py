@@ -3,6 +3,7 @@
 import sys
 import os
 from os import system
+import signal
 import subprocess
 from subprocess import Popen
 import shutil
@@ -84,6 +85,44 @@ def prepare_experiment(xname, ename):
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
 
+def kill_proc(p):
+    (proc, outfd, errfd) = p
+    proc.kill()
+    if outfd:
+        outfd.close()
+    if errfd:
+        errfd.close()
+
+def wait_for_proc(p):
+    (proc, outfd, errfd) = p
+    proc.wait()
+    if outfd:
+        outfd.close()
+    if errfd:
+        errfd.close()
+
+def run_cmd_bg(cmd, outfile=None, errfile=None, sh=False):
+    global logfd
+    
+    if outfile:
+        outfd = open(outfile, "a")
+    else:
+        outfd = None
+    if errfile:
+        if errfile == outfile:
+            errfd = outfd
+        else:
+            errfd = open(errfile, "a")
+    else:
+        errfd = None
+    
+    print cmd
+    logfd.write(cmd + "\n")
+    return (Popen(cmd.split(), stdout=outfd, stderr=errfd, shell=sh), outfd, errfd)
+
+def run_cmd(cmd, outfile=None, errfile=None, sh=False):
+    wait_for_proc(run_cmd_bg(cmd, outfile, errfile, sh))
+
 def check_database_env(expdef):
     global dbenvpath
     
@@ -110,37 +149,25 @@ def start_postgres(expdef, id):
     dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
     os.makedirs(dbpath)
 
-    cmd = "initdb " + dbpath + " -E utf8 -A trust" + \
-          " > " + fartfile + " 2> " + fartfile
-    print cmd
-    Popen(cmd, shell=True).wait()
+    cmd = "initdb " + dbpath + " -E utf8 -A trust"
+    run_cmd(cmd, fartfile, fartfile)
 
     dbflags = expdef.get('def_db_flags')
     cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
-          " -D " + dbpath + " " + dbflags + \
-          " >> " + fartfile + " 2>> " + fartfile
-    print cmd
-    proc = Popen(cmd, shell=True)
+          " -D " + dbpath + " " + dbflags
+    proc = run_cmd_bg(cmd, fartfile, fartfile)
     sleep(2)
     
-    cmd = "createdb -h " + dbhost + " -p " + str(dbstartport + id) + " pequod" + \
-          " >> " + fartfile + " 2>> " + fartfile
-    print cmd
-    Popen(cmd, shell=True).wait()
+    cmd = "createdb -h " + dbhost + " -p " + str(dbstartport + id) + " pequod"
+    run_cmd(cmd, fartfile, fartfile)
 
     if 'def_db_sql_script' in expdef:
-        cmd = "psql -p %d pequod < %s >> %s 2>> %s" % \
-              (dbstartport + id, expdef['def_db_sql_script'], fartfile, fartfile)
-        
-        print cmd
-        Popen(cmd, shell=True).wait()
+        cmd = "psql -p %d pequod -f %s" % (dbstartport + id, expdef['def_db_sql_script'])
+        run_cmd(cmd, fartfile, fartfile)
         
     if 'def_db_s_import' in expdef:
-        cmd = "pg_restore -a -p %d -d pequod -Fc %s >> %s 2>> %s" % \
-              (dbstartport + id, expdef['def_db_s_import'], fartfile, fartfile)
-        
-        print cmd
-        Popen(cmd, shell=True).wait()
+        cmd = "pg_restore -a -p %d -d pequod -Fc %s" % (dbstartport + id, expdef['def_db_s_import'])
+        run_cmd(cmd, fartfile, fartfile)
         
     return proc
 
@@ -159,10 +186,13 @@ def start_redis(expdef, id):
     conffile.write(conf)
     conffile.close()
     
-    cmd = "redis-server " + confpath + " > " + fartfile + " 2> " + fartfile
+    if affinity:
+        pin = "numactl -C " + str(startcpu + (id * skipcpu)) + " "
+    else:
+        pin = ""
     
-    print cmd
-    return Popen(cmd, shell=True)
+    cmd = pin + "redis-server " + confpath
+    return run_cmd_bg(cmd, fartfile, fartfile)
 
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
@@ -184,14 +214,11 @@ for x in exps:
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
         (expdir, resdir) = prepare_experiment(x["name"], expname)
-                
+        logfd = open(os.path.join(resdir, "cmd_log.txt"), "w")
+        
         if 'def_build' in e:
             fartfile = os.path.join(resdir, "fart_build.txt")
-            fd = open(fartfile, "w")
-
-            print e['def_build']
-            Popen(e['def_build'], stdout=fd, stderr=fd, shell=True).wait()
-            fd.close()
+            run_cmd(e['def_build'], fartfile, fartfile, sh=True)
              
         usedb = True if 'def_db_type' in e else False
         rediscompare = e.get('def_redis_compare')
@@ -251,8 +278,8 @@ for x in exps:
     
                 part = options.part if options.part else e['def_part']
                 serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-                outfile = os.path.join(resdir, "output_srv_")
-                fartfile = os.path.join(resdir, "fart_srv_")
+                outfile = os.path.join(resdir, "output_srv_" + str(s) + ".txt")
+                fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
       
                 if affinity:
                     pin = "numactl -C " + str(startcpu + (s * skipcpu)) + " "
@@ -262,13 +289,8 @@ for x in exps:
                 else:
                     perf = ""
     
-                full_cmd = pin + perf + servercmd + serverargs + \
-                    " -kl=" + str(startport + s) + \
-                    " > " + outfile + str(s) + ".txt" + \
-                    " 2> " + fartfile + str(s) + ".txt"
-    
-                print full_cmd
-                serverprocs.append(Popen(full_cmd, shell=True))
+                full_cmd = pin + perf + servercmd + serverargs + " -kl=" + str(startport + s)
+                serverprocs.append(run_cmd_bg(full_cmd, outfile, fartfile))
         
             if usedb:
                 dbfile.close()
@@ -288,10 +310,8 @@ for x in exps:
             if affinity:
                 pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
             
-            full_cmd = pin + initcmd + " 2> " + fartfile
-
-            print full_cmd
-            Popen(full_cmd, shell=True).wait()
+            full_cmd = pin + initcmd
+            run_cmd(full_cmd, fartfile, fartfile)
 
         if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Populating backend from database archive."
@@ -300,11 +320,10 @@ for x in exps:
             for s in range(ndbs):
                 archfile = os.path.join(dbarchive, "pequod_" + str(s))
                 cmd = "pg_restore -p " + str(dbport + s) + " -d pequod -a " + archfile
-                print cmd
-                procs.append(Popen(cmd, shell=True))
+                procs.append(run_cmd_bg(cmd))
                 
             for p in procs:
-                p.wait()
+                wait_for_proc(p)
         elif 'populatecmd' in e:
             print "Populating backend."
             popcmd = e['populatecmd']
@@ -321,10 +340,8 @@ for x in exps:
             if affinity:
                 pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
             
-            full_cmd = pin + popcmd + " 2> " + fartfile
-
-            print full_cmd
-            Popen(full_cmd, shell=True).wait()
+            full_cmd = pin + popcmd
+            run_cmd(full_cmd, fartfile, fartfile)
 
         if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Dumping backend database after population."
@@ -334,23 +351,23 @@ for x in exps:
                 archfile = os.path.join(dbarchive, "pequod_" + str(s))
                 system("rm -rf " + archfile + "; mkdir -p " + dbarchive)
                 cmd = "pg_dump -p " + str(dbport + s) + " -f " + archfile + " -a -F d pequod" 
-                print cmd
-                procs.append(Popen(cmd, shell=True))
+                procs.append(run_cmd(cmd))
                 
             for p in procs:
-                p.wait()
+                wait_for_proc(p)
 
 
         print "Starting app clients."
         clientprocs = []
         
         for c in range(ngroups):
-            outfile = os.path.join(resdir, "output_app_")
-            fartfile = os.path.join(resdir, "fart_app_")
+            outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
+            fartfile = os.path.join(resdir, "fart_app_" + str(c) + ".txt")
             clientcmd = e['clientcmd']
             
             if dbcompare:
-                clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching / ngroups)
+                clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % \
+                            (dbstartport, ncaching / ngroups)
             else:
                 clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
@@ -361,27 +378,24 @@ for x in exps:
                 pin = "numactl -C " + str(startcpu + ((nprocesses + c) * skipcpu)) + " "
 
             full_cmd = pin + clientcmd + \
-                " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
-                " > " + outfile + str(c) + ".json" + \
-                " 2> " + fartfile + str(c) + ".txt"
+                       " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
 
-            print full_cmd
-            clientprocs.append(Popen(full_cmd, shell=True));
+            clientprocs.append(run_cmd_bg(full_cmd, outfile, fartfile));
             
         # wait for clients to finish
         for p in clientprocs:
-            p.wait()
+            wait_for_proc(p)
     
         for p in serverprocs + dbprocs:
-            p.kill()
-            p.wait()
-    
+            kill_proc(p)
+        
         if ngroups > 1:
             aggregate_dir(resdir)
     
         if usedb and e.get('def_db_in_memory'):
            shutil.rmtree(dbenvpath)
 
+        logfd.close()
         print "Done experiment. Results are stored at", resdir
     
     if expdir and 'plot' in x:
