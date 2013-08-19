@@ -220,7 +220,7 @@ serverconns = []
 
 print "Testing SSH connections."
 for h in running:
-    while run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
+    while ec2.run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
         print "Waiting for SSH access to " + h.public_dns_name
         sleep(5)
 
