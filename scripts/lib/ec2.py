@@ -161,12 +161,12 @@ def cancel_spot_requests(requests):
             conn.cancel_spot_instance_requests([r.id])
     
 def scp_to(machine, tofile, fromfile):
-    cmd = "scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ubuntu@%s:%s" % \
+    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ubuntu@%s:%s" % \
           (SSH_KEY, fromfile, machine, tofile)
     Popen(cmd, shell=True).wait()
 
 def scp_from(machine, fromfile, tofile):
-    cmd = "scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ubuntu@%s:%s %s" % \
+    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ubuntu@%s:%s %s" % \
           (SSH_KEY, machine, fromfile, tofile)
     Popen(cmd, shell=True).wait()
 
@@ -177,6 +177,3 @@ def run_ssh_command_bg(machine, cmd):
 
 def run_ssh_command(machine, cmd):
     return run_ssh_command_bg(machine, cmd).wait()
-    
-def test_ssh_connection(machine):
-    return run_ssh_command(machine, "echo 2>&1 \"%s is Live\"" % (machine)) == 0

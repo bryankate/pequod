@@ -52,6 +52,11 @@ topdir = None
 uniquedir = None
 hostpath = None
 
+# load experiment definitions as global 'exps'
+exph = open(expfile, "r")
+exec(exph, globals())
+exph.close()
+
 def kill():
     print "Going nuclear on EC2"
     ec2.terminate_machines(ec2.get_all_instances())
@@ -66,7 +71,7 @@ if (justkill):
 running = []
 newmachines = []
 
-def prepare_instances(num, cluster, type, roletag):
+def startup_instances(num, cluster, type, roletag):
     global running, newmachines
     
     if num == 0:
@@ -150,10 +155,8 @@ def prepare_instances(num, cluster, type, roletag):
     for r in running_:
         r.update(True)
         r.add_tag('role', roletag)
-        hosts_.append({'id': r.id,
-                       'dns': r.public_dns_name, 
-                       'ip': r.private_ip_address})
-    return hosts_
+        
+    return running_
 
 def add_server_hosts(hfile, num, cluster, hosts):
     if num == 0:
@@ -165,14 +168,16 @@ def add_server_hosts(hfile, num, cluster, hosts):
     h = 0
     c = 0
     for s in range(num):
-        hfile.write(hosts[h]['ip'] + "\t" + str(startport + s) + "\n")
-        serverconns.append([hosts[h]['dns'], startport + s])
+        hfile.write(hosts[h].private_ip_address + "\t" + str(startport + s) + "\n")
+        serverconns.append([hosts[h].public_dns_name, startport + s])
         c += 1
         if c % cluster == 0:
             h += 1 
 
 def prepare_experiment(xname, ename):
-    global topdir, uniquedir, hostpath
+    global topdir, uniquedir, hostpath, serverconns
+    serverconns = []
+    
     if topdir is None:
         topdir = "results"
 
@@ -194,44 +199,61 @@ def prepare_experiment(xname, ename):
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
 
-# load experiment definitions as global 'exps'
-exph = open(expfile, "r")
-exec(exph, globals())
-exph.close()
+def prepare_instances(instances, test, cmd, log):
+    procs = []
+    
+    for p in instances:
+        p.update(True)
+        if ec2.run_ssh_command(p.public_dns_name, test) != 0:
+            print log + " on instance " + p.id + " (" + p.public_dns_name + ")."
+            procs.append(ec2.run_ssh_command_bg(p.public_dns_name, cmd))
+            
+    for p in procs:
+        p.wait()
 
-backinghosts = prepare_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
-cachehosts = prepare_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, 'cache')
-clienthosts = prepare_instances(ngroups, 1, ec2.INSTANCE_TYPE_CLIENT, 'client')
+
+
+backinghosts = startup_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
+cachehosts = startup_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, 'cache')
+clienthosts = startup_instances(ngroups, 1, ec2.INSTANCE_TYPE_CLIENT, 'client')
 serverconns = []
 
 print "Testing SSH connections."
-for h in backinghosts + cachehosts + clienthosts:
-    while not ec2.test_ssh_connection(h['dns']):
-        print "Waiting for SSH access to " + h['dns']
+for h in running:
+    while run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
+        print "Waiting for SSH access to " + h.public_dns_name
         sleep(5)
 
-debs = ("build-essential autoconf libtool git libev-dev libjemalloc-dev " +
+debs = ("htop build-essential autoconf libtool git libev-dev libjemalloc-dev " +
         "flex bison libboost-dev libboost-thread-dev libboost-system-dev")
 
-prepcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs + "; " + \
-          "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config;" + \
-          "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
-          "cd pequod; git checkout multi2; autoconf < configure.ac; ./bootstrap.sh; ./configure --with-malloc=jemalloc; make"
+installcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs
 
-for n in newmachines:
-    print "Preparing new instance " + n.id + " (" + n.public_dns_name + ")."
-    n.update(True)
-    ec2.run_ssh_command(n.public_dns_name, prepcmd)
+buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
+           "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
+           "cd pequod; git checkout multi2; autoconf < configure.ac; " + \
+           "./bootstrap.sh; ./configure --with-malloc=jemalloc; make"
 
-for h in backinghosts + cachehosts + clienthosts:
-    print "Updating instance " + h['id'] + " (" + h['dns'] + ")."
-    ec2.run_ssh_command(h['dns'], "cd pequod; git pull -q; make -s")
+graph = 'twitter_graph_1.8M.dat'
+graphcmd = "cd pequod; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; tar -zxf " + graph + ".tar.gz"
+
+prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software")
+prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
+prepare_instances(clienthosts, "[ -e pequod/" + graph + " ]", graphcmd, "Fetching Twitter graph")
+
+for h in running:
+    print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
+    ec2.run_ssh_command(h.public_dns_name, "cd pequod; git pull -q; make -s")
 
 print "Checking that pequod is built on all servers."
-for h in backinghosts + cachehosts + clienthosts:
-    if ec2.run_ssh_command(h['dns'], "cd pequod; ./obj/pqserver foo 2> /dev/null") != 0:
-        print "Instance " + h['id'] + " (" + h['dns'] + ") does not have pqserver!"
-        exit(-1)
+pqexists = True
+for h in running:
+    if ec2.run_ssh_command(h.public_dns_name, "[ -x pequod/obj/pqserver ]") != 0:
+        print "Instance " + h.id + " (" + h.public_dns_name + ") does not have pqserver!"
+        pqexists = False
+
+if not pqexists:        
+    exit(-1)
 
 if (preponly):
     exit(0)
@@ -256,9 +278,9 @@ for x in exps:
               " in test '" + x['name'] + "'."
         
         for h in backinghosts + cachehosts + clienthosts:
-            ec2.run_ssh_command(h['dns'], "killall pqserver")
-            ec2.run_ssh_command(h['dns'], "mkdir -p " + remote_resdir)
-            ec2.scp_to(h['dns'], os.path.join("pequod", hostpath), hostpath)
+            ec2.run_ssh_command(h.public_dns_name, "killall pqserver")
+            ec2.run_ssh_command(h.public_dns_name, "mkdir -p " + remote_resdir + "; rm -f last; ln -s " + remote_resdir + " last")
+            ec2.scp_to(h.public_dns_name, os.path.join("pequod", hostpath), hostpath)
 
         part = options.part if options.part else e['def_part']
         serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
@@ -289,8 +311,8 @@ for x in exps:
             full_cmd = initcmd + " 2> " + fartfile
 
             print full_cmd
-            logfd.write(clienthosts[0]['dns'] + ": " + full_cmd + "\n")
-            ec2.run_ssh_command(clienthosts[0]['dns'], "cd pequod; " + full_cmd)
+            logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
+            ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
 
         if 'populatecmd' in e:
             print "Populating backend."
@@ -301,8 +323,8 @@ for x in exps:
             full_cmd = popcmd + " 2> " + fartfile
 
             print full_cmd
-            logfd.write(clienthosts[0]['dns'] + ": " + full_cmd + "\n")
-            ec2.run_ssh_command(clienthosts[0]['dns'], "cd pequod; " + full_cmd)
+            logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
+            ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
 
         print "Starting app clients."
         clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
@@ -317,8 +339,8 @@ for x in exps:
                 " 2> " + fartfile + str(c) + ".txt"
 
             print full_cmd
-            logfd.write(clienthosts[c]['dns'] + ": " + full_cmd + "\n")
-            clientprocs.append(ec2.run_ssh_command_bg(clienthosts[c]['dns'], 
+            logfd.write(clienthosts[c].public_dns_name + ": " + full_cmd + "\n")
+            clientprocs.append(ec2.run_ssh_command_bg(clienthosts[c].public_dns_name, 
                                                       "cd pequod; " + full_cmd))
             
         # wait for clients to finish
@@ -330,8 +352,8 @@ for x in exps:
             p.kill()
         
         # get results
-        for h in backinghosts + cachehosts + clienthosts:
-            ec2.scp_from(h['dns'], remote_resdir, os.path.join(resdir, os.pardir))
+        for h in running:
+            ec2.scp_from(h.public_dns_name, remote_resdir, os.path.join(resdir, os.pardir))
         
         if ngroups > 1:
             aggregate_dir(resdir)
