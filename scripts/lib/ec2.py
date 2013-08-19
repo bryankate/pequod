@@ -10,29 +10,25 @@ import boto
 from boto.ec2.connection import EC2Connection
 
 REGION = 'us-west-2'
-AVAILABILITY_ZONE = 'us-west-2b'
 
 AWS_ACCESS_KEY_ID = 'AKIAJSSPS6LP2VMU4WUA'
 AWS_SECRET_ACCESS_KEY = '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'
 KEY_NAME = "pequod-" + REGION
 SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), KEY_NAME + ".pem")
 
-AMI_IDS = {'us-east-1': 'ami-c30360aa',
-           'us-west-2': 'ami-bf1d8a8f'}
+# note: instance have 10Gb ethernet only if launched in the same placement group
+INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script testing
+                  'cc2.8xlarge': {'bid': 2.50, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
+                  'cr1.8xlarge': {'bid': 3.50, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
+                  'hi1.4xlarge': {'bid': 3.10, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
+                  'hs1.8xlarge': {'bid': 4.60, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
 
-INSTANCE_TYPE_BACKING = 'm1.small'
-INSTANCE_TYPE_CACHE = 'm1.small'
-INSTANCE_TYPE_CLIENT = 'm1.small'
+AMI_IDS = {'us-west-2': {'basic': 'ami-bf1d8a8f', 'hvm': 'ami-a11d8a91'}}
 
-SPOT_BIDS = {'m1.small':    0.06,
-             'm1.xlarge':   0.50,
-             'm3.2xlarge':  0.85,
-             'c1.xlarge':   0.60,
-             'm2.4xlarge':  1.65,
-             'cc2.8xlarge': 2.50,
-             'cr1.8xlarge': 3.50, 
-             'hi1.4xlarge': 3.10, 
-             'hs1.8xlarge': 4.60}
+INSTANCE_TYPE_BACKING = 'cc2.8xlarge'
+INSTANCE_TYPE_CACHE = 'cc2.8xlarge'
+INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
+
 
 conn = None
 
@@ -46,24 +42,26 @@ def connect():
 
 def checkout_machines(num, type, spot=False):
     print "Checking out %s machines." % (num)
-    reservation = conn.run_instances(AMI_IDS[REGION],
+    ami_type = 'hvm' if INSTANCE_TYPES[type]['hvm'] else 'basic'
+    reservation = conn.run_instances(AMI_IDS[REGION][ami_type],
                                      min_count = num, 
                                      max_count = num,
                                      key_name = KEY_NAME, 
                                      instance_type = type, 
                                      security_groups = ['pequod'],
-                                     placement = AVAILABILITY_ZONE)
+                                     placement_group='pequod')
     return [i for i in reservation.instances]
 
 def request_machines(num, type):
     print "Requesting %s spot instances." % (num)
-    return conn.request_spot_instances(SPOT_BIDS[type], 
-                                       AMI_IDS[REGION], 
+    ami_type = 'hvm' if INSTANCE_TYPES[type]['hvm'] else 'basic'
+    return conn.request_spot_instances(INSTANCE_TYPES[type]['bid'], 
+                                       AMI_IDS[REGION][ami_type], 
                                        count = num,
                                        key_name = KEY_NAME, 
                                        instance_type = type, 
                                        security_groups = ['pequod'],
-                                       placement = AVAILABILITY_ZONE)
+                                       placement_group='pequod')
 
 def startup_machines(instances):
     for i in instances:
