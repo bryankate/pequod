@@ -560,7 +560,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t end_time = beg_time + this->tp_.duration();
         uint32_t postlimit = this->tp_.postlimit();
         uint32_t checklimit = this->tp_.checklimit();
-        uint32_t u, beg_scan, end_scan, slot, n;
+        uint32_t u, beg_scan, end_scan, slot, n, lastprog = 0;
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
                  nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
         TwitterUser* user = NULL;
@@ -709,9 +709,27 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         ++currtime_;
 
         if (tp_.verbose()) {
-            uint32_t diff = currtime_ - beg_time;
-            if (currtime_ > beg_time && diff % (tp_.duration() / 10) == 0)
-                std::cerr << diff / (tp_.duration() / 10) * 10 << "% complete" << std::endl;
+            uint32_t prog;
+            uint32_t goal;
+
+            if (postlimit) {
+                prog = npost;
+                goal = postlimit;
+            }
+            else if (checklimit) {
+                prog = ncheck;
+                goal = checklimit;
+            }
+            else {
+                prog = currtime_ - beg_time;
+                goal = tp_.duration();
+            }
+
+            uint32_t frac = goal / 10;
+            if (prog && prog != lastprog && prog % frac == 0) {
+                lastprog = prog;
+                std::cerr << prog / frac * 10 << "% complete" << std::endl;
+            }
         }
     }
     twait { drain(gr, make_event()); }
