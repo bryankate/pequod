@@ -210,17 +210,19 @@ def define_experiments():
     # fix %active at 70, post:check ratio at 1:100 and 50 timeline checks per user. 
     exp = {'name': "compare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    popBase = "%s %s --popduration=0" % (populateCmd, users)
-    clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
+    binaryFlag = "--no-binary"  #  not setup for binary on other systems
+    initBase = "%s %s" % (initCmd, binaryFlag)
+    popBase = "%s %s %s --popduration=0" % (populateCmd, users, binaryFlag)
+    clientBase = "%s %s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
-                 (clientCmd, users)
+                 (clientCmd, users, binaryFlag)
     
     exp['defs'].append(
         {'name': "pequod",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
+         'initcmd': "%s" % (initBase),
          'populatecmd': "%s" % (popBase),
          'clientcmd': "%s" % (clientBase)})
     
@@ -229,7 +231,7 @@ def define_experiments():
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
+         'initcmd': "%s" % (initBase),
          'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
     
