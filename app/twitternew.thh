@@ -730,7 +730,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     }
                 }
 
-                std::cerr << "checking " << user->uid() << std::endl;
                 beg_scan = user->last_read_;
                 end_scan = currtime_ - SKEW;
 
