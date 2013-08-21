@@ -175,14 +175,19 @@ def define_experiments():
     exps.append(exp)
     
     
-    # computation experiment. 
+    # computation/latency experiment. 
     # measure computation times inside the server and see that they are small.
-    # should be run both on a multiprocessor and in a distributed setup 
-    # with one cache server and one or more backing servers that own all the base data.
+    # should be run on a multiprocessor
     #
     # the enable_validation_logging flag should be set to true and the 
     # logs should be used to determine avg, stddev, and percentiles for
     # the computation times.
+    #
+    # alternately, the latency for timeline check operations (as measured by the client)
+    # can be evaluated by enabling timeline latency logging in the client. 
+    # the latency test should really be run on a real network in two setups:
+    # 1. with a single cache server
+    # 2. with backing servers to demonstrate the added latency for the extra hop
     exp = {'name': "computation", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=1000000" % (populateCmd, users),
