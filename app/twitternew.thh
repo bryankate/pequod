@@ -115,10 +115,47 @@ class TwitterNewPopulator {
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
 
-    inline uint32_t begin_managed() const { return groupbegin_; }
-    inline uint32_t end_managed() const { return groupend_; }
-    inline const TwitterGraphNode* user(uint32_t user) const { return users_[user]; }
+    class managed_iterator {
+      public:
+        typedef std::vector<TwitterGraphNode*> users_type;
+
+        managed_iterator(uint32_t idx, uint32_t skip, users_type& users)
+            : idx_(idx), skip_(skip), users_(users) {
+        }
+
+        uint32_t operator*() {
+            return users_[idx_]->uid();
+        }
+
+        managed_iterator& operator++() {
+            if (idx_ + skip_ < users_.size())
+                idx_ += skip_;
+            else
+                idx_ = users_.size();
+            return *this;
+        }
+
+        bool operator!=(const managed_iterator& other) {
+            return idx_ != other.idx_;
+        }
+
+        managed_iterator& operator=(const managed_iterator& other) {
+            idx_ = other.idx_;
+            skip_ = other.skip_;
+            users_ = other.users_;
+            return *this;
+        }
+
+      private:
+        uint32_t idx_;
+        uint32_t skip_;
+        users_type& users_;
+    };
+
+    inline auto begin_managed() -> managed_iterator;
+    inline auto end_managed() -> managed_iterator;
     inline TwitterUser* managed_user(uint32_t user);
+    inline const TwitterGraphNode* user(uint32_t user) const { return users_[user]; }
     inline bool is_celebrity(uint32_t user) const;
 
     void make_subscriptions(generator_type& gen, std::vector<std::pair<uint32_t, uint32_t>>& subs);
@@ -126,8 +163,8 @@ class TwitterNewPopulator {
 
     inline uint32_t rand_op(generator_type& gen) { return op_dist_(gen); }
     inline uint32_t rand_user_all(generator_type& gen) { return uni_dist_(gen); }
-    inline uint32_t rand_user_managed(generator_type& gen) { return group_uni_dist_(gen); }
     inline uint32_t rand_user_post(generator_type& gen) { return post_dist_(gen); }
+    inline uint32_t rand_user_managed(generator_type& gen);
 
     static const char tweet_data[];
 
@@ -135,8 +172,6 @@ class TwitterNewPopulator {
     uint32_t nusers_;
     uint32_t ngroups_;
     uint32_t groupid_;
-    uint32_t groupbegin_;
-    uint32_t groupend_;
     uint32_t duration_;
     uint32_t popduration_;
     uint32_t postlimit_;
@@ -182,9 +217,21 @@ class TwitterNewPopulator {
     bool in_group(uint32_t u) const;
 };
 
+inline auto TwitterNewPopulator::begin_managed() -> TwitterNewPopulator::managed_iterator {
+    return managed_iterator(0, ngroups_, users_);
+}
+
+inline auto TwitterNewPopulator::end_managed() -> TwitterNewPopulator::managed_iterator {
+    return managed_iterator(users_.size(), ngroups_, users_);
+}
+
 inline TwitterUser* TwitterNewPopulator::managed_user(uint32_t user) {
     assert(in_group(user));
     return reinterpret_cast<TwitterUser*>(users_[user]);
+}
+
+inline uint32_t TwitterNewPopulator::rand_user_managed(generator_type& gen) {
+    return group_uni_dist_(gen) * ngroups_ + groupid_;
 }
 
 inline bool TwitterNewPopulator::is_celebrity(uint32_t user) const {
@@ -411,7 +458,7 @@ tamed template <typename S>
 void TwitterNewRunner<S>::populate(tamer::event<> done) {
     tvars {
         boost::mt19937 gen;
-        uint32_t u, s;
+        uint32_t s;
         uint32_t post_end_time = this->currtime_ + this->tp_.popduration();
         std::vector<std::pair<uint32_t, uint32_t>> subs;
         Json j;
@@ -444,9 +491,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
         twait { server_.pace(make_event()); }
     }
 
-    for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
-        if (tp_.is_celebrity(u))
-            server_.mark_celebrity(u, gr.make_event());
+    for (auto u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
+        if (tp_.is_celebrity(*u))
+            server_.mark_celebrity(*u, gr.make_event());
     twait { drain(gr, make_event()); }
 
     if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
@@ -471,6 +518,7 @@ void TwitterNewRunner<S>::select_active(event<> done) {
     tvars {
         boost::mt19937 gen;
         boost::uniform_real<> active_rng(0,100);
+        TwitterNewPopulator::managed_iterator uit = this->tp_.end_managed();
         uint32_t u;
         tamer::gather_rendezvous gr;
     }
@@ -479,16 +527,16 @@ void TwitterNewRunner<S>::select_active(event<> done) {
 
     // create a working set of users
     if (tp_.verbose()) { std::cerr << "Selecting active users." << std::endl; }
-    for (u = tp_.begin_managed(); u != tp_.end_managed(); ++u) {
+    for (uit = tp_.begin_managed(); uit != tp_.end_managed(); ++uit) {
         if (active_rng(gen) >= tp_.pct_active()) {
-            inactive_.push_back(u);
+            inactive_.push_back(*uit);
             continue;
         }
 
-        loggedin_.push_back(u);
+        loggedin_.push_back(*uit);
 
         if (tp_.prevalidate()) {
-            prevalidate(tp_.managed_user(u), gr.make_event());
+            prevalidate(tp_.managed_user(*uit), gr.make_event());
             twait{ server_.pace(make_event()); }
         }
     }
@@ -682,6 +730,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     }
                 }
 
+                std::cerr << "checking " << user->uid() << std::endl;
                 beg_scan = user->last_read_;
                 end_scan = currtime_ - SKEW;
 

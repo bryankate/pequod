@@ -247,17 +247,16 @@ void TwitterNewPopulator::finish_make_subscriptions(generator_type& gen) {
 }
 
 void TwitterNewPopulator::make_users() {
-
-    groupbegin_ = 0;
-    groupend_ = nusers_;
+    uint32_t gbegin = 0;
+    uint32_t gend = nusers_;
 
     if (ngroups_ > 1) {
         uint32_t gsize = nusers_ / ngroups_;
-        groupbegin_ = gsize * groupid_;
-        groupend_ = (groupid_ == ngroups_ - 1) ? nusers_ : (groupbegin_ + gsize);
+        gbegin = gsize * groupid_;
+        gend = (groupid_ == ngroups_ - 1) ? nusers_ : (gbegin + gsize);
     }
 
-    group_uni_dist_ = uni_dist_type(groupbegin_, groupend_ - 1);
+    group_uni_dist_ = uni_dist_type(gbegin, gend - 1);
 
     for (uint32_t u = 0; u < nusers_; ++u)
         if (in_group(u))
@@ -267,7 +266,7 @@ void TwitterNewPopulator::make_users() {
 }
 
 bool TwitterNewPopulator::in_group(uint32_t u) const {
-    return (u >= groupbegin_ && u < groupend_);
+    return u % ngroups_ == groupid_;
 }
 
 
