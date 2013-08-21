@@ -219,7 +219,7 @@ class TwitterNewPopulator {
 };
 
 inline auto TwitterNewPopulator::begin_managed() -> TwitterNewPopulator::managed_iterator {
-    return managed_iterator(0, ngroups_, users_);
+    return managed_iterator(groupid_, ngroups_, users_);
 }
 
 inline auto TwitterNewPopulator::end_managed() -> TwitterNewPopulator::managed_iterator {
@@ -232,7 +232,9 @@ inline TwitterUser* TwitterNewPopulator::managed_user(uint32_t user) {
 }
 
 inline uint32_t TwitterNewPopulator::rand_user_managed(generator_type& gen) {
-    return group_uni_dist_(gen) * ngroups_ + groupid_;
+    uint32_t randu;
+    while ((randu = group_uni_dist_(gen) * ngroups_ + groupid_) >= nusers_ );
+    return randu;
 }
 
 inline bool TwitterNewPopulator::is_celebrity(uint32_t user) const {
@@ -421,6 +423,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
 
 #if TIMELINE_SANITY_CHECK
     {
+        assert(!tp_.groupid() && "Sanity check requires single client group.")
         TwitterUser* poster = tp_.managed_user(u);
         poster->posts_.push_back(time);
 
