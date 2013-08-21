@@ -33,6 +33,7 @@ class TwitterNewPopulator;
 #define SKEW            5000       // subtracted from now to define end_scan
 
 #define TIMELINE_SANITY_CHECK 0
+#define TIMELINE_LATENCY 0
 
 // Keep barebones info on each user.
 struct TwitterGraphNode {
@@ -266,6 +267,10 @@ class TwitterNewRunner {
     tamer::event<> trigger_;
     Log log_;
 
+#if TIMELINE_LATENCY
+    std::vector<uint64_t> latency_log_;
+#endif
+
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
     tamed void prevalidate(TwitterUser* user, event<> e);
@@ -312,7 +317,12 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     tvars {
         typename S::scan_result sr;
         size_t count = 0;
+        uint64_t rtt;
     }
+
+#if TIMELINE_LATENCY
+    rtt = tstamp();
+#endif
 
     if (tp_.fetch() || tp_.log() || TIMELINE_SANITY_CHECK) {
         twait { server_.timeline_scan(user->uid(), beg_scan, end_scan,
@@ -369,6 +379,11 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     else
         twait { server_.timeline_add_count(user->uid(), beg_scan, end_scan,
                                            make_event(count)); }
+
+#if TIMELINE_LATENCY
+    rtt = tstamp() - rtt;
+    latency_log_.emplace_back(rtt);
+#endif
 
     loggedin_.push_back(user->uid());
     trigger_.trigger();
@@ -801,6 +816,11 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     twait { drain(gr, make_event()); }
     twait { server_.control(Json().set("print_validation_log", true)
                                   .set("get_log", true), make_event(logs)); }
+
+#if TIMELINE_LATENCY
+    for (auto rtt : latency_log_)
+        std::cerr << "rtt (us): " << rtt << std::endl;
+#endif
 
     if (!stats.is_array()) {
         old_stats = Json::make_array(old_stats);
