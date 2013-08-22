@@ -42,22 +42,26 @@ class String : public String_base<String> {
     /** @endcond never */
     inline ~String();
 
-    static inline const String &make_empty();
-    static inline const String &make_out_of_memory();
+    static inline const String& make_empty();
+    static inline const String& make_out_of_memory();
     static String make_uninitialized(int len);
-    static inline String make_stable(const char *cstr);
-    static inline String make_stable(const char *s, int len);
-    static inline String make_stable(const char *first, const char *last);
+    static inline String make_stable(const char* cstr);
+    static inline String make_stable(const char* s, int len);
+    static inline String make_stable(const char* first, const char* last);
     static String make_fill(int c, int n); // n copies of c
-    static inline const String &make_zero();
+    static inline const String& make_zero();
 
     inline const char *data() const;
     inline int length() const;
 
     inline const char *c_str() const;
 
-    inline String substring(const char *first, const char *last) const;
-    inline String fast_substring(const char *first, const char *last) const;
+    inline String substring(const char* first, const char* last) const;
+    inline String substring(const unsigned char* first,
+                            const unsigned char* last) const;
+    inline String fast_substring(const char* first, const char* last) const;
+    inline String fast_substring(const unsigned char* first,
+                                 const unsigned char* last) const;
     String substring(int pos, int len) const;
     inline String substring(int pos) const;
     String ltrim() const;
@@ -500,7 +504,7 @@ inline const char* String::c_str() const {
     memo_type* m = _r.memo();
     if ((m && end_data >= m->real_data + m->dirty)
 	|| *end_data != '\0') {
-	if (char *x = const_cast<String *>(this)->append_uninitialized(1)) {
+	if (char *x = const_cast<String*>(this)->append_uninitialized(1)) {
 	    *x = '\0';
 	    --_r.length;
 	}
@@ -526,6 +530,11 @@ inline String String::substring(const char* first, const char* last) const {
     } else
 	return String();
 }
+/** @overload */
+inline String String::substring(const unsigned char* first, const unsigned char* last) const {
+    return substring(reinterpret_cast<const char*>(first),
+                     reinterpret_cast<const char*>(last));
+}
 
 /** @brief Return a substring of the current string starting at @a first
     and ending before @a last.
@@ -536,6 +545,11 @@ inline String String::fast_substring(const char* first, const char* last) const 
     assert(begin() <= first && first <= last && last <= end());
     _r.ref();
     return String(first, last - first, _r.memo());
+}
+/** @overload */
+inline String String::fast_substring(const unsigned char* first, const unsigned char* last) const {
+    return fast_substring(reinterpret_cast<const char*>(first),
+                          reinterpret_cast<const char*>(last));
 }
 
 /** @brief Return the suffix of the current string starting at index @a pos.
