@@ -192,6 +192,7 @@ class String : public String_base<String> {
                 memo_offset = 0;
         }
         friend class String;
+        friend class StringAccum;
     };
 
     const rep_type& internal_rep() const {
@@ -216,6 +217,14 @@ class String : public String_base<String> {
 	memo_type* next;
 #endif
 	char real_data[8];	// but it might be more or less
+
+        inline void initialize(uint32_t capacity, uint32_t dirty);
+#if HAVE_STRING_PROFILING
+        void account_new();
+        void account_destroy();
+#else
+        inline void account_destroy() {}
+#endif
     };
 
     enum {
@@ -289,7 +298,7 @@ class String : public String_base<String> {
     static inline memo_type* absent_memo() {
 	return reinterpret_cast<memo_type*>(uintptr_t(1));
     }
-    static memo_type* create_memo(char* space, int dirty, int capacity);
+    static inline memo_type* create_memo(int capacity, int dirty);
     static void delete_memo(memo_type* memo);
     const char* hard_c_str() const;
     bool hard_equals(const char* s, int len) const;
@@ -299,8 +308,6 @@ class String : public String_base<String> {
     static const rep_type oom_string_rep;
     static const rep_type zero_string_rep;
 
-    static String make_claim(char*, int, int); // claim memory
-
     static int parse_cesu8_char(const unsigned char* s,
 				const unsigned char* end);
 
@@ -308,6 +315,17 @@ class String : public String_base<String> {
     friend class StringAccum;
 };
 
+
+/** @cond never */
+inline void String::memo_type::initialize(uint32_t capacity, uint32_t dirty) {
+    this->refcount = 1;
+    this->capacity = capacity;
+    this->dirty = dirty;
+#if HAVE_STRING_PROFILING
+    this->account_new();
+#endif
+}
+/** @endcond never */
 
 /** @brief Construct an empty String (with length 0). */
 inline String::String()
