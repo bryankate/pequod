@@ -175,8 +175,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
 
         // Add it
     next:
-        Json* jp = stack_.size() ? stack_.back().jp : &json_;
-        if (jp->is_o() && stack_.size()) {
+        Json* jp = stack_.empty() ? &json_ : stack_.back().jp;
+        if (jp->is_o() && !stack_.empty()) {
             // Reading a key for some object Json
             if (!j.is_s() && !j.is_i())
                 goto error;
@@ -185,7 +185,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             continue;
         }
 
-        if (jp->is_a() && stack_.size()) {
+        if (jp->is_a() && !stack_.empty()) {
             jp->push_back(std::move(j));
             jp = &jp->back();
             --stack_.back().size;
