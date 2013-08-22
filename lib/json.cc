@@ -579,7 +579,7 @@ void Json::hard_unparse(StringAccum &sa, const unparse_manipulator &m, int depth
 	sa << '\"' << reinterpret_cast<const String&>(u_.str).encode_json() << '\"';
     else if (u_.x.type == j_bool) {
         bool b = u_.i.x;
-        sa.append("false\0true" + (-b & 6), 5 - b);
+        sa.append(&"false\0true"[-b & 6], 5 - b);
     } else if (u_.x.type == j_int)
         sa << u_.i.x;
     else if (u_.x.type == j_double)
