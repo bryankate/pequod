@@ -32,8 +32,10 @@ class StringAccum { public:
     inline StringAccum(const StringAccum& x);
 #if HAVE_CXX_RVALUE_REFERENCES
     inline StringAccum(StringAccum&& x);
+    inline StringAccum(String&& x);
 #endif
     inline ~StringAccum();
+    static StringAccum make_transfer(String& x);
 
     inline StringAccum &operator=(const StringAccum& x);
 #if HAVE_CXX_RVALUE_REFERENCES
@@ -111,7 +113,7 @@ class StringAccum { public:
 
     String take_string();
 
-    void swap(StringAccum &x);
+    void swap(StringAccum& x);
 
     // see also operator<< declarations below
 
@@ -140,7 +142,7 @@ class StringAccum { public:
     void hard_append(const char *s, int len);
     void hard_append_cstr(const char *cstr);
     bool append_utf8_hard(int ch);
-
+    void transfer_from(String& x);
 };
 
 inline StringAccum &operator<<(StringAccum &sa, char c);
@@ -203,12 +205,24 @@ inline StringAccum::StringAccum(StringAccum&& x) {
     using std::swap;
     swap(r_, x.r_);
 }
+
+inline StringAccum::StringAccum(String&& x) {
+    transfer_from(x);
+    x._r = String::rep_type{String_generic::empty_data, 0, 0};
+}
 #endif
 
 /** @brief Destroy a StringAccum, freeing its memory. */
 inline StringAccum::~StringAccum() {
     if (r_.cap > 0)
 	delete[] reinterpret_cast<char*>(r_.s - memo_space);
+}
+
+inline StringAccum StringAccum::make_transfer(String& x) {
+    StringAccum sa;
+    sa.transfer_from(x);
+    x._r = String::rep_type{String_generic::empty_data, 0, 0};
+    return sa;
 }
 
 /** @brief Return the contents of the StringAccum.

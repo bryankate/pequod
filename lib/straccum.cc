@@ -123,6 +123,17 @@ StringAccum::hard_extend(int nadjust, int nreserve)
     return x;
 }
 
+void StringAccum::transfer_from(String& x) {
+    if (x.data_shared() || x._r.memo_offset != -memo_space) {
+        append(x.begin(), x.end());
+        x._r.deref();
+    } else {
+        r_.s = const_cast<unsigned char*>(x.udata());
+        r_.len = x.length();
+        r_.cap = x._r.memo()->capacity;
+    }
+}
+
 /** @brief Null-terminate this StringAccum and return its data.
 
     Note that the null character does not contribute to the StringAccum's
