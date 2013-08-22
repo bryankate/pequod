@@ -16,6 +16,14 @@ const uint8_t nbytes[] = {
 };
 }
 
+static inline bool in_range(uint8_t x, unsigned low, unsigned n) {
+    return (unsigned) x - low < n;
+}
+
+static inline bool in_wrapped_range(uint8_t x, unsigned low, unsigned n) {
+    return (unsigned) (int8_t) x - low < n;
+}
+
 const uint8_t* streaming_parser::consume(const uint8_t* first,
                                          const uint8_t* last,
                                          const String& str) {
@@ -53,16 +61,16 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
     }
 
     while (first != last) {
-        if ((uint8_t) (*first + format::nfixnegint) < format::nfixint) {
+        if (in_wrapped_range(*first, -format::nfixnegint, format::nfixint)) {
             j = Json(int(int8_t(*first)));
             ++first;
         } else if (*first == format::fnull) {
             j = Json();
             ++first;
-        } else if ((uint8_t) (*first - format::ffalse) < 2) {
+        } else if (in_range(*first, format::ffalse, 2)) {
             j = Json(bool(*first - format::ffalse));
             ++first;
-        } else if ((uint8_t) (*first - format::ffixmap) < format::nfixmap) {
+        } else if (in_range(*first, format::ffixmap, format::nfixmap)) {
             n = *first - format::ffixmap;
             ++first;
         map:
@@ -71,7 +79,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_object();
-        } else if ((uint8_t) (*first - format::ffixarray) < format::nfixarray) {
+        } else if (in_range(*first, format::ffixarray, format::nfixarray)) {
             n = *first - format::ffixarray;
             ++first;
         array:
@@ -80,7 +88,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_array_reserve(n);
-        } else if ((uint8_t) (*first - format::ffixstr) < format::nfixstr) {
+        } else if (in_range(*first, format::ffixstr, format::nfixstr)) {
             n = *first - format::ffixstr;
             ++first;
         raw:
