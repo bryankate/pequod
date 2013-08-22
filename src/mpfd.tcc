@@ -99,7 +99,7 @@ bool msgpack_fd::read_one_message() {
     rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_, rdlen_ - rdpos_,
                                 rdbuf_);
 
-    if (rdparser_.complete()) {
+    if (rdparser_.done()) {
         --rdquota_;
         if (rdquota_ == 0)
             rdwake_();          // wake up coroutine [if it's sleeping]
@@ -143,7 +143,7 @@ tamed void msgpack_fd::reader_coroutine() {
 
 bool msgpack_fd::dispatch(bool exit_on_request) {
     Json& result = rdparser_.result();
-    if (!rdparser_.done())
+    if (!rdparser_.success())
         result = Json();        // XXX reset connection
     rdparser_.reset();
     if (result.is_a() && result[0].is_i() && result[1].is_i()

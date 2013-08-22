@@ -251,8 +251,8 @@ class streaming_parser {
     inline streaming_parser();
     inline void reset();
 
-    inline bool complete() const;
     inline bool done() const;
+    inline bool success() const;
     inline bool error() const;
 
     inline size_t consume(const char* first, size_t length);
@@ -430,11 +430,11 @@ inline void streaming_parser::reset() {
     stack_.clear();
 }
 
-inline bool streaming_parser::complete() const {
+inline bool streaming_parser::done() const {
     return state_ < 0;
 }
 
-inline bool streaming_parser::done() const {
+inline bool streaming_parser::success() const {
     return state_ == st_final;
 }
 
