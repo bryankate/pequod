@@ -32,7 +32,7 @@ static Clp_Option options[] = {
     { "hn", 'h', 1005, 0, Clp_Negate },
     { "analytics", 0, 1006, 0, Clp_Negate },
     { "builtinhash", 'b', 1008, 0, Clp_Negate },
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
     { "memcached", 0, 1009, 0, Clp_Negate },
 #endif
 #if HAVE_HIREDIS_HIREDIS_H
@@ -392,18 +392,15 @@ int main(int argc, char** argv) {
     } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
+
         pq::TwitterPopulator tp(tp_param);
-        if (tp_param["memcached"]) {
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
+        if (hosts)
+            part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
+
+        if (tp_param.get("memcached").as_b(false)) {
+            mandatory_assert(hosts && part);
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
-            pq::MemcachedClient client;
-            pq::TwitterHashShim<pq::MemcachedClient> shim(client);
-            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate(tamer::event<>());
-            tr.run(tamer::event<>());
-#else
-            mandatory_assert(false);
-#endif
+            run_twitter_memcache(tp, hosts, part);
         } else if (tp_param["builtinhash"]) {
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
             pq::BuiltinHashClient client;
@@ -412,8 +409,6 @@ int main(int argc, char** argv) {
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         } else if (client_port >= 0 || hosts) {
-            if (hosts)
-                part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
             run_twitter_remote(tp, client_port, hosts, dbhosts, part);
         } else {
             pq::DirectClient dc(server);
@@ -462,15 +457,7 @@ int main(int argc, char** argv) {
             hr.populate(tamer::event<>());
             hr.run(tamer::event<>());
         } else if (tp_param["memcached"]) {
-#if HAVE_LIBMEMCACHED_MEMCACHED_HPP
-            pq::MemcachedClient client;
-            pq::HashHackerNewsShim<pq::MemcachedClient> shim(client);
-            pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
-            hr.populate(tamer::event<>());
-            hr.run(tamer::event<>());
-#else
-            mandatory_assert(false);
-#endif
+            run_hn_remote_memcache(*hp);
         } else if (tp_param["pg"]) {
             run_hn_remote_db(*hp, db_param);
         } else if (tp_param["redis"])
@@ -515,6 +502,8 @@ int main(int argc, char** argv) {
         }
         else if (tp_param["redis"])
             pq::run_rwmicro_redis(tp_param);
+        else if (tp_param["memcache"])
+            pq::run_rwmicro_memcache(tp_param);
         else if (client_port >= 0)
             pq::run_rwmicro_pqremote(tp_param, client_port);
         else {

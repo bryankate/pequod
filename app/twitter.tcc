@@ -3,6 +3,7 @@
 #include "json.hh"
 #include "pqjoin.hh"
 #include "pqmulticlient.hh"
+#include "memcacheadapter.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -144,6 +145,21 @@ tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
         MultiClient* mc = new MultiClient(hosts, part, client_port);
         TwitterShim<MultiClient>* shim = new TwitterShim<MultiClient>(*mc);
         TwitterRunner<TwitterShim<MultiClient>>* tr = new TwitterRunner<TwitterShim<MultiClient> >(*shim, tp);
+    }
+    twait { mc->connect(make_event()); }
+    twait { tr->populate(make_event()); }
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete mc;
+}
+
+tamed void run_twitter_memcache(TwitterPopulator& tp,
+                                const Hosts* hosts, const Partitioner* part) {
+    tvars {
+        MemcacheMultiClient* mc = new MemcacheMultiClient(hosts, part);
+        TwitterHashShim<MemcacheMultiClient>* shim = new TwitterHashShim<MemcacheMultiClient>(*mc);
+        TwitterRunner<TwitterHashShim<MemcacheMultiClient>>* tr = new TwitterRunner<TwitterHashShim<MemcacheMultiClient> >(*shim, tp);
     }
     twait { mc->connect(make_event()); }
     twait { tr->populate(make_event()); }

@@ -276,6 +276,7 @@ class DBPoolParams;
 tamed void run_hn_remote_db(HackernewsPopulator& hp, const DBPoolParams& dbparams);
 
 tamed void run_hn_remote_redis(HackernewsPopulator& hp);
+tamed void run_hn_remote_memcache(HackernewsPopulator& hp);
 
 };
 

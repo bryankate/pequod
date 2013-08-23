@@ -1,6 +1,7 @@
 #include "rwmicro.hh"
 #include <tamer/tamer.hh>
 #include "redisadapter.hh"
+#include "memcacheadapter.hh"
 #include "twittershim.hh"
 #include "pqremoteclient.hh"
 
@@ -20,6 +21,25 @@ tamed void run_rwmicro_redis(Json& tp_param) {
 #else
 void run_rwmicro_redis(Json&) {
     mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
+
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+typedef pq::TwitterHashShim<pq::MemcacheClient> memcache_shim_type;
+
+tamed void run_rwmicro_memcache(Json& tp_param) {
+    tvars {
+        pq::MemcacheClient* client = new pq::MemcacheClient();
+        memcache_shim_type* shim = new memcache_shim_type(*client);
+        pq::RwMicro<memcache_shim_type>* rw = new pq::RwMicro<memcache_shim_type>(tp_param, *shim);
+    }
+
+    twait { client->connect(make_event()); }
+    rw->safe_run();
+}
+#else
+void run_rwmicro_memcache(Json&) {
+    mandatory_assert(false && "Not configured for Memcache!");
 }
 #endif
 

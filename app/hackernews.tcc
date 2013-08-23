@@ -1,6 +1,7 @@
 #include "hackernews.hh"
 #include "pqmulticlient.hh"
 #include "redisadapter.hh"
+#include "memcacheadapter.hh"
 #include "pqdbpool.hh"
 
 namespace pq {
@@ -64,6 +65,30 @@ tamed void run_hn_remote_redis(HackernewsPopulator& hp) {
 #else
 void run_hn_remote_redis(HackernewsPopulator&) {
     mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
+
+
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+typedef pq::HashHackerNewsShim<pq::MemcacheClient> memcache_shim_type;
+
+tamed void run_hn_remote_memcache(HackernewsPopulator& hp) {
+    tvars {
+        pq::MemcacheClient* client = new pq::MemcacheClient();
+        memcache_shim_type* shim = new memcache_shim_type(*client);
+        pq::HackernewsRunner<memcache_shim_type>* hr = new pq::HackernewsRunner<memcache_shim_type>(*shim, hp);
+    }
+
+    twait { client->connect(make_event()); }
+    twait { hr->populate(make_event()); }
+    twait { hr->run(make_event()); }
+    delete hr;
+    delete shim;
+    delete client;
+}
+#else
+void run_hn_remote_memcache(HackernewsPopulator&) {
+    mandatory_assert(false && "Not configured for Memcache!");
 }
 #endif
 
