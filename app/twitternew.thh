@@ -80,9 +80,10 @@ struct TwitterUser : public TwitterGraphNode {
     TwitterUser(uint32_t uid);
 
     uint32_t last_read_;
+    tamer::event<uint32_t> checking_;
 };
 
-enum TwitterOp { op_post = 0, op_subscribe, op_login, op_logout, op_check, n_op };
+enum TwitterOp { op_post = 0, op_subscribe, op_logout, op_check, n_op };
 
 class TwitterNewPopulator {
   public:
@@ -262,11 +263,10 @@ class TwitterNewRunner {
   private:
     S& server_;
     TwitterNewPopulator& tp_;
-    std::deque<uint32_t> active_;
+    std::vector<uint32_t> active_;
     std::vector<uint32_t> inactive_;
     std::deque<uint32_t> loggedin_;
     uint32_t currtime_;
-    tamer::event<> trigger_;
     Log log_;
 
 #if TIMELINE_LATENCY
@@ -321,6 +321,8 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         size_t count = 0;
         uint64_t rtt;
     }
+
+    user->checking_ = done;
 
 #if TIMELINE_LATENCY
     rtt = tstamp();
@@ -386,9 +388,6 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     rtt = tstamp() - rtt;
     latency_log_.emplace_back(rtt);
 #endif
-
-    loggedin_.push_back(user->uid());
-    trigger_.trigger();
 
     done(done.result() + count);
 }
@@ -551,7 +550,7 @@ void TwitterNewRunner<S>::select_active(event<> done) {
             continue;
         }
 
-        loggedin_.push_back(*uit);
+        active_.push_back(*uit);
 
         if (tp_.prevalidate()) {
             prevalidate(tp_.managed_user(*uit), gr.make_event());
@@ -568,8 +567,8 @@ void TwitterNewRunner<S>::select_active(event<> done) {
         twait { drain(gr, make_event()); }
     }
 
-    std::random_shuffle(loggedin_.begin(), loggedin_.end(), RandomAdapter(gen));
-    if (loggedin_.empty() && tp_.pct_active())
+    std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
+    if (active_.empty() && tp_.pct_active())
         assert(false && "There were no active users selected.");
 
     done();
@@ -629,6 +628,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t u, beg_scan, end_scan, slot, n, lastprog = 0;
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
                  nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
+        uint32_t next_checker = 0;
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
@@ -714,44 +714,22 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                     fprintf(stderr, "%d: logout %08d\n", currtime_, user->uid());
 
                 loggedin_.pop_front();
-                active_.push_back(user->uid());
                 ++nlogout;
                 break;
 
-            case op_login:
-                do_login:
-                if (!active_.empty()) {
-                    user = tp_.managed_user(active_.front());
-                    active_.pop_front();
-
-                    if (tp_.log())
-                        fprintf(stderr, "%d: login %08d\n", currtime_, user->uid());
-
-                    ++nlogin;
-                }
-                // fall through to check timeline after login
-
             case op_check:
-                if (!user) {
-                    do_check:
-                    if (!loggedin_.empty()) {
-                        user = tp_.managed_user(loggedin_.front());
-                        loggedin_.pop_front();
-                    }
-                    else if (!active_.empty())
-                        goto do_login;
-                    else {
-                        // wait until there is a loggedin user that is not
-                        // already refreshing its timeline
-                        twait { trigger_ = make_event(); }
-                        goto do_check;
-                    }
-                }
+                if (next_checker >= active_.size())
+                    next_checker = 0;
+
+                user = tp_.managed_user(active_[next_checker++]);
+                if (user->checking_)
+                    twait { user->checking_.at_trigger(make_event()); }
 
                 beg_scan = user->last_read_;
                 end_scan = currtime_ - SKEW;
 
                 if (!beg_scan) {
+                    loggedin_.push_back(user->uid());
                     beg_scan = currtime_ - LOGIN_WINDOW;
                     ++nfull;
                 }

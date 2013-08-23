@@ -116,7 +116,6 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
     // they also see 10x more social graph changes than posts
     op_weight[op_post] = param["ppost"].as_d(1);
     op_weight[op_subscribe] = param["psubscribe"].as_d(10);
-    op_weight[op_login] = param["plogin"].as_d(5);
     op_weight[op_logout] = param["plogout"].as_d(5);
     op_weight[op_check] = param["pread"].as_d(60);
 
