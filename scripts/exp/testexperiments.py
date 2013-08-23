@@ -19,7 +19,7 @@ def define_experiments():
     postgresPopulateCmd = "%s --twitternew --verbose --dbshim %s --no-execute --popduration=0 %s" % \
                           (serverCmd, binaryflag, users)
     postgresClientCmd ="%s --twitternew --verbose --dbshim %s --no-populate %s --duration=100000 " \
-                       "--psubscribe=0 --plogin=0 --plogout=0" % (serverCmd, binaryflag, users) 
+                       "--psubscribe=0 --plogout=0" % (serverCmd, binaryflag, users) 
 
     exps.append({'name': "basic", 
                  'defs': [{'def_part': partfunc,

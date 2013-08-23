@@ -81,7 +81,6 @@ static Clp_Option options[] = {
     { "pread", 0, 4002, Clp_ValDouble, 0 },
     { "ppost", 0, 4003, Clp_ValDouble, 0 },
     { "psubscribe", 0, 4004, Clp_ValDouble, 0 },
-    { "plogin", 0, 4005, Clp_ValDouble, 0 },
     { "plogout", 0, 4006, Clp_ValDouble, 0 },
     { "graph", 0, 4007, Clp_ValStringNotOption, 0 },
     { "visualize", 0, 4008, 0, Clp_Negate },
@@ -251,8 +250,6 @@ int main(int argc, char** argv) {
             tp_param.set("ppost", clp->val.d);
         else if (clp->option->long_name == String("psubscribe"))
             tp_param.set("psubscribe", clp->val.d);
-        else if (clp->option->long_name == String("plogin"))
-            tp_param.set("plogin", clp->val.d);
         else if (clp->option->long_name == String("plogout"))
             tp_param.set("plogout", clp->val.d);
         else if (clp->option->long_name == String("graph"))

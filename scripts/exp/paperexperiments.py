@@ -30,7 +30,7 @@ def define_experiments():
     for active in points:
         popBase = "%s %s --popduration=0" % (populateCmd, users)
         clientBase = "%s %s --pactive=%d --duration=1000000000 --postlimit=1000000 " \
-                     "--ppost=1 --pread=%d --psubscribe=0 --plogin=0 --plogout=0" % \
+                     "--ppost=1 --pread=%d --psubscribe=0 --plogout=0" % \
                      (clientCmd, users, active, active)
         
         exp['defs'].append(
@@ -79,7 +79,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -130,7 +130,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     buildBase = "./configure --with-malloc=jemalloc"
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -192,7 +192,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     popBase = "%s %s --popduration=1000000" % (populateCmd, users),
     clientBase = "%s %s --no-prevalidate --pactive=70 --duration=1000000000 --checklimit=62795845 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -219,7 +219,7 @@ def define_experiments():
     initBase = "%s %s" % (initCmd, binaryFlag)
     popBase = "%s %s %s --popduration=0" % (populateCmd, users, binaryFlag)
     clientBase = "%s %s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users, binaryFlag)
     
     exp['defs'].append(
@@ -277,7 +277,7 @@ def define_experiments():
     popBase = "%s %s --popduration=0" % (populateCmd, users)
     #clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogin=5 --plogout=5" % \
+                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
