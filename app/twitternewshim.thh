@@ -1058,9 +1058,6 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
         std::vector<String> posts;
     }
 
-    done(scan_result(Json::make_array()));
-    return;
-
     if (tp_.binary()) {
         memcpy(buf, "p|XXXX|XXXX", 11);
         write_in_net_order(buf + 2, poster);
