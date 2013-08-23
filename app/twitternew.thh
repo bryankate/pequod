@@ -875,5 +875,8 @@ tamed void run_twitter_new_dbshim(TwitterNewPopulator& tp,
 tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
                                  const Hosts* hosts, const Partitioner* part);
 
+tamed void run_twitter_new_memcache(TwitterNewPopulator& tp,
+                                    const Hosts* hosts, const Partitioner* part);
+
 } // namespace pq
 #endif

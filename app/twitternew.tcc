@@ -5,6 +5,7 @@
 #include "pqmulticlient.hh"
 #include "pqdbpool.hh"
 #include "redisadapter.hh"
+#include "memcacheadapter.hh"
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -356,6 +357,31 @@ tamed void run_twitter_new_redis(TwitterNewPopulator& tp,
 #else
 void run_twitter_new_redis(TwitterNewPopulator&, const Hosts*, const Partitioner*) {
     mandatory_assert(false && "Not configured for Redis!");
+}
+#endif
+
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+typedef pq::TwitterNewMemcacheShim<pq::MemcacheMultiClient, pq::TwitterNewPopulator> memcache_shim_type;
+
+tamed void run_twitter_new_memcache(TwitterNewPopulator& tp,
+                                    const Hosts* hosts, const Partitioner* part) {
+    tvars {
+        MemcacheMultiClient* mc = new MemcacheMultiClient(hosts, part);
+        memcache_shim_type* shim = new memcache_shim_type(*mc, tp);
+        TwitterNewRunner<memcache_shim_type>* tr = new TwitterNewRunner<memcache_shim_type>(*shim, tp);
+    }
+
+    twait { mc->connect(make_event()); }
+    twait { tr->initialize(make_event()); }
+    twait { tr->populate(make_event()); }
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete mc;
+}
+#else
+void run_twitter_new_memcache(TwitterNewPopulator&, const Hosts*, const Partitioner*) {
+    mandatory_assert(false && "Not configured for Memcache!");
 }
 #endif
 

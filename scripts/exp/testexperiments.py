@@ -58,6 +58,12 @@ def define_experiments():
                            'populatecmd': "%s %s --push --redis" % (populateCmd, users),
                            'clientcmd': "%s --push --redis" % (clientBase)}]})
     
+    exps.append({'name': "memcache", 
+                 'defs': [{'def_part': partfunc,
+                           'def_memcache_compare': True,
+                           'populatecmd': "%s %s --push --memcached" % (populateCmd, users),
+                           'clientcmd': "%s --push --memcached" % (clientBase)}]})
+    
     exps.append({'name': "eviction", 
                  'defs': [{'def_part': partfunc,
                            'def_db_type': "postgres",

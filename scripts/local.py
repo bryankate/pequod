@@ -194,6 +194,17 @@ def start_redis(expdef, id):
     cmd = pin + "redis-server " + confpath
     return run_cmd_bg(cmd, fartfile, fartfile)
 
+def start_memcache(expdef, id):
+    fartfile = os.path.join(resdir, "fart_memcache_" + str(id) + ".txt")
+    
+    if affinity:
+        pin = "numactl -C " + str(startcpu + (id * skipcpu)) + " "
+    else:
+        pin = ""
+    
+    cmd = pin + "memcached -p " + str(startport + id)
+    return run_cmd_bg(cmd, fartfile, fartfile)
+
 # load experiment definitions as global 'exps'
 exph = open(expfile, "r")
 exec(exph, globals())
@@ -222,6 +233,7 @@ for x in exps:
              
         usedb = True if 'def_db_type' in e else False
         rediscompare = e.get('def_redis_compare')
+        memcachecompare = e.get('def_memcache_compare')
         dbcompare = e.get('def_db_compare')
         dbmonitor = e.get('def_db_writearound')
         serverprocs = [] 
@@ -249,6 +261,14 @@ for x in exps:
                 
             for s in range(ncaching):
                 dbprocs.append(start_redis(e, s))
+                
+        elif memcachecompare:
+            if ncaching < 1:
+                print "ERROR: -c must be > 0 for memcache comparison experiments"
+                exit(-1)
+                
+            for s in range(ncaching):
+                dbprocs.append(start_memcache(e, s))
                 
         else:
             if usedb:
@@ -278,7 +298,6 @@ for x in exps:
     
                 part = options.part if options.part else e['def_part']
                 serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-                outfile = os.path.join(resdir, "output_srv_" + str(s) + ".txt")
                 fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
       
                 if affinity:
@@ -290,7 +309,7 @@ for x in exps:
                     perf = ""
     
                 full_cmd = pin + perf + servercmd + serverargs + " -kl=" + str(startport + s)
-                serverprocs.append(run_cmd_bg(full_cmd, outfile, fartfile))
+                serverprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile))
         
             if usedb:
                 dbfile.close()

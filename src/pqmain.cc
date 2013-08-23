@@ -32,12 +32,8 @@ static Clp_Option options[] = {
     { "hn", 'h', 1005, 0, Clp_Negate },
     { "analytics", 0, 1006, 0, Clp_Negate },
     { "builtinhash", 'b', 1008, 0, Clp_Negate },
-#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
     { "memcached", 0, 1009, 0, Clp_Negate },
-#endif
-#if HAVE_HIREDIS_HIREDIS_H
     { "redis", 0, 1010, 0, Clp_Negate},
-#endif
 
     // rpc params
     { "client", 'c', 2000, Clp_ValInt, Clp_Optional },
@@ -430,6 +426,8 @@ int main(int argc, char** argv) {
             run_twitter_new_dbshim(*tp, db_param);
         else if (tp_param.get("redis").as_b(false))
             run_twitter_new_redis(*tp, hosts, part);
+        else if (tp_param.get("memcached").as_b(false))
+            run_twitter_new_memcache(*tp, hosts, part);
         else if (client_port >= 0 || hosts) {
             if (tp_param.get("writearound").as_b(false))
                 mandatory_assert(dbhosts && part);
