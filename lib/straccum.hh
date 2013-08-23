@@ -35,7 +35,7 @@ class StringAccum { public:
     inline StringAccum(String&& x);
 #endif
     inline ~StringAccum();
-    static StringAccum make_transfer(String& x);
+    static inline StringAccum make_transfer(String& x);
 
     inline StringAccum &operator=(const StringAccum& x);
 #if HAVE_CXX_RVALUE_REFERENCES
@@ -156,11 +156,11 @@ inline StringAccum &operator<<(StringAccum &sa, short x);
 inline StringAccum &operator<<(StringAccum &sa, unsigned short x);
 inline StringAccum &operator<<(StringAccum &sa, int x);
 inline StringAccum &operator<<(StringAccum &sa, unsigned x);
-StringAccum &operator<<(StringAccum &sa, long x);
-StringAccum &operator<<(StringAccum &sa, unsigned long x);
-StringAccum &operator<<(StringAccum &sa, long long x);
-StringAccum &operator<<(StringAccum &sa, unsigned long long x);
-StringAccum &operator<<(StringAccum &sa, double x);
+StringAccum& operator<<(StringAccum& sa, long x);
+StringAccum& operator<<(StringAccum& sa, unsigned long x);
+StringAccum& operator<<(StringAccum& sa, long long x);
+StringAccum& operator<<(StringAccum& sa, unsigned long long x);
+StringAccum& operator<<(StringAccum& sa, double x);
 
 /** @brief Construct an empty StringAccum (with length 0). */
 inline StringAccum::StringAccum() {
