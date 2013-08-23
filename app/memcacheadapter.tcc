@@ -217,7 +217,7 @@ tamed void MemcacheClient::read_loop() {
         // get header
         twait { sock_.read(data, hdrlen, &nread, make_event(err)); }
         mandatory_assert(!err && "Problems reading memcached response.");
-        mandatory_assert(nread == sizeof(protocol_binary_response_header));
+        mandatory_assert(nread == hdrlen);
 
         hdr = (protocol_binary_response_header*)data;
         mandatory_assert(hdr->response.magic == PROTOCOL_BINARY_RES);
