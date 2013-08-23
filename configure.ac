@@ -29,13 +29,7 @@ fi
 
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
 
-AC_SEARCH_LIBS([memcached], [memcached], [ac_cv_have_memcached=yes], [ac_cv_have_memcached=no])
-MEMCACHED_LIB=
-if test "$ac_cv_have_memcached" = yes; then
-    AC_CHECK_HEADERS([libmemcached/memcached.hpp])
-    MEMCACHED_LIB="-lmemcached"
-fi
-AC_SUBST([MEMCACHED_LIB])
+AC_CHECK_HEADERS([memcached/protocol_binary.h])
 
 AC_CHECK_HEADERS([hiredis/hiredis.h], [HIREDIS_LIB="-lhiredis"], [HIREDIS_LIB=])
 AC_SUBST([HIREDIS_LIB])

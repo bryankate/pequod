@@ -1130,57 +1130,6 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
-void test_berkeleydb() {
-    using namespace pq;
-#if HAVE_DB_CXX_H
-    BerkeleyDBStore *dbi = new BerkeleyDBStore("/tmp", "pqunit.db");
-    String s1 = "xxx";
-    String s2 = "zzz";
-
-    dbi->put(s1, s2);
-    String s3 = dbi->get(s1);
-    CHECK_EQ(s3, s2);
-
-    String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
-    for (int i = 0; i < 10; ++i) {
-        PersistentWrite* wop = new PersistentWrite(keys[i], keys[i]);
-        (*wop)(dbi);
-    }
-
-    PersistentStore::ResultSet res;
-    PersistentRead* rop = new PersistentRead("b", "p", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)10);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("a", "c", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)0);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("c", "d0", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)2);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("c0", "g", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)3);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("j", "p0", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)3);
-    delete rop;
-
-    delete dbi;
-#endif
-}
-
 void test_postgres() {
     using namespace pq;
 #if HAVE_PQXX_PQXX
@@ -1235,9 +1184,10 @@ void test_postgres() {
 
 } // namespace
 
-extern void test_redis();
 extern void test_mpfd();
 extern void test_mpfd2();
+extern void test_redis();
+extern void test_memcache();
 
 void unit_tests(const std::set<String> &testcases) {
     std::vector<std::pair<String, test_func> > tests_;
@@ -1265,15 +1215,15 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_iupdate_t);
     ADD_TEST(test_celebrity);
-    ADD_TEST(test_berkeleydb);
     ADD_EXP_TEST(test_postgres);
-    ADD_EXP_TEST(test_redis);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
     ADD_EXP_TEST(test_karma_online);
     ADD_OTHER_TEST(test_mpfd);
     ADD_OTHER_TEST(test_mpfd2);
+    ADD_OTHER_TEST(test_redis);
+    ADD_OTHER_TEST(test_memcache);
     size_t ntests = 0;
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {

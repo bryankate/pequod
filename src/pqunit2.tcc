@@ -1,6 +1,7 @@
 // -*- mode: c++ -*-
 #include "mpfd.hh"
 #include "redisadapter.hh"
+#include "memcacheadapter.hh"
 #include "check.hh"
 #include <fcntl.h>
 
@@ -188,5 +189,56 @@ tamed void test_redis() {
     CHECK_EQ(results.size(), (uint32_t)4);
 }
 #else
-void test_redis() { }
+void test_redis() {
+    mandatory_assert(false && "Not configured for redis!");
+}
+#endif
+
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+tamed void test_memcache() {
+    tvars {
+        pq::MemcacheClient client;
+        String v;
+        int32_t newlen = -1;
+        std::vector<String> results;
+    }
+    twait { client.connect(make_event()); }
+
+    twait { client.set("hello", "world", make_event()); }
+    twait { client.get("hello", make_event(v)); }
+    CHECK_EQ(v, "world");
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "");
+
+    twait { client.append("k2", "abc", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 3);
+
+    twait { client.append("k2", "def", make_event()); }
+    twait { client.length("k2", make_event(newlen)); }
+    CHECK_EQ(newlen, 6);
+
+    twait { client.get("k2", make_event(v)); }
+    CHECK_EQ(v, "abcdef");
+
+    twait { client.get("k2", 1, make_event(v)); }
+    CHECK_EQ(v, "bcdef");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "1");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "2");
+
+    twait { client.increment("k0", make_event()); }
+    twait { client.get("k0", make_event(v)); }
+    CHECK_EQ(v, "3");
+}
+#else
+void test_memcache() {
+    mandatory_assert(false && "Not configured for memcache!");
+}
 #endif
