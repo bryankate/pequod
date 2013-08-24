@@ -215,16 +215,15 @@ def define_experiments():
     # fix %active at 70, post:check ratio at 1:100 and 50 timeline checks per user. 
     exp = {'name': "compare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    binaryFlag = "--no-binary"  #  not setup for binary on other systems
-    initBase = "%s %s" % (initCmd, binaryFlag)
-    popBase = "%s %s %s --popduration=0" % (populateCmd, users, binaryFlag)
-    clientBase = "%s %s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
+    initBase = "%s --no-binary" % (initCmd)
+    popBase = "%s %s --no-binary --popduration=0" % (populateCmd, users)
+    clientBase = "%s %s --no-binary --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
-                 (clientCmd, users, binaryFlag)
+                 (clientCmd, users)
     
     exp['defs'].append(
         {'name': "pequod",
-         'def_part': partfunc,
+         'def_part': "twitternew-text",
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initBase),
@@ -233,7 +232,7 @@ def define_experiments():
     
     exp['defs'].append(
         {'name': "pequod-client-push",
-         'def_part': partfunc,
+         'def_part': "twitternew-text",
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initBase),
@@ -242,10 +241,19 @@ def define_experiments():
     
     exp['defs'].append(
         {'name': "redis",
-         'def_part': partfunc,
+         'def_part': "twitternew-text",
          'def_redis_compare': True,
          'populatecmd': "%s --push --redis" % (popBase),
          'clientcmd': "%s --push --redis" % (clientBase)})
+    
+    '''
+    exp['defs'].append(
+        {'name': "memcache",
+         'def_part': "twitternew-text",
+         'def_memcache_compare': True,
+         'populatecmd': "%s --push --memcached" % (popBase),
+         'clientcmd': "%s --push --memcached" % (clientBase)})
+    '''
     
     exp['defs'].append(
         {'name': "postgres",
