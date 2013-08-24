@@ -143,6 +143,7 @@ $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteclient.o: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqunit.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqpersistent.hh $(OBJDIR)/redisadapter.hh
+$(OBJDIR)/pqunit2.o: $(OBJDIR)/memcacheadapter.hh
 $(OBJDIR)/twitter.hh: $(OBJDIR)/twittershim.hh
 $(OBJDIR)/twitter.o: $(OBJDIR)/twitter.hh $(OBJDIR)/pqmulticlient.hh
 $(OBJDIR)/twittershim.hh: $(OBJDIR)/pqclient.hh
