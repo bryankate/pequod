@@ -231,7 +231,7 @@ void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
 
 void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int) const {
     long diff = src->value().to_i() - old_value.to_i();
-    sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) {
+    sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst)
                 return src->value();
             else if (diff)
@@ -244,7 +244,7 @@ void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
 void BoundedCopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& oldval, int notifier) const {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
-    sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) {
+    sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) -> String {
             return notifier >= 0 ? src->value() : erase_marker();
         });
 }
