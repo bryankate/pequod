@@ -937,6 +937,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
         uint32_t prefixsz = uidsz + 2;
         uint32_t entrysz = uidsz + timesz + 1;
         std::vector<String> posts;
+        std::vector<String*> values;
     }
 
     if (tp_.binary()) {
@@ -967,13 +968,19 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
                 memcpy(pbuf + 2, pstart + timesz + 1, uidsz);
                 memcpy(pbuf + 3 + uidsz, pstart, timesz);
 
+                values.push_back(new String());
                 posts.push_back(Str(tbuf, prefixsz + entrysz + 1));
                 posts.push_back("");
 
-                server_.get(Str(pbuf, entrysz + 2), make_event(posts.back()));
+                server_.get(Str(pbuf, entrysz + 2), make_event(*values.back()));
             }
         }
     }
+
+    for (uint32_t v = 0; v < values.size(); ++v) {
+         posts[v * 2 + 1] = *values[v];
+         delete values[v];
+     }
 
     done(scan_result(Json(posts)));
 }
@@ -1056,6 +1063,7 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
         uint32_t timesz = (this->tp_.binary()) ? 4 : 10;
         uint32_t prefixsz = uidsz + 2;
         std::vector<String> posts;
+        std::vector<String*> values;
     }
 
     if (tp_.binary()) {
@@ -1081,12 +1089,18 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
             if (ptime >= start_time && ptime < end_time) {
                 memcpy(buf + prefixsz + 1, pstart, timesz);
 
+                values.push_back(new String());
                 posts.push_back(Str(buf, prefixsz + timesz + 1));
                 posts.push_back("");
 
-                server_.get(Str(buf, prefixsz + timesz + 1), make_event(posts.back()));
+                server_.get(Str(buf, prefixsz + timesz + 1), make_event(*values.back()));
             }
         }
+    }
+
+    for (uint32_t v = 0; v < values.size(); ++v) {
+        posts[v * 2 + 1] = *values[v];
+        delete values[v];
     }
 
     done(scan_result(Json(posts)));
