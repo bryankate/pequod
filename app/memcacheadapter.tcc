@@ -201,9 +201,10 @@ tamed void MemcacheClient::read_loop() {
     tvars {
         int32_t err;
         size_t nread;
-        uint8_t data[sizeof(protocol_binary_response_header) + 256];
-        protocol_binary_response_header* hdr = nullptr;
+        protocol_binary_response_header hdr;
         uint32_t hdrlen = sizeof(protocol_binary_response_header);
+        uint8_t* data = nullptr;
+        uint32_t datasz = 0;
         uint32_t bodylen;
         tamer::event<MemcacheResponse> curr;
     }
@@ -215,60 +216,63 @@ tamed void MemcacheClient::read_loop() {
         rdwait_.pop_front();
 
         // get header
-        twait { sock_.read(data, hdrlen, &nread, make_event(err)); }
+        twait { sock_.read(&hdr, hdrlen, &nread, make_event(err)); }
         mandatory_assert(!err && "Problems reading memcached response.");
         mandatory_assert(nread == hdrlen);
+        mandatory_assert(hdr.response.magic == PROTOCOL_BINARY_RES);
+        mandatory_assert(read_in_net_order<uint32_t>((uint8_t*)&hdr.response.opaque) == curr.result().seq);
 
-        hdr = (protocol_binary_response_header*)data;
-        mandatory_assert(hdr->response.magic == PROTOCOL_BINARY_RES);
-        mandatory_assert(read_in_net_order<uint32_t>((uint8_t*)&hdr->response.opaque) == curr.result().seq);
+        bodylen = read_in_net_order<uint32_t>((uint8_t*)&hdr.response.bodylen);
+        curr.result().status = read_in_net_order<uint16_t>((uint8_t*)&hdr.response.status);
 
-        bodylen = read_in_net_order<uint32_t>((uint8_t*)&hdr->response.bodylen);
-        curr.result().status = read_in_net_order<uint16_t>((uint8_t*)&hdr->response.status);
-        curr.result().flags = 0;
+        if (bodylen > datasz) {
+            if (data)
+                delete[] data;
+            data = new uint8_t[bodylen];
+            datasz = bodylen;
+        }
 
         if (curr.result().status) {
             // get error message
-            twait { sock_.read(data + hdrlen, bodylen, &nread, make_event(err)); }
+            twait { sock_.read(data, bodylen, &nread, make_event(err)); }
             mandatory_assert(!err && "Problems reading memcached response.");
             mandatory_assert(nread == bodylen);
 
-            curr.result().strval = String(data + hdrlen, bodylen);
+            curr.result().strval = String(data, bodylen);
             curr.unblocker().trigger();
             continue;
         }
 
-        switch(hdr->response.opcode) {
+        switch(hdr.response.opcode) {
             case PROTOCOL_BINARY_CMD_GET: {
-                twait { sock_.read(data + hdrlen, bodylen, &nread, make_event(err)); }
+                twait { sock_.read(data, bodylen, &nread, make_event(err)); }
                 mandatory_assert(!err && "Problems reading memcached response.");
                 mandatory_assert(nread == bodylen);
 
-                uint16_t keylen = read_in_net_order<uint16_t>((uint8_t*)&hdr->response.keylen);
-                curr.result().flags = read_in_net_order<uint32_t>(data + hdrlen);
-                curr.result().strval = String(data + hdrlen + hdr->response.extlen + keylen,
-                                              bodylen - hdr->response.extlen - keylen);
+                uint16_t keylen = read_in_net_order<uint16_t>((uint8_t*)&hdr.response.keylen);
+                curr.result().strval = String(data + hdr.response.extlen + keylen,
+                                              bodylen - hdr.response.extlen - keylen);
                 break;
             }
 
             case PROTOCOL_BINARY_CMD_SET: {
                 mandatory_assert(!bodylen);
-                mandatory_assert(hdr->response.cas);
+                mandatory_assert(hdr.response.cas);
                 break;
             }
 
             case PROTOCOL_BINARY_CMD_INCREMENT: {
-                twait { sock_.read(data + hdrlen, bodylen, &nread, make_event(err)); }
+                twait { sock_.read(data, bodylen, &nread, make_event(err)); }
                 mandatory_assert(!err && "Problems reading memcached response.");
                 mandatory_assert(nread == bodylen);
 
-                curr.result().intval = read_in_net_order<uint64_t>(data + hdrlen);
+                curr.result().intval = read_in_net_order<uint64_t>(data);
                 break;
             }
 
             case PROTOCOL_BINARY_CMD_APPEND: {
                 mandatory_assert(!bodylen);
-                mandatory_assert(hdr->response.cas);
+                mandatory_assert(hdr.response.cas);
                 break;
             }
 
@@ -281,6 +285,8 @@ tamed void MemcacheClient::read_loop() {
     }
 
     reading_ = false;
+    if (data)
+        delete[] data;
 }
 
 #else
@@ -348,7 +354,7 @@ void MemcacheClient::pace(tamer::event<> e) {
 
 tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len, tamer::event<> e) {
     tvars {
-        size_t nwritten;
+        size_t nwritten = 0;
         int32_t ret;
     }
 

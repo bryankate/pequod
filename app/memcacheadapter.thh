@@ -18,7 +18,6 @@ enum { use_yandong_modified_server = 0 };
 
 struct MemcacheResponse {
     uint16_t status;
-    uint32_t flags;
     uint32_t seq;
     String strval;
     uint64_t intval;
