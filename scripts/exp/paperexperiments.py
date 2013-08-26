@@ -241,19 +241,15 @@ def define_experiments():
     
     exp['defs'].append(
         {'name': "redis",
-         'def_part': "twitternew-text",
          'def_redis_compare': True,
          'populatecmd': "%s --push --redis" % (popBase),
          'clientcmd': "%s --push --redis" % (clientBase)})
     
-    '''
     exp['defs'].append(
         {'name': "memcache",
-         'def_part': "twitternew-text",
          'def_memcache_compare': True,
          'populatecmd': "%s --push --memcached" % (popBase),
          'clientcmd': "%s --push --memcached" % (clientBase)})
-    '''
     
     exp['defs'].append(
         {'name': "postgres",
@@ -271,7 +267,7 @@ def define_experiments():
     exp['plot'] = {'type': "bar",
                    'data': [{'from': "client",
                              'attr': "wall_time"}],
-                   'lines': ["pequod", "pequod-client-push", "redis", "postgres"],
+                   'lines': ["pequod", "pequod-client-push", "redis", "memcache", "postgres"],
                    'ylabel': "Runtime (s)"}
     exps.append(exp)
     
