@@ -39,11 +39,11 @@ class Allocator {
     }
 
     inline pointer address(reference t) const {
-        return std::__addressof(t);
+        return std::addressof(t);
     }
 
     inline const_pointer address(const_reference t) const {
-        return std::__addressof(t);
+        return std::addressof(t);
     }
 
     inline void destroy(pointer p) {
