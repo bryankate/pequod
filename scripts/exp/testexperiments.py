@@ -53,14 +53,12 @@ def define_experiments():
                            'clientcmd': "%s --dbpool-depth=100" % (postgresClientCmd)}]})
     
     exps.append({'name': "redis", 
-                 'defs': [{'def_part': partfunc,
-                           'def_redis_compare': True,
+                 'defs': [{'def_redis_compare': True,
                            'populatecmd': "%s %s --push --redis" % (populateCmd, users),
                            'clientcmd': "%s --push --redis" % (clientBase)}]})
     
     exps.append({'name': "memcache", 
-                 'defs': [{'def_part': partfunc,
-                           'def_memcache_compare': True,
+                 'defs': [{'def_memcache_compare': True,
                            'populatecmd': "%s %s --push --memcached" % (populateCmd, users),
                            'clientcmd': "%s --push --memcached" % (clientBase)}]})
     
