@@ -78,11 +78,11 @@ def prepare_experiment(xname, ename):
             os.unlink("last")
         os.symlink(uniquedir, "last")
 
-    if symlink:
-        linkpath = os.path.join(topdir, symlink)
-        if os.path.lexists(linkpath):
-            os.unlink(linkpath)
-        os.symlink(expdir, linkpath)
+        if symlink:
+            linkpath = os.path.join(topdir, symlink)
+            if os.path.lexists(linkpath):
+                os.unlink(linkpath)
+            os.symlink(expdir, linkpath)
 
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
