@@ -626,8 +626,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t postlimit = this->tp_.postlimit();
         uint32_t checklimit = this->tp_.checklimit();
         uint32_t u, beg_scan, end_scan, slot, n, lastprog = 0;
-        uint32_t npost = 0, nbackpost = 0, nsubscribe = 0, nlogout = 0,
-                 nlogin = 0, ncheck = 0, nread = 0, nfull = 0;
+        uint32_t npost = 0, nbackpost = 0, nsubscribe = 0,
+                 nlogout = 0, ncheck = 0, nread = 0, nfull = 0;
         uint32_t next_checker = 0;
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
@@ -782,11 +782,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     // each distributed experiment does roughly the same amount of work
     // despite differences in rpc ordering
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
-    n = loggedin_.size();
-    for (u = 0; u < n; ++u) {
-        user = tp_.managed_user(loggedin_.front());
-        loggedin_.pop_front();
-        check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
+    for (auto& uid : active_) {
+        user = tp_.managed_user(uid);
+        if (user->last_read_)
+            check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
     }
     twait { drain(gr, make_event()); }
 
@@ -829,8 +828,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
          .set("nchecks", ncheck)
          .set("nfull", nfull)
          .set("nposts_read", nread)
-         .set("nactive", active_.size() + loggedin_.size())
-         .set("nlogins", nlogin)
+         .set("nactive", active_.size())
          .set("nlogouts", nlogout)
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))

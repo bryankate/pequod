@@ -17,7 +17,6 @@ def aggregate(*file_names):
 	output["nfull"] = 0
 	output["nposts_read"] = 0
 	output["nactive"] = 0
-	output["nlogins"] = 0
 	output["nlogouts"] = 0
 	output["user_time"] = 0
 	output["system_time"] = 0
@@ -37,7 +36,6 @@ def aggregate(*file_names):
 		output["nfull"] += structured_obj["nfull"]
 		output["nposts_read"] += structured_obj["nposts_read"]
 		output["nactive"] += structured_obj["nactive"]
-		output["nlogins"] += structured_obj["nlogins"]
 		output["nlogouts"] += structured_obj["nlogouts"]
 		output["user_time"] += structured_obj["user_time"]
 		output["system_time"] += structured_obj["system_time"]
