@@ -21,6 +21,7 @@ from lib.gnuplotter import make_gnuplot
 parser = OptionParser()
 parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", 
                   default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
+parser.add_option("-L", "--link", action="store", type="string", dest="symlink", default=None)
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=7000)
@@ -37,6 +38,7 @@ parser.add_option("-r", "--ramfs", action="store", type="string", dest="ramfs", 
 (options, args) = parser.parse_args()
 
 expfile = options.expfile
+symlink = options.symlink
 nbacking = options.nbacking
 ncaching = options.ncaching
 startport = options.startport
@@ -68,12 +70,19 @@ def prepare_experiment(xname, ename):
         topdir = "results"
 
     if uniquedir is None:
-        uniquedir = topdir + "/exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
+        expdir = "exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
+        uniquedir = os.path.join(topdir, expdir)
         os.makedirs(uniquedir)
 
         if os.path.lexists("last"):
             os.unlink("last")
         os.symlink(uniquedir, "last")
+
+    if symlink:
+        linkpath = os.path.join(topdir, symlink)
+        if os.path.lexists(linkpath):
+            os.unlink(linkpath)
+        os.symlink(expdir, linkpath)
 
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
