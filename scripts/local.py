@@ -155,7 +155,7 @@ def check_database_env(expdef):
             exit()
         dbenvpath = os.path.join(ramfs, dbenvpath)
 
-def start_postgres(expdef, id):
+def start_postgres(expdef, id, nclients):
     fartfile = os.path.join(resdir, "fart_db_" + str(id) + ".txt")
     dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
     os.makedirs(dbpath)
@@ -163,9 +163,17 @@ def start_postgres(expdef, id):
     cmd = "initdb " + dbpath + " -E utf8 -A trust"
     run_cmd(cmd, fartfile, fartfile)
 
-    dbflags = expdef.get('def_db_flags')
-    cmd = "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
-          " -D " + dbpath + " " + dbflags
+    if affinity:
+        cpus = str(startcpu + (id * skipcpu))
+        for c in range(nclients - 1):
+            cpus += "," + str(startcpu + ((id + c + 1) * skipcpu))
+            
+        pin = "numactl -C " + cpus + " "
+    else:
+        pin = ""
+    
+    cmd = pin + "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
+          " -D " + dbpath + " " + expdef.get('def_db_flags')
     proc = run_cmd_bg(cmd, fartfile, fartfile)
     sleep(2)
     
@@ -212,8 +220,9 @@ def start_memcache(expdef, id):
         pin = "numactl -C " + str(startcpu + (id * skipcpu)) + " "
     else:
         pin = ""
-    
-    cmd = pin + "memcached -p " + str(startport + id)
+
+    cmd = pin + "memcached " + expdef.get('def_memcache_args') + \
+          " -t 1 -p " + str(startport + id)
     return run_cmd_bg(cmd, fartfile, fartfile)
 
 # load experiment definitions as global 'exps'
@@ -266,7 +275,7 @@ for x in exps:
                 print "ERROR: -c must be > 0 for DB comparison experiments"
                 exit(-1)
                 
-            dbprocs.append(start_postgres(e, 0))
+            dbprocs.append(start_postgres(e, 0, ncaching))
             
         elif rediscompare:
             if ncaching < 1:
@@ -308,7 +317,7 @@ for x in exps:
                             servercmd = servercmd + " --monitordb"
     
                         dbfile.write(dbhost + "\t" + str(dbstartport + s) + "\n");
-                        dbprocs.append(start_postgres(e, s))
+                        dbprocs.append(start_postgres(e, s, 1))
     
                 part = options.part if options.part else e['def_part']
                 serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
