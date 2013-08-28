@@ -422,7 +422,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
 
 #if TIMELINE_SANITY_CHECK
     {
-        assert(!tp_.groupid() && "Sanity check requires single client group.")
+        assert(!tp_.groupid() && "Sanity check requires single client group.");
         TwitterUser* poster = tp_.managed_user(u);
         poster->posts_.push_back(time);
 
@@ -643,7 +643,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (loggedin_.empty())
         twait { select_active(make_event()); }
 
-    gen.seed(13918 + tp_.groupid());
+    gen.seed(13 + tp_.groupid());
     periodic_logger(done);
 
     log_.clear();
