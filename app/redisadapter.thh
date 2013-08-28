@@ -26,26 +26,33 @@ class RedisClient {
     void connect();
     void clear();
 
-    void get(Str k, tamer::event<String> e);
-    void get(Str k, int32_t begin, tamer::event<String> e);
-    void getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e);
-    void set(Str k, Str v, tamer::event<> e);
-    void append(Str k, Str v, tamer::event<> e);
-    void increment(Str k, tamer::event<> e);
-    void length(Str k, tamer::event<int32_t> e);
-    void sadd(Str k, Str v, tamer::event<> e);
-    void smembers(Str k, tamer::event<result_set> e);
-    void zadd(Str k, Str v, int32_t score, tamer::event<> e);
-    void zrangebyscore(Str k, int32_t begin, int32_t end, tamer::event<result_set> e);
+    tamed void get(Str k, tamer::event<String> e);
+    tamed void get(Str k, int32_t begin, tamer::event<String> e);
+    tamed void getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e);
+    tamed void set(Str k, Str v, tamer::event<> e);
+    tamed void append(Str k, Str v, tamer::event<> e);
+    tamed void increment(Str k, tamer::event<> e);
+    tamed void length(Str k, tamer::event<int32_t> e);
+    tamed void sadd(Str k, Str v, tamer::event<> e);
+    tamed void smembers(Str k, tamer::event<result_set> e);
+    tamed void zadd(Str k, Str v, int32_t score, tamer::event<> e);
+    tamed void zrangebyscore(Str k, int32_t begin, int32_t end, tamer::event<result_set> e);
+
+    tamed void pace(tamer::event<> e);
 
     // only here for interface compliance
     void done_get(Str k);
-    void pace(tamer::event<> e);
 
   private:
+    enum { nout_lo = 256, nout_hi = 1024 };
+
     redisAsyncContext* ctx_;
     String host_;
     uint32_t port_;
+    tamer::event<> pacer_;
+    uint32_t nout_;
+
+    void check_pace();
 };
 
 void redis_cb_void(redisAsyncContext* c, void* reply, void* privdata);
@@ -75,6 +82,8 @@ class RedisMultiClient {
     inline void smembers(Str k, tamer::event<result_set> e);
     inline void zadd(Str k, Str v, int32_t score, tamer::event<> e);
     inline void zrangebyscore(Str k, int32_t begin, int32_t end, tamer::event<result_set> e);
+
+    tamed void pace(tamer::event<> e);
 
   private:
     const Hosts* hosts_;

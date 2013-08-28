@@ -39,20 +39,26 @@ class MemcacheClient {
     tamed void append(Str key, Str value, tamer::event<> e);
     tamed void increment(Str key, tamer::event<> e);
     tamed void length(Str key, tamer::event<int32_t> e);
+    tamed void pace(tamer::event<> e);
 
     // only here for interface compliance
     void done_get(Str key);
-    void pace(tamer::event<> e);
 
   private:
+    enum { wbuffsz_lo = 2 << 19, wbuffsz_hi = 2 << 20 };
+    enum { nout_lo = 8192, nout_hi = 16384 };
+
     String host_;
     uint32_t port_;
     tamer::fd sock_;
     uint32_t seq_;
     volatile bool reading_;
     std::deque<tamer::event<MemcacheResponse>> rdwait_;
+    uint32_t wbuffsz_;
+    tamer::event<> pacer_;
 
     tamed void send_command(const uint8_t* data, uint32_t len, tamer::event<> e);
+    tamed void check_pace(tamer::event<> e);
 
 #if HAVE_MEMCACHED_PROTOCOL_BINARY_H
     uint32_t prep_command(uint8_t* data, uint8_t op, Str key, Str value, uint32_t seq);
@@ -76,10 +82,10 @@ class MemcacheMultiClient {
     inline void append(Str k, Str v, tamer::event<> e);
     inline void increment(Str k, tamer::event<> e);
     inline void length(Str k, tamer::event<int32_t> e);
+    tamed void pace(tamer::event<> e);
 
     // only here for interface compliance
     inline void done_get(Str k);
-    inline void pace(tamer::event<> e);
 
   private:
     const Hosts* hosts_;
@@ -114,10 +120,6 @@ inline void MemcacheMultiClient::length(Str k, tamer::event<int32_t> e) {
 }
 
 inline void MemcacheMultiClient::done_get(Str) {
-}
-
-inline void MemcacheMultiClient::pace(tamer::event<> e) {
-    e();
 }
 
 inline MemcacheClient* MemcacheMultiClient::cache_for(Str key) {

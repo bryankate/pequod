@@ -22,6 +22,7 @@ parser = OptionParser()
 parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", 
                   default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
 parser.add_option("-L", "--link", action="store", type="string", dest="symlink", default=None)
+parser.add_option("-K", "--killall", action="store_true", dest="killall", default=False)
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=7000)
@@ -39,6 +40,7 @@ parser.add_option("-r", "--ramfs", action="store", type="string", dest="ramfs", 
 
 expfile = options.expfile
 symlink = options.symlink
+killall = options.killall
 nbacking = options.nbacking
 ncaching = options.ncaching
 startport = options.startport
@@ -231,6 +233,9 @@ for x in exps:
         elif not args and e.get("disabled"):
             continue
 
+        if killall:
+            Popen("killall pqserver; killall postgres; killall memcached; killall redis-server", shell=True).wait()
+
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
         (expdir, resdir) = prepare_experiment(x["name"], expname)
@@ -416,6 +421,9 @@ for x in exps:
     
         for p in serverprocs + dbprocs:
             kill_proc(p)
+        
+        if killall:
+            Popen("killall pqserver; killall postgres; killall memcached; killall redis-server", shell=True).wait()
         
         if ngroups > 1:
             aggregate_dir(resdir)
