@@ -5,11 +5,11 @@
 namespace pq {
 
 RedisClient::RedisClient()
-    : ctx_(nullptr), host_("127.0.0.1"), port_(6379) {
+    : ctx_(nullptr), host_("127.0.0.1"), port_(6379), nout_(0) {
 }
 
 RedisClient::RedisClient(String host, uint32_t port)
-    : ctx_(nullptr), host_(host), port_(port) {
+    : ctx_(nullptr), host_(host), port_(port), nout_(0) {
 }
 
 RedisClient::~RedisClient() {
@@ -27,6 +27,7 @@ void RedisClient::connect() {
         mandatory_assert(false);
     }
 
+    nout_ = 0;
     redis_tamer_attach(ctx_);
 }
 
@@ -37,91 +38,146 @@ void RedisClient::clear() {
     ctx_ = nullptr;
 }
 
-void RedisClient::get(Str k, tamer::event<String> e) {
-    tamer::event<String>* payload = new tamer::event<String>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_string, payload, "GET %b",
-                                    k.data(), k.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::get(Str k, tamer::event<String> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_string, &e, "GET %b",
+                                        k.data(), k.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::get(Str k, int32_t begin, tamer::event<String> e) {
+tamed void RedisClient::get(Str k, int32_t begin, tamer::event<String> e) {
     getrange(k, begin, -1, e);
 }
 
-void RedisClient::getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e) {
-    tamer::event<String>* payload = new tamer::event<String>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_string, payload, "GETRANGE %b %d %d",
-                                    k.data(), (size_t)k.length(), begin, end);
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_string, &e, "GETRANGE %b %d %d",
+                                        k.data(), (size_t)k.length(), begin, end);
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::set(Str k, Str v, tamer::event<> e) {
-    tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "SET %b %b",
-                                    k.data(), (size_t)k.length(),
-                                    v.data(), (size_t)v.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::set(Str k, Str v, tamer::event<> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_void, &e, "SET %b %b",
+                                        k.data(), (size_t)k.length(),
+                                        v.data(), (size_t)v.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::append(Str k, Str v, tamer::event<> e) {
-    tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "APPEND %b %b",
-                                    k.data(), (size_t)k.length(),
-                                    v.data(), (size_t)v.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::append(Str k, Str v, tamer::event<> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_void, &e, "APPEND %b %b",
+                                        k.data(), (size_t)k.length(),
+                                        v.data(), (size_t)v.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::increment(Str k, tamer::event<> e) {
-    tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "INCR %b",
-                                    k.data(), (size_t)k.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::increment(Str k, tamer::event<> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_void, &e, "INCR %b",
+                                        k.data(), (size_t)k.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::length(Str k, tamer::event<int32_t> e) {
-    tamer::event<int32_t>* payload = new tamer::event<int32_t>(e);
-    int32_t err =  redisAsyncCommand(ctx_, redis_cb_int32, payload, "STRLEN %b",
-                                     k.data(), (size_t)k.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::length(Str k, tamer::event<int32_t> e) {
+    {
+        int32_t err =  redisAsyncCommand(ctx_, redis_cb_int32, &e, "STRLEN %b",
+                                         k.data(), (size_t)k.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::sadd(Str k, Str v, tamer::event<> e) {
-    tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "SADD %b %b",
-                                    k.data(), (size_t)k.length(),
-                                    v.data(), (size_t)v.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::sadd(Str k, Str v, tamer::event<> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_void, &e, "SADD %b %b",
+                                        k.data(), (size_t)k.length(),
+                                        v.data(), (size_t)v.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::smembers(Str k, tamer::event<result_set> e) {
-    tamer::event<result_set>* payload = new tamer::event<result_set>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_set, payload, "SMEMBERS %b",
-                                    k.data(), (size_t)k.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::smembers(Str k, tamer::event<result_set> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_set, &e, "SMEMBERS %b",
+                                        k.data(), (size_t)k.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
-    tamer::event<>* payload = new tamer::event<>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_void, payload, "ZADD %b %d %b",
-                                    k.data(), (size_t)k.length(),
-                                    score,
-                                    v.data(), (size_t)v.length());
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_void, &e, "ZADD %b %d %b",
+                                        k.data(), (size_t)k.length(),
+                                        score,
+                                        v.data(), (size_t)v.length());
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
 }
 
-void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
-                                tamer::event<result_set> e) {
-    tamer::event<result_set>* payload = new tamer::event<result_set>(e);
-    int32_t err = redisAsyncCommand(ctx_, redis_cb_set, payload, "ZRANGEBYSCORE %b %d (%d",
-                                    k.data(), (size_t)k.length(), begin, end);
-    mandatory_assert(err == REDIS_OK);
+tamed void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
+                                      tamer::event<result_set> e) {
+    {
+        int32_t err = redisAsyncCommand(ctx_, redis_cb_set, &e, "ZRANGEBYSCORE %b %d (%d",
+                                        k.data(), (size_t)k.length(), begin, end);
+        mandatory_assert(err == REDIS_OK);
+        ++nout_;
+    }
+    twait { e.at_trigger(make_event()); }
+    check_pace();
+}
+
+tamed void RedisClient::pace(tamer::event<> e) {
+    if (nout_ >= nout_hi) {
+        if (!pacer_) {
+            twait { pacer_ = make_event(); }
+            e();
+        }
+        else
+            pacer_.at_trigger(e);
+    }
+    else
+        e();
+}
+
+void RedisClient::check_pace() {
+    --nout_;
+    if (pacer_ && nout_ <= nout_lo)
+        pacer_();
 }
 
 void RedisClient::done_get(Str) {
-}
-
-void RedisClient::pace(tamer::event<> e) {
-    e();
 }
 
 void redis_check_reply(redisAsyncContext* c, void* reply) {
@@ -135,7 +191,6 @@ void redis_cb_void(redisAsyncContext* c, void* reply, void* privdata) {
     redis_check_reply(c, reply);
     tamer::event<>* e = (tamer::event<>*)privdata;
     e->trigger();
-    delete e;
 }
 
 void redis_cb_string(redisAsyncContext* c, void* reply, void* privdata) {
@@ -143,14 +198,12 @@ void redis_cb_string(redisAsyncContext* c, void* reply, void* privdata) {
     redisReply* r = (redisReply*)reply;
     tamer::event<String>* e = (tamer::event<String>*)privdata;
     e->trigger(Str(r->str, r->len));
-    delete e;
 }
 
 void redis_cb_int32(redisAsyncContext* c, void* reply, void* privdata) {
     redis_check_reply(c, reply);
     tamer::event<int32_t>* e = (tamer::event<int32_t>*)privdata;
     e->trigger(((redisReply*)reply)->integer);
-    delete e;
 }
 
 void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata) {
@@ -163,7 +216,6 @@ void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata) {
         result.push_back(r->element[i]->str);
 
     e->unblocker().trigger();
-    delete e;
 }
 
 
@@ -189,6 +241,18 @@ void RedisMultiClient::clear() {
         delete c;
     }
     clients_.clear();
+}
+
+tamed void RedisMultiClient::pace(tamer::event<> e) {
+    tvars {
+        tamer::gather_rendezvous gr;
+    }
+
+    for (auto& c : clients_)
+        c->pace(gr.make_event());
+
+    twait(gr);
+    e();
 }
 
 

@@ -801,7 +801,7 @@ void TwitterNewRedisShim<S,P>::post_scan(uint32_t poster,
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewRedisShim<S,P>::pace(tamer::preevent<R> done) {
-    done();
+    server_.pace(done);
 }
 
 template <typename S, typename P> template <typename R>
@@ -1108,7 +1108,7 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::pace(tamer::preevent<R> done) {
-    done();
+    server_.pace(done);
 }
 
 template <typename S, typename P> template <typename R>

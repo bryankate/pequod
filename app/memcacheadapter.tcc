@@ -33,6 +33,7 @@ tamed void MemcacheClient::connect(tamer::event<> done) {
 void MemcacheClient::clear() {
     reading_ = false;
     sock_.close();
+    rdwait_.clear();
 }
 
 #if HAVE_MEMCACHED_PROTOCOL_BINARY_H
@@ -238,6 +239,9 @@ tamed void MemcacheClient::read_loop() {
             mandatory_assert(!err && "Problems reading memcached response.");
             mandatory_assert(nread == bodylen);
 
+            if (pacer_ && rdwait_.size() <= nout_lo)
+                pacer_();
+
             curr.result().strval = String(data, bodylen);
             curr.unblocker().trigger();
             continue;
@@ -281,12 +285,28 @@ tamed void MemcacheClient::read_loop() {
                 break;
         }
 
+        if (pacer_ && rdwait_.size() <= nout_lo)
+            pacer_();
+
         curr.unblocker().trigger();
     }
 
     reading_ = false;
     if (data)
         delete[] data;
+}
+
+tamed void MemcacheClient::pace(tamer::event<> e) {
+    if (rdwait_.size() >= nout_hi) {
+        if (!pacer_) {
+            twait { pacer_ = make_event(); }
+            e();
+        }
+        else
+            pacer_.at_trigger(e);
+    }
+    else
+        e();
 }
 
 #else
@@ -308,6 +328,10 @@ tamed void MemcacheClient::append(Str key, Str value, tamer::event<> e) {
 
 tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     mandatory_assert(false && "Memcached headers not installed!");
+    e();
+}
+
+tamed void MemcacheClient::pace(tamer::event<> e) {
     e();
 }
 #endif
@@ -346,10 +370,6 @@ tamed void MemcacheClient::length(Str key, tamer::event<int32_t> e) {
 }
 
 void MemcacheClient::done_get(Str) {
-}
-
-void MemcacheClient::pace(tamer::event<> e) {
-    e();
 }
 
 tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len, tamer::event<> e) {
@@ -395,6 +415,18 @@ void MemcacheMultiClient::clear() {
         delete c;
     }
     clients_.clear();
+}
+
+tamed void MemcacheMultiClient::pace(tamer::event<> e) {
+    tvars {
+        tamer::gather_rendezvous gr;
+    }
+
+    for (auto& c : clients_)
+        c->pace(gr.make_event());
+
+    twait(gr);
+    e();
 }
 
 }
