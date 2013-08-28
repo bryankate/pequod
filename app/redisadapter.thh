@@ -44,7 +44,7 @@ class RedisClient {
     void done_get(Str k);
 
   private:
-    enum { nout_lo = 2 << 14, nout_hi = 2 << 16 };
+    enum { nout_lo = 256, nout_hi = 1024 };
 
     redisAsyncContext* ctx_;
     String host_;

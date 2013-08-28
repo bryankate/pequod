@@ -9,11 +9,11 @@
 namespace pq {
 
 MemcacheClient::MemcacheClient()
-    : host_("127.0.0.1"), port_(11211), seq_(0), reading_(false) {
+    : host_("127.0.0.1"), port_(11211), seq_(0), reading_(false), wbuffsz_(0) {
 }
 
 MemcacheClient::MemcacheClient(String host, uint32_t port)
-    : host_(host), port_(port), seq_(0), reading_(false) {
+    : host_(host), port_(port), seq_(0), reading_(false), wbuffsz_(0) {
 }
 
 MemcacheClient::~MemcacheClient() {
@@ -33,6 +33,7 @@ tamed void MemcacheClient::connect(tamer::event<> done) {
 void MemcacheClient::clear() {
     reading_ = false;
     sock_.close();
+    wbuffsz_ = 0;
     rdwait_.clear();
 }
 
@@ -239,11 +240,9 @@ tamed void MemcacheClient::read_loop() {
             mandatory_assert(!err && "Problems reading memcached response.");
             mandatory_assert(nread == bodylen);
 
-            if (pacer_ && rdwait_.size() <= nout_lo)
-                pacer_();
-
             curr.result().strval = String(data, bodylen);
             curr.unblocker().trigger();
+            twait { check_pace(make_event()); }
             continue;
         }
 
@@ -285,28 +284,13 @@ tamed void MemcacheClient::read_loop() {
                 break;
         }
 
-        if (pacer_ && rdwait_.size() <= nout_lo)
-            pacer_();
-
         curr.unblocker().trigger();
+        twait { check_pace(make_event()); }
     }
 
     reading_ = false;
     if (data)
         delete[] data;
-}
-
-tamed void MemcacheClient::pace(tamer::event<> e) {
-    if (rdwait_.size() >= nout_hi) {
-        if (!pacer_) {
-            twait { pacer_ = make_event(); }
-            e();
-        }
-        else
-            pacer_.at_trigger(e);
-    }
-    else
-        e();
 }
 
 #else
@@ -331,9 +315,6 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     e();
 }
 
-tamed void MemcacheClient::pace(tamer::event<> e) {
-    e();
-}
 #endif
 
 tamed void MemcacheClient::get(Str key, int32_t offset, tamer::event<String> e) {
@@ -378,10 +359,35 @@ tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len, tamer
         int32_t ret;
     }
 
+    wbuffsz_ += len;
     twait { sock_.write(data, len, &nwritten, make_event(ret)); }
     mandatory_assert(!ret && "Problem writing to socket.");
     mandatory_assert(nwritten == len && "Did not write the correct number of bytes?");
+    wbuffsz_ -= len;
+    twait { check_pace(make_event()); }
     e();
+}
+
+tamed void MemcacheClient::pace(tamer::event<> e) {
+    if (wbuffsz_ >= wbuffsz_hi || rdwait_.size() >= nout_hi) {
+        if (!pacer_) {
+            twait { pacer_ = make_event(); }
+            e();
+        }
+        else
+            pacer_.at_trigger(e);
+    }
+    else
+        e();
+}
+
+tamed void MemcacheClient::check_pace(tamer::event<> e) {
+    if (pacer_ && wbuffsz_ <= wbuffsz_lo && rdwait_.size() <= nout_lo) {
+        pacer_();
+        tamer::at_asap(e);
+    }
+    else
+        e();
 }
 
 
