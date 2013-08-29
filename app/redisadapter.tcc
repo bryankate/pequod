@@ -4,8 +4,25 @@
 #if HAVE_HIREDIS_HIREDIS_H
 namespace pq {
 
+// taken from the SDS dynamic C string library used in hiredis.
+// the header file is not installed with hiredis, but it is used internally
+struct sdshdr {
+    int len;
+    int free;
+    char buf[];
+};
+
+inline uint32_t wbuffsz(redisAsyncContext* ctx) {
+    if (ctx) {
+        struct sdshdr* hdr = reinterpret_cast<struct sdshdr*>(ctx->c.obuf - sizeof(struct sdshdr));
+        return hdr->len;
+    }
+    return 0;
+}
+
+
 RedisClient::RedisClient()
-    : ctx_(nullptr), host_("127.0.0.1"), port_(6379), nout_(0) {
+    : ctx_(nullptr), host_("127.0.0.1"), port_(6379), nout_(0){
 }
 
 RedisClient::RedisClient(String host, uint32_t port)
@@ -159,7 +176,7 @@ tamed void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
 }
 
 tamed void RedisClient::pace(tamer::event<> e) {
-    if (nout_ >= nout_hi) {
+    if (wbuffsz(ctx_) >= wbuffsz_hi || nout_ >= nout_hi) {
         if (!pacer_) {
             twait { pacer_ = make_event(); }
             e();
@@ -173,8 +190,10 @@ tamed void RedisClient::pace(tamer::event<> e) {
 
 void RedisClient::check_pace() {
     --nout_;
-    if (pacer_ && nout_ <= nout_lo)
+
+    if (pacer_ && wbuffsz(ctx_) <= wbuffsz_lo && nout_ <= nout_lo) {
         pacer_();
+    }
 }
 
 void RedisClient::done_get(Str) {

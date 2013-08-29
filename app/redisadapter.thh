@@ -10,8 +10,8 @@
 #include "partitioner.hh"
 #include <vector>
 #include <tamer/tamer.hh>
-#include "hiredis/hiredis.h"
-#include "hiredis/async.h"
+#include <hiredis/hiredis.h>
+#include <hiredis/async.h>
 
 namespace pq {
 
@@ -44,7 +44,8 @@ class RedisClient {
     void done_get(Str k);
 
   private:
-    enum { nout_lo = 256, nout_hi = 1024 };
+    enum { wbuffsz_lo = 2 << 19, wbuffsz_hi = 2 << 20 };
+    enum { nout_lo = 2 << 15, nout_hi = 2 << 16 };
 
     redisAsyncContext* ctx_;
     String host_;
