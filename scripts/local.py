@@ -12,6 +12,7 @@ from time import sleep
 from optparse import OptionParser
 import json, fnmatch, re
 import socket
+import math
 import lib.aggregate
 from lib.aggregate import aggregate_dir
 import lib.gnuplotter
@@ -26,6 +27,7 @@ parser.add_option("-K", "--killall", action="store_true", dest="killall", defaul
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
 parser.add_option("-p", "--startport", action="store", type="int", dest="startport", default=7000)
+parser.add_option("-M", "--moveports", action="store_true", dest="moveports", default=False)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu", default=1)
@@ -44,6 +46,7 @@ killall = options.killall
 nbacking = options.nbacking
 ncaching = options.ncaching
 startport = options.startport
+moveports = options.moveports
 affinity = options.affinity
 startcpu = options.startcpu
 skipcpu = options.skipcpu
@@ -86,12 +89,13 @@ def prepare_experiment(xname, ename):
                 os.unlink(linkpath)
             os.symlink(expdir, linkpath)
 
+    if moveports or not hostpath:
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
         for h in range(nprocesses):
             hfile.write(localhost + "\t" + str(startport + h) + "\n");
         hfile.close()
-
+        
     resdir = os.path.join(uniquedir, xname, ename if ename else "")
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
@@ -172,8 +176,13 @@ def start_postgres(expdef, id, nclients):
     else:
         pin = ""
     
+    if expdef.get('def_db_flags'):
+        flags = expdef.get('def_db_flags')
+    else:
+        flags = ""
+    
     cmd = pin + "postgres -h " + dbhost + " -p " + str(dbstartport + id) + \
-          " -D " + dbpath + " " + expdef.get('def_db_flags')
+          " -D " + dbpath + " " + flags
     proc = run_cmd_bg(cmd, fartfile, fartfile)
     sleep(2)
     
@@ -221,8 +230,12 @@ def start_memcache(expdef, id):
     else:
         pin = ""
 
-    cmd = pin + "memcached " + expdef.get('def_memcache_args') + \
-          " -t 1 -p " + str(startport + id)
+    if expdef.get('def_memcache_args'):
+        args = expdef.get('def_memcache_args') + " "
+    else:
+        args = ""
+
+    cmd = pin + "memcached " + args + "-t 1 -p " + str(startport + id)
     return run_cmd_bg(cmd, fartfile, fartfile)
 
 # load experiment definitions as global 'exps'
@@ -243,7 +256,7 @@ for x in exps:
             continue
 
         if killall:
-            Popen("killall pqserver; killall postgres; killall memcached; killall redis-server", shell=True).wait()
+            Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
 
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
@@ -408,8 +421,13 @@ for x in exps:
             clientcmd = e['clientcmd']
             
             if dbcompare:
+                if ngroups >= ncaching:
+                    pool = 1;
+                else:
+                    pool = math.ceil(ncaching / ngroups)
+                    
                 clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % \
-                            (dbstartport, ncaching / ngroups)
+                            (dbstartport, pool)
             else:
                 clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
@@ -432,7 +450,11 @@ for x in exps:
             kill_proc(p)
         
         if killall:
-            Popen("killall pqserver; killall postgres; killall memcached; killall redis-server", shell=True).wait()
+            Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
+        
+        if moveports:
+            startport += 100
+            dbstartport += 100
         
         if ngroups > 1:
             aggregate_dir(resdir)
