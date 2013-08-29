@@ -23,13 +23,15 @@ function redraw(rawjson) {
     for (var l = 0; l < rawjson['client_logs'].length; ++l)
       processLog(rawjson['client_logs'][l], 'client_' + l, colors['client'], symbols['client']);
   
-  var b = 0;
-  var c = 0;
-  for (var l = 0; l < rawjson['server_logs'].length; ++l)
-    if (rawjson['server_logs'][l]['backend'])
-      processLog(rawjson['server_logs'][l].data, 'backend_' + b++, colors['backend'], symbols['backend']);
-    else
-      processLog(rawjson['server_logs'][l].data, 'cache_' + c++, colors['cache'], symbols['cache']);
+  if (rawjson.hasOwnProperty('server_logs') && rawjson['server_logs']) {
+    var b = 0;
+    var c = 0;
+    for (var l = 0; l < rawjson['server_logs'].length; ++l)
+      if (rawjson['server_logs'][l]['backend'])
+        processLog(rawjson['server_logs'][l].data, 'backend_' + b++, colors['backend'], symbols['backend']);
+      else
+        processLog(rawjson['server_logs'][l].data, 'cache_' + c++, colors['cache'], symbols['cache']);
+  }
 
   for (g in lines) {
     var plotid = createGraph(g);
