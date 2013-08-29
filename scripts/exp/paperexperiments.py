@@ -248,6 +248,7 @@ def define_experiments():
     exp['defs'].append(
         {'name': "memcache",
          'def_memcache_compare': True,
+         'def_memcache_args': "-m 61440 -M",
          'populatecmd': "%s --push --memcached" % (popBase),
          'clientcmd': "%s --push --memcached" % (clientBase)})
     
