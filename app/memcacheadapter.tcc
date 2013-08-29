@@ -54,8 +54,7 @@ tamed void MemcacheClient::get(Str key, tamer::event<String> e) {
 
     res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_GET, key, "", res.seq);
-    twait { send_command(data, cmdlen, make_event()); }
-    twait { wait_for_reply(make_event(res)); }
+    twait { send_command(data, cmdlen, make_event(res)); }
 
     if (res.status == PROTOCOL_BINARY_RESPONSE_KEY_ENOENT) {
         res.status = PROTOCOL_BINARY_RESPONSE_SUCCESS;
@@ -75,8 +74,7 @@ tamed void MemcacheClient::set(Str key, Str value, tamer::event<> e) {
 
       res.seq = seq_++;
       cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_SET, key, value, res.seq);
-      twait { send_command(data, cmdlen, make_event()); }
-      twait { wait_for_reply(make_event(res)); }
+      twait { send_command(data, cmdlen, make_event(res)); }
 
       check_error(res);
       e();
@@ -91,8 +89,7 @@ tamed void MemcacheClient::append(Str key, Str value, tamer::event<> e) {
 
     res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_APPEND, key, value, res.seq);
-    twait { send_command(data, cmdlen, make_event()); }
-    twait { wait_for_reply(make_event(res)); }
+    twait { send_command(data, cmdlen, make_event(res)); }
 
     if (res.status == PROTOCOL_BINARY_RESPONSE_NOT_STORED) {
         set(key, value, e);
@@ -112,8 +109,7 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
 
     res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_INCREMENT, key, "", res.seq);
-    twait { send_command(data, cmdlen, make_event()); }
-    twait { wait_for_reply(make_event(res)); }
+    twait { send_command(data, cmdlen, make_event(res)); }
 
     if (res.status == PROTOCOL_BINARY_RESPONSE_KEY_ENOENT) {
         set(key, "1", e);
@@ -189,7 +185,22 @@ uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
     return hdrlen + bodylen;
 }
 
-tamed void MemcacheClient::wait_for_reply(tamer::event<MemcacheResponse> e) {
+tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len,
+                                        tamer::event<MemcacheResponse> e) {
+    tvars {
+        size_t nwritten = 0;
+        int32_t ret;
+    }
+
+    wbuffsz_ += len;
+    twait { sock_.write(data, len, &nwritten, make_event(ret)); }
+    if (ret) {
+        std::cerr << "error code is " << ret << std::endl;
+    }
+    mandatory_assert(!ret && "Problem writing to socket.");
+    mandatory_assert(nwritten == len && "Did not write the correct number of bytes?");
+    wbuffsz_ -= len;
+
     twait {
         rdwait_.push_back(make_event(e.result()));
         if (!reading_)
@@ -351,21 +362,6 @@ tamed void MemcacheClient::length(Str key, tamer::event<int32_t> e) {
 }
 
 void MemcacheClient::done_get(Str) {
-}
-
-tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len, tamer::event<> e) {
-    tvars {
-        size_t nwritten = 0;
-        int32_t ret;
-    }
-
-    wbuffsz_ += len;
-    twait { sock_.write(data, len, &nwritten, make_event(ret)); }
-    mandatory_assert(!ret && "Problem writing to socket.");
-    mandatory_assert(nwritten == len && "Did not write the correct number of bytes?");
-    wbuffsz_ -= len;
-    twait { check_pace(make_event()); }
-    e();
 }
 
 tamed void MemcacheClient::pace(tamer::event<> e) {

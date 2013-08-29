@@ -46,7 +46,7 @@ class MemcacheClient {
 
   private:
     enum { wbuffsz_lo = 2 << 19, wbuffsz_hi = 2 << 20 };
-    enum { nout_lo = 8192, nout_hi = 16384 };
+    enum { nout_lo = 2 << 15, nout_hi = 2 << 16 };
 
     String host_;
     uint32_t port_;
@@ -57,12 +57,11 @@ class MemcacheClient {
     uint32_t wbuffsz_;
     tamer::event<> pacer_;
 
-    tamed void send_command(const uint8_t* data, uint32_t len, tamer::event<> e);
     tamed void check_pace(tamer::event<> e);
 
 #if HAVE_MEMCACHED_PROTOCOL_BINARY_H
     uint32_t prep_command(uint8_t* data, uint8_t op, Str key, Str value, uint32_t seq);
-    tamed void wait_for_reply(tamer::event<MemcacheResponse> e);
+    tamed void send_command(const uint8_t* data, uint32_t len, tamer::event<MemcacheResponse> e);
     tamed void read_loop();
 #endif
 };
