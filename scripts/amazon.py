@@ -32,7 +32,7 @@ parser.add_option("-t", "--terminate", action="store_true", dest="terminate", de
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
 parser.add_option("-R", "--keepalive", action="store_true", dest="keepalive", default=False)
-parser.add_option("-A", "--abort", action="store_true", dest="abort", default=False)
+parser.add_option("-i", "--invoke", action="store", type="string", dest="invoke", default=None)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
 (options, args) = parser.parse_args()
@@ -48,7 +48,7 @@ cgroups = options.cgroups
 terminate = options.terminate
 preponly = options.preponly
 justkill = options.kill
-justabort = options.abort
+invoke = options.invoke
 ondemand = options.ondemand
 keepalive = options.keepalive
 user = options.user
@@ -74,10 +74,10 @@ ec2.connect()
 if justkill:
     kill()
 
-if justabort:
+if invoke:
     running = ec2.get_running_instances()
     for r in running:
-        ec2.run_ssh_command(r.public_dns_name, "killall pqserver")
+        ec2.run_ssh_command(r.public_dns_name, invoke)
     exit(0)
 
 running = []
@@ -243,7 +243,7 @@ for h in running:
         print "Waiting for SSH access to " + h.public_dns_name
         sleep(5)
 
-debs = ("htop build-essential autoconf libtool git libev-dev libjemalloc-dev " +
+debs = ("htop iftop build-essential autoconf libtool git libev-dev libjemalloc-dev " +
         "flex bison libboost-dev libboost-thread-dev libboost-system-dev")
 
 installcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs
@@ -320,7 +320,7 @@ for x in exps:
             print full_cmd
             logfd.write(conn[0] + ": " + full_cmd + "\n")
             logfd.flush()
-            serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; " + full_cmd))
+            serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; ulimit -c unlimited; " + full_cmd))
 
         sleep(3)
 
@@ -334,7 +334,7 @@ for x in exps:
             print full_cmd
             logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
             logfd.flush()
-            ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
+            ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; ulimit -c unlimited; " + full_cmd)
 
         if 'populatecmd' in e:
             print "Populating backend."
@@ -351,7 +351,7 @@ for x in exps:
                 chost = clienthosts[c % len(clienthosts)].public_dns_name
                 logfd.write(chost + ": " + full_cmd + "\n")
                 logfd.flush()
-                clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; " + full_cmd))
+                clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; ulimit -c unlimited; " + full_cmd))
             
             for p in clientprocs:
                 p.wait()
@@ -372,7 +372,7 @@ for x in exps:
             chost = clienthosts[c % len(clienthosts)].public_dns_name
             logfd.write(chost + ": " + full_cmd + "\n")
             logfd.flush()
-            clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; " + full_cmd))
+            clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; ulimit -c unlimited; " + full_cmd))
             
         # wait for clients to finish
         for p in clientprocs:
