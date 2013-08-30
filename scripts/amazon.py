@@ -32,6 +32,7 @@ parser.add_option("-t", "--terminate", action="store_true", dest="terminate", de
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
 parser.add_option("-R", "--keepalive", action="store_true", dest="keepalive", default=False)
+parser.add_option("-A", "--abort", action="store_true", dest="abort", default=False)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
 (options, args) = parser.parse_args()
@@ -47,6 +48,7 @@ cgroups = options.cgroups
 terminate = options.terminate
 preponly = options.preponly
 justkill = options.kill
+justabort = options.abort
 ondemand = options.ondemand
 keepalive = options.keepalive
 user = options.user
@@ -69,8 +71,14 @@ def kill():
 
 ec2.connect()
 
-if (justkill):
+if justkill:
     kill()
+
+if justabort:
+    running = ec2.get_running_instances()
+    for r in running:
+        ec2.run_ssh_command(r.public_dns_name, "killall pqserver")
+    exit(0)
 
 running = []
 newmachines = []
@@ -330,16 +338,23 @@ for x in exps:
 
         if 'populatecmd' in e:
             print "Populating backend."
-            procs = []
             popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
-            fartfile = os.path.join(resdir, "fart_pop.txt")
-            
-            full_cmd = popcmd + " 2> " + fartfile
+            fartfile = os.path.join(resdir, "fart_pop_")
 
-            print full_cmd
-            logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
-            logfd.flush()
-            ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
+            clientprocs = []
+            for c in range(ngroups):         
+                full_cmd = popcmd + \
+                           " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
+                           " 2> " + fartfile + str(c) + ".txt"
+    
+                print full_cmd
+                chost = clienthosts[c % len(clienthosts)].public_dns_name
+                logfd.write(chost + ": " + full_cmd + "\n")
+                logfd.flush()
+                clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; " + full_cmd))
+            
+            for p in clientprocs:
+                p.wait()
 
         print "Starting app clients."
         clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
