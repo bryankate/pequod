@@ -27,6 +27,7 @@ parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching"
 parser.add_option("-C", "--clustercaching", action="store", type="int", dest="ccaching", default=1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
+parser.add_option("-G", "--clustergroups", action="store", type="int", dest="cgroups", default=1)
 parser.add_option("-t", "--terminate", action="store_true", dest="terminate", default=False)
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
@@ -42,6 +43,7 @@ cbacking = options.cbacking
 ncaching = options.ncaching
 ccaching = options.ccaching
 ngroups = options.ngroups
+cgroups = options.cgroups
 terminate = options.terminate
 preponly = options.preponly
 justkill = options.kill
@@ -224,7 +226,7 @@ def prepare_instances(instances, test, cmd, log):
 
 backinghosts = startup_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
 cachehosts = startup_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, 'cache')
-clienthosts = startup_instances(ngroups, 1, ec2.INSTANCE_TYPE_CLIENT, 'client')
+clienthosts = startup_instances(ngroups, cgroups, ec2.INSTANCE_TYPE_CLIENT, 'client')
 serverconns = []
 
 print "Testing SSH connections."
@@ -309,6 +311,7 @@ for x in exps:
 
             print full_cmd
             logfd.write(conn[0] + ": " + full_cmd + "\n")
+            logfd.flush()
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; " + full_cmd))
 
         sleep(3)
@@ -322,6 +325,7 @@ for x in exps:
 
             print full_cmd
             logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
+            logfd.flush()
             ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
 
         if 'populatecmd' in e:
@@ -334,6 +338,7 @@ for x in exps:
 
             print full_cmd
             logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
+            logfd.flush()
             ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; " + full_cmd)
 
         print "Starting app clients."
@@ -349,9 +354,10 @@ for x in exps:
                 " 2> " + fartfile + str(c) + ".txt"
 
             print full_cmd
-            logfd.write(clienthosts[c].public_dns_name + ": " + full_cmd + "\n")
-            clientprocs.append(ec2.run_ssh_command_bg(clienthosts[c].public_dns_name, 
-                                                      "cd pequod; " + full_cmd))
+            chost = clienthosts[c % len(clienthosts)].public_dns_name
+            logfd.write(chost + ": " + full_cmd + "\n")
+            logfd.flush()
+            clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; " + full_cmd))
             
         # wait for clients to finish
         for p in clientprocs:
