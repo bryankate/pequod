@@ -506,6 +506,9 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     for (s = 0; s != subs.size(); ++s) {
         subscribe(subs[s].first, subs[s].second, currtime_, gr.make_event());
         twait { server_.pace(make_event()); }
+
+        if (tp_.verbose() && s && s % (subs.size() / 10) == 0)
+            std::cerr << s / (subs.size() / 10) * 10 << "% complete" << std::endl;
     }
 
     for (auto u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
