@@ -276,12 +276,10 @@ def define_experiments():
     # scale experiment
     # run on a cluster with a ton of memory
     exp = {'name': "scale", 'defs': []}
-    #users = "--graph=twitter_graph_40M.dat"
-    users = "--graph=twitter_graph_1.8M.dat"
+    users = "--graph=/mnt/twitter_graph_40M.dat"
     
     popBase = "%s %s --popduration=0" % (populateCmd, users)
-    #clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
-    clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
+    clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     

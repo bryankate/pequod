@@ -20,6 +20,7 @@ import lib.ec2 as ec2
 parser = OptionParser()
 parser.add_option("-e", "--expfile", action="store", type="string", dest="expfile", 
                   default=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "exp", "testexperiments.py"))
+parser.add_option("-L", "--link", action="store", type="string", dest="symlink", default=None)
 parser.add_option("-b", "--backing", action="store", type="int", dest="nbacking", default=1)
 parser.add_option("-B", "--clusterbacking", action="store", type="int", dest="cbacking", default=1)
 parser.add_option("-c", "--caching", action="store", type="int", dest="ncaching", default=5)
@@ -35,6 +36,7 @@ parser.add_option("-u", "--user", action="store", type="string", dest="user", de
 (options, args) = parser.parse_args()
 
 expfile = options.expfile
+symlink = options.symlink
 nbacking = options.nbacking
 cbacking = options.cbacking
 ncaching = options.ncaching
@@ -182,12 +184,19 @@ def prepare_experiment(xname, ename):
         topdir = "results"
 
     if uniquedir is None:
-        uniquedir = topdir + "/exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
+        expdir = "exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
+        uniquedir = os.path.join(topdir, expdir)
         os.makedirs(uniquedir)
 
         if os.path.lexists("last"):
             os.unlink("last")
         os.symlink(uniquedir, "last")
+
+        if symlink:
+            linkpath = os.path.join(topdir, symlink)
+            if os.path.lexists(linkpath):
+                os.unlink(linkpath)
+            os.symlink(expdir, linkpath)
 
         hostpath = os.path.join(uniquedir, "hosts.txt")
         hfile = open(hostpath, "w")
@@ -234,12 +243,13 @@ buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.
            "cd pequod; git checkout multi2; autoconf < configure.ac; " + \
            "./bootstrap.sh; ./configure --with-malloc=jemalloc; make"
 
-graph = 'twitter_graph_1.8M.dat'
-graphcmd = "cd pequod; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; tar -zxf " + graph + ".tar.gz"
+graph = 'twitter_graph_40M.dat'
+graphcmd = "cd /mnt; sudo wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
+           "sudo tar -zxf " + graph + ".tar.gz; sudo chmod 666 twitter*"
 
 prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software")
 prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
-prepare_instances(clienthosts, "[ -e pequod/" + graph + " ]", graphcmd, "Fetching Twitter graph")
+prepare_instances(clienthosts, "[ -e /mnt/" + graph + " ]", graphcmd, "Fetching Twitter graph")
 
 for h in running:
     print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
