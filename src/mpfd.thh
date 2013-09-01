@@ -137,7 +137,7 @@ inline bool msgpack_fd::pace_recovered() const {
 template <typename R>
 inline void msgpack_fd::pace(tamer::preevent<R> done) {
     if (need_pace())
-        pacer_ = tamer::distribute(pacer_, std::move(done));
+        pacer_ = tamer::distribute(std::move(pacer_), std::move(done));
     else
         done();
 }

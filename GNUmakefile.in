@@ -16,7 +16,7 @@ OBJDIR = obj
 PROTOSRCDIR = $(top_srcdir)/proto
 PROTOGENDIR = $(OBJDIR)
 
-TAMER_COMMIT = e137afcf7edd83eef72ff4ed88e90ce3d1276449
+TAMER_COMMIT = dd0046b714beee577290c86bd2e4f6be7739eac3
 
 INCLUDES = -include config.h -I$(top_srcdir)/lib -I$(PROTOGENDIR)
 LIBS = `$(TAMER) -l` @MALLOC_LIBS@ @POSTGRES_LIBS@ @MEMCACHED_LIB@

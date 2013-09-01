@@ -88,7 +88,7 @@ inline bool redis_fd::pace_recovered() const {
 
 inline void redis_fd::pace(tamer::event<> done) {
     if (need_pace())
-        pacer_ = tamer::distribute(pacer_, std::move(done));
+        pacer_ = tamer::distribute(std::move(pacer_), std::move(done));
     else
         done();
 }
