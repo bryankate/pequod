@@ -593,7 +593,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
-    twait { server_->interconnect(owner)->pace(make_event()); }
+    twait { server_->interconnect(owner)->maybe_pace(make_event()); }
 
     //std::cerr << "remote data fetch: " << rr->interval() << " returned "
     //          << res.size() << " results" << std::endl;

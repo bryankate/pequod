@@ -9,6 +9,7 @@
 
 namespace pq {
 using tamer::event;
+using tamer::preevent;
 
 class Interconnect : public RemoteClient {
   public:
@@ -24,15 +25,30 @@ class Interconnect : public RemoteClient {
 
     tamed void invalidate(const String& first, const String& last,
                           event<> e);
+
+    template <typename R>
+    inline void maybe_pace(preevent<R> e);
+
+  private:
+    uint32_t need_pace_;
 };
 
 
 inline Interconnect::Interconnect(tamer::fd fd)
-    : RemoteClient(fd) {
+    : RemoteClient(fd), need_pace_(1) {
 }
 
 inline Interconnect::Interconnect(msgpack_fd* fd)
     : RemoteClient(fd) {
+}
+
+template <typename R>
+inline void Interconnect::maybe_pace(preevent<R> e) {
+    if (need_pace_ % 1024 == 0) {
+        need_pace_ = 1;
+        pace(e);
+    }
+    e();
 }
 
 } // namespace pq
