@@ -243,8 +243,9 @@ for h in running:
         print "Waiting for SSH access to " + h.public_dns_name
         sleep(5)
 
-debs = ("htop iftop build-essential autoconf libtool git libev-dev libjemalloc-dev " +
-        "flex bison libboost-dev libboost-thread-dev libboost-system-dev")
+debs = ("htop iftop build-essential gdb valgrind autoconf libtool " + 
+        "git libev-dev libjemalloc-dev flex bison " +
+        "libboost-dev libboost-thread-dev libboost-system-dev")
 
 installcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs
 
