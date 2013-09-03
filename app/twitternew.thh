@@ -268,6 +268,7 @@ class TwitterNewRunner {
     std::deque<uint32_t> loggedin_;
     uint32_t currtime_;
     Log log_;
+    uint64_t nrpc_;
 
 #if TIMELINE_LATENCY
     std::vector<uint64_t> latency_log_;
@@ -287,7 +288,7 @@ class TwitterNewRunner {
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
-    : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()) {
+    : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()), nrpc_(0) {
 }
 
 template <typename S> template <typename R>
@@ -300,6 +301,7 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
     server_.subscribe((tp_.push()) ? poster : subscriber,
                       (tp_.push()) ? subscriber : poster,
                       e);
+    ++nrpc_;
 }
 
 tamed template <typename S>
@@ -309,6 +311,7 @@ void TwitterNewRunner<S>::prevalidate(TwitterUser* user, event<> done) {
     }
 
     twait { server_.timeline_add_count(user->uid(), 0, END_TIME, make_event(count)); }
+    ++nrpc_;
     done();
 }
 
@@ -389,6 +392,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     latency_log_.emplace_back(rtt);
 #endif
 
+    ++nrpc_;
     done(done.result() + count);
 }
 
@@ -404,10 +408,12 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
         fprintf(stderr, "%d: post p|%08d|%010d\n", time, u, time);
 
     server_.post(u, time, value, tp_.is_celebrity(u), gr.make_event());
+    ++nrpc_;
 
     if (tp_.push()) {
         server_.follower_scan(u, gr.make_event(sr));
         twait(gr);
+        ++nrpc_;
 
         server_.prepare_push_post(u, time, value);
 
@@ -417,6 +423,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
             else
                 s = Str(it->key().data() + 11, 8).to_i();
             server_.push_post(s, gr.make_event());
+            ++nrpc_;
         }
     }
 
@@ -450,6 +457,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
 
     server_.post_scan(f, time - LOGIN_WINDOW, time, gr.make_event(sr));
     twait(gr);
+    ++nrpc_;
 
     for (auto it = sr.begin(); it != sr.end(); ++it) {
         if (tp_.binary())
@@ -458,6 +466,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
             ptime = Str(it->key().data() + 11, 10).to_i();
         server_.prepare_push_post(f, ptime, it->value());
         server_.push_post(u, gr.make_event());
+        ++nrpc_;
     }
     twait(gr);
 
@@ -775,7 +784,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             uint32_t frac = goal / 10;
             if (prog && prog != lastprog && prog % frac == 0) {
                 lastprog = prog;
-                std::cerr << prog / frac * 10 << "% complete" << std::endl;
+                std::cerr << prog / frac * 10 << "% complete ("
+                          << nrpc_ << " rpcs sent)" << std::endl;
             }
         }
     }
