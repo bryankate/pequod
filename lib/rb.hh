@@ -540,49 +540,6 @@ void rbtree<T, C, R>::insert_commit(T* x, rbnodeptr<T> p, bool child) {
 
     // flip up the tree
     // invariant: we are looking at the `child` of `p`
-#define RB_INSERT_CODE 2
-#if RB_INSERT_CODE == 2 || RB_INSERT_CODE == 3
-    while (p.red()) {
-        rbnodeptr<T> gp = p.black_parent(), z;
-        bool gpchild = gp.find_child(p.node());
-        if (gp.child(!gpchild).red()) {
-            z = gp.flip();
-            p = z.black_parent().load_color();
-# if RB_INSERT_CODE == 3
-        } else if (!gpchild) {
-            if (gpchild != child)
-                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
-            z = gp.rotate(!gpchild, r_.reshape());
-            p = z.black_parent();
-# endif
-        } else {
-            if (gpchild != child)
-                gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
-            z = gp.rotate(!gpchild, r_.reshape());
-            p = z.black_parent();
-        }
-        child = p.find_child(gp.node());
-        p.set_child(child, z, r_.root_);
-    }
-#elif RB_INSERT_CODE == 1
-    rbnodeptr<T> gp;
-    while (p.red() && (gp = p.black_parent(), gp.children_same_color())) {
-        gp = gp.flip();
-        p = gp.black_parent().load_color();
-        child = p.find_child(gp.node());
-        p.set_child(child, gp, r_.root_);
-    }
-
-    // maybe one last rotation (pair)
-    if (p.red()) {
-        bool gpchild = gp.find_child(p.node());
-        if (gpchild != child)
-            gp.child(gpchild) = p.rotate(gpchild, r_.reshape());
-        rbnodeptr<T> z = gp.rotate(!gpchild, r_.reshape());
-        p = z.black_parent();
-        p.set_child(p.find_child(gp.node()), z, r_.root_);
-    }
-#else
     while (p.red()) {
         rbnodeptr<T> gp = p.black_parent(), z;
         if (gp.child(0).red() && gp.child(1).red()) {
@@ -598,7 +555,6 @@ void rbtree<T, C, R>::insert_commit(T* x, rbnodeptr<T> p, bool child) {
         child = p.find_child(gp.node());
         p.set_child(child, z, r_.root_);
     }
-#endif
 }
 
 template <typename T, typename C, typename R>
