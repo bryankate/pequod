@@ -25,9 +25,9 @@ INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script 
 
 AMI_IDS = {'us-west-2': {'basic': 'ami-bf1d8a8f', 'hvm': 'ami-a11d8a91'}}
 
-INSTANCE_TYPE_BACKING = 'cr1.8xlarge'
+INSTANCE_TYPE_BACKING = 'cc2.8xlarge'
 INSTANCE_TYPE_CACHE = 'cr1.8xlarge'
-INSTANCE_TYPE_CLIENT = 'cr1.8xlarge'
+INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
 
 
 conn = None
@@ -61,7 +61,8 @@ def request_machines(num, type):
                                        key_name = KEY_NAME, 
                                        instance_type = type, 
                                        security_groups = ['pequod'],
-                                       placement_group='pequod')
+                                       placement_group='pequod',
+                                       launch_group='pequod')
 
 def startup_machines(instances):
     for i in instances:

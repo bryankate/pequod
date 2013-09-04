@@ -232,8 +232,8 @@ def prepare_instances(instances, test, cmd, log):
 
 
 
-backinghosts = startup_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
 cachehosts = startup_instances(ncaching, ccaching, ec2.INSTANCE_TYPE_CACHE, 'cache')
+backinghosts = startup_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 'backing')
 clienthosts = startup_instances(ngroups, cgroups, ec2.INSTANCE_TYPE_CLIENT, 'client')
 serverconns = []
 
@@ -264,7 +264,8 @@ prepare_instances(clienthosts, "[ -e /mnt/" + graph + " ]", graphcmd, "Fetching 
 
 for h in running:
     print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
-    ec2.run_ssh_command(h.public_dns_name, "cd pequod; git pull -q; make -s")
+    ec2.run_ssh_command(h.public_dns_name, "sudo echo \"core.%p\" > /proc/sys/kernel/core_pattern; " + \
+                                           "cd pequod; git pull -q; make -s")
 
 print "Checking that pequod is built on all servers."
 pqexists = True
@@ -323,7 +324,7 @@ for x in exps:
             logfd.flush()
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; ulimit -c unlimited; " + full_cmd))
 
-        sleep(3)
+        sleep(5)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
@@ -384,6 +385,7 @@ for x in exps:
             p.kill()
         
         # get results
+        print "Gathering results."
         for h in running:
             ec2.scp_from(h.public_dns_name, remote_resdir, os.path.join(resdir, os.pardir))
         
