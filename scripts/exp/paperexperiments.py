@@ -230,6 +230,7 @@ def define_experiments():
          'populatecmd': "%s" % (popBase),
          'clientcmd': "%s" % (clientBase)})
     
+    '''
     exp['defs'].append(
         {'name': "pequod-client-push",
          'def_part': "twitternew-text",
@@ -238,6 +239,7 @@ def define_experiments():
          'initcmd': "%s" % (initBase),
          'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
+    '''
     
     exp['defs'].append(
         {'name': "redis",
