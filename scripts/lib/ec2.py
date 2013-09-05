@@ -18,10 +18,10 @@ SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), KEY_NAME + "
 
 # note: instance have 10Gb ethernet only if launched in the same placement group
 INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script testing
-                  'cc2.8xlarge': {'bid': 2.50, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
-                  'cr1.8xlarge': {'bid': 3.50, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
-                  'hi1.4xlarge': {'bid': 3.10, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
-                  'hs1.8xlarge': {'bid': 4.60, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
+                  'cc2.8xlarge': {'bid': 0.51, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
+                  'cr1.8xlarge': {'bid': 0.51, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
+                  'hi1.4xlarge': {'bid': 0.51, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
+                  'hs1.8xlarge': {'bid': 0.51, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
 
 AMI_IDS = {'us-west-2': {'basic': 'ami-bf1d8a8f', 'hvm': 'ami-a11d8a91'}}
 

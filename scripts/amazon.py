@@ -31,7 +31,8 @@ parser.add_option("-G", "--clustergroups", action="store", type="int", dest="cgr
 parser.add_option("-t", "--terminate", action="store_true", dest="terminate", default=False)
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
-parser.add_option("-R", "--keepalive", action="store_true", dest="keepalive", default=False)
+parser.add_option("-A", "--keepalive", action="store_true", dest="keepalive", default=False)
+parser.add_option("-R", "--keeproles", action="store_true", dest="keeproles", default=False)
 parser.add_option("-i", "--invoke", action="store", type="string", dest="invoke", default=None)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
@@ -51,6 +52,7 @@ justkill = options.kill
 invoke = options.invoke
 ondemand = options.ondemand
 keepalive = options.keepalive
+keeproles = options.keeproles
 user = options.user
 startport = 9000
 
@@ -243,7 +245,7 @@ for h in running:
         print "Waiting for SSH access to " + h.public_dns_name
         sleep(5)
 
-debs = ("htop iftop build-essential gdb valgrind autoconf libtool " + 
+debs = ("htop iftop numactl build-essential gdb valgrind autoconf libtool " + 
         "git libev-dev libjemalloc-dev flex bison " +
         "libboost-dev libboost-thread-dev libboost-system-dev")
 
@@ -264,7 +266,7 @@ prepare_instances(clienthosts, "[ -e /mnt/" + graph + " ]", graphcmd, "Fetching 
 
 for h in running:
     print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
-    ec2.run_ssh_command(h.public_dns_name, "sudo echo \"core.%p\" > /proc/sys/kernel/core_pattern; " + \
+    ec2.run_ssh_command(h.public_dns_name, "sudo bash -c 'echo core.%p > /proc/sys/kernel/core_pattern'; " + \
                                            "cd pequod; git pull -q; make -s")
 
 print "Checking that pequod is built on all servers."
@@ -398,8 +400,9 @@ for x in exps:
         make_gnuplot(x['name'], expdir, x['plot'])
         
 # cleanup
-for r in running:
-    r.add_tag('role', 'none')
+if not keeproles:
+    for r in running:
+        r.add_tag('role', 'none')
 
 if not keepalive:
     if terminate:
