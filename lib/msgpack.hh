@@ -6,6 +6,29 @@
 #include <vector>
 namespace msgpack {
 
+namespace format {
+    enum {
+        ffixuint = 0x00, nfixuint = 0x80,
+        ffixmap = 0x80, nfixmap = 0x10,
+        ffixarray = 0x90, nfixarray = 0x10,
+        ffixstr = 0xA0, nfixstr = 0x20,
+        fnull = 0xC0,
+        ffalse = 0xC2, ftrue = 0xC3,
+        fbin8 = 0xC4, fbin16 = 0xC5, fbin32 = 0xC6,
+        fext8 = 0xC7, fext16 = 0xC8, fext32 = 0xC9,
+        ffloat32 = 0xCA, ffloat64 = 0xCB,
+        fuint8 = 0xCC, fuint16 = 0xCD, fuint32 = 0xCE, fuint64 = 0xCF,
+        fint8 = 0xD0, fint16 = 0xD1, fint32 = 0xD2, fint64 = 0xD3,
+        ffixext1 = 0xD4, ffixext2 = 0xD5, ffixext4 = 0xD6,
+        ffixext8 = 0xD7, ffixext16 = 0xD8,
+        fstr8 = 0xD9, fstr16 = 0xDA, fstr32 = 0xDB,
+        farray16 = 0xDC, farray32 = 0xDD,
+        fmap16 = 0xDE, fmap32 = 0xDF,
+        ffixnegint = 0xE0, nfixnegint = 0x20,
+        nfixint = nfixuint + nfixnegint
+    };
+}
+
 class compact_unparser {
   public:
     inline uint8_t* unparse_null(uint8_t* s) {
@@ -225,16 +248,16 @@ class streaming_parser {
     inline streaming_parser();
     inline void reset();
 
-    inline bool complete() const;
     inline bool done() const;
+    inline bool success() const;
     inline bool error() const;
 
-    inline size_t consume(const char* first, size_t length, const String& str);
-    inline size_t consume(const char* first, size_t length);
-    inline const uint8_t* consume(const uint8_t* first, const uint8_t* last);
-    inline const char* consume(const char* first, const char* last);
+    inline size_t consume(const char* first, size_t length,
+                          const String& str = String());
+    inline const char* consume(const char* first, const char* last,
+                               const String& str = String());
     const uint8_t* consume(const uint8_t* first, const uint8_t* last,
-                           const String& str);
+                           const String& str = String());
 
     inline Json& result();
     inline const Json& result() const;
@@ -404,11 +427,11 @@ inline void streaming_parser::reset() {
     stack_.clear();
 }
 
-inline bool streaming_parser::complete() const {
+inline bool streaming_parser::done() const {
     return state_ < 0;
 }
 
-inline bool streaming_parser::done() const {
+inline bool streaming_parser::success() const {
     return state_ == st_final;
 }
 
@@ -416,21 +439,12 @@ inline bool streaming_parser::error() const {
     return state_ == st_error;
 }
 
-inline const uint8_t* streaming_parser::consume(const uint8_t* first,
-                                                const uint8_t* last) {
-    return consume(first, last, String());
-}
-
 inline const char* streaming_parser::consume(const char* first,
-                                             const char* last) {
+                                             const char* last,
+                                             const String& str) {
     return reinterpret_cast<const char*>
         (consume(reinterpret_cast<const uint8_t*>(first),
-                 reinterpret_cast<const uint8_t*>(last), String()));
-}
-
-inline size_t streaming_parser::consume(const char* first, size_t length) {
-    const uint8_t* ufirst = reinterpret_cast<const uint8_t*>(first);
-    return consume(ufirst, ufirst + length, String()) - ufirst;
+                 reinterpret_cast<const uint8_t*>(last), str));
 }
 
 inline size_t streaming_parser::consume(const char* first, size_t length,

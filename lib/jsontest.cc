@@ -28,8 +28,33 @@ void incr(T& x) {
 }
 #endif
 
+void benchmark_parse() {
+    std::vector<String> parse_examples;
+    parse_examples.push_back("{}");
+    parse_examples.push_back("{\"foo\":\"bar\",\"baz\":\"flim\"}");
+    parse_examples.push_back("[1,2,3,4,5]");
+    parse_examples.push_back("[]");
+    parse_examples.push_back("[{},{\"b\":[]}]");
+    Json j;
+#if 0
+    for (int i = 0; i < 10000000; ++i)
+        j.assign_parse(parse_examples[rand() % parse_examples.size()]);
+#else
+    using std::swap;
+    Json::streaming_parser jsp;
+    for (int i = 0; i < 10000000; ++i) {
+        jsp.reset();
+        swap(jsp.result(), j);
+        const String& str = parse_examples[rand() % parse_examples.size()];
+        jsp.consume(str.begin(), str.end(), str, true);
+    }
+#endif
+    exit(0);
+}
+
 int main(int argc, char** argv) {
     (void) argc, (void) argv;
+    //benchmark_parse();
 
     Json j;
     CHECK(j.empty());
@@ -231,6 +256,239 @@ int main(int argc, char** argv) {
         std::cout << j << "\n";
     }
 #endif
+
+    {
+        Json::streaming_parser jsp;
+        const uint8_t* x = reinterpret_cast<const uint8_t*>("\"abcdef\"");
+
+        const uint8_t* r = jsp.consume(x, x + 8, String());
+        CHECK(r == x + 8);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"abcdef\"");
+
+        x = reinterpret_cast<const uint8_t*>("\"\\\"\\\\fartbox\" amksdnsndfa");
+        jsp.reset();
+        r = jsp.consume(x, x + 9, String());
+        CHECK(r == x + 9);
+        CHECK(!jsp.done());
+        r = jsp.consume(x + 9, x + 17, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\\\"\\\\fartbox\"");
+
+        jsp.reset();
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\\\"\\\\fartbox\"");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("\"\\uD834\\uDD1E\"f");
+        r = jsp.consume(x, x + 15, String());
+        CHECK(r == x + 14);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\xF0\x9D\x84\x9E\"");
+
+        jsp.reset();
+        r = jsp.consume(x, x + 2, String());
+        CHECK(r == x + 2);
+        r = jsp.consume(x + 2, x + 4, String());
+        CHECK(r == x + 4);
+        r = jsp.consume(x + 4, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 8, String());
+        CHECK(r == x + 8);
+        r = jsp.consume(x + 8, x + 10, String());
+        CHECK(r == x + 10);
+        r = jsp.consume(x + 10, x + 15, String());
+        CHECK(r == x + 14);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\xF0\x9D\x84\x9E\"");
+
+        x = reinterpret_cast<const uint8_t*>("\"\xF0\x9D\x84\x9E\" fart");
+        jsp.reset();
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 5, x + 7, String());
+        CHECK(r == x + 5);
+        CHECK(jsp.error());
+
+        jsp.reset();
+        r = jsp.consume(x, x + 7, String());
+        CHECK(r == x + 6);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\xF0\x9D\x84\x9E\"");
+
+        jsp.reset();
+        r = jsp.consume(x, x + 2, String());
+        CHECK(r == x + 2);
+        r = jsp.consume(x + 2, x + 4, String());
+        CHECK(r == x + 4);
+        r = jsp.consume(x + 4, x + 7, String());
+        CHECK(r == x + 6);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"\xF0\x9D\x84\x9E\"");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{}");
+        r = jsp.consume(x, x + 2, String());
+        CHECK(r == x + 2);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("\"ab cde\" ");
+        r = jsp.consume(x, x + 9, String());
+        CHECK(r == x + 8);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "\"ab cde\"");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"a\":\"b\"}");
+        r = jsp.consume(x, x + 9, String());
+        CHECK(r == x + 9);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"a\":\"b\"}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("[]");
+        r = jsp.consume(x, x + 2, String());
+        CHECK(r == x + 2);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "[]");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("[\"a\",\"b\"]");
+        r = jsp.consume(x, x + 9, String());
+        CHECK(r == x + 9);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "[\"a\",\"b\"]");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("[[\"a\"],[[\"b\"]]]");
+        r = jsp.consume(x, x + 15, String());
+        CHECK(r == x + 15);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "[[\"a\"],[[\"b\"]]]");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("[[],[[]]]");
+        r = jsp.consume(x, x + 9, String());
+        CHECK(r == x + 9);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "[[],[[]]]");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\":\"def\"}");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":\"def\"}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\":true }");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":true}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\": null}");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":null}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\":false}");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":false}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\": -13 }");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":-13}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("{\"abc\":0    }");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 13, String());
+        CHECK(r == x + 13);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "{\"abc\":0}");
+
+        jsp.reset();
+        x = reinterpret_cast<const uint8_t*>("[0,1,2,3,4e5,10.2]");
+        r = jsp.consume(x, x + 3, String());
+        CHECK(r == x + 3);
+        r = jsp.consume(x + 3, x + 6, String());
+        CHECK(r == x + 6);
+        r = jsp.consume(x + 6, x + 9, String());
+        CHECK(r == x + 9);
+        r = jsp.consume(x + 9, x + 12, String());
+        CHECK(r == x + 12);
+        r = jsp.consume(x + 12, x + 18, String());
+        CHECK(r == x + 18);
+        CHECK(jsp.success());
+        CHECK(jsp.result().unparse() == "[0,1,2,3,400000,10.2]");
+    }
 
     std::cout << "All tests pass!\n";
     return 0;

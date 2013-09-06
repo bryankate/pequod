@@ -25,19 +25,21 @@ class StringAccum { public:
 
     inline StringAccum();
     explicit inline StringAccum(int capacity);
-    explicit inline StringAccum(const char *cstr);
-    inline StringAccum(const char *s, int len);
+    explicit inline StringAccum(const char* cstr);
+    inline StringAccum(const char* s, int len);
     template <typename T>
-    inline StringAccum(const String_base<T> &str);
-    inline StringAccum(const StringAccum &x);
+    inline StringAccum(const String_base<T>& str);
+    inline StringAccum(const StringAccum& x);
 #if HAVE_CXX_RVALUE_REFERENCES
     inline StringAccum(StringAccum&& x);
+    inline StringAccum(String&& x);
 #endif
     inline ~StringAccum();
+    static inline StringAccum make_transfer(String& x);
 
-    inline StringAccum &operator=(const StringAccum &x);
+    inline StringAccum &operator=(const StringAccum& x);
 #if HAVE_CXX_RVALUE_REFERENCES
-    inline StringAccum &operator=(StringAccum &&x);
+    inline StringAccum &operator=(StringAccum&& x);
 #endif
 
     inline const char* data() const;
@@ -111,14 +113,14 @@ class StringAccum { public:
 
     String take_string();
 
-    void swap(StringAccum &x);
+    void swap(StringAccum& x);
 
     // see also operator<< declarations below
 
   private:
 
     enum {
-	MEMO_SPACE = String::MEMO_SPACE
+	memo_space = String::MEMO_SPACE
     };
 
     struct rep_t {
@@ -135,12 +137,12 @@ class StringAccum { public:
 
     rep_t r_;
 
-    char *grow(int);
-    char *hard_extend(int nadjust, int nreserve);
+    char* grow(int ncap);
+    char* hard_extend(int nadjust, int nreserve);
     void hard_append(const char *s, int len);
     void hard_append_cstr(const char *cstr);
     bool append_utf8_hard(int ch);
-
+    void transfer_from(String& x);
 };
 
 inline StringAccum &operator<<(StringAccum &sa, char c);
@@ -154,11 +156,11 @@ inline StringAccum &operator<<(StringAccum &sa, short x);
 inline StringAccum &operator<<(StringAccum &sa, unsigned short x);
 inline StringAccum &operator<<(StringAccum &sa, int x);
 inline StringAccum &operator<<(StringAccum &sa, unsigned x);
-StringAccum &operator<<(StringAccum &sa, long x);
-StringAccum &operator<<(StringAccum &sa, unsigned long x);
-StringAccum &operator<<(StringAccum &sa, long long x);
-StringAccum &operator<<(StringAccum &sa, unsigned long long x);
-StringAccum &operator<<(StringAccum &sa, double x);
+StringAccum& operator<<(StringAccum& sa, long x);
+StringAccum& operator<<(StringAccum& sa, unsigned long x);
+StringAccum& operator<<(StringAccum& sa, long long x);
+StringAccum& operator<<(StringAccum& sa, unsigned long long x);
+StringAccum& operator<<(StringAccum& sa, double x);
 
 /** @brief Construct an empty StringAccum (with length 0). */
 inline StringAccum::StringAccum() {
@@ -173,12 +175,7 @@ inline StringAccum::StringAccum() {
     StringAccum falls back to a smaller capacity (possibly zero). */
 inline StringAccum::StringAccum(int capacity) {
     assert(capacity >= 0);
-    unsigned char *s;
-    if (capacity
-	&& (s = new unsigned char[capacity + MEMO_SPACE])) {
-	r_.s = s + MEMO_SPACE;
-	r_.cap = capacity;
-    }
+    grow(capacity);
 }
 
 /** @brief Construct a StringAccum containing the characters in @a cstr. */
@@ -208,12 +205,24 @@ inline StringAccum::StringAccum(StringAccum&& x) {
     using std::swap;
     swap(r_, x.r_);
 }
+
+inline StringAccum::StringAccum(String&& x) {
+    transfer_from(x);
+    x._r = String::rep_type{String_generic::empty_data, 0, 0};
+}
 #endif
 
 /** @brief Destroy a StringAccum, freeing its memory. */
 inline StringAccum::~StringAccum() {
     if (r_.cap > 0)
-	delete[] (r_.s - MEMO_SPACE);
+	delete[] reinterpret_cast<char*>(r_.s - memo_space);
+}
+
+inline StringAccum StringAccum::make_transfer(String& x) {
+    StringAccum sa;
+    sa.transfer_from(x);
+    x._r = String::rep_type{String_generic::empty_data, 0, 0};
+    return sa;
 }
 
 /** @brief Return the contents of the StringAccum.
@@ -528,7 +537,7 @@ void StringAccum::append_encoded(T &encoder,
 	    grow(r_.len + last - first);
     }
     if (kills)
-	delete[] (kills - MEMO_SPACE);
+	delete[] reinterpret_cast<char*>(kills - memo_space);
 }
 
 template <typename T>

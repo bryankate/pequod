@@ -9,7 +9,7 @@ class String : public String_base<String> {
   public:
     struct rep_type;
 
-    enum { max_length = 0x7FFFFE0 };
+    enum { max_length = 0x7FFFFFE0 };
 
     typedef String substring_type;
     typedef const String& argument_type;
@@ -42,22 +42,26 @@ class String : public String_base<String> {
     /** @endcond never */
     inline ~String();
 
-    static inline const String &make_empty();
-    static inline const String &make_out_of_memory();
+    static inline const String& make_empty();
+    static inline const String& make_out_of_memory();
     static String make_uninitialized(int len);
-    static inline String make_stable(const char *cstr);
-    static inline String make_stable(const char *s, int len);
-    static inline String make_stable(const char *first, const char *last);
+    static inline String make_stable(const char* cstr);
+    static inline String make_stable(const char* s, int len);
+    static inline String make_stable(const char* first, const char* last);
     static String make_fill(int c, int n); // n copies of c
-    static inline const String &make_zero();
+    static inline const String& make_zero();
 
-    inline const char *data() const;
+    inline const char* data() const;
     inline int length() const;
 
     inline const char *c_str() const;
 
-    inline String substring(const char *first, const char *last) const;
-    inline String fast_substring(const char *first, const char *last) const;
+    inline String substring(const char* first, const char* last) const;
+    inline String substring(const unsigned char* first,
+                            const unsigned char* last) const;
+    inline String fast_substring(const char* first, const char* last) const;
+    inline String fast_substring(const unsigned char* first,
+                                 const unsigned char* last) const;
     String substring(int pos, int len) const;
     inline String substring(int pos) const;
     String ltrim() const;
@@ -188,6 +192,7 @@ class String : public String_base<String> {
                 memo_offset = 0;
         }
         friend class String;
+        friend class StringAccum;
     };
 
     const rep_type& internal_rep() const {
@@ -201,7 +206,6 @@ class String : public String_base<String> {
     /** @endcond never */
 
   private:
-
     /** @cond never */
     struct memo_type {
 	volatile uint32_t refcount;
@@ -212,6 +216,14 @@ class String : public String_base<String> {
 	memo_type* next;
 #endif
 	char real_data[8];	// but it might be more or less
+
+        inline void initialize(uint32_t capacity, uint32_t dirty);
+#if HAVE_STRING_PROFILING
+        void account_new();
+        void account_destroy();
+#else
+        inline void account_destroy() {}
+#endif
     };
 
     enum {
@@ -285,7 +297,7 @@ class String : public String_base<String> {
     static inline memo_type* absent_memo() {
 	return reinterpret_cast<memo_type*>(uintptr_t(1));
     }
-    static memo_type* create_memo(char* space, int dirty, int capacity);
+    static inline memo_type* create_memo(int capacity, int dirty);
     static void delete_memo(memo_type* memo);
     const char* hard_c_str() const;
     bool hard_equals(const char* s, int len) const;
@@ -295,8 +307,6 @@ class String : public String_base<String> {
     static const rep_type oom_string_rep;
     static const rep_type zero_string_rep;
 
-    static String make_claim(char*, int, int); // claim memory
-
     static int parse_cesu8_char(const unsigned char* s,
 				const unsigned char* end);
 
@@ -304,6 +314,17 @@ class String : public String_base<String> {
     friend class StringAccum;
 };
 
+
+/** @cond never */
+inline void String::memo_type::initialize(uint32_t capacity, uint32_t dirty) {
+    this->refcount = 1;
+    this->capacity = capacity;
+    this->dirty = dirty;
+#if HAVE_STRING_PROFILING
+    this->account_new();
+#endif
+}
+/** @endcond never */
 
 /** @brief Construct an empty String (with length 0). */
 inline String::String()
@@ -368,8 +389,8 @@ inline String::String(const char *first, const char *last) {
 }
 
 /** @overload */
-inline String::String(const unsigned char *first, const unsigned char *last) {
-    assign(reinterpret_cast<const char *>(first),
+inline String::String(const unsigned char* first, const unsigned char* last) {
+    assign(reinterpret_cast<const char*>(first),
 	   (first < last ? last - first : 0), false);
 }
 
@@ -421,7 +442,7 @@ inline String String::make_uninitialized(int len) {
 
 /** @brief Return a const reference to the string "0". */
 inline const String& String::make_zero() {
-    return reinterpret_cast<const String &>(zero_string_rep);
+    return reinterpret_cast<const String&>(zero_string_rep);
 }
 
 /** @brief Return a String that directly references the C string @a cstr.
@@ -500,7 +521,7 @@ inline const char* String::c_str() const {
     memo_type* m = _r.memo();
     if ((m && end_data >= m->real_data + m->dirty)
 	|| *end_data != '\0') {
-	if (char *x = const_cast<String *>(this)->append_uninitialized(1)) {
+	if (char *x = const_cast<String*>(this)->append_uninitialized(1)) {
 	    *x = '\0';
 	    --_r.length;
 	}
@@ -526,6 +547,11 @@ inline String String::substring(const char* first, const char* last) const {
     } else
 	return String();
 }
+/** @overload */
+inline String String::substring(const unsigned char* first, const unsigned char* last) const {
+    return substring(reinterpret_cast<const char*>(first),
+                     reinterpret_cast<const char*>(last));
+}
 
 /** @brief Return a substring of the current string starting at @a first
     and ending before @a last.
@@ -536,6 +562,11 @@ inline String String::fast_substring(const char* first, const char* last) const 
     assert(begin() <= first && first <= last && last <= end());
     _r.ref();
     return String(first, last - first, _r.memo());
+}
+/** @overload */
+inline String String::fast_substring(const unsigned char* first, const unsigned char* last) const {
+    return fast_substring(reinterpret_cast<const char*>(first),
+                          reinterpret_cast<const char*>(last));
 }
 
 /** @brief Return the suffix of the current string starting at index @a pos.
@@ -720,7 +751,7 @@ inline String String::compact() const {
 }
 
 /** @brief Return the unsigned char * version of mutable_data(). */
-unsigned char *String::mutable_udata() {
+inline unsigned char *String::mutable_udata() {
     return reinterpret_cast<unsigned char *>(mutable_data());
 }
 

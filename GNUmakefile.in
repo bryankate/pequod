@@ -13,7 +13,7 @@ builddir = .
 
 OBJDIR = obj
 
-TAMER_COMMIT = e137afcf7edd83eef72ff4ed88e90ce3d1276449
+TAMER_COMMIT = 3fa263ff353e94c36020d29f51910e40c7e0cfdb
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include

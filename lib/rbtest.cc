@@ -258,8 +258,9 @@ void grow_and_shrink(G& tree, int N) {
     getrusage(RUSAGE_SELF, &ru[1]);
     tree.phase(1);
     getrusage(RUSAGE_SELF, &ru[2]);
+    int count = 0;
     for (int i = 0; i < 4 * N; ++i)
-        tree.find(random() % N);
+        count += tree.contains(random() % N);
     getrusage(RUSAGE_SELF, &ru[3]);
     tree.phase(2);
     for (int i = 0; i < N; ++i)
@@ -277,10 +278,11 @@ void grow_and_shrink(G& tree, int N) {
     delete[] x;
     for (int i = 5; i > 0; --i)
         timersub(&ru[i].ru_utime, &ru[i-1].ru_utime, &ru[i].ru_utime);
-    fprintf(stderr, "time: insert %ld.%06ld  find %ld.%06ld  remove %ld.%06ld\n",
+    fprintf(stderr, "time: insert %ld.%06ld  find %ld.%06ld  remove %ld.%06ld  count %d\n",
             long(ru[1].ru_utime.tv_sec), long(ru[1].ru_utime.tv_usec),
             long(ru[3].ru_utime.tv_sec), long(ru[3].ru_utime.tv_usec),
-            long(ru[5].ru_utime.tv_sec), long(ru[5].ru_utime.tv_usec));
+            long(ru[5].ru_utime.tv_sec), long(ru[5].ru_utime.tv_usec),
+            count);
 }
 
 template <typename G>
@@ -295,18 +297,18 @@ void fuzz(G& tree, int N) {
         if (op < 5) {
             if (print_actions)
                 std::cerr << "find " << which << "\n";
-            auto n = tree.find(which);
-            assert(n ? in[which] : !in[which]);
+            bool c = tree.contains(which);
+            assert(c ? in[which] : !in[which]);
         } else if (!in[which] || (op == 5 && in[which] < 4)) {
             if (print_actions)
                 std::cerr << "insert " << which << "\n";
-            assert(!!in[which] == !!tree.find(which));
+            assert(!!in[which] == tree.contains(which));
             tree.insert(which);
             ++in[which];
         } else {
             if (print_actions)
                 std::cerr << "erase " << which << "\n";
-            assert(tree.find(which));
+            assert(tree.contains(which));
             tree.find_and_erase(which);
             --in[which];
         }
@@ -348,8 +350,8 @@ struct rbtree_without_print {
         tree.erase_and_dispose(*tree.find(rbwrapper<int>(val)));
 	//tree.check();
     }
-    inline rbwrapper<int>* find(int val) {
-        return tree.find(rbwrapper<int>(val)).operator->();
+    inline bool contains(int val) {
+        return tree.find(rbwrapper<int>(val)).operator->() != 0;
     }
     inline void phase(int) {
         tree.check();
@@ -388,8 +390,8 @@ struct boost_set_without_print {
     inline void find_and_erase(int val) {
         tree.erase_and_dispose(tree.find(node(val)), node_disposer());
     }
-    inline void find(int val) {
-        tree.find(node(val));
+    inline bool contains(int val) {
+        return tree.find(node(val)) != tree.end();
     }
     inline void phase(int) {
     }

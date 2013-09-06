@@ -15,6 +15,14 @@ template <typename T> T grab(const uint8_t* x) {
 }
 }
 
+static inline bool in_range(uint8_t x, unsigned low, unsigned n) {
+    return (unsigned) x - low < n;
+}
+
+static inline bool in_wrapped_range(uint8_t x, unsigned low, unsigned n) {
+    return (unsigned) (int8_t) x - low < n;
+}
+
 const uint8_t* streaming_parser::consume(const uint8_t* first,
                                          const uint8_t* last,
                                          const String& str) {
@@ -52,17 +60,17 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
     }
 
     while (first != last) {
-        if ((uint8_t) (*first + 0x20) < 0xA0) {
+        if (in_wrapped_range(*first, -format::nfixnegint, format::nfixint)) {
             j = Json(int(int8_t(*first)));
             ++first;
         } else if (*first == 0xC0) {
             j = Json();
             ++first;
-        } else if ((*first | 1) == 0xC3) {
-            j = Json(bool(*first == 0xC3));
+        } else if (in_range(*first, format::ffalse, 2)) {
+            j = Json(bool(*first - format::ffalse));
             ++first;
-        } else if ((uint8_t) (*first - 0x80) < 0x10) {
-            n = *first - 0x80;
+        } else if (in_range(*first, format::ffixmap, format::nfixmap)) {
+            n = *first - format::ffixmap;
             ++first;
         map:
             if (stack_.empty() && json_.is_o()) {
@@ -70,8 +78,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_object();
-        } else if ((uint8_t) (*first - 0x90) < 0x10) {
-            n = *first - 0x90;
+        } else if (in_range(*first, format::ffixarray, format::nfixarray)) {
+            n = *first - format::ffixarray;
             ++first;
         array:
             if (stack_.empty() && json_.is_a()) {
@@ -79,8 +87,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 j.clear();
             } else
                 j = Json::make_array_reserve(n);
-        } else if ((uint8_t) (*first - 0xA0) < 0x20) {
-            n = *first - 0xA0;
+        } else if (in_range(*first, format::ffixstr, format::nfixstr)) {
+            n = *first - format::ffixstr;
             ++first;
         raw:
             if (last - first < n) {
@@ -160,8 +168,8 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
 
         // Add it
     next:
-        Json* jp = stack_.size() ? stack_.back().jp : &json_;
-        if (jp->is_o() && stack_.size()) {
+        Json* jp = stack_.empty() ? &json_ : stack_.back().jp;
+        if (jp->is_o() && !stack_.empty()) {
             // Reading a key for some object Json
             if (!j.is_s() && !j.is_i())
                 goto error;
@@ -170,7 +178,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             continue;
         }
 
-        if (jp->is_a() && stack_.size()) {
+        if (jp->is_a() && !stack_.empty()) {
             jp->push_back(std::move(j));
             jp = &jp->back();
             --stack_.back().size;
