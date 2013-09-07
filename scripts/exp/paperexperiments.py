@@ -222,16 +222,6 @@ def define_experiments():
                  (clientCmd, users)
     
     exp['defs'].append(
-        {'name': "pequod",
-         'def_part': "twitternew-text",
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initBase),
-         'populatecmd': "%s" % (popBase),
-         'clientcmd': "%s" % (clientBase)})
-    
-    '''
-    exp['defs'].append(
         {'name': "pequod-client-push",
          'def_part': "twitternew-text",
          'backendcmd': "%s" % (serverCmd),
@@ -239,7 +229,15 @@ def define_experiments():
          'initcmd': "%s" % (initBase),
          'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
-    '''
+    
+    exp['defs'].append(
+        {'name': "pequod",
+         'def_part': "twitternew-text",
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initBase),
+         'populatecmd': "%s" % (popBase),
+         'clientcmd': "%s" % (clientBase)})
     
     exp['defs'].append(
         {'name': "redis",
@@ -258,11 +256,11 @@ def define_experiments():
         {'name': "postgres",
          'def_db_type': "postgres",
          'def_db_sql_script': "scripts/exp/twitter-pg-schema.sql",
-         'def_db_in_memory': False,
+         'def_db_in_memory': True,
          'def_db_compare': True,
          'def_db_flags': "-c synchronous_commit=off -c fsync=off " + \
                          "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
-                         "-c shared_buffers=24GB  -c bgwriter_delay=10000 " + \
+                         "-c shared_buffers=10GB  -c bgwriter_delay=10000 " + \
                          "-c checkpoint_segments=600 ",
          'populatecmd': "%s --initialize --dbshim --dbpool-max=10 --dbpool-depth=100 " % (popBase),
          'clientcmd': "%s --initialize --dbshim --dbpool-depth=100" % (clientBase)})
