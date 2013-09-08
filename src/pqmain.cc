@@ -96,6 +96,8 @@ static Clp_Option options[] = {
     { "prevalidate-before-sub", 0, 4019, 0, Clp_Negate },
     { "binary", 0, 4020, 0, Clp_Negate },
     { "dbshim", 0, 4021, 0, Clp_Negate },
+    { "master-host", 0, 4022, Clp_ValStringNotOption, 0 },
+    { "master-port", 0, 4023, Clp_ValInt, 0 },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -280,6 +282,10 @@ int main(int argc, char** argv) {
             tp_param.set("binary", !clp->negated);
         else if (clp->option->long_name == String("dbshim"))
             tp_param.set("dbshim", !clp->negated);
+        else if (clp->option->long_name == String("master-host"))
+            tp_param.set("master_host", clp->val.s);
+        else if (clp->option->long_name == String("master-port"))
+            tp_param.set("master_port", clp->val.i);
 
         // hn
 	else if (clp->option->long_name == String("narticles"))

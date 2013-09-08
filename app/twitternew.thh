@@ -15,6 +15,8 @@
 #include "time.hh"
 #include "json.hh"
 #include "hosts.hh"
+#include "mpfd.hh"
+#include "sock_helper.hh"
 #include "partitioner.hh"
 #include "pqlog.hh"
 #include "pqmemory.hh"
@@ -30,10 +32,14 @@ class TwitterNewPopulator;
 #define BASE_TIME       1000000000
 #define LOGIN_WINDOW    1000000
 #define OVERLAP         0          // subtracted from last check time to define beg_scan
-#define SKEW            5000       // subtracted from now to define end_scan
+#define SKEW            100000     // subtracted from now to define end_scan
 
 #define TIMELINE_SANITY_CHECK 0
 #define TIMELINE_LATENCY 0
+
+#define SYNC_PERIOD 100000
+enum { client_at_barrier = 77 };
+
 
 // Keep barebones info on each user.
 struct TwitterGraphNode {
@@ -94,7 +100,9 @@ class TwitterNewPopulator {
     typedef boost::random::uniform_int_distribution<> uni_dist_type;
 
     TwitterNewPopulator(const Json& param);
+    ~TwitterNewPopulator();
 
+    inline uint32_t ngroups() const { return ngroups_; }
     inline uint32_t groupid() const { return groupid_; }
     inline uint32_t duration() const { return duration_; }
     inline uint32_t popduration() const { return popduration_; }
@@ -116,6 +124,7 @@ class TwitterNewPopulator {
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
+    inline const Host* master() { return master_; }
 
     class managed_iterator {
       public:
@@ -193,6 +202,7 @@ class TwitterNewPopulator {
     bool visualize_;
     bool binary_;
     bool verbose_;
+    const Host* master_;
     uint32_t celebthresh_;
     double pct_active_;
     String graph_file_;
@@ -269,6 +279,10 @@ class TwitterNewRunner {
     uint32_t currtime_;
     Log log_;
     uint64_t nrpc_;
+    volatile uint32_t barrier_;
+    std::vector<tamer::event<>> at_barrier_;
+    tamer::fd master_fd_;
+    msgpack_fd* master_sync_;
 
 #if TIMELINE_LATENCY
     std::vector<uint64_t> latency_log_;
@@ -284,12 +298,121 @@ class TwitterNewRunner {
     tamed void periodic_logger(event<> e);
     tamed void select_active(event<> e);
     tamed void drain(gather_rendezvous& r, event<> e);
+
+    tamed void registrar();
+    tamed void register_one(tamer::fd fd);
+    tamed void register_with_master(event<> e);
+    tamed void wait_at_barrier(event<> e);
+    tamed void check_barrier(event<> e);
 };
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
-    : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()), nrpc_(0) {
+    : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()), nrpc_(0),
+      barrier_(0), master_sync_(nullptr) {
 }
+
+tamed template <typename S>
+void TwitterNewRunner<S>::registrar() {
+    tvars { tamer::fd cfd; }
+
+    master_fd_ = tamer::tcp_listen(tp_.master()->port());
+
+    if (!master_fd_) {
+        std::cerr << "listen: " << strerror(-master_fd_.error()) << std::endl;
+        mandatory_assert(false);
+    }
+
+    while (master_fd_) {
+        twait { master_fd_.accept(make_event(cfd)); }
+        register_one(cfd);
+    }
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::register_one(tamer::fd cfd) {
+    tvars {
+        msgpack_fd mpfd(cfd);
+        Json j;
+    }
+
+    while(cfd) {
+        j.clear();
+        twait { mpfd.read_request(make_event(j)); }
+
+        if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i()) {
+            if (!cfd.valid())
+                break;
+            std::cerr << "got bad request from grouped client: " << j << std::endl;
+            mandatory_assert(false);
+        }
+
+        mandatory_assert(j[0].as_i() == client_at_barrier);
+        mandatory_assert(j[1].as_i() == barrier_);
+
+        twait { check_barrier(make_event()); }
+        mpfd.write(Json::make_array(-client_at_barrier, barrier_ - 1));
+        twait { mpfd.flush(make_event()); }
+    }
+
+    cfd.close();
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::check_barrier(event<> e) {
+    at_barrier_.push_back(e);
+
+    if (at_barrier_.size() == tp_.ngroups()) {
+        for (auto& b : at_barrier_)
+            b();
+        at_barrier_.clear();
+        ++barrier_;
+    }
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::register_with_master(event<> e) {
+    tvars {
+        struct sockaddr_in sin;
+    }
+
+    do {
+       twait { tamer::at_delay(0.1, make_event()); }
+       twait {
+           auto h = tp_.master();
+           pq::sock_helper::make_sockaddr(h->name().c_str(), h->port(), sin);
+           tamer::tcp_connect(sin.sin_addr, h->port(), make_event(master_fd_));
+       }
+    } while(!master_fd_);
+
+    if (tp_.verbose())
+        std::cerr << "Established connection with master." << std::endl;
+
+    master_sync_ = new msgpack_fd(master_fd_);
+    e();
+}
+
+tamed template <typename S>
+void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
+    tvars { Json j; }
+
+    if (!tp_.groupid())
+        check_barrier(e);
+    else {
+        mandatory_assert(master_sync_);
+
+        twait {
+            j.clear();
+            master_sync_->call(Json::make_array(client_at_barrier, barrier_),
+                               make_event(j));
+        }
+
+        mandatory_assert(j && j[0] == -client_at_barrier && j[1].as_i() == barrier_);
+        ++barrier_;
+        e();
+    }
+}
+
 
 template <typename S> template <typename R>
 void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
@@ -652,8 +775,19 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         return;
     }
 
+    if (tp_.groupid())
+        twait { register_with_master(make_event()); }
+    else if (tp_.ngroups() > 1)
+        registrar();
+
+    if (tp_.ngroups() > 1)
+        twait { wait_at_barrier(make_event()); }
+
     if (loggedin_.empty())
         twait { select_active(make_event()); }
+
+    if (tp_.ngroups() > 1)
+        twait { wait_at_barrier(make_event()); }
 
     gen.seed(13 + tp_.groupid());
     periodic_logger(done);
@@ -764,6 +898,11 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
         ++currtime_;
 
+        if (tp_.ngroups() > 1 && currtime_ % SYNC_PERIOD == 0) {
+            twait { drain(gr, make_event()); }
+            twait { wait_at_barrier(make_event()); }
+        }
+
         if (tp_.verbose()) {
             uint32_t prog;
             uint32_t goal;
@@ -795,12 +934,22 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     // each distributed experiment does roughly the same amount of work
     // despite differences in rpc ordering
     if (tp_.verbose()) { std::cerr << "Final scan." << std::endl; }
-    for (auto& uid : active_) {
-        user = tp_.managed_user(uid);
-        if (user->last_read_)
+    for (u = 0; u < active_.size(); ++u) {
+        user = tp_.managed_user(active_[u]);
+        if (user->last_read_) {
             check(user, currtime_, user->last_read_, currtime_, gr.make_event(nread));
+            twait { server_.pace(make_event()); }
+        }
     }
     twait { drain(gr, make_event()); }
+
+    if (tp_.ngroups() > 1) {
+        twait { wait_at_barrier(make_event()); }
+
+        master_fd_.close();
+        if (tp_.groupid())
+            delete master_sync_;
+    }
 
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);

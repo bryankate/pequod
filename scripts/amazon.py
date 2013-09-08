@@ -369,6 +369,7 @@ for x in exps:
         for c in range(ngroups):
             full_cmd = clientcmd + \
                 " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
+                " --master-host=" + clienthosts[0].private_ip_address + \
                 " > " + outfile + str(c) + ".json" + \
                 " 2> " + fartfile + str(c) + ".txt"
 

@@ -88,6 +88,8 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       visualize_(param["visualize"].as_b(false)),
       binary_(param["binary"].as_b(true)),
       verbose_(param["verbose"].as_b(false)),
+      master_(new Host(param["master_host"].as_s("localhost"),
+                       param["master_port"].as_i(13333), 0)),
       celebthresh_(param["celebrity"].as_i(0)),
       pct_active_(param["pactive"].as_d(70)),
       graph_file_(param["graph"].as_s("")),
