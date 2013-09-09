@@ -995,7 +995,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
          .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
          .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
          .set("wall_time", to_real(tv[1] - tv[0]));
-    std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
+    std::cout << stats.unparse(Json::indent_depth(4)) << std::endl;
 
     done();
 }
