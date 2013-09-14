@@ -26,7 +26,7 @@ INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script 
 AMI_IDS = {'us-west-2': {'basic': 'ami-bf1d8a8f', 'hvm': 'ami-a11d8a91'}}
 
 INSTANCE_TYPE_BACKING = 'cc2.8xlarge'
-INSTANCE_TYPE_CACHE = 'cr1.8xlarge'
+INSTANCE_TYPE_CACHE = 'cc2.8xlarge'
 INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
 
 
