@@ -34,6 +34,7 @@ parser.add_option("-K", "--kill", action="store_true", dest="kill", default=Fals
 parser.add_option("-A", "--keepalive", action="store_true", dest="keepalive", default=False)
 parser.add_option("-R", "--keeproles", action="store_true", dest="keeproles", default=False)
 parser.add_option("-i", "--invoke", action="store", type="string", dest="invoke", default=None)
+parser.add_option("-F", "--filter", action="store", type="string", dest="filter", default=None)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
 (options, args) = parser.parse_args()
@@ -50,6 +51,7 @@ terminate = options.terminate
 preponly = options.preponly
 justkill = options.kill
 invoke = options.invoke
+filter = options.filter
 ondemand = options.ondemand
 keepalive = options.keepalive
 keeproles = options.keeproles
@@ -77,7 +79,7 @@ if justkill:
     kill()
 
 if invoke:
-    running = ec2.get_running_instances()
+    running = ec2.get_running_instances(tag=['role', filter] if filter else None)
     for r in running:
         ec2.run_ssh_command(r.public_dns_name, invoke)
     exit(0)
