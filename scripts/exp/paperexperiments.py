@@ -128,50 +128,18 @@ def define_experiments():
     # can be run on a multiprocessor
     exp = {'name': "optimization", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    buildBase = "./configure --with-malloc=jemalloc"
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
-        {'name': "pequod-base",
+        {'name': "pequod",
          'def_part': partfunc,
-         'def_build': "%s --disable-hint --disable-value-sharing; make -j1" % (buildBase),
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
          'clientcmd': "%s" % (clientBase)})
-    
-    exp['defs'].append(
-        {'name': "pequod-hint",
-         'def_part': partfunc,
-         'def_build': "%s --disable-value-sharing; make -j1" % (buildBase),
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s" % (clientBase)})
-        
-    exp['defs'].append(
-        {'name': "pequod-hint-share",
-         'def_part': partfunc,
-         'def_build': "%s; make -j1" % (buildBase),
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
-         'clientcmd': "%s" % (clientBase)})
-    
-    exp['plot'] = {'type': "stackedbar",
-                   'data': [{'from': "server",
-                             'attr': "server_wall_time_insert"},
-                            {'from': "server",
-                             'attr': "server_wall_time_validate"},
-                            {'from': "server",
-                             'attr': "server_wall_time_other"}],
-                   'lines': ["pequod-base", "pequod-hint", "pequod-hint-share"],
-                   'ylabel': "Runtime (s)"}
     exps.append(exp)
     
     
@@ -291,6 +259,39 @@ def define_experiments():
          'initcmd': "%s" % (initCmd),
          'populatecmd': "%s" % (popBase),
          'clientcmd': "%s --no-prevalidate" % (clientBase)})
+    exps.append(exp)
+
+
+    # cache join comparison
+    # compute karma as a single table or interleaved with article data
+    # can be run on a multiprocessor
+    exp = {'name': "karma", 'defs': []}
+    clientBase = "./obj/pqserver --hn --nops=4000000 --large"
+    vote_rate = [0, 1, 5, 10, 20, 50]
+    
+    for vr in vote_rate:
+        exp['defs'].append(
+            {'name': "single",
+             'def_part': "hackernews",
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'clientcmd': "%s --vote_rate=%d" % (clientBase, vr)})
+        
+        exp['defs'].append(
+            {'name': "interleaved",
+             'def_part': "hackernews",
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'clientcmd': "%s --vote_rate=%d --super_materialize" % (clientBase, vr)})
+
+    exp['plot'] = {'type': "line",
+                   'data': [{'from': "client",
+                             'attr': "wall_time"}],
+                   'lines': ["single", "interleaved"],
+                   'points': vote_rate,
+                   'xlabel': "Vote Rate (%)",
+                   'ylabel': "Runtime (s)"}
+
     exps.append(exp)
 
 define_experiments()
