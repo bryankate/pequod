@@ -257,10 +257,10 @@ void HackernewsRunner<S>::run(event<> e) {
 
     real_time = to_real(tv[1] - tv[0]);
     stats.set("nread", nread).set("npost", npost)
-	.set("ncomment", ncomment).set("nvote", nvote)
-	.set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
-	.set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
-	.set("real_time", real_time);
+	 .set("ncomment", ncomment).set("nvote", nvote)
+	 .set("user_time", to_real(ru[1].ru_utime - ru[0].ru_utime))
+	 .set("system_time", to_real(ru[1].ru_stime - ru[0].ru_stime))
+	 .set("wall_time", real_time);
 
     std::cout << stats.unparse(Json::indent_depth(4)) << "\n";
     std::cerr << nops << " done, " << real_time << " seconds, " 
