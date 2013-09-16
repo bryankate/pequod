@@ -271,14 +271,14 @@ def define_experiments():
     
     for vr in vote_rate:
         exp['defs'].append(
-            {'name': "single",
+            {'name': "single_%d" % (vr),
              'def_part': "hackernews",
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
              'clientcmd': "%s --vote_rate=%d" % (clientBase, vr)})
         
         exp['defs'].append(
-            {'name': "interleaved",
+            {'name': "interleaved_%d" % (vr),
              'def_part': "hackernews",
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
