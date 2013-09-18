@@ -266,7 +266,7 @@ def define_experiments():
     # compute karma as a single table or interleaved with article data
     # can be run on a multiprocessor
     exp = {'name': "karma", 'defs': []}
-    clientBase = "./obj/pqserver --hn --nops=4000000 --large"
+    clientBase = "./obj/pqserver --hn --nops=4000000 --large --run_only"
     vote_rate = [0, 1, 5, 10, 20, 50]
     
     for vr in vote_rate:
