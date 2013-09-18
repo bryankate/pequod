@@ -30,7 +30,6 @@ parser.add_option("-p", "--startport", action="store", type="int", dest="startpo
 parser.add_option("-M", "--moveports", action="store_true", dest="moveports", default=False)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
-parser.add_option("-k", "--skipcpu", action="store", type="int", dest="skipcpu", default=1)
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
@@ -40,6 +39,7 @@ parser.add_option("-l", "--loaddb", action="store_true", dest="loaddb", default=
 parser.add_option("-r", "--ramfs", action="store", type="string", dest="ramfs", default="/mnt/tmp")
 (options, args) = parser.parse_args()
 
+maxcpus = 24
 expfile = options.expfile
 symlink = options.symlink
 killall = options.killall
@@ -49,7 +49,6 @@ startport = options.startport
 moveports = options.moveports
 affinity = options.affinity
 startcpu = options.startcpu
-skipcpu = options.skipcpu
 perfserver = options.perfserver
 ngroups = options.ngroups
 dbstartport = options.dbstartport
@@ -159,7 +158,7 @@ def check_database_env(expdef):
             exit()
         dbenvpath = os.path.join(ramfs, dbenvpath)
 
-def start_postgres(expdef, id, nclients):
+def start_postgres(expdef, id, ncpus):
     fartfile = os.path.join(resdir, "fart_db_" + str(id) + ".txt")
     dbpath = os.path.join(dbenvpath, "postgres_" + str(id))
     os.makedirs(dbpath)
@@ -168,11 +167,7 @@ def start_postgres(expdef, id, nclients):
     run_cmd(cmd, fartfile, fartfile)
 
     if affinity:
-        cpus = str(startcpu + (id * skipcpu))
-        for c in range(nclients - 1):
-            cpus += "," + str(startcpu + ((id + c + 1) * skipcpu))
-            
-        pin = "numactl -C " + cpus + " "
+        pin = "numactl -C " + ",".join([str(id + c) for c in range(ncpus)]) + " "
     else:
         pin = ""
     
@@ -215,7 +210,7 @@ def start_redis(expdef, id):
     conffile.close()
     
     if affinity:
-        pin = "numactl -C " + str(startcpu + (id * skipcpu)) + " "
+        pin = "numactl -C " + str(startcpu + id) + " "
     else:
         pin = ""
     
@@ -226,7 +221,7 @@ def start_memcache(expdef, id):
     fartfile = os.path.join(resdir, "fart_memcache_" + str(id) + ".txt")
     
     if affinity:
-        pin = "numactl -C " + str(startcpu + (id * skipcpu)) + " "
+        pin = "numactl -C " + str(startcpu + id) + " "
     else:
         pin = ""
 
@@ -337,7 +332,7 @@ for x in exps:
                 fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
       
                 if affinity:
-                    pin = "numactl -C " + str(startcpu + (s * skipcpu)) + " "
+                    pin = "numactl -C " + str(startcpu + s) + " "
                     
                 if s == perfserver:
                     perf = "perf record -g -o " + os.path.join(resdir, "perf-") + str(s) + ".dat "
@@ -363,7 +358,7 @@ for x in exps:
                 initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
             if affinity:
-                pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
+                pin = "numactl -C " + str(startcpu + nprocesses) + " "
             
             full_cmd = pin + initcmd
             run_cmd(full_cmd, fartfile, fartfile)
@@ -393,7 +388,7 @@ for x in exps:
                 popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
             
             if affinity:
-                pin = "numactl -C " + str(startcpu + (nprocesses * skipcpu)) + " "
+                pin = "numactl -C " + str(startcpu + nprocesses) + " "
             
             full_cmd = pin + popcmd
             run_cmd(full_cmd, fartfile, fartfile)
@@ -415,6 +410,12 @@ for x in exps:
         print "Starting app clients."
         clientprocs = []
         
+        cpulist = ""
+        if startcpu + nprocesses + ngroups > maxcpus:
+            # if we want to run more clients than we have processors left, 
+            # just run them all on the set of remaining cpus
+            cpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
+                    
         for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
             fartfile = os.path.join(resdir, "fart_app_" + str(c) + ".txt")
@@ -433,9 +434,9 @@ for x in exps:
             
             if dbmonitor:
                 clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
-                
+            
             if affinity:
-                pin = "numactl -C " + str(startcpu + ((nprocesses + c) * skipcpu)) + " "
+                pin = "numactl -C " + (cpulist if cpulist else str(startcpu + nprocesses + c)) + " "
 
             full_cmd = pin + clientcmd + \
                        " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
