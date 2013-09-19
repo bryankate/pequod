@@ -120,6 +120,21 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     e();
 }
 
+tamed void MemcacheClient::stats(tamer::event<Json> e) {
+    tvars {
+        uint8_t data[sizeof(protocol_binary_request_stats) + 128];
+        uint32_t cmdlen;
+        MemcacheResponse res;
+    }
+
+    res.seq = seq_++;
+    cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_STAT, "", "", res.seq);
+    twait { send_command(data, cmdlen, make_event(res)); }
+
+    check_error(res);
+    e(res.jsonval);
+}
+
 uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
                                       Str key, Str value, uint32_t seq) {
 
@@ -170,6 +185,11 @@ uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
             extraslen = 0;
             memcpy(data + hdrlen + extraslen, key.data(), key.length());
             memcpy(data + hdrlen + extraslen + key.length(), value.data(), value.length());
+            break;
+        }
+
+        case PROTOCOL_BINARY_CMD_STAT: {
+            extraslen = 0;
             break;
         }
 
@@ -228,7 +248,7 @@ tamed void MemcacheClient::read_loop() {
         curr = rdwait_.front();
         rdwait_.pop_front();
 
-        // get header
+        read_header:
         twait { sock_.read(&hdr, hdrlen, &nread, make_event(err)); }
         mandatory_assert(!err && "Problems reading memcached response.");
         mandatory_assert(nread == hdrlen);
@@ -288,6 +308,23 @@ tamed void MemcacheClient::read_loop() {
                 mandatory_assert(!bodylen);
                 mandatory_assert(hdr.response.cas);
                 break;
+            }
+
+            case PROTOCOL_BINARY_CMD_STAT: {
+                mandatory_assert(!hdr.response.cas);
+                mandatory_assert(!hdr.response.extlen);
+
+                // stats are terminated by an empty packet
+                if (!bodylen)
+                    break;
+
+                twait { sock_.read(data, bodylen, &nread, make_event(err)); }
+                mandatory_assert(!err && "Problems reading memcached response.");
+                mandatory_assert(nread == bodylen);
+
+                uint16_t keylen = read_in_net_order<uint16_t>((uint8_t*)&hdr.response.keylen);
+                curr.result().jsonval.set(Str(data, keylen), Str(data + keylen, bodylen - keylen));
+                goto read_header;
             }
 
             default:
@@ -417,6 +454,19 @@ void MemcacheMultiClient::clear() {
         delete c;
     }
     clients_.clear();
+}
+
+tamed void MemcacheMultiClient::stats(tamer::event<Json> e) {
+    tvars {
+        Json j = Json::make_array_reserve(this->clients_.size());
+    }
+
+    twait {
+        for (uint32_t i = 0; i < clients_.size(); ++i)
+            clients_[i]->stats(make_event(j[i].value()));
+    }
+
+    e(j);
 }
 
 tamed void MemcacheMultiClient::pace(tamer::event<> e) {

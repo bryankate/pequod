@@ -171,12 +171,12 @@ class TwitterNewMemcacheShim {
     tamed void follower_scan(uint32_t poster, event<scan_result> e);
     tamed void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan,
                          event<scan_result> e);
+    tamed void stats(tamer::event<Json> e);
     template <typename R>
     inline void pace(tamer::preevent<R> done);
     template <typename R>
     inline void flush(tamer::preevent<R> done);
-    template <typename R>
-    inline void stats(tamer::preevent<R, Json> e);
+
     template <typename R>
     inline void control(const Json& cmd, tamer::preevent<R, Json> e);
 
@@ -1116,9 +1116,18 @@ inline void TwitterNewMemcacheShim<S,P>::flush(tamer::preevent<R> done) {
     done();
 }
 
-template <typename S, typename P> template <typename R>
-inline void TwitterNewMemcacheShim<S,P>::stats(tamer::preevent<R, Json> done) {
-    done(Json());
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::stats(tamer::event<Json> done) {
+    twait { server_.stats(make_event(done.result())); }
+
+    Json& j = done.result();
+    for (auto it = j.abegin(); it != j.aend(); ++it) {
+        it->set("server_user_time", it->get("rusage_user").to_d());
+        it->set("server_system_time", it->get("rusage_system").to_d());
+        it->set("server_wall_time", fromus(it->get("time").to_u64()));
+    }
+
+    done.unblocker().trigger();
 }
 
 template <typename S, typename P> template <typename R>
