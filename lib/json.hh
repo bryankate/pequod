@@ -66,7 +66,7 @@ class Json {
     inline Json(unsigned long long x);
     inline Json(double x);
     inline Json(bool x);
-    inline Json(const String &x);
+    inline Json(const String& x);
     inline Json(Str x);
     inline Json(const char* x);
     template <typename T> inline Json(const std::vector<T>& x);
