@@ -248,7 +248,7 @@ tamed void MemcacheClient::read_loop() {
         curr = rdwait_.front();
         rdwait_.pop_front();
 
-        read_header:
+        // read header
         twait { sock_.read(&hdr, hdrlen, &nread, make_event(err)); }
         mandatory_assert(!err && "Problems reading memcached response.");
         mandatory_assert(nread == hdrlen);
@@ -324,7 +324,8 @@ tamed void MemcacheClient::read_loop() {
 
                 uint16_t keylen = read_in_net_order<uint16_t>((uint8_t*)&hdr.response.keylen);
                 curr.result().jsonval.set(Str(data, keylen), Str(data + keylen, bodylen - keylen));
-                goto read_header;
+                rdwait_.push_front(curr);
+                continue;
             }
 
             default:
