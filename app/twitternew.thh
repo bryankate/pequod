@@ -396,6 +396,10 @@ tamed template <typename S>
 void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
     tvars { Json j; }
 
+    if (tp_.verbose())
+        std::cerr << tstamp() << ": waiting at barrier ("
+                  << nrpc_ << " rpcs sent)" << std::endl;
+
     if (!tp_.groupid())
         check_barrier(e);
     else {
@@ -923,8 +927,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             uint32_t frac = goal / 10;
             if (prog && prog != lastprog && prog % frac == 0) {
                 lastprog = prog;
-                std::cerr << prog / frac * 10 << "% complete ("
-                          << nrpc_ << " rpcs sent)" << std::endl;
+                std::cerr << prog / frac * 10 << "% complete" << std::endl;
             }
         }
     }
