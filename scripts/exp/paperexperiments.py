@@ -265,11 +265,13 @@ def define_experiments():
     # cache join comparison
     # compute karma as a single table or interleaved with article data
     # can be run on a multiprocessor
+    #
+    # note: a hack needs to be enabled by turning on the compile-time flag 
+    #       hn_interleaved_hack flag
     exp = {'name': "karma", 'defs': []}
     clientBase = "./obj/pqserver --hn --nops=4000000 --large --run_only"
-    vote_rate = [0, 1, 5, 10, 20, 50]
-    
     populateCmd = "./obj/pqserver --hn --narticles=100000 --nusers=50000 --populate_only"
+    vote_rate = [0, 1, 5, 10, 20, 50]
 
     for vr in vote_rate:
         exp['defs'].append(
