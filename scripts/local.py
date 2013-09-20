@@ -347,6 +347,12 @@ for x in exps:
                 
         sleep(3)
 
+        clientcpulist = ""
+        if startcpu + nprocesses + ngroups > maxcpus:
+            # if we want to run more clients than we have processors left, 
+            # just run them all on the set of remaining cpus
+            clientcpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
+
         if 'initcmd' in e:
             print "Initializing cache servers."
             initcmd = e['initcmd']
@@ -374,25 +380,39 @@ for x in exps:
                 
             for p in procs:
                 wait_for_proc(p)
+                
         elif 'populatecmd' in e:
             print "Populating backend."
             popcmd = e['populatecmd']
-            fartfile = os.path.join(resdir, "fart_pop.txt")
-            
+                    
             if dbcompare:
-                popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching)
+                if ngroups >= ncaching:
+                    pool = 1;
+                else:
+                    pool = math.ceil(ncaching / ngroups)
+                    
+                popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, pool)
             else:
                 popcmd = popcmd + " -H=" + hostpath + " -B=" + str(nbacking)
             
             if dbmonitor:
                 popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
-            
-            if affinity:
-                pin = "numactl -C " + str(startcpu + nprocesses) + " "
-            
-            full_cmd = pin + popcmd
-            run_cmd(full_cmd, fartfile, fartfile)
+          
+            popprocs = []
+            for c in range(ngroups):
+                fartfile = os.path.join(resdir, "fart_pop_" + str(c) + ".txt")
+                            
+                if affinity:
+                    pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
+                            
+                full_cmd = pin + popcmd + \
+                    " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
 
+                popprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile));
+            
+            for p in popprocs:
+                wait_for_proc(p)
+            
         if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Dumping backend database after population."
             procs = []
@@ -409,12 +429,6 @@ for x in exps:
 
         print "Starting app clients."
         clientprocs = []
-        
-        cpulist = ""
-        if startcpu + nprocesses + ngroups > maxcpus:
-            # if we want to run more clients than we have processors left, 
-            # just run them all on the set of remaining cpus
-            cpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
                     
         for c in range(ngroups):
             outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
@@ -436,7 +450,7 @@ for x in exps:
                 clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
             
             if affinity:
-                pin = "numactl -C " + (cpulist if cpulist else str(startcpu + nprocesses + c)) + " "
+                pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
 
             full_cmd = pin + clientcmd + \
                        " --ngroups=" + str(ngroups) + " --groupid=" + str(c)

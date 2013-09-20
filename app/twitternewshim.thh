@@ -1124,7 +1124,7 @@ void TwitterNewMemcacheShim<S,P>::stats(tamer::event<Json> done) {
     for (auto it = j.abegin(); it != j.aend(); ++it) {
         it->set("server_user_time", it->get("rusage_user").to_d());
         it->set("server_system_time", it->get("rusage_system").to_d());
-        it->set("server_wall_time", fromus(it->get("time").to_u64()));
+        it->set("server_wall_time", it->get("uptime").to_d());
     }
 
     done.unblocker().trigger();
