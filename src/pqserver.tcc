@@ -11,6 +11,10 @@
 
 namespace pq {
 
+// this hack avoids a bunch of overhead in the interleaved karma
+// experiment by not checking validation on join ranges that are always pushed
+#define hn_interleaved_hack 0
+
 const Datum Datum::empty_datum{Str()};
 const Datum Datum::max_datum(Str("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"));
 Table Table::empty_table{Str(), nullptr, nullptr};
@@ -360,7 +364,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
             log |= ValidateRecord::fetch_remote;
     }
     else if (t->njoins_ != 0) {
-        if (t->njoins_ == 1) {
+        if (hn_interleaved_hack || t->njoins_ == 1) {
             auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
             if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
