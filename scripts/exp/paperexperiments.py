@@ -269,12 +269,15 @@ def define_experiments():
     clientBase = "./obj/pqserver --hn --nops=4000000 --large --run_only"
     vote_rate = [0, 1, 5, 10, 20, 50]
     
+    populateCmd = "./obj/pqserver --hn --narticles=100000 --nusers=50000 --populate_only"
+
     for vr in vote_rate:
         exp['defs'].append(
             {'name': "single_%d" % (vr),
              'def_part': "hackernews",
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
+             'populatecmd' : populateCmd,
              'clientcmd': "%s --vote_rate=%d" % (clientBase, vr)})
         
         exp['defs'].append(
@@ -282,6 +285,7 @@ def define_experiments():
              'def_part': "hackernews",
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
+             'populatecmd' : populateCmd,
              'clientcmd': "%s --vote_rate=%d --super_materialize" % (clientBase, vr)})
 
     exp['plot'] = {'type': "line",
