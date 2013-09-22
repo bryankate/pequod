@@ -384,12 +384,13 @@ for x in exps:
         elif 'populatecmd' in e:
             print "Populating backend."
             popcmd = e['populatecmd']
+            npop = 1 if e.get('def_single_pop') else ngroups
                     
             if dbcompare:
-                if ngroups >= ncaching:
+                if npop >= ncaching:
                     pool = 1;
                 else:
-                    pool = math.ceil(ncaching / ngroups)
+                    pool = math.ceil(ncaching / npop)
                     
                 popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, pool)
             else:
@@ -399,14 +400,15 @@ for x in exps:
                 popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
           
             popprocs = []
-            for c in range(ngroups):
+            for c in range(npop):
                 fartfile = os.path.join(resdir, "fart_pop_" + str(c) + ".txt")
                             
                 if affinity:
-                    pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
+                    pin = "numactl -C " + (clientcpulist if clientcpulist and npop > 1 \
+                                                         else str(startcpu + nprocesses + c)) + " "
                             
                 full_cmd = pin + popcmd + \
-                    " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
+                    " --ngroups=" + str(npop) + " --groupid=" + str(c)
 
                 popprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile));
             
