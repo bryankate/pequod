@@ -9,11 +9,11 @@
 namespace pq {
 
 MemcacheClient::MemcacheClient()
-    : host_("127.0.0.1"), port_(11211), seq_(0), reading_(false), wbuffsz_(0) {
+    : host_("127.0.0.1"), port_(11211), seq_(1000), reading_(false), wbuffsz_(0) {
 }
 
 MemcacheClient::MemcacheClient(String host, uint32_t port)
-    : host_(host), port_(port), seq_(0), reading_(false), wbuffsz_(0) {
+    : host_(host), port_(port), seq_(1000), reading_(false), wbuffsz_(0) {
 }
 
 MemcacheClient::~MemcacheClient() {
@@ -49,10 +49,9 @@ tamed void MemcacheClient::get(Str key, tamer::event<String> e) {
     tvars {
         uint8_t data[sizeof(protocol_binary_request_get) + 128];
         uint32_t cmdlen;
-        MemcacheResponse res;
+        MemcacheResponse res(this->seq_++);
     }
 
-    res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_GET, key, "", res.seq);
     twait { send_command(data, cmdlen, make_event(res)); }
 
@@ -69,10 +68,9 @@ tamed void MemcacheClient::set(Str key, Str value, tamer::event<> e) {
     tvars {
           uint8_t data[sizeof(protocol_binary_request_set) + 128];
           uint32_t cmdlen;
-          MemcacheResponse res;
+          MemcacheResponse res(this->seq_++);
       }
 
-      res.seq = seq_++;
       cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_SET, key, value, res.seq);
       twait { send_command(data, cmdlen, make_event(res)); }
 
@@ -84,10 +82,9 @@ tamed void MemcacheClient::append(Str key, Str value, tamer::event<> e) {
     tvars {
         uint8_t data[sizeof(protocol_binary_request_append) + 128];
         uint32_t cmdlen;
-        MemcacheResponse res;
+        MemcacheResponse res(this->seq_++);
     }
 
-    res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_APPEND, key, value, res.seq);
     twait { send_command(data, cmdlen, make_event(res)); }
 
@@ -104,10 +101,9 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     tvars {
         uint8_t data[sizeof(protocol_binary_request_incr) + 128];
         uint32_t cmdlen;
-        MemcacheResponse res;
+        MemcacheResponse res(this->seq_++);
     }
 
-    res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_INCREMENT, key, "", res.seq);
     twait { send_command(data, cmdlen, make_event(res)); }
 
@@ -124,10 +120,9 @@ tamed void MemcacheClient::stats(tamer::event<Json> e) {
     tvars {
         uint8_t data[sizeof(protocol_binary_request_stats) + 128];
         uint32_t cmdlen;
-        MemcacheResponse res;
+        MemcacheResponse res(this->seq_++);
     }
 
-    res.seq = seq_++;
     cmdlen = prep_command(data, PROTOCOL_BINARY_CMD_STAT, "", "", res.seq);
     twait { send_command(data, cmdlen, make_event(res)); }
 
@@ -212,11 +207,10 @@ tamed void MemcacheClient::send_command(const uint8_t* data, uint32_t len,
         int32_t ret;
     }
 
+    mandatory_assert(e.result().seq);
+
     wbuffsz_ += len;
     twait { sock_.write(data, len, &nwritten, make_event(ret)); }
-    if (ret) {
-        std::cerr << "error code is " << ret << std::endl;
-    }
     mandatory_assert(!ret && "Problem writing to socket.");
     mandatory_assert(nwritten == len && "Did not write the correct number of bytes?");
     wbuffsz_ -= len;

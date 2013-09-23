@@ -18,6 +18,7 @@ namespace pq {
 enum { use_yandong_modified_server = 0 };
 
 struct MemcacheResponse {
+    MemcacheResponse(uint32_t s) : seq(s) { }
     uint32_t seq;
     uint16_t status;
     uint64_t intval;
