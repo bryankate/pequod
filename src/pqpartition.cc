@@ -46,6 +46,7 @@ TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
     : Partitioner(default_owner, nbacking) {
 
     ps_.add(partition1("c|", partition1::text, 0, 0, 1));
+    ps_.add(partition1("prog", partition1::text, 0, 0, 1));
 
     if (newtwitter) {
         if (binary) {

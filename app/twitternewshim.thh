@@ -44,10 +44,12 @@ class TwitterNewShim {
     template <typename R>
     inline void post_scan(uint32_t poster, uint32_t beg_scan, uint32_t end_scan,
                           tamer::preevent<R, scan_result> e);
+
     template <typename R>
     inline void pace(tamer::preevent<R> done);
     template <typename R>
     inline void flush(tamer::preevent<R> done);
+    tamed void update_progress(uint32_t prog, tamer::event<uint32_t> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
     template <typename R>
@@ -87,6 +89,7 @@ class TwitterNewDBShim {
                           tamer::event<scan_result> e);
     inline void pace(tamer::event<> done);
     inline void flush(tamer::event<> done);
+    inline void update_progress(uint32_t prog, tamer::event<uint32_t> done);
     tamed void stats(tamer::event<Json> e);
     inline void control(const Json& cmd, tamer::event<Json> e);
 
@@ -130,6 +133,7 @@ class TwitterNewRedisShim {
     inline void pace(tamer::preevent<R> done);
     template <typename R>
     inline void flush(tamer::preevent<R> done);
+    tamed void update_progress(uint32_t prog, tamer::event<uint32_t> e);
     template <typename R>
     inline void stats(tamer::preevent<R, Json> e);
     template <typename R>
@@ -176,7 +180,7 @@ class TwitterNewMemcacheShim {
     inline void pace(tamer::preevent<R> done);
     template <typename R>
     inline void flush(tamer::preevent<R> done);
-
+    tamed void update_progress(uint32_t prog, tamer::event<uint32_t> e);
     template <typename R>
     inline void control(const Json& cmd, tamer::preevent<R, Json> e);
 
@@ -425,6 +429,27 @@ inline void TwitterNewShim<S,P>::flush(tamer::preevent<R> done) {
     server_.flush(done);
 }
 
+tamed template <typename S, typename P>
+void TwitterNewShim<S,P>::update_progress(uint32_t prog, tamer::event<uint32_t> done) {
+    tvars {
+        scan_result res;
+        uint32_t slowest = prog;
+    }
+
+    sprintf(buf_, "prog|%03u", tp_.groupid());
+    twait {
+        server_.insert(Str(buf_, 8), String(prog), make_event());
+        server_.scan("prog|", "prog}", make_event(res));
+    }
+
+    for (auto it = res.begin(); it != res.end(); ++it) {
+        if (it->value().to_i() < slowest)
+            slowest = it->value().to_i();
+    }
+
+    done(slowest);
+}
+
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::stats(tamer::preevent<R, Json> done) {
     server_.stats(done);
@@ -574,6 +599,12 @@ template <typename S, typename P>
 inline void TwitterNewDBShim<S,P>::pace(tamer::event<> done) {
     server_.maybe_flush();
     done();
+}
+
+template <typename S, typename P>
+inline void TwitterNewDBShim<S,P>::update_progress(uint32_t prog,
+                                                   tamer::event<uint32_t> done) {
+    done(prog);
 }
 
 template <typename S, typename P>
@@ -802,6 +833,31 @@ void TwitterNewRedisShim<S,P>::post_scan(uint32_t poster,
 template <typename S, typename P> template <typename R>
 inline void TwitterNewRedisShim<S,P>::pace(tamer::preevent<R> done) {
     server_.pace(done);
+}
+
+tamed template <typename S, typename P>
+void TwitterNewRedisShim<S,P>::update_progress(uint32_t prog, tamer::event<uint32_t> done) {
+    tvars {
+        char buf[16];
+        std::vector<String> res(this->tp_.ngroups());
+        uint32_t slowest = prog;
+    }
+
+    sprintf(buf, "prog|%03u", tp_.groupid());
+
+    twait {
+        server_.set(Str(buf, 8), String(prog), make_event());
+        for (uint32_t p = 0; p < tp_.ngroups(); ++p) {
+            sprintf(buf, "prog|%03u", p);
+            server_.get(Str(buf, 8), make_event(res[p]));
+        }
+    }
+
+    for (auto r : res)
+        if (!r.empty() && r.to_i() < slowest)
+            slowest = r.to_i();
+
+    done(slowest);
 }
 
 template <typename S, typename P> template <typename R>
@@ -1109,6 +1165,32 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::pace(tamer::preevent<R> done) {
     server_.pace(done);
+}
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::update_progress(uint32_t prog,
+                                                  tamer::event<uint32_t> done) {
+    tvars {
+        char buf[16];
+        std::vector<String> res(this->tp_.ngroups());
+        uint32_t slowest = prog;
+    }
+
+    sprintf(buf, "prog|%03u", tp_.groupid());
+
+    twait {
+        server_.set(Str(buf, 8), String(prog), make_event());
+        for (uint32_t p = 0; p < tp_.ngroups(); ++p) {
+            sprintf(buf, "prog|%03u", p);
+            server_.get(Str(buf, 8), make_event(res[p]));
+        }
+    }
+
+    for (auto r : res)
+        if (!r.empty() && r.to_i() < slowest)
+            slowest = r.to_i();
+
+    done(slowest);
 }
 
 template <typename S, typename P> template <typename R>

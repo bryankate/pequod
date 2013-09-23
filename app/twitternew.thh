@@ -37,7 +37,10 @@ class TwitterNewPopulator;
 #define TIMELINE_SANITY_CHECK 0
 #define TIMELINE_LATENCY 0
 
-#define SYNC_PERIOD 100000
+#define PROG_REPORT_PERIOD 1000
+#define RATE_LIMIT_PERIOD  10
+#define RATE_LIMIT_THRESH  PROG_REPORT_PERIOD * 10
+
 enum { client_at_barrier = 77 };
 
 
@@ -768,6 +771,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0,
                  nlogout = 0, ncheck = 0, nread = 0, nfull = 0;
         uint32_t next_checker = 0;
+        uint32_t slowest = 0;
+        bool rate_limit = false;
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
@@ -902,10 +907,17 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
         ++currtime_;
 
-        if (tp_.ngroups() > 1 && currtime_ % SYNC_PERIOD == 0) {
+        if (tp_.ngroups() > 1 && currtime_ % PROG_REPORT_PERIOD == 0) {
             twait { drain(gr, make_event()); }
-            twait { wait_at_barrier(make_event()); }
+            twait { server_.update_progress(currtime_, make_event(slowest)); }
+            if (currtime_ - slowest >= RATE_LIMIT_THRESH)
+                rate_limit = true;
+            else
+                rate_limit = false;
         }
+
+        if (rate_limit && currtime_ % RATE_LIMIT_PERIOD == 0)
+            twait { tamer::at_delay(0.001, make_event()); }
 
         if (tp_.verbose()) {
             uint32_t prog;
