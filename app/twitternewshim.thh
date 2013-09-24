@@ -893,20 +893,13 @@ inline void TwitterNewMemcacheShim<S,P>::initialize(tamer::preevent<R> done) {
 tamed template <typename S, typename P>
 void TwitterNewMemcacheShim<S,P>::subscribe(uint32_t subscriber, uint32_t poster,
                                             tamer::event<> done) {
-    twait {
-        if (tp_.populate() && inited_.find(subscriber) == inited_.end()) {
-            uint32_t prefixsz;
+
+    if (tp_.populate() && inited_.find(subscriber) == inited_.end()) {
+        twait {
+            uint32_t prefixsz = 10;
             inited_[subscriber] = true;
 
-            if (tp_.binary()) {
-                prefixsz = 6;
-                memcpy(buf_, "s|XXXX", 6);
-                write_in_net_order(buf_ + 2, subscriber);
-            }
-            else {
-                prefixsz = 10;
-                sprintf(buf_, "s|%08u", subscriber);
-            }
+            sprintf(buf_, "s|%08u", subscriber);
 
             server_.set(Str(buf_, prefixsz), "", make_event());
             buf_[0] = 'p';
@@ -914,12 +907,10 @@ void TwitterNewMemcacheShim<S,P>::subscribe(uint32_t subscriber, uint32_t poster
             buf_[0] = 't';
             server_.set(Str(buf_, prefixsz), "", make_event());
         }
-
-        sprintf(buf_, "s|%08u %08u", subscriber, poster);
-        server_.append(Str(buf_, 10), Str(buf_ + 11, 8), make_event());
     }
 
-    done();
+    sprintf(buf_, "s|%08u %08u", subscriber, poster);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 8), done);
 }
 
 template <typename S, typename P> template <typename R>
