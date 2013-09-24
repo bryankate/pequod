@@ -148,6 +148,8 @@ class TwitterNewRedisShim {
 };
 
 
+#define MEMCACHE_INLINE_TWEETS 1
+
 template <typename S, typename P>
 class TwitterNewMemcacheShim {
   public:
@@ -880,6 +882,7 @@ template <typename S, typename P>
 TwitterNewMemcacheShim<S,P>::TwitterNewMemcacheShim(S& server, P& tp)
     : server_(server), tp_(tp) {
     mandatory_assert(tp_.push());
+    mandatory_assert(!tp_.binary());
 }
 
 template <typename S, typename P> template <typename R>
@@ -912,16 +915,8 @@ void TwitterNewMemcacheShim<S,P>::subscribe(uint32_t subscriber, uint32_t poster
             server_.set(Str(buf_, prefixsz), "", make_event());
         }
 
-        if (tp_.binary()) {
-            memcpy(buf_, "s|XXXX XXXX", 11);
-            write_in_net_order(buf_ + 2, subscriber);
-            write_in_net_order(buf_ + 7, poster);
-            server_.append(Str(buf_, 6), Str(buf_ + 7, 4), make_event());
-        }
-        else {
-            sprintf(buf_, "s|%08u %08u", subscriber, poster);
-            server_.append(Str(buf_, 10), Str(buf_ + 11, 8), make_event());
-        }
+        sprintf(buf_, "s|%08u %08u", subscriber, poster);
+        server_.append(Str(buf_, 10), Str(buf_ + 11, 8), make_event());
     }
 
     done();
@@ -932,25 +927,143 @@ inline void TwitterNewMemcacheShim<S,P>::mark_celebrity(uint32_t, tamer::preeven
     mandatory_assert(false && "Unsupported by Memcache shim.");
 }
 
+#if MEMCACHE_INLINE_TWEETS
+
 tamed template <typename S, typename P>
 void TwitterNewMemcacheShim<S,P>::post(uint32_t poster, uint32_t time,
                                        const String& value,
                                        bool celeb, tamer::event<> done) {
     (void)celeb;
+    sprintf(buf_, "p|%08u %010u|", poster, time);
+    memcpy(buf_ + 22, value.data(), value.length());
+    buf_[22 + value.length()] = '\0';
+
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 151), done);
+}
+
+template <typename S, typename P>
+inline void TwitterNewMemcacheShim<S,P>::prepare_push_post(uint32_t poster, uint32_t time,
+                                                           const String& value) {
+    sprintf(buf_, "t|%08u %010u|%08u|", 0, time, poster);
+    memcpy(buf_ + 31, value.data(), value.length());
+    buf_[31 + value.length()] = '\0';
+}
+
+template <typename S, typename P> template <typename R>
+inline void TwitterNewMemcacheShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
+    sprintf(buf_ + 2, "%08u", subscriber);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 160), done);
+}
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
+                                                uint32_t start_time, uint32_t end_time,
+                                                event<scan_result> done) {
+    tvars {
+        char tbuf[128];
+        String timeline;
+        uint32_t uidsz = 8;
+        uint32_t timesz = 10;
+        uint32_t prefixsz = uidsz + 2;
+        uint32_t postsz = uidsz + timesz + 1;
+        uint32_t entrysz = postsz + 1 + 140;
+        std::vector<String> posts;
+    }
+
+    sprintf(tbuf, "t|%08u|", subscriber);
+
+    twait { server_.get(Str(tbuf, prefixsz), make_event(timeline)); }
+
+    uint32_t ptime;
+    for (uint32_t t = 0; t < timeline.length() / entrysz; ++t) {
+        const char* pstart = timeline.data() + t * entrysz;
+        ptime = String(pstart, timesz).to_i();
+
+        if (ptime >= start_time && ptime < end_time) {
+            memcpy(tbuf + prefixsz + 1, pstart, postsz);
+
+            posts.push_back(Str(tbuf, prefixsz + postsz + 1));
+            posts.push_back(Str(pstart + postsz + 1));
+        }
+    }
+
+    done(scan_result(Json(posts)));
+}
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::timeline_add_count(uint32_t subscriber,
+                                                     uint32_t start_time, uint32_t end_time,
+                                                     event<size_t> done) {
+    tvars {
+        char tbuf[128];
+        String timeline;
+        uint32_t prefixsz = 10;
+        uint32_t entrysz = 160;
+        size_t count = 0;
+    }
+
+    sprintf(tbuf, "t|%08u|", subscriber);
+
+    twait { server_.get(Str(tbuf, prefixsz), make_event(timeline)); }
+
+    uint32_t ptime;
+    for (uint32_t t = 0; t < timeline.length() / entrysz; ++t) {
+        const uint8_t* pstart = (const uint8_t*)timeline.data() + t * entrysz;
+        ptime = String(pstart, 10).to_i();
+
+        if (ptime >= start_time && ptime < end_time)
+            ++count;
+    }
+
+    done(done.result() + count);
+}
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
+                                            uint32_t start_time, uint32_t end_time,
+                                            event<scan_result> done) {
+    tvars {
+        char buf[128];
+        String authored;
+        uint32_t uidsz = 8;
+        uint32_t timesz = 10;
+        uint32_t prefixsz = uidsz + 2;
+        uint32_t entrysz = timesz + 1 + 140;
+        std::vector<String> posts;
+    }
+
+    sprintf(buf, "p|%08u|", poster);
+
+    twait { server_.get(Str(buf, prefixsz), make_event(authored)); }
+
+    uint32_t ptime;
+    for (uint32_t t = 0; t < authored.length() / entrysz; ++t) {
+        const char* pstart = authored.data() + t * entrysz;
+        ptime = String(pstart, timesz).to_i();
+
+        if (ptime >= start_time && ptime < end_time) {
+            memcpy(buf + prefixsz + 1, pstart, timesz);
+
+            posts.push_back(Str(buf, prefixsz + timesz + 1));
+            posts.push_back(Str(pstart + timesz + 1));
+        }
+    }
+
+    done(scan_result(Json(posts)));
+}
+
+#else
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::post(uint32_t poster, uint32_t time,
+                                       const String& value,
+                                       bool celeb, tamer::event<> done) {
+    (void)celeb;
+    sprintf(buf_, "p|%08u|%010u|", poster, time);
 
     twait {
-        if (tp_.binary()) {
-            memcpy(buf_, "p|XXXX|XXXX", 12);
-            write_in_net_order(buf_ + 2, poster);
-            write_in_net_order(buf_ + 7, time);
-            server_.append(Str(buf_, 6), Str(buf_ + 7, 4), make_event());
-            server_.set(Str(buf_, 11), value, make_event());
-        }
-        else {
-            sprintf(buf_, "p|%08u|%010u", poster, time);
-            server_.append(Str(buf_, 10), Str(buf_ + 11, 10), make_event());
-            server_.set(Str(buf_, 21), value, make_event());
-        }
+        server_.append(Str(buf_, 10), Str(buf_ + 11, 10), make_event());
+        server_.set(Str(buf_, 21), value, make_event());
     }
 
     done();
@@ -959,25 +1072,13 @@ void TwitterNewMemcacheShim<S,P>::post(uint32_t poster, uint32_t time,
 template <typename S, typename P>
 inline void TwitterNewMemcacheShim<S,P>::prepare_push_post(uint32_t poster, uint32_t time,
                                                            const String&) {
-    if (tp_.binary()) {
-        memcpy(buf_, "t|XXXX XXXX|XXXX", 17);
-        write_in_net_order(buf_ + 7, time);
-        write_in_net_order(buf_ + 11, poster);
-    }
-    else
-        sprintf(buf_, "t|%08u %010u|%08u", 0, time, poster);
+    sprintf(buf_, "t|%08u %010u|%08u|", 0, time, poster);
 }
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
-    if (tp_.binary()) {
-        write_in_net_order(buf_ + 2, subscriber);
-        server_.append(Str(buf_, 6), Str(buf_ + 7, 7), done);
-    }
-    else {
-        sprintf(buf_ + 2, "%08u", subscriber);
-        server_.append(Str(buf_, 10), Str(buf_ + 11, 19), done);
-    }
+    sprintf(buf_ + 2, "%08u", subscriber);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 19), done);
 }
 
 tamed template <typename S, typename P>
@@ -988,23 +1089,16 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
         char tbuf[128];
         char pbuf[64];
         String timeline;
-        uint32_t uidsz = (this->tp_.binary()) ? 4 : 8;
-        uint32_t timesz = (this->tp_.binary()) ? 4 : 10;
+        uint32_t uidsz = 8;
+        uint32_t timesz = 10;
         uint32_t prefixsz = uidsz + 2;
         uint32_t entrysz = uidsz + timesz + 1;
         std::vector<String> posts;
         std::vector<String*> values;
     }
 
-    if (tp_.binary()) {
-        memcpy(tbuf, "t|XXXX|", 7);
-        write_in_net_order(tbuf + 2, subscriber);
-        memcpy(pbuf, "p|XXXX|XXXX", 11);
-    }
-    else {
-        sprintf(tbuf, "t|%08u|", subscriber);
-        sprintf(pbuf, "p|%08u|%010u", 0, 0);
-    }
+    sprintf(tbuf, "t|%08u|", subscriber);
+    sprintf(pbuf, "p|%08u|%010u", 0, 0);
 
     twait { server_.get(Str(tbuf, prefixsz), make_event(timeline)); }
 
@@ -1013,11 +1107,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
 
         for (uint32_t t = 0; t < timeline.length() / entrysz; ++t) {
             const uint8_t* pstart = (const uint8_t*)timeline.data() + t * entrysz;
-
-            if (tp_.binary())
-                ptime = read_in_net_order<uint32_t>(pstart);
-            else
-                ptime = String(pstart, timesz).to_i();
+            ptime = String(pstart, timesz).to_i();
 
             if (ptime >= start_time && ptime < end_time) {
                 memcpy(tbuf + prefixsz + 1, pstart, entrysz);
@@ -1048,17 +1138,12 @@ void TwitterNewMemcacheShim<S,P>::timeline_add_count(uint32_t subscriber,
     tvars {
         char tbuf[128];
         String timeline;
-        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
-        uint32_t entrysz = (this->tp_.binary()) ? 9 : 19;
+        uint32_t prefixsz = 10;
+        uint32_t entrysz = 19;
         size_t count = 0;
     }
 
-    if (tp_.binary()) {
-        memcpy(tbuf, "t|XXXX|", 7);
-        write_in_net_order(tbuf + 2, subscriber);
-    }
-    else
-        sprintf(tbuf, "t|%08u|", subscriber);
+    sprintf(tbuf, "t|%08u|", subscriber);
 
     twait { server_.get(Str(tbuf, prefixsz), make_event(timeline)); }
 
@@ -1066,11 +1151,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_add_count(uint32_t subscriber,
 
     for (uint32_t t = 0; t < timeline.length() / entrysz; ++t) {
         const uint8_t* pstart = (const uint8_t*)timeline.data() + t * entrysz;
-
-        if (tp_.binary())
-            ptime = read_in_net_order<uint32_t>(pstart);
-        else
-            ptime = String(pstart, 10).to_i();
+        ptime = String(pstart, 10).to_i();
 
         if (ptime >= start_time && ptime < end_time)
             ++count;
@@ -1080,54 +1161,20 @@ void TwitterNewMemcacheShim<S,P>::timeline_add_count(uint32_t subscriber,
 }
 
 tamed template <typename S, typename P>
-void TwitterNewMemcacheShim<S,P>::follower_scan(uint32_t poster,
-                                                event<scan_result> done) {
-    tvars {
-        char buf[128];
-        String following;
-        uint32_t prefixsz = (this->tp_.binary()) ? 6 : 10;
-        uint32_t entrysz = (this->tp_.binary()) ? 4 : 8;
-        std::vector<String> ret;
-    }
-
-    if (tp_.binary()) {
-        memcpy(buf, "s|XXXX|", 7);
-        write_in_net_order(buf + 2, poster);
-    }
-    else
-        sprintf(buf, "s|%08u|", poster);
-
-    twait { server_.get(Str(buf, prefixsz), make_event(following)); }
-
-    for (uint32_t f = 0; f < following.length() / entrysz; ++f) {
-        memcpy(buf + prefixsz + 1, following.data() + f * entrysz, entrysz);
-        ret.push_back(Str(buf, prefixsz + entrysz + 1));
-        ret.push_back("1");
-    }
-
-    done(scan_result(Json(ret)));
-}
-
-tamed template <typename S, typename P>
 void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
                                             uint32_t start_time, uint32_t end_time,
                                             event<scan_result> done) {
     tvars {
         char buf[128];
         String authored;
-        uint32_t uidsz = (this->tp_.binary()) ? 4 : 8;
-        uint32_t timesz = (this->tp_.binary()) ? 4 : 10;
+        uint32_t uidsz = 8;
+        uint32_t timesz = 10;
         uint32_t prefixsz = uidsz + 2;
         std::vector<String> posts;
         std::vector<String*> values;
     }
 
-    if (tp_.binary()) {
-        memcpy(buf, "p|XXXX|XXXX", 11);
-        write_in_net_order(buf + 2, poster);
-    }
-    else
-        sprintf(buf, "p|%08u|%010u", poster, 0);
+    sprintf(buf, "p|%08u|%010u", poster, 0);
 
     twait { server_.get(Str(buf, prefixsz), make_event(authored)); }
 
@@ -1136,11 +1183,7 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
 
         for (uint32_t t = 0; t < authored.length() / timesz; ++t) {
             const uint8_t* pstart = (const uint8_t*)authored.data() + t * timesz;
-
-            if (tp_.binary())
-                ptime = read_in_net_order<uint32_t>(pstart);
-            else
-                ptime = String(pstart, timesz).to_i();
+            ptime = String(pstart, timesz).to_i();
 
             if (ptime >= start_time && ptime < end_time) {
                 memcpy(buf + prefixsz + 1, pstart, timesz);
@@ -1160,6 +1203,31 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
     }
 
     done(scan_result(Json(posts)));
+}
+#endif
+
+tamed template <typename S, typename P>
+void TwitterNewMemcacheShim<S,P>::follower_scan(uint32_t poster,
+                                                event<scan_result> done) {
+    tvars {
+        char buf[128];
+        String following;
+        uint32_t prefixsz = 10;
+        uint32_t entrysz = 8;
+        std::vector<String> ret;
+    }
+
+    sprintf(buf, "s|%08u|", poster);
+
+    twait { server_.get(Str(buf, prefixsz), make_event(following)); }
+
+    for (uint32_t f = 0; f < following.length() / entrysz; ++f) {
+        memcpy(buf + prefixsz + 1, following.data() + f * entrysz, entrysz);
+        ret.push_back(Str(buf, prefixsz + entrysz + 1));
+        ret.push_back("1");
+    }
+
+    done(scan_result(Json(ret)));
 }
 
 template <typename S, typename P> template <typename R>
