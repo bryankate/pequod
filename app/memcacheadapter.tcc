@@ -38,6 +38,8 @@ void MemcacheClient::clear() {
 }
 
 #if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+#define MAX_REQUEST_LEN 256
+
 void check_error(const MemcacheResponse& res) {
     if (res.status != PROTOCOL_BINARY_RESPONSE_SUCCESS) {
         std::cerr << "Memcached error: " << res.strval << std::endl;
@@ -47,7 +49,7 @@ void check_error(const MemcacheResponse& res) {
 
 tamed void MemcacheClient::get(Str key, tamer::event<String> e) {
     tvars {
-        uint8_t data[sizeof(protocol_binary_request_get) + 128];
+        uint8_t data[MAX_REQUEST_LEN];
         uint32_t cmdlen;
         MemcacheResponse res(this->seq_++);
     }
@@ -66,7 +68,7 @@ tamed void MemcacheClient::get(Str key, tamer::event<String> e) {
 
 tamed void MemcacheClient::set(Str key, Str value, tamer::event<> e) {
     tvars {
-          uint8_t data[sizeof(protocol_binary_request_set) + 128];
+          uint8_t data[MAX_REQUEST_LEN];
           uint32_t cmdlen;
           MemcacheResponse res(this->seq_++);
       }
@@ -80,7 +82,7 @@ tamed void MemcacheClient::set(Str key, Str value, tamer::event<> e) {
 
 tamed void MemcacheClient::append(Str key, Str value, tamer::event<> e) {
     tvars {
-        uint8_t data[sizeof(protocol_binary_request_append) + 128];
+        uint8_t data[MAX_REQUEST_LEN];
         uint32_t cmdlen;
         MemcacheResponse res(this->seq_++);
     }
@@ -99,7 +101,7 @@ tamed void MemcacheClient::append(Str key, Str value, tamer::event<> e) {
 
 tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     tvars {
-        uint8_t data[sizeof(protocol_binary_request_incr) + 128];
+        uint8_t data[MAX_REQUEST_LEN];
         uint32_t cmdlen;
         MemcacheResponse res(this->seq_++);
     }
@@ -118,7 +120,7 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
 
 tamed void MemcacheClient::stats(tamer::event<Json> e) {
     tvars {
-        uint8_t data[sizeof(protocol_binary_request_stats) + 128];
+        uint8_t data[MAX_REQUEST_LEN];
         uint32_t cmdlen;
         MemcacheResponse res(this->seq_++);
     }
@@ -142,27 +144,29 @@ uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
     write_in_net_order((uint8_t*)&hdr->request.keylen, (uint16_t)key.length());
     write_in_net_order((uint8_t*)&hdr->request.opaque, seq);
     uint8_t extraslen = 0;
+    bool write_key = false, write_val = false;
 
     switch(op) {
         case PROTOCOL_BINARY_CMD_GET: {
             extraslen = 0;
-            memcpy(data + hdrlen + extraslen, key.data(), key.length());
+            write_key = true;
             break;
         }
 
         case PROTOCOL_BINARY_CMD_SET: {
             extraslen = 8;
-            protocol_binary_request_set* setreq = (protocol_binary_request_set*)data;
+            write_key = true;
+            write_val = true;
 
+            protocol_binary_request_set* setreq = (protocol_binary_request_set*)data;
             write_in_net_order((uint8_t*)&setreq->message.body.flags, (uint32_t)0);
             write_in_net_order((uint8_t*)&setreq->message.body.expiration, (uint32_t)0);
-            memcpy(data + hdrlen + extraslen, key.data(), key.length());
-            memcpy(data + hdrlen + extraslen + key.length(), value.data(), value.length());
             break;
         }
 
         case PROTOCOL_BINARY_CMD_INCREMENT: {
             extraslen = 20;
+            write_key = true;
             protocol_binary_request_incr* incrreq = (protocol_binary_request_incr*)data;
 
             // we want the increment to fail if not present, so that we
@@ -172,14 +176,13 @@ uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
             write_in_net_order((uint8_t*)&incrreq->message.body.expiration, (uint32_t)-1);
             write_in_net_order((uint8_t*)&incrreq->message.body.initial, (uint64_t)1);
             write_in_net_order((uint8_t*)&incrreq->message.body.delta, (uint64_t)1);
-            memcpy(data + hdrlen + extraslen, key.data(), key.length());
             break;
         }
 
         case PROTOCOL_BINARY_CMD_APPEND: {
             extraslen = 0;
-            memcpy(data + hdrlen + extraslen, key.data(), key.length());
-            memcpy(data + hdrlen + extraslen + key.length(), value.data(), value.length());
+            write_key = true;
+            write_val = true;
             break;
         }
 
@@ -194,8 +197,16 @@ uint32_t MemcacheClient::prep_command(uint8_t* data, uint8_t op,
     }
 
     uint32_t bodylen = extraslen + key.length() + value.length();
+    mandatory_assert(hdrlen + bodylen <= MAX_REQUEST_LEN);
+
     write_in_net_order((uint8_t*)&hdr->request.extlen, extraslen);
     write_in_net_order((uint8_t*)&hdr->request.bodylen, bodylen);
+
+    if (write_key)
+        memcpy(data + hdrlen + extraslen, key.data(), key.length());
+
+    if (write_val)
+        memcpy(data + hdrlen + extraslen + key.length(), value.data(), value.length());
 
     return hdrlen + bodylen;
 }
