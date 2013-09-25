@@ -658,7 +658,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
         post(tp_.rand_user_post(gen), currtime_,
-             String(TwitterNewPopulator::tweet_data, 5), gr.make_event());
+             String(TwitterNewPopulator::tweet_data, TWEET_LENGTH), gr.make_event());
         ++currtime_;
 
         twait{ server_.pace(make_event()); }
@@ -820,7 +820,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         switch(tp_.rand_op(gen)) {
             case op_post:
                 post(tp_.rand_user_post(gen), currtime_,
-                     String(TwitterNewPopulator::tweet_data, 5),
+                     String(TwitterNewPopulator::tweet_data, TWEET_LENGTH),
                      gr.make_event());
 
                 ++npost;

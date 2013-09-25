@@ -12,6 +12,8 @@ namespace pq {
 using tamer::event;
 using tamer::preevent;
 
+#define TWEET_LENGTH 5
+
 template <typename S, typename P>
 class TwitterNewShim {
   public:
@@ -929,7 +931,7 @@ void TwitterNewMemcacheShim<S,P>::post(uint32_t poster, uint32_t time,
     memcpy(buf_ + 22, value.data(), value.length());
     buf_[22 + value.length()] = '\0';
 
-    server_.append(Str(buf_, 10), Str(buf_ + 11, 151), done);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 11 + TWEET_LENGTH), done);
 }
 
 template <typename S, typename P>
@@ -943,7 +945,7 @@ inline void TwitterNewMemcacheShim<S,P>::prepare_push_post(uint32_t poster, uint
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     sprintf(buf_ + 2, "%08u", subscriber);
-    server_.append(Str(buf_, 10), Str(buf_ + 11, 160), done);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 20 + TWEET_LENGTH), done);
 }
 
 tamed template <typename S, typename P>
@@ -957,7 +959,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
         uint32_t timesz = 10;
         uint32_t prefixsz = uidsz + 2;
         uint32_t postsz = uidsz + timesz + 1;
-        uint32_t entrysz = postsz + 1 + 140;
+        uint32_t entrysz = postsz + 1 + TWEET_LENGTH;
         std::vector<String> posts;
     }
 
@@ -974,7 +976,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_scan(uint32_t subscriber,
             memcpy(tbuf + prefixsz + 1, pstart, postsz);
 
             posts.push_back(Str(tbuf, prefixsz + postsz + 1));
-            posts.push_back(Str(pstart + postsz + 1));
+            posts.push_back(Str(pstart + postsz + 1, TWEET_LENGTH));
         }
     }
 
@@ -989,7 +991,7 @@ void TwitterNewMemcacheShim<S,P>::timeline_add_count(uint32_t subscriber,
         char tbuf[128];
         String timeline;
         uint32_t prefixsz = 10;
-        uint32_t entrysz = 160;
+        uint32_t entrysz = 20 + TWEET_LENGTH;
         size_t count = 0;
     }
 
@@ -1019,7 +1021,7 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
         uint32_t uidsz = 8;
         uint32_t timesz = 10;
         uint32_t prefixsz = uidsz + 2;
-        uint32_t entrysz = timesz + 1 + 140;
+        uint32_t entrysz = timesz + 1 + TWEET_LENGTH;
         std::vector<String> posts;
     }
 
@@ -1036,7 +1038,7 @@ void TwitterNewMemcacheShim<S,P>::post_scan(uint32_t poster,
             memcpy(buf + prefixsz + 1, pstart, timesz);
 
             posts.push_back(Str(buf, prefixsz + timesz + 1));
-            posts.push_back(Str(pstart + timesz + 1));
+            posts.push_back(Str(pstart + timesz + 1, TWEET_LENGTH));
         }
     }
 
