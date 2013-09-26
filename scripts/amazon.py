@@ -395,7 +395,7 @@ for x in exps:
             ec2.scp_from(h.public_dns_name, remote_resdir, os.path.join(resdir, os.pardir))
         
         if ngroups > 1:
-            aggregate_dir(resdir)
+            aggregate_dir(resdir, expname)
     
         print "Done experiment. Results are stored at", resdir
     
