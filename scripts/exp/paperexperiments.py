@@ -270,9 +270,9 @@ def define_experiments():
     # note: a hack needs to be enabled by turning on the compile-time flag 
     #       hn_interleaved_hack flag
     exp = {'name': "karma", 'defs': []}
-    clientBase = "./obj/pqserver --hn --nops=4000000 --large --run_only"
+    clientBase = "./obj/pqserver --hn --nops=10000000 --large --run_only"
     populateCmd = "./obj/pqserver --hn --narticles=100000 --nusers=50000 --populate_only"
-    vote_rate = [0, 20, 50, 75, 100]
+    vote_rate = [0, 1, 10, 25, 50, 75, 100]
 
     for vr in vote_rate:
         exp['defs'].append(
