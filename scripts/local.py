@@ -474,7 +474,7 @@ for x in exps:
             dbstartport += 100
         
         if ngroups > 1:
-            aggregate_dir(resdir, expname)
+            aggregate_dir(resdir, x['name'])
     
         if usedb and e.get('def_db_in_memory'):
            shutil.rmtree(dbenvpath)
