@@ -32,6 +32,7 @@ class HackernewsPopulator {
     inline bool log() const;
     inline bool push() const;
     inline bool writearound() const;
+    inline uint32_t groupid() const;
     inline const std::vector<uint32_t>& articles() const;
     inline const std::vector<uint32_t>& karmas() const;
     inline uint32_t pre() const;
@@ -56,6 +57,7 @@ class HackernewsPopulator {
     bool log_;
     bool push_;
     bool writearound_;
+    uint32_t groupid_;
     uint32_t nusers_;
     // author -> karma
     std::vector<uint32_t> karma_;
@@ -75,6 +77,7 @@ inline HackernewsPopulator::HackernewsPopulator(const Json& param)
     :  ncomments(0), nvotes(0), param_(param), log_(param["log"].as_b(false)), 
        push_(param["push"].as_b(false)), 
        writearound_(param["writearound"].as_b(false)),
+       groupid_(param["groupid"].as_i(0)),
       nusers_(param["hnusers"].as_i(10)),
       karma_(1000000),
       articles_(1000000),
@@ -165,6 +168,10 @@ inline bool HackernewsPopulator::push() const {
 
 inline bool HackernewsPopulator::writearound() const {
     return writearound_;
+}
+
+inline uint32_t HackernewsPopulator::groupid() const {
+    return groupid_;
 }
 
 inline void HackernewsPopulator::set_log(bool val) {

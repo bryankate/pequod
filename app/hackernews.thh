@@ -136,6 +136,7 @@ void HackernewsRunner<S>::populate(event<> e) {
             if (!hp_.populate_only())
                 hp_.populate_from_files(&nv, &nc);
         } else {
+            mandatory_assert(!hp_.groupid() && "HN population does not make sense with multiple clients.");
             gen.seed(13918);
             for (aid = 0; aid < hp_.pre(); aid++) {
                 // Need this to be deterministic.  Fake it for now.
@@ -190,7 +191,7 @@ void HackernewsRunner<S>::run(event<> e) {
         uint32_t i, p, user, aid;
         tamer::gather_rendezvous gr;
     }
-    gen.seed(13918);
+    gen.seed(13918 + hp_.groupid());
     periodic_logger(e);
 
     log_.clear();
