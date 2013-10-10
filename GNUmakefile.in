@@ -12,6 +12,8 @@ top_srcdir = @top_srcdir@
 builddir = .
 
 OBJDIR = obj
+MEMTIER_OBJDIR = $(OBJDIR)/memtier_obj
+MEMTIER_SRCDIR = $(top_srcdir)/memtier_benchmark-1.1.0
 
 TAMER_COMMIT = 3fa263ff353e94c36020d29f51910e40c7e0cfdb
 
@@ -75,6 +77,9 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) $(TAMERFLAGS) -F .deps/$*.hh.d -o $@ $<
+	
+$(MEMTIER_OBJDIR)/%.o: $(MEMTIER_SRCDIR)/%.cpp $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -include $(MEMTIER_SRCDIR)/config.h -I$(MEMTIER_SRCDIR) -c -o $@ $<
 
 
 # make sure tamed versions get built first
@@ -207,6 +212,15 @@ PQINFO_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqinfo.o
 
+MEMTIER_OBJS = $(COMMON_OBJS) \
+        $(MEMTIER_OBJDIR)/client.o \
+        $(MEMTIER_OBJDIR)/config_types.o \
+        $(MEMTIER_OBJDIR)/file_io.o \
+        $(MEMTIER_OBJDIR)/item.o \
+        $(MEMTIER_OBJDIR)/memtier_benchmark.o \
+        $(MEMTIER_OBJDIR)/obj_gen.o \
+        $(MEMTIER_OBJDIR)/protocol.o
+
 HASHTIMER_OBJS = $(PQSERVER_OBJS) \
 	$(OBJDIR)/hashtimer.o
 
@@ -228,13 +242,16 @@ $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
 $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
+$(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS) -levent -lrt
+
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
 tamer-update:
 	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating tamer... 1>&2; cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
 	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
-$(OBJDIR)/stamp $(DEPSDIR)/stamp:
+$(OBJDIR)/stamp $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp:
 	mkdir -p $(dir $@)
 	touch $@
 
@@ -253,15 +270,30 @@ stamp-h: $(top_srcdir)/config.h.in config.status
 	CONFIG_FILES= $(SHELL) ./config.status
 	echo > stamp-h
 
+$(MEMTIER_SRCDIR)/configure $(MEMTIER_SRCDIR)/config.h.in: $(MEMTIER_SRCDIR)/configure.ac
+	cd $(MEMTIER_SRCDIR) && autoreconf -ivf && touch config.h.in
+
+$(MEMTIER_SRCDIR)/config.h: $(MEMTIER_SRCDIR)/stamp-h
+
+$(MEMTIER_SRCDIR)/config.status: $(MEMTIER_SRCDIR)/configure
+	cd $(MEMTIER_SRCDIR) && ./configure
+
+$(MEMTIER_SRCDIR)/stamp-h: $(MEMTIER_SRCDIR)/config.h.in $(MEMTIER_SRCDIR)/config.status
+	echo > $(MEMTIER_SRCDIR)/stamp-h
+
+memtier: $(OBJDIR)/memtier_benchmark
+
 clean:
 	rm -rf $(OBJDIR) $(DEPSDIR) $(GENDIR)
 
 allclean: clean
 	cd tamer && $(MAKE) clean
+	cd $(MEMTIER_SRCDIR) && $(MAKE) clean
 
 distclean: clean
 	cd tamer && $(MAKE) distclean
-	rm -rf config.* configure autom4te.* stamp-h Makefile
+	cd $(MEMTIER_SRCDIR) && $(MAKE) distclean
+	rm -rf config.* configure autom4te.* stamp-h GNUMakefile
 
 DEPFILES := $(wildcard $(DEPSDIR)/*.d)
 ifneq ($(DEPFILES),)
@@ -271,7 +303,7 @@ endif
 always:
 	@:
 
-.PHONY: all clean distclean always tamer-update
+.PHONY: all clean distclean always tamer-update memtier
 .PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
 	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh \
 	$(OBJ)/%.cc $(OBJ)/%.hh
