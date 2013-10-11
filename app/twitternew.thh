@@ -127,6 +127,7 @@ class TwitterNewPopulator {
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
+    inline String print_table() const { return print_table_; }
     inline const Host* master() { return master_; }
 
     class managed_iterator {
@@ -205,6 +206,7 @@ class TwitterNewPopulator {
     bool visualize_;
     bool binary_;
     bool verbose_;
+    String print_table_;
     const Host* master_;
     uint32_t celebthresh_;
     double pct_active_;
@@ -971,8 +973,15 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     server_.stats(gr.make_event(stats));
     twait { drain(gr, make_event()); }
-    twait { server_.control(Json().set("print_validation_log", true)
-                                  .set("get_log", true), make_event(logs)); }
+    twait {
+        server_.control(Json().set("print_validation_log", true)
+                              .set("get_log", true),
+                        make_event(logs));
+
+        if (tp_.print_table())
+            server_.control(Json().set("print_table_keys", tp_.print_table()),
+                            make_event(j));
+    }
 
 #if TIMELINE_LATENCY
     for (auto rtt : latency_log_)
