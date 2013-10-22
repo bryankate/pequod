@@ -369,6 +369,11 @@ tamed void MemcacheClient::increment(Str key, tamer::event<> e) {
     e();
 }
 
+tamed void MemcacheClient::stats(tamer::event<Json> e) {
+    mandatory_assert(false && "Memcached headers not installed!");
+    e(Json());
+}
+
 #endif
 
 tamed void MemcacheClient::get(Str key, int32_t offset, tamer::event<String> e) {
