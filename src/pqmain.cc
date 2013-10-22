@@ -74,7 +74,7 @@ static Clp_Option options[] = {
     { "mem-hi", 0, 3025, Clp_ValInt, 0 },
     { "evict-inline", 0, 3026, 0, Clp_Negate },
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
-    { "print-table", 0, 3028, 0, Clp_ValStringNotOption },
+    { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
