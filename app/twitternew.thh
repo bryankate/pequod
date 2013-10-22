@@ -804,11 +804,12 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     periodic_logger(done);
 
     log_.clear();
-    if (!tp_.groupid())
+    if (!tp_.groupid()) {
         twait { server_.control(Json().set("clear_log", true), make_event(j)); }
 
-    server_.stats(gr.make_event(old_stats));
-    twait { drain(gr, make_event()); }
+        server_.stats(gr.make_event(old_stats));
+        twait { drain(gr, make_event()); }
+    }
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
@@ -971,42 +972,46 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
 
-    server_.stats(gr.make_event(stats));
-    twait { drain(gr, make_event()); }
-    twait {
-        server_.control(Json().set("print_validation_log", true)
-                              .set("get_log", true),
-                        make_event(logs));
-
-        if (tp_.print_table())
-            server_.control(Json().set("print_table_keys", tp_.print_table()),
-                            make_event(j));
-    }
-
 #if TIMELINE_LATENCY
     for (auto rtt : latency_log_)
         std::cerr << "rtt (us): " << rtt << std::endl;
 #endif
 
-    if (!stats.is_array()) {
-        old_stats = Json::make_array(old_stats);
-        stats = Json::make_array(stats);
-    }
+    if (!tp_.groupid()) {
+        server_.stats(gr.make_event(stats));
+        twait { drain(gr, make_event()); }
+        twait {
+            server_.control(Json().set("print_validation_log", true)
+                                  .set("get_log", true),
+                            make_event(logs));
 
-    uint32_t s = 0;
-    for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s) {
-        (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
-        (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
-        (*it)["server_wall_time"] -= old_stats[s]["server_wall_time"];
-        (*it)["server_wall_time_insert"] -= old_stats[s]["server_wall_time_insert"];
-        (*it)["server_wall_time_validate"] -= old_stats[s]["server_wall_time_validate"];
-        (*it)["server_wall_time_evict"] -= old_stats[s]["server_wall_time_evict"];
-        (*it)["server_wall_time_other"] -= old_stats[s]["server_wall_time_other"];
-    }
+            if (tp_.print_table())
+                server_.control(Json().set("print_table_keys", tp_.print_table()),
+                                make_event(j));
+        }
 
-    stats = Json().set("log", log_.as_json())
-                  .set("server_logs", logs)
-                  .set("server_stats", stats);
+        if (!stats.is_array()) {
+            old_stats = Json::make_array(old_stats);
+            stats = Json::make_array(stats);
+        }
+
+        uint32_t s = 0;
+        for (auto it = stats.abegin(); it != stats.aend(); ++it, ++s) {
+            (*it)["server_user_time"] -= old_stats[s]["server_user_time"];
+            (*it)["server_system_time"] -= old_stats[s]["server_system_time"];
+            (*it)["server_wall_time"] -= old_stats[s]["server_wall_time"];
+            (*it)["server_wall_time_insert"] -= old_stats[s]["server_wall_time_insert"];
+            (*it)["server_wall_time_validate"] -= old_stats[s]["server_wall_time_validate"];
+            (*it)["server_wall_time_evict"] -= old_stats[s]["server_wall_time_evict"];
+            (*it)["server_wall_time_other"] -= old_stats[s]["server_wall_time_other"];
+        }
+
+        stats = Json().set("log", log_.as_json())
+                      .set("server_logs", logs)
+                      .set("server_stats", stats);
+    }
+    else
+        stats = Json().set("log", log_.as_json());
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
