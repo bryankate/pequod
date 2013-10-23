@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("evict-periodic"))
             evict_periodic = !clp->negated;
         else if (clp->option->long_name == String("print-table"))
-            tp_param.set("print-table", clp->val.s);
+            tp_param.set("print_table", clp->val.s);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
