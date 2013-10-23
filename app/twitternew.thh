@@ -986,7 +986,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                             make_event(logs));
 
             if (tp_.print_table())
-                server_.control(Json().set("print_table_keys", tp_.print_table()),
+                server_.control(Json().set("print_table_keys", tp_.print_table() + "|"),
                                 make_event(j));
         }
 
