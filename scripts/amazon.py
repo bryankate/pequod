@@ -241,6 +241,8 @@ backinghosts = startup_instances(nbacking, cbacking, ec2.INSTANCE_TYPE_BACKING, 
 clienthosts = startup_instances(ngroups, cgroups, ec2.INSTANCE_TYPE_CLIENT, 'client')
 serverconns = []
 
+remote_tmpdir = "/mnt/pequod"
+
 print "Testing SSH connections."
 for h in running:
     while ec2.run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
@@ -251,25 +253,30 @@ debs = ("htop iftop numactl build-essential gdb valgrind autoconf libtool " +
         "git libev-dev libjemalloc-dev flex bison " +
         "libboost-dev libboost-thread-dev libboost-system-dev")
 
-installcmd = "sudo apt-get -qq update; sudo apt-get -y install " + debs
+installcmd = "sudo mkdir -p " + remote_tmpdir + \
+             "; sudo chown ubuntu:ubuntu " + remote_tmpdir + \
+             "; sudo chmod 777 " + remote_tmpdir + \
+             "; mkdir -p " + os.path.join(remote_tmpdir, "cores") + \
+             "; sudo bash -c 'echo " + os.path.join(remote_tmpdir, "cores", "core.%p") + " > /proc/sys/kernel/core_pattern'; " + \
+             "; sudo apt-get -qq update; sudo apt-get -y install " + debs
 
 buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
            "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
            "cd pequod; git checkout multi2; autoconf < configure.ac; " + \
-           "./bootstrap.sh; ./configure --with-malloc=jemalloc; make"
+           "./bootstrap.sh; ./configure --with-malloc=jemalloc; make; exit"
 
 graph = 'twitter_graph_40M.dat'
-graphcmd = "cd /mnt; sudo wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
-           "sudo tar -zxf " + graph + ".tar.gz; sudo chmod 666 twitter*"
+graphcmd = "cd " + remote_tmpdir + "; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
+           "tar -zxf " + graph + ".tar.gz; chmod 666 twitter*; exit"
 
+print "Checking instance preparedness."
 prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software")
 prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
-prepare_instances(clienthosts, "[ -e /mnt/" + graph + " ]", graphcmd, "Fetching Twitter graph")
+prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph) + " ]", graphcmd, "Fetching Twitter graph")
 
 for h in running:
     print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
-    ec2.run_ssh_command(h.public_dns_name, "sudo bash -c 'echo core.%p > /proc/sys/kernel/core_pattern'; " + \
-                                           "cd pequod; git pull -q; make -s")
+    ec2.run_ssh_command(h.public_dns_name, "cd pequod; git pull -q; make -s; exit")
 
 print "Checking that pequod is built on all servers."
 pqexists = True
@@ -297,21 +304,24 @@ for x in exps:
             continue
 
         (expdir, resdir) = prepare_experiment(x["name"], expname)
-        remote_resdir = os.path.join("pequod", resdir)
+        remote_resdir = os.path.join(remote_tmpdir, resdir)
+        remote_hostpath = os.path.join(remote_tmpdir, hostpath)
         logfd = open(os.path.join(resdir, "cmd_log.txt"), "w")
             
         print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
               " in test '" + x['name'] + "'."
         
         for h in backinghosts + cachehosts + clienthosts:
-            ec2.run_ssh_command(h.public_dns_name, "killall pqserver")
-            ec2.run_ssh_command(h.public_dns_name, "mkdir -p " + remote_resdir + "; rm -f last; ln -s " + remote_resdir + " last")
-            ec2.scp_to(h.public_dns_name, os.path.join("pequod", hostpath), hostpath)
+            ec2.run_ssh_command(h.public_dns_name, 
+                                "killall pqserver" + \
+                                "; mkdir -p " + remote_resdir + \
+                                "; rm -f last; ln -s " + remote_resdir + " last")
+            ec2.scp_to(h.public_dns_name, remote_hostpath, hostpath)
 
         part = options.part if options.part else e['def_part']
-        serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-        outfile = os.path.join(resdir, "output_srv_")
-        fartfile = os.path.join(resdir, "fart_srv_")
+        serverargs = " -H=" + remote_hostpath + " -B=" + str(nbacking) + " -P=" + part
+        outfile = os.path.join(remote_resdir, "output_srv_")
+        fartfile = os.path.join(remote_resdir, "fart_srv_")
 
         serverprocs = []
         for s in range(nbacking + ncaching):
@@ -332,8 +342,8 @@ for x in exps:
 
         if 'initcmd' in e:
             print "Initializing cache servers."
-            initcmd = e['initcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
-            fartfile = os.path.join(resdir, "fart_init.txt")
+            initcmd = e['initcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
+            fartfile = os.path.join(remote_resdir, "fart_init.txt")
             
             full_cmd = initcmd + " 2> " + fartfile
 
@@ -344,8 +354,8 @@ for x in exps:
 
         if 'populatecmd' in e:
             print "Populating backend."
-            popcmd = e['populatecmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
-            fartfile = os.path.join(resdir, "fart_pop_")
+            popcmd = e['populatecmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
+            fartfile = os.path.join(remote_resdir, "fart_pop_")
 
             clientprocs = []
             for c in range(ngroups):         
@@ -363,9 +373,9 @@ for x in exps:
                 p.wait()
 
         print "Starting app clients."
-        clientcmd = e['clientcmd'] + " -H=" + hostpath + " -B=" + str(nbacking)
-        outfile = os.path.join(resdir, "output_app_")
-        fartfile = os.path.join(resdir, "fart_app_")
+        clientcmd = e['clientcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
+        outfile = os.path.join(remote_resdir, "output_app_")
+        fartfile = os.path.join(remote_resdir, "fart_app_")
             
         clientprocs = []
         for c in range(ngroups):
