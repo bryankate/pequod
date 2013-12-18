@@ -243,7 +243,7 @@ $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS) -levent
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) -levent
 
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
