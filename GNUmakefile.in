@@ -78,7 +78,7 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) $(TAMERFLAGS) -F .deps/$*.hh.d -o $@ $<
 	
-$(MEMTIER_OBJDIR)/%.o: $(MEMTIER_SRCDIR)/%.cpp $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp
+$(MEMTIER_OBJDIR)/%.o: $(MEMTIER_SRCDIR)/%.cpp $(MEMTIER_SRCDIR)/config.h $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -include $(MEMTIER_SRCDIR)/config.h -I$(MEMTIER_SRCDIR) -c -o $@ $<
 
 
@@ -243,7 +243,7 @@ $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS) -levent -lrt
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS) -levent
 
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
