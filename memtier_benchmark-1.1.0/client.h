@@ -26,6 +26,7 @@
 #include <sys/un.h>
 #include <vector>
 #include <queue>
+#include <utility>
 
 #include <event2/event.h>
 #include <event2/buffer.h>
@@ -40,7 +41,7 @@ class object_generator;
 class data_object;
 
 #define MAX_LATENCY_HISTOGRAM       5000
-#define RECORD_FULL_LATENCY         0
+#define RECORD_FULL_LATENCY         1
 
 class run_stats {
 protected:
@@ -98,8 +99,7 @@ protected:
     unsigned int m_set_latency[MAX_LATENCY_HISTOGRAM+1];
 
 #if RECORD_FULL_LATENCY
-    std::vector<unsigned int> m_get_latency_log;
-    std::vector<unsigned int> m_set_latency_log;
+    std::vector<std::pair<unsigned int, unsigned int>> m_latency_log;
 #endif
 
     void roll_cur_stats(struct timeval* ts);

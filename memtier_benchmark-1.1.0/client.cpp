@@ -1072,7 +1072,7 @@ void run_stats::update_get_op(struct timeval* ts, unsigned int bytes, unsigned i
     m_get_latency[msec_latency]++;    
 
 #if RECORD_FULL_LATENCY
-    m_get_latency_log.push_back(msec_latency);
+    m_latency_log.push_back(std::make_pair(0, msec_latency));
 #endif
 }
 
@@ -1094,7 +1094,7 @@ void run_stats::update_set_op(struct timeval* ts, unsigned int bytes, unsigned i
     m_set_latency[msec_latency]++;
 
 #if RECORD_FULL_LATENCY
-    m_set_latency_log.push_back(msec_latency);
+    m_latency_log.push_back(std::make_pair(1, msec_latency));
 #endif
 }
 
@@ -1187,16 +1187,10 @@ bool run_stats::save_csv(const char *filename)
     }
 
 #if RECORD_FULL_LATENCY
-    fprintf(f, "\n" "Full-Test GET Latency (msec) Log\n");
+    fprintf(f, "\n" "Full-Test Latency (msec) Log\n");
 
-    for (unsigned int i = 0; i < m_get_latency_log.size(); ++i) {
-        fprintf(f, "%u\n", m_get_latency_log[i]);
-    }
-
-    fprintf(f, "\n" "Full-Test SET Latency (msec) Log\n");
-
-    for (unsigned int i = 0; i < m_set_latency_log.size(); ++i) {
-        fprintf(f, "%u\n", m_set_latency_log[i]);
+    for (unsigned int i = 0; i < m_latency_log.size(); ++i) {
+        fprintf(f, "%s %u\n", (m_latency_log[i].first) ? "SET" : "GET", m_latency_log[i].second);
     }
 #endif
 
