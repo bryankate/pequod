@@ -41,7 +41,7 @@ class object_generator;
 class data_object;
 
 #define MAX_LATENCY_HISTOGRAM       5000
-#define RECORD_FULL_LATENCY         1
+#define RECORD_FULL_LATENCY         0
 
 class run_stats {
 protected:
