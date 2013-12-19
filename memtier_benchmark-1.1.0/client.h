@@ -40,6 +40,8 @@ class object_generator;
 class data_object;
 
 #define MAX_LATENCY_HISTOGRAM       5000
+#define RECORD_FULL_LATENCY         0
+
 class run_stats {
 protected:
     struct one_second_stats {
@@ -94,6 +96,12 @@ protected:
 
     unsigned int m_get_latency[MAX_LATENCY_HISTOGRAM+1];
     unsigned int m_set_latency[MAX_LATENCY_HISTOGRAM+1];
+
+#if RECORD_FULL_LATENCY
+    std::vector<unsigned int> m_get_latency_log;
+    std::vector<unsigned int> m_set_latency_log;
+#endif
+
     void roll_cur_stats(struct timeval* ts);
 
 public:
@@ -179,7 +187,7 @@ protected:
 public:
     client(client_group* group);
     client(struct event_base *event_base, benchmark_config *config, abstract_protocol *protocol, object_generator *obj_gen);
-    ~client();
+    virtual ~client();
 
     bool initialized(void);
     int prepare(void);

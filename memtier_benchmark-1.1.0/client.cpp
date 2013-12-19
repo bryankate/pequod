@@ -1070,6 +1070,10 @@ void run_stats::update_get_op(struct timeval* ts, unsigned int bytes, unsigned i
     if (msec_latency > MAX_LATENCY_HISTOGRAM)
         msec_latency = MAX_LATENCY_HISTOGRAM;
     m_get_latency[msec_latency]++;    
+
+#if RECORD_FULL_LATENCY
+    m_get_latency_log.push_back(msec_latency);
+#endif
 }
 
 void run_stats::update_set_op(struct timeval* ts, unsigned int bytes, unsigned int latency)
@@ -1088,6 +1092,10 @@ void run_stats::update_set_op(struct timeval* ts, unsigned int bytes, unsigned i
     if (msec_latency > MAX_LATENCY_HISTOGRAM)
         msec_latency = MAX_LATENCY_HISTOGRAM;
     m_set_latency[msec_latency]++;
+
+#if RECORD_FULL_LATENCY
+    m_set_latency_log.push_back(msec_latency);
+#endif
 }
 
 unsigned int run_stats::get_duration(void)
@@ -1177,6 +1185,20 @@ bool run_stats::save_csv(const char *filename)
             fprintf(f, "%u,%.2f\n", i, (double) total_count / total_set_ops * 100);
         }
     }
+
+#if RECORD_FULL_LATENCY
+    fprintf(f, "\n" "Full-Test GET Latency (msec) Log\n");
+
+    for (unsigned int i = 0; i < m_get_latency_log.size(); ++i) {
+        fprintf(f, "%u\n", m_get_latency_log[i]);
+    }
+
+    fprintf(f, "\n" "Full-Test SET Latency (msec) Log\n");
+
+    for (unsigned int i = 0; i < m_set_latency_log.size(); ++i) {
+        fprintf(f, "%u\n", m_set_latency_log[i]);
+    }
+#endif
 
     fclose(f);
     return true;
@@ -1406,6 +1428,6 @@ void run_stats::print(FILE *out)
             fprintf(out, "%-6s %12u %12.2f\n",
                     "GET", i, (double) total_count / m_totals.m_ops_get * 100);
         }
-    }    
+    }
 }
 
