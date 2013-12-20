@@ -91,12 +91,12 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         break;
     }
     case pq_insert:
-        server.insert(j[2].as_s(), j[3].as_s());
+        twait { server.insert(j[2].as_s(), j[3].as_s(), make_event()); }
         rj[2] = pq_ok;
         ++diff_.ninsert;
         break;
     case pq_erase:
-        server.erase(j[2].as_s());
+        twait { server.erase(j[2].as_s(), make_event()); }
         rj[2] = pq_ok;
         break;
     case pq_count:

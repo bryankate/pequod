@@ -76,10 +76,10 @@ class Table : public Datum {
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     local_iterator insert(Table& t);
-    void insert(Str key, String value);
+    tamed void insert(Str key, String value, tamer::event<> done);
     template <typename F>
     inline void modify(Str key, const SinkRange* sink, const F& func);
-    void erase(Str key);
+    tamed void erase(Str key, tamer::event<> done);
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
     inline iterator erase_invalid(iterator it);
@@ -120,6 +120,9 @@ class Table : public Datum {
     uint64_t nevict_sink_;
 
   private:
+    void insert(Str key, String value);
+    void erase(Str key);
+
     inline bool subtable_hashable() const;
     inline uint64_t subtable_hash_for(Str key) const;
     Table* next_table_for(Str key);
@@ -133,6 +136,7 @@ class Table : public Datum {
 
     void add_subscription(Str first, Str last, int32_t peer);
     void remove_subscription(Str first, Str last, int32_t peer);
+
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
 
@@ -189,6 +193,9 @@ class Server {
 
     inline void insert(Str key, const String& value);
     inline void erase(Str key);
+
+    tamed void insert(Str key, const String& value, tamer::event<> done);
+    tamed void erase(Str key, tamer::event<> done);
 
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh = 0);
 
@@ -516,18 +523,19 @@ inline bool Table::flush_for_pull(uint64_t now) {
 }
 
 inline void Server::insert(Str key, const String& value) {
-    struct timeval tv[2];
+    tamer::rendezvous<> r;
+    tamer::event<> done = r.make_event();
 
-    gettimeofday(&tv[0], NULL);
-    make_table_for(key).insert(key, value);
-    gettimeofday(&tv[1], NULL);
-    insert_time_ += to_real(tv[1] - tv[0]);
-
-    maybe_evict();
+    insert(key, value, done);
+    mandatory_assert(!done && "insert would block, use tamed version.");
 }
 
 inline void Server::erase(Str key) {
-    table_for(key).erase(key);
+    tamer::rendezvous<> r;
+    tamer::event<> done = r.make_event();
+
+    erase(key, done);
+    mandatory_assert(!done && "erase would block, use tamed version.");
 }
 
 inline uint64_t Server::next_validate_at() {

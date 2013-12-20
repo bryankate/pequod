@@ -198,14 +198,26 @@ auto Table::insert(Table& t) -> local_iterator {
     return store_.insert_commit(t, cd);
 }
 
+tamed void Table::insert(Str key, String value, tamer::event<> done) {
+    tvars {
+        int32_t owner = this->server_->owner_for(key);
+    }
+
+    // belongs on a remote server. send it along and wait for the write
+    // to return before writing locally.
+    if (unlikely(server_->is_remote(owner)))
+        twait { server_->interconnect(owner)->insert(key, value, make_event()); }
+    else if (unlikely(server_->writethrough() && server_->is_owned_public(owner)))
+        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
+
+    insert(key, value);
+    done();
+}
+
 void Table::insert(Str key, String value) {
     assert(!triecut_ || key.length() < triecut_);
 
     //std::cerr << "INSERT: " << key << std::endl;
-    if (unlikely(server_->writethrough() &&
-                 server_->is_owned_public(server_->owner_for(key))))
-        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
-
     store_type::insert_commit_data cd;
     auto p = store_.insert_check(key, KeyCompare(), cd);
     Datum* d;
@@ -223,13 +235,26 @@ void Table::insert(Str key, String value) {
     all_pull_ = false;
 }
 
+tamed void Table::erase(Str key, tamer::event<> done) {
+    tvars {
+        int32_t owner = this->server_->owner_for(key);
+    }
+
+    // belongs on a remote server. send it along and wait for the write
+    // to return before writing locally.
+    if (unlikely(server_->is_remote(owner)))
+        twait { server_->interconnect(owner)->erase(key, make_event()); }
+    else if (unlikely(server_->writethrough() && server_->is_owned_public(owner)))
+        server_->persistent_store()->enqueue(new PersistentErase(key));
+
+    erase(key);
+    done();
+}
+
 void Table::erase(Str key) {
     assert(!triecut_ || key.length() < triecut_);
 
-    if (unlikely(server_->writethrough() &&
-                 server_->is_owned_public(server_->owner_for(key))))
-        server_->persistent_store()->enqueue(new PersistentErase(key));
-
+    //std::cerr << "ERASE: " << key << std::endl;
     auto it = store_.find(key, KeyCompare());
     if (it != store_.end())
         erase(iterator(this, it));
@@ -730,6 +755,24 @@ auto Server::create_table(Str tname) -> Table::local_iterator {
     assert(tname);
     Table* t = new Table(tname, &supertable_, this);
     return supertable_.insert(*t);
+}
+
+tamed void Server::insert(Str key, const String& value, tamer::event<> done) {
+    tvars {
+        struct timeval tv[2];
+    }
+
+    gettimeofday(&tv[0], NULL);
+    twait { make_table_for(key).insert(key, value, make_event()); }
+    gettimeofday(&tv[1], NULL);
+    insert_time_ += to_real(tv[1] - tv[0]);
+
+    maybe_evict();
+    done();
+}
+
+tamed void Server::erase(Str key, tamer::event<> done) {
+    twait { table_for(key).erase(key, done); }
 }
 
 tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
