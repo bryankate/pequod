@@ -24,6 +24,7 @@ typedef struct {
     uint32_t nunsubscribe;
     uint32_t nscan;
     uint32_t ninvalidate;
+    uint32_t nnotify;
 } nrpc;
 nrpc diff_;
 
@@ -155,6 +156,18 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         first = j[2].as_s(), last = j[3].as_s();
         server.table_for(first, last).invalidate_remote(first, last);
         ++diff_.ninvalidate;
+        break;
+    case pq_notify_insert:
+        key = j[2].as_s();
+        server.table_for(key).insert(key, j[3].as_s());
+        rj[2] = pq_ok;
+        ++diff_.nnotify;
+        break;
+    case pq_notify_erase:
+        key = j[2].as_s();
+        server.table_for(key).erase(j[2].as_s());
+        rj[2] = pq_ok;
+        ++diff_.nnotify;
         break;
     case pq_stats:
         rj[2] = pq_ok;
@@ -312,6 +325,7 @@ tamed void periodic_logger() {
         log_.record_at("nunsubscribe", now, diff_.nunsubscribe);
         log_.record_at("nscan", now, diff_.nscan);
         log_.record_at("ninvalidate", now, diff_.ninvalidate);
+        log_.record_at("nnotify", now, diff_.nnotify);
 
         lu = u;
         before = now;

@@ -27,6 +27,25 @@ tamed void Interconnect::unsubscribe(const String& first, const String& last,
     e();
 }
 
+tamed void Interconnect::notify_insert(const String& key, const String& value,
+                                       event<> e) {
+    tvars { Json j; }
+    twait {
+        fd_->call(Json::make_array(pq_notify_insert, seq_, key, value), make_event(j));
+        ++seq_;
+    }
+    e();
+}
+
+tamed void Interconnect::notify_erase(const String& key, event<> e) {
+    tvars { Json j; }
+    twait {
+        fd_->call(Json::make_array(pq_notify_erase, seq_, key), make_event(j));
+        ++seq_;
+    }
+    e();
+}
+
 tamed void Interconnect::invalidate(const String& first, const String& last,
                                     event<> e) {
     tvars { Json j; }

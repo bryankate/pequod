@@ -169,11 +169,11 @@ void SubscribedRange::notify(const Datum* src, const String&, int notifier) cons
         RemoteSink* sink = reinterpret_cast<RemoteSink*>(it->sink);
         switch(notifier) {
             case SourceRange::notify_erase:
-                sink->conn()->erase(src->key(), tamer::event<>());
+                sink->conn()->notify_erase(src->key(), tamer::event<>());
                 break;
             case SourceRange::notify_insert:
             case SourceRange::notify_update:
-                sink->conn()->insert(src->key(), src->value(), tamer::event<>());
+                sink->conn()->notify_insert(src->key(), src->value(), tamer::event<>());
                 break;
         }
     }

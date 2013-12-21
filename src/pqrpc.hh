@@ -10,10 +10,12 @@ enum {
     pq_subscribe = 6,
     pq_unsubscribe = 7,
     pq_invalidate = 8,
-    pq_add_join = 9,
+    pq_notify_insert = 9,
+    pq_notify_erase = 10,
+    pq_add_join = 11,
     // order matters
-    pq_stats = 10,
-    pq_control = 11
+    pq_stats = 12,
+    pq_control = 13
 };
 
 enum {

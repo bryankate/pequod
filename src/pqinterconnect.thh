@@ -22,6 +22,9 @@ class Interconnect : public RemoteClient {
     tamed void unsubscribe(const String& first, const String& last,
                            int32_t subscriber, event<> e);
 
+    tamed void notify_insert(const String& key, const String& value, event<> e);
+    tamed void notify_erase(const String& key, event<> e);
+
     tamed void invalidate(const String& first, const String& last,
                           event<> e);
 };
