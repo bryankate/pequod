@@ -1,19 +1,24 @@
 #ifndef PEQUOD_PQRPC_HH
 #define PEQUOD_PQRPC_HH
 
+// order matters!
 enum {
+    // single key operations
     pq_get = 1,
     pq_insert = 2,
     pq_erase = 3,
-    pq_count = 4,
-    pq_scan = 5,
-    pq_subscribe = 6,
-    pq_unsubscribe = 7,
-    pq_invalidate = 8,
-    pq_notify_insert = 9,
-    pq_notify_erase = 10,
+    pq_notify_insert = 4,
+    pq_notify_erase = 5,
+    pq_count = 6,
+
+    // range operations
+    pq_scan = 7,
+    pq_subscribe = 8,
+    pq_unsubscribe = 9,
+    pq_invalidate = 10,
+
+    // other
     pq_add_join = 11,
-    // order matters
     pq_stats = 12,
     pq_control = 13
 };
