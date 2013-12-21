@@ -19,7 +19,7 @@ TAMER_COMMIT = 3fa263ff353e94c36020d29f51910e40c7e0cfdb
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
-LIBS = `$(TAMER) -l` @BOOST_LIBS@ @MALLOC_LIBS@ @POSTGRES_LIBS@ @HIREDIS_LIB@ @PQXX_LIB@
+LIBS = `$(TAMER) -l` @BOOST_LIBS@ @MALLOC_LIBS@ @POSTGRES_LIBS@ @HIREDIS_LIB@
 
 CXXFLAGS += $(INCLUDES) -fno-omit-frame-pointer
 LDFLAGS += -L/usr/local/lib -L/opt/local/lib
@@ -147,8 +147,8 @@ $(OBJDIR)/pqmulticlient.o: $(OBJDIR)/pqmulticlient.hh
 $(OBJDIR)/pqmulticlient.hh: $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqremoteclient.hh: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqremoteclient.o: $(OBJDIR)/pqremoteclient.hh
-$(OBJDIR)/pqunit.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqpersistent.hh $(OBJDIR)/redisadapter.hh
-$(OBJDIR)/pqunit2.o: $(OBJDIR)/memcacheadapter.hh
+$(OBJDIR)/pqunit.o: $(OBJDIR)/pqserver.hh 
+$(OBJDIR)/pqunit2.o: $(OBJDIR)/memcacheadapter.hh $(OBJDIR)/redisadapter.hh $(OBJDIR)/pqpersistent.hh
 $(OBJDIR)/twitter.hh: $(OBJDIR)/twittershim.hh
 $(OBJDIR)/twitter.o: $(OBJDIR)/twitter.hh $(OBJDIR)/pqmulticlient.hh
 $(OBJDIR)/twittershim.hh: $(OBJDIR)/pqclient.hh

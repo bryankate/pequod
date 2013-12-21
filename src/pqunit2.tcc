@@ -2,6 +2,7 @@
 #include "mpfd.hh"
 #include "redisadapter.hh"
 #include "memcacheadapter.hh"
+#include "pqpersistent.hh"
 #include "check.hh"
 #include <fcntl.h>
 
@@ -242,3 +243,64 @@ void test_memcache() {
     mandatory_assert(false && "Not configured for memcache!");
 }
 #endif
+
+#if HAVE_LIBPQ
+tamed void test_postgres() {
+    tvars {
+        pq::DBPoolParams params;
+        pq::PersistentStore* store;
+        pq::PostgresStore* pg;
+        pq::PersistentStore::ResultSet res;
+        String s1 = "xxx";
+        String s2 = "zzz";
+        String s3;
+    }
+
+    params.dbname = "pqunit";
+    params.host = "127.0.0.1";
+    params.port = 5432;
+
+    pg = new pq::PostgresStore(params);
+    store = pg;
+
+    // this will fail if postgres is not running or the pqunit db does not exist
+    pg->connect();
+
+    twait { store->put(s1, s2, make_event()); }
+    twait { store->get(s1, make_event(s3)); }
+    CHECK_EQ(s3, s2);
+
+    twait {
+        String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
+        for (int i = 0; i < 10; ++i)
+            store->put(keys[i], keys[i], make_event());
+    }
+
+    twait { store->scan("b", "p", make_event(res)); }
+    CHECK_EQ(res.size(), (uint32_t)10);
+    res.clear();
+
+    twait { store->scan("a", "c", make_event(res)); }
+    CHECK_EQ(res.size(), (uint32_t)0);
+    res.clear();
+
+    twait { store->scan("c", "d0", make_event(res)); }
+    CHECK_EQ(res.size(), (uint32_t)2);
+    res.clear();
+
+    twait { store->scan("c0", "g", make_event(res)); }
+    CHECK_EQ(res.size(), (uint32_t)3);
+    res.clear();
+
+    twait { store->scan("j", "p0", make_event(res)); }
+    CHECK_EQ(res.size(), (uint32_t)3);
+    res.clear();
+
+    delete store;
+}
+#else
+void test_postgres() {
+    mandatory_assert(false && "Not configured for postgres!");
+}
+#endif
+

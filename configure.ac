@@ -40,27 +40,6 @@ AC_CHECK_HEADERS([libpq-fe.h], [AC_DEFINE([HAVE_LIBPQ], [1], [Define if you have
 AC_CHECK_LIB([pq], [PQuser], [POSTGRES_LIBS="-lpq"], [ac_cv_have_postgres=no])
 AC_SUBST([POSTGRES_LIBS])
 
-AC_ARG_WITH([pqxx],
-    [AS_HELP_STRING([--with-pqxx],
-    [enable postgres backend if available])],
-    [], [with_pqxx=no])
-PQXX_LIB=
-if test "x$with_pqxx" != "xno"; then
-    if test "$ac_cv_have_postgres" = no; then
-        AC_MSG_ERROR([libpqxx requires libpq])
-    fi
-    AC_CHECK_HEADERS([pqxx/pqxx pqxx/notification], [], AC_MSG_ERROR([missing libpqxx headers]))
-    # test for pqxx library >= 4.0 by looking for transactor class
-    AC_LANG_PUSH(C++)
-    SAVED_LDFLAGS=$LDFLAGS
-    LDFLAGS="$LDFLAGS -lpqxx"
-    AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <pqxx/transactor.hxx>], [pqxx::transactor<> dummy;])], 
-                   [PQXX_LIB="-lpqxx"], AC_MSG_ERROR([libqxx >= 4.0 required.]))
-    LDFLAGS=$SAVED_LDFLAGS
-    AC_LANG_POP(C++)
-fi
-AC_SUBST([PQXX_LIB])
-
 
 dnl Builtins
 

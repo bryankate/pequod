@@ -208,7 +208,7 @@ tamed void Table::insert(Str key, String value, tamer::event<> done) {
     if (unlikely(server_->is_remote(owner)))
         twait { server_->interconnect(owner)->insert(key, value, make_event()); }
     else if (unlikely(server_->writethrough() && server_->is_owned_public(owner)))
-        server_->persistent_store()->enqueue(new PersistentWrite(key, value));
+        twait { server_->persistent_store()->put(key, value, make_event()); }
 
     insert(key, value);
     done();
@@ -245,7 +245,7 @@ tamed void Table::erase(Str key, tamer::event<> done) {
     if (unlikely(server_->is_remote(owner)))
         twait { server_->interconnect(owner)->erase(key, make_event()); }
     else if (unlikely(server_->writethrough() && server_->is_owned_public(owner)))
-        server_->persistent_store()->enqueue(new PersistentErase(key));
+        twait { server_->persistent_store()->erase(key, make_event()); }
 
     erase(key);
     done();
@@ -544,18 +544,13 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     tvars {
         PersistedRange* pr = new PersistedRange(this, first, last);
         PersistentStore::ResultSet res;
-        PersistentRead op(first, last, res);
     }
 
     pr->add_waiting(done);
     persisted_ranges_.insert(*pr);
 
     //std::cerr << "fetching persisted data: " << pr->interval() << std::endl;
-    twait {
-        // BNK: this doesn't feel right. is tamer's event loop thread safe?
-        op.set_trigger(make_event());
-        server_->persistent_store()->enqueue(&op);
-    }
+    twait { server_->persistent_store()->scan(first, last, make_event(res)); }
 
     //std::cerr << "persisted data fetch: " << pr->interval() << " returned "
     //          << res.size() << " results" << std::endl;

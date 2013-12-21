@@ -76,9 +76,11 @@ class Table : public Datum {
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     local_iterator insert(Table& t);
+    void insert(Str key, String value);
     tamed void insert(Str key, String value, tamer::event<> done);
     template <typename F>
     inline void modify(Str key, const SinkRange* sink, const F& func);
+    void erase(Str key);
     tamed void erase(Str key, tamer::event<> done);
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
@@ -120,9 +122,6 @@ class Table : public Datum {
     uint64_t nevict_sink_;
 
   private:
-    void insert(Str key, String value);
-    void erase(Str key);
-
     inline bool subtable_hashable() const;
     inline uint64_t subtable_hash_for(Str key) const;
     Table* next_table_for(Str key);
@@ -219,8 +218,8 @@ class Server {
                                     const std::vector<Interconnect*>& interconnect,
                                     const Partitioner* part);
 
-    inline PersistentStoreThread* persistent_store() const;
-    inline void set_persistent_store(PersistentStoreThread* store, bool writethrough);
+    inline PersistentStore* persistent_store() const;
+    inline void set_persistent_store(PersistentStore* store, bool writethrough);
     inline bool writethrough() const;
 
     inline void lru_add(Evictable* e);
@@ -237,7 +236,7 @@ class Server {
     void print(std::ostream& stream);
 
   private:
-    mutable PersistentStoreThread* persistent_store_;
+    mutable PersistentStore* persistent_store_;
     bool writethrough_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
@@ -572,11 +571,11 @@ inline Table::iterator Server::end() {
     return supertable_.end();
 }
 
-inline PersistentStoreThread* Server::persistent_store() const {
+inline PersistentStore* Server::persistent_store() const {
     return persistent_store_;
 }
 
-inline void Server::set_persistent_store(PersistentStoreThread* store, bool writethrough) {
+inline void Server::set_persistent_store(PersistentStore* store, bool writethrough) {
     if (persistent_store_)
         delete persistent_store_;
     persistent_store_ = store;

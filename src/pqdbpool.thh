@@ -35,6 +35,7 @@ class DBPool {
     ~DBPool();
 
     void connect();
+    void connect_all(const std::vector<String>& sess_init = std::vector<String>());
     void clear();
 
     tamed void execute(Str query, tamer::event<Json> e);

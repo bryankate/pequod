@@ -1,306 +1,217 @@
 #include "pqpersistent.hh"
 #include "pqserver.hh"
-#include <boost/date_time.hpp>
 
 namespace pq {
 
-PersistentRead::PersistentRead(Str first, Str last, PersistentStore::ResultSet& rs)
-    : rs_(rs), first_(first), last_(last) {
-}
+#if HAVE_LIBPQ
 
-void PersistentRead::operator()(PersistentStore* ps){
-    ps->scan(first_, last_, rs_);
-    tev_();
-}
-
-void PersistentRead::set_trigger(tamer::event<> t) {
-    tev_ = t;
-}
-
-PersistentWrite::PersistentWrite(Str key, Str value)
-    : key_(key), value_(value) {
-}
-
-void PersistentWrite::operator()(PersistentStore* ps){
-    ps->put(key_, value_);
-    delete this;
-}
-
-PersistentErase::PersistentErase(Str key) : key_(key) {
-}
-
-void PersistentErase::operator()(PersistentStore* ps) {
-    ps->erase(key_);
-    delete this;
-}
-
-PersistentFlush::PersistentFlush(std::atomic<bool>& waiting, boost::condition_variable& cond)
-    : waiting_(waiting), cond_(cond) {
-}
-
-void PersistentFlush::operator()(PersistentStore*) {
-    waiting_ = false;
-    cond_.notify_all();
-    delete this;
-}
-
-PersistentStoreThread::PersistentStoreThread(PersistentStore* store)
-    : store_(store), worker_(&PersistentStoreThread::run, this),
-      pending_(1024), running_(true) {
-}
-
-PersistentStoreThread::~PersistentStoreThread() {
-    running_ = false;
-    cond_.notify_all();
-    worker_.join();
-    delete store_;
-}
-
-void PersistentStoreThread::enqueue(PersistentOp* op) {
-    pending_.enqueue(op);
-    cond_.notify_all();
-}
-
-void PersistentStoreThread::flush() {
-    std::atomic<bool> waiting(true);
-    boost::mutex mu;
-    boost::condition_variable cond;
-
-    pending_.enqueue(new PersistentFlush(waiting, cond));
-
-    while(waiting) {
-        boost::mutex::scoped_lock lock(mu);
-        cond.timed_wait(lock, boost::posix_time::milliseconds(5));
-    }
-}
-
-void PersistentStoreThread::run() {
-    PersistentOp *op;
-    while(running_) {
-        if (pending_.try_dequeue(op))
-            (*op)(store_);
-        else {
-            boost::mutex::scoped_lock lock(mu_);
-            cond_.timed_wait(lock, boost::posix_time::milliseconds(5));
-        }
-    }
-}
-
-}
-
-
-#if HAVE_PQXX_PQXX
-#include <iostream>
-
-PostgresStore::PostgresStore(String db, String host, uint32_t port)
-    : dbname_(db), host_(host), port_(port),
-      dbh_(new pqxx::connection(connection_string().c_str())), monitor_(nullptr) {
-    init();
+PostgresStore::PostgresStore(const DBPoolParams& params)
+    : params_(params), pool_(nullptr), monitor_(nullptr) {
 }
 
 PostgresStore::~PostgresStore() {
-    delete dbh_;
-    delete monitor_;
+    delete pool_;
+    if (monitor_)
+        PQfinish(monitor_);
 }
 
-void PostgresStore::init() {
-    try{
-        // start with an empty table, make it empty if needed
-        pqxx::work txn(*dbh_);
-        txn.exec(
-            "DROP TABLE IF EXISTS cache"
-        );
-        txn.exec(
-            "CREATE TABLE cache (key varchar, value varchar)"
-        );
-        txn.commit();
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        mandatory_assert(false);
+void PostgresStore::connect() {
+    std::vector<String> statements({
+        "PREPARE kv_put(text,text) AS "
+            "WITH upsert AS "
+            "(UPDATE cache SET value=$2 WHERE key=$1 RETURNING cache.*) "
+            "INSERT INTO cache "
+            "SELECT * FROM (SELECT $1 k, $2 v) AS tmp_table "
+            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)",
+        "PREPARE kv_erase(text) AS "
+            "DELETE FROM cache WHERE key=$1",
+        "PREPARE kv_get(text) AS "
+            "SELECT value FROM cache WHERE key=$1",
+        "PREPARE kv_scan(text,text) AS "
+            "SELECT key, value FROM cache WHERE key >= $1 AND key < $2"});
+
+    pool_ = new DBPool(params_);
+    pool_->connect_all(statements);
+}
+
+tamed void PostgresStore::put(Str key, Str value, tamer::event<> done) {
+    tvars {
+        String q = "EXECUTE kv_put('" + key + "','" + value + "')";
+        Json j;
     }
+
+    twait { pool_->execute(q, make_event(j)); }
+    done();
 }
 
-int32_t PostgresStore::put(Str key, Str val){
-    try{
-        pqxx::work txn(*dbh_);
-        auto k = txn.quote(std::string(key.mutable_data(), key.length()));
-        auto v = txn.quote(std::string(val.mutable_data(), val.length()));
-        txn.exec(
-            "WITH upsert AS " 
-            "(UPDATE cache SET value=" + v +
-            " WHERE key=" + k +
-            " RETURNING cache.* ) " 
-            "INSERT INTO cache " 
-            "SELECT * FROM (SELECT " + k + " k, " + v + " v) AS tmp_table " 
-            "WHERE CAST(tmp_table.k AS TEXT) NOT IN (SELECT key FROM upsert)"
-        );
-        txn.commit();
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        return -1;
+tamed void PostgresStore::erase(Str key, tamer::event<> done) {
+    tvars {
+        String q = "EXECUTE kv_erase('" + key + "')";
+        Json j;
     }
-    return 0;
+
+    twait { pool_->execute(q, make_event(j)); }
+    done();
 }
 
-void PostgresStore::erase(Str key) {
-    try{
-        pqxx::work txn(*dbh_);
-        auto k = txn.quote(std::string(key.mutable_data(), key.length()));
-        txn.exec("DELETE FROM cache WHERE key=" + k);
-        txn.commit();
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        mandatory_assert(false);
+tamed void PostgresStore::get(Str key, tamer::event<String> done) {
+    tvars {
+        String q = "EXECUTE kv_get('" + key + "')";
+        Json j;
     }
+
+    twait { pool_->execute(q, make_event(j)); }
+
+    if (j.is_a() && j.size() && j[0].size())
+        done(j[0][0].as_s());
+    else
+        // todo: distinguish between no value and empty value!
+        done("");
 }
 
-String PostgresStore::get(Str k){
-    try{
-        pqxx::work txn(*dbh_);
-        pqxx::result scan = txn.exec(
-            "SELECT key, value FROM cache "
-            "WHERE key = " +
-            txn.quote(std::string(k.mutable_data(), k.length()))
-        );
-        return String(scan.begin()["value"].as<std::string>());
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        mandatory_assert(false);
+tamed void PostgresStore::scan(Str first, Str last, tamer::event<ResultSet> done) {
+    tvars {
+        String q = "EXECUTE kv_scan('" + first + "','" + last + "')";
+        Json j;
     }
+
+    twait { pool_->execute(q, make_event(j)); }
+
+    ResultSet& rs = done.result();
+    for (auto it = j.abegin(); it < j.aend(); ++it )
+        rs.push_back(Result((*it)[0].as_s(), (*it)[1].as_s()));
+
+    done.unblocker().trigger();
 }
 
-void PostgresStore::scan(Str first, Str last, pq::PersistentStore::ResultSet& results){
-    try{
-        pqxx::work txn(*dbh_);
-        pqxx::result scan = txn.exec(
-            "SELECT key, value FROM cache "
-            "WHERE key >= " +
-            txn.quote(std::string(first.mutable_data(), first.length())) +
-            " AND key < " +
-            txn.quote(std::string(last.mutable_data(), last.length()))
-        );
-
-        for (auto row = scan.begin(); row != scan.end(); ++row) {
-            results.push_back(PersistentStore::Result(
-                String(row["key"].as<std::string>()),
-                String(row["value"].as<std::string>())
-            ));
-        }
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        mandatory_assert(false);
-    }
+void PostgresStore::flush() {
+    pool_->flush();
 }
 
-String PostgresStore::connection_string() const {
-    return "dbname=" + dbname_ + " host=" + host_ + " port=" + String(port_);
-}
+void PostgresStore::run_monitor(Server& server) {
+    String cs = "dbname=" + params_.dbname + " host=" + params_.host + " port=" + String(params_.port);
+    monitor_ = PQconnectdb(cs.c_str());
+    mandatory_assert(monitor_);
+    mandatory_assert(PQstatus(monitor_) != CONNECTION_BAD);
 
-void PostgresStore::run_monitor(pq::Server& server) {
-    monitor_ = new pqxx::connection(connection_string().c_str());
+    PGresult* res;
+    res = PQexec(monitor_,
+                 "CREATE OR REPLACE FUNCTION notify_upsert_listener() "
+                 "RETURNS trigger AS "
+                 "$BODY$ "
+                 "BEGIN "
+                 "PERFORM pg_notify('backend_queue', '{ \"op\":0, \"k\":\"' || CAST (NEW.key AS TEXT) || '\", \"v\":\"' || CAST (NEW.value AS TEXT) || '\" }'); "
+                 "RETURN NULL; "
+                 "END; "
+                 "$BODY$ "
+                 "LANGUAGE plpgsql VOLATILE "
+                 "COST 100");
 
-    try {
-        pqxx::work txn(*monitor_);
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
 
-        // create the notify trigger functions
-        txn.exec(
-        "CREATE OR REPLACE FUNCTION notify_upsert_listener() "
-        "RETURNS trigger AS "
-        "$BODY$ "
-        "BEGIN "
-        "PERFORM pg_notify('backend_queue', '{ \"op\":0, \"key\":\"' || CAST (NEW.key AS TEXT) || '\", \"value\":\"' || CAST (NEW.value AS TEXT) || '\" }'); "
-        "RETURN NULL; "
-        "END; "
-        "$BODY$ "
-        "LANGUAGE plpgsql VOLATILE "
-        "COST 100"
-        );
+    res = PQexec(monitor_,
+                 "CREATE OR REPLACE FUNCTION notify_delete_listener() "
+                 "RETURNS trigger AS "
+                 "$BODY$ "
+                 "BEGIN "
+                 "PERFORM pg_notify('backend_queue', '{ \"op\":1, \"k\":\"' || CAST (OLD.key AS TEXT) || '\" }'); "
+                 "RETURN NULL; "
+                 "END; "
+                 "$BODY$ "
+                 "LANGUAGE plpgsql VOLATILE "
+                 "COST 100");
 
-        txn.exec(
-        "CREATE OR REPLACE FUNCTION notify_delete_listener() "
-        "RETURNS trigger AS "
-        "$BODY$ "
-        "BEGIN "
-        "PERFORM pg_notify('backend_queue', '{ \"op\":1, \"key\":\"' || CAST (OLD.key AS TEXT) || '\" }'); "
-        "RETURN NULL; "
-        "END; "
-        "$BODY$ "
-        "LANGUAGE plpgsql VOLATILE "
-        "COST 100"
-        );
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
 
-        // drop and create the triggers
-        txn.exec("DROP TRIGGER IF EXISTS notify_upsert_cache ON cache");
-        txn.exec("DROP TRIGGER IF EXISTS notify_delete_cache ON cache");
+    res = PQexec(monitor_, "DROP TRIGGER IF EXISTS notify_upsert_cache ON cache");
 
-        txn.exec(
-        "CREATE TRIGGER notify_upsert_cache "
-        "AFTER INSERT OR UPDATE ON cache "
-        "FOR EACH ROW "
-        "EXECUTE PROCEDURE notify_upsert_listener()"
-        );
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
 
-        txn.exec(
-        "CREATE TRIGGER notify_delete_cache "
-        "AFTER DELETE ON cache "
-        "FOR EACH ROW "
-        "EXECUTE PROCEDURE notify_delete_listener()"
-        );
+    res = PQexec(monitor_, "DROP TRIGGER IF EXISTS notify_delete_cache ON cache");
 
-        txn.commit();
-    } catch (const std::exception &e){
-        std::cerr << e.what() << std::endl;
-        mandatory_assert(false);
-    }
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+
+    res = PQexec(monitor_,
+                 "CREATE TRIGGER notify_upsert_cache "
+                 "AFTER INSERT OR UPDATE ON cache "
+                 "FOR EACH ROW "
+                 "EXECUTE PROCEDURE notify_upsert_listener()");
+
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+
+    res = PQexec(monitor_,
+                 "CREATE TRIGGER notify_delete_cache "
+                 "AFTER DELETE ON cache "
+                 "FOR EACH ROW "
+                 "EXECUTE PROCEDURE notify_delete_listener()");
+
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+
+    res = PQexec(monitor_, "LISTEN backend_queue");
+
+    mandatory_assert(res);
+    mandatory_assert(PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
 
     monitor_db(server);
 }
 
-tamed void PostgresStore::monitor_db(pq::Server& server) {
+tamed void PostgresStore::monitor_db(Server& server) {
     tvars {
-        int32_t ret;
-        PostgresListener listener(*(this->monitor_), "backend_queue", server);
+        int32_t err;
+        Json j;
     }
 
     while(true) {
-        twait { tamer::at_fd_read(monitor_->sock(), make_event(ret)); }
+        // XXX: we might need to yield once in a while...
 
-        if (ret == 0) {
-            // todo: i don't think this will block.
-            // also, this will fire all notifications, which might take a while
-            monitor_->get_notifs();
+        do {
+            twait { tamer::at_fd_read(PQsocket(monitor_), make_event()); }
+            err = PQconsumeInput(monitor_);
+            mandatory_assert(err == 1 && "Error reading data from DB.");
+        } while(PQisBusy(monitor_));
+
+        // there should be no results on this connection
+        mandatory_assert(!PQgetResult(monitor_));
+
+        // process notifications
+        PGnotify* n = PQnotifies(monitor_);
+        while(n) {
+
+            j.assign_parse(n->extra);
+            assert(j && j.is_o());
+
+            switch(j["op"].as_i()) {
+                case pg_update:
+                    server.insert(j["k"].as_s(), j["v"].as_s());
+                    break;
+
+                case pg_delete:
+                    server.erase(j["k"].as_s());
+                    break;
+
+                default:
+                    mandatory_assert(false && "Unknown DB operation.");
+                    break;
+            }
+
+            PQfreemem(n);
+            n = PQnotifies(monitor_);
         }
-        else
-            mandatory_assert(false);
-    }
-}
-
-PostgresListener::PostgresListener(pqxx::connection_base& conn, const std::string& channel,
-                                   pq::Server& server)
-    : pqxx::notification_receiver(conn, channel), server_(server) {
-}
-
-void PostgresListener::operator()(const std::string& payload, int32_t) {
-    //std::cerr << "Notification: " << payload << std::endl;
-
-    Json j;
-    j.assign_parse(payload);
-    assert(j && j.is_o());
-
-    int32_t op = j["op"].as_i();
-    switch(op) {
-      case pg_update:
-          server_.insert(j["key"].as_s(), j["value"].as_s());
-          break;
-
-      case pg_delete:
-          server_.erase(j["key"].as_s());
-          break;
-
-      default:
-          mandatory_assert(false && "Unknown DB operation.");
-          break;
     }
 }
 
 #endif
+}

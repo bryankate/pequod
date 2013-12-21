@@ -34,6 +34,7 @@ def define_experiments():
                            'def_db_type': "postgres",
                            'def_db_writearound': True,
                            'def_db_flags': "-c synchronous_commit=off -c fsync=off",
+                           'def_db_sql_script': "scripts/exp/cache.sql",
                            'backendcmd': "%s" % (serverCmd),
                            'cachecmd': "%s" % (serverCmd),
                            'initcmd': "%s" % (initCmd),

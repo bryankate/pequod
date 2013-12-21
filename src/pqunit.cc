@@ -12,8 +12,6 @@
 #include "json.hh"
 #include "time.hh"
 #include "check.hh"
-#include "redisadapter.hh"
-#include "pqpersistent.hh"
 
 namespace  {
 
@@ -1130,64 +1128,13 @@ bb|<bid> = copy b|<bid> where bid:3"));
     CHECK_EQ(server["kk|b"].value(), "3");
 }
 
-void test_postgres() {
-    using namespace pq;
-#if HAVE_PQXX_PQXX
-    // this will fail if postgres is not running or the pqunit db does not exist
-    PostgresStore *dbi = new PostgresStore("pqunit", "127.0.0.1", 5432);
-    String s1 = "xxx";
-    String s2 = "zzz";
-
-    dbi->put(s1, s2);
-    String s3 = dbi->get(s1);
-    CHECK_EQ(s3, s2);
-
-    String keys[] = {"c","d","e","f","g","h","i","j","m","n"};
-    for (int i = 0; i < 10; ++i) {
-        PersistentWrite* wop = new PersistentWrite(keys[i], keys[i]);
-        (*wop)(dbi);
-    }
-
-    PersistentStore::ResultSet res;
-    PersistentRead* rop = new PersistentRead("b", "p", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)10);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("a", "c", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)0);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("c", "d0", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)2);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("c0", "g", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)3);
-    delete rop;
-
-    res.clear();
-    rop = new PersistentRead("j", "p0", res);
-    (*rop)(dbi);
-    CHECK_EQ(res.size(), (uint32_t)3);
-    delete rop;
-
-    delete dbi;
-#endif
-}
-
 } // namespace
 
 extern void test_mpfd();
 extern void test_mpfd2();
 extern void test_redis();
 extern void test_memcache();
+extern void test_postgres();
 
 void unit_tests(const std::set<String> &testcases) {
     std::vector<std::pair<String, test_func> > tests_;
@@ -1215,7 +1162,6 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_iupdate_t);
     ADD_TEST(test_celebrity);
-    ADD_EXP_TEST(test_postgres);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
@@ -1224,6 +1170,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_OTHER_TEST(test_mpfd2);
     ADD_OTHER_TEST(test_redis);
     ADD_OTHER_TEST(test_memcache);
+    ADD_OTHER_TEST(test_postgres);
     size_t ntests = 0;
     for (auto& t : tests_)
         if (testcases.empty() || testcases.find(t.first) != testcases.end()) {

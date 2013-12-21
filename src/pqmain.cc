@@ -342,9 +342,12 @@ int main(int argc, char** argv) {
 
     if (db != db_unknown) {
         pq::PersistentStore* pstore = nullptr;
+
         if (db == db_postgres) {
-#if HAVE_PQXX_PQXX
-            pstore = new PostgresStore(db_param.dbname, db_param.host, db_param.port);
+#if HAVE_LIBPQ
+            pq::PostgresStore* pg = new pq::PostgresStore(db_param);
+            pg->connect();
+            pstore = pg;
 #else
             mandatory_assert(false && "Not configured for PostgreSQL.");
 #endif
@@ -352,7 +355,7 @@ int main(int argc, char** argv) {
         else
             mandatory_assert(false && "Unknown DB type.");
 
-        server.set_persistent_store(new pq::PersistentStoreThread(pstore), !monitordb);
+        server.set_persistent_store(pstore, !monitordb);
         if (monitordb)
             pstore->run_monitor(server);
     }
