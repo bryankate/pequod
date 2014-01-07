@@ -18,20 +18,20 @@ def define_experiments():
             {'name': "pequod_%d" % s,
              'cachecmd': "%s" % (serverCmd),
              'populatecmd': "%s --maxkey=%d" % (popBase, s),
-             'clientcmd': "%s --key-maximum %d -P pequod" % (clientBase, s)})
+             'clientcmd': "%s --key-maximum %d -P pequod" % (clientBase, s-1)})
         
         exp['defs'].append(
             {'name': "redis_%d" % s,
              'def_redis_compare': True,
              'populatecmd': "%s --maxkey=%d --redis" % (popBase, s),
-             'clientcmd': "%s --key-maximum %d -P redis" % (clientBase, s)})
+             'clientcmd': "%s --key-maximum %d -P redis" % (clientBase, s-1)})
         
         exp['defs'].append(
             {'name': "memcache_%d" % s,
              'def_memcache_compare': True,
-             'def_memcache_args': "-m 2048 -M",
+             'def_memcache_args': "-m 61440 -M",
              'populatecmd': "%s --maxkey=%d --memcached" % (popBase, s),
-             'clientcmd': "%s --key-maximum %d -P memcache_binary" % (clientBase, s)})
+             'clientcmd': "%s --key-maximum %d -P memcache_binary" % (clientBase, s-1)})
         
     exps.append(exp)
 
