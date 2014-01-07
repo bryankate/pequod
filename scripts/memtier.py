@@ -23,7 +23,7 @@ parser.add_option("-p", "--port", action="store", type="int", dest="port", defau
 parser.add_option("-t", "--threads", action="store", type="int", dest="threads", default=4)
 parser.add_option("-d", "--duration", action="store", type="int", dest="duration", default=30)
 parser.add_option("-x", "--prefix", action="store", type="string", dest="prefix", default="m|")
-parser.add_option("-s", "--valsize", action="store", type="string", dest="valsize", default=1024)
+parser.add_option("-s", "--valsize", action="store", type="string", dest="valsize", default=256)
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-P", "--perfserver", action="store_true", dest="perfserver", default=False)
@@ -242,3 +242,5 @@ for x in exps:
         
         logfd.close()
         print "Done experiment. Results are stored at", resdir
+        
+        port += 1
