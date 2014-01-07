@@ -14,7 +14,6 @@ using std::endl;
 using namespace pq;
 
 enum { mode_pequod = 0, mode_redis = 1, mode_memcached = 2 };
-static const String value = String::make_fill('.', 256);
 
 tamed void populate(const Json& params) {
     tvars {
@@ -26,6 +25,7 @@ tamed void populate(const Json& params) {
         Json j;
         char key[32];
         uint32_t ksz = params["prefix"].as_s().length() + 10;
+        String value = String::make_fill('.', params["valsize"].as_i());
         int32_t i;
         tamer::gather_rendezvous gr;
     }
@@ -88,8 +88,9 @@ static Clp_Option options[] = {{ "host", 'h', 1000, Clp_ValStringNotOption, 0 },
                                { "minkey", 0, 1002, Clp_ValInt, 0 },
                                { "maxkey", 0, 1003, Clp_ValInt, 0 },
                                { "prefix", 0, 1004, Clp_ValStringNotOption, 0 },
-                               { "memcached", 0, 1005, 0, Clp_Negate },
-                               { "redis", 0, 1006, 0, Clp_Negate}};
+                               { "valsize", 0, 1005, Clp_ValInt, 0 },
+                               { "memcached", 0, 1006, 0, Clp_Negate },
+                               { "redis", 0, 1007, 0, Clp_Negate}};
 
 int main(int argc, char** argv) {
     putenv(envstr);
@@ -114,6 +115,8 @@ int main(int argc, char** argv) {
             params.set("maxkey", clp->val.i);
         else if (clp->option->long_name == String("prefix"))
             params.set("prefix", clp->val.s);
+        else if (clp->option->long_name == String("valsize"))
+            params.set("valsize", clp->val.i);
         else if (clp->option->long_name == String("memcached"))
             params.set("mode", mode_memcached);
         else if (clp->option->long_name == String("redis"))
