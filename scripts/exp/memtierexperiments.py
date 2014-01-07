@@ -29,7 +29,7 @@ def define_experiments():
         exp['defs'].append(
             {'name': "memcache_%d" % s,
              'def_memcache_compare': True,
-             'def_memcache_args': "-m 61440 -M",
+             'def_memcache_args': "-m 81920 -M",
              'populatecmd': "%s --maxkey=%d --memcached" % (popBase, s),
              'clientcmd': "%s --key-maximum %d -P memcache_binary" % (clientBase, s-1)})
         
