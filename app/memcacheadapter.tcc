@@ -38,7 +38,7 @@ void MemcacheClient::clear() {
 }
 
 #if HAVE_MEMCACHED_PROTOCOL_BINARY_H
-#define MAX_REQUEST_LEN 256
+#define MAX_REQUEST_LEN 2048
 
 void check_error(const MemcacheResponse& res) {
     if (res.status != PROTOCOL_BINARY_RESPONSE_SUCCESS) {
