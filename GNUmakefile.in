@@ -53,7 +53,7 @@ TAMERFLAGS = @TAMERFLAGS@
 LIBTAMER = tamer/tamer/.libs/libtamer.a
 
 
-all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo 
+all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo $(OBJDIR)/poptable
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
@@ -123,6 +123,7 @@ $(OBJDIR)/memcacheadapter.hh: $(top_srcdir)/app/memcacheadapter.thh
 $(OBJDIR)/memcacheadapter.cc: $(top_srcdir)/app/memcacheadapter.tcc
 $(OBJDIR)/hashtableadapter.hh: $(top_srcdir)/app/hashtableadapter.thh
 $(OBJDIR)/pqinfo.cc: $(top_srcdir)/app/pqinfo.tcc
+$(OBJDIR)/poptable.cc: $(top_srcdir)/app/poptable.tcc
 
 $(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
                     $(OBJDIR)/pqclient.hh \
@@ -165,6 +166,7 @@ $(OBJDIR)/facebook.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/rwmicro.o: $(OBJDIR)/rwmicro.hh $(OBJDIR)/twittershim.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/redisadapter.hh
 $(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
+$(OBJDIR)/poptable.o: $(OBJDIR)/poptable.cc $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/memcacheadapter.hh $(OBJDIR)/redisadapter.hh
 
 COMMON_OBJS = \
 	$(OBJDIR)/str.o \
@@ -216,6 +218,13 @@ PQINFO_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqinfo.o
 
+POPTABLE_OBJS = $(COMMON_OBJS) \
+        $(OBJDIR)/pqremoteclient.o \
+        $(OBJDIR)/memcacheadapter.o \
+        $(OBJDIR)/redisadapter.o \
+        $(OBJDIR)/mpfd.o \
+        $(OBJDIR)/poptable.o
+
 MEMTIER_OBJS = $(COMMON_OBJS) \
         $(MEMTIER_OBJDIR)/client.o \
         $(MEMTIER_OBJDIR)/config_types.o \
@@ -232,6 +241,9 @@ $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
+	
+$(OBJDIR)/poptable: $(POPTABLE_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/rbtest: $(OBJDIR)/rbtest.o $(OBJDIR)/str.o $(OBJDIR)/straccum.o $(OBJDIR)/string.o
