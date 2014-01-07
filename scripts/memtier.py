@@ -226,7 +226,7 @@ for x in exps:
         clientcmd = e['clientcmd']
         
         if affinity:
-            pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + 1) + "-" + str(startcpu + threads + 2)) + " "
+            pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + 1) + "-" + str(startcpu + threads + 1)) + " "
 
         full_cmd = pin + clientcmd + " -p " + str(port) + " -t " + str(threads) + \
                    " --test-time=" + str(duration) + " --key-prefix=" + prefix + \
