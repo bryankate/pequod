@@ -66,6 +66,7 @@ protected:
     const char *m_key_prefix;
     unsigned int m_key_min;
     unsigned int m_key_max;
+    unsigned int m_key_pad;
     data_object m_object;
 
     unsigned int m_next_key[OBJECT_GENERATOR_KEY_ITERATORS];
@@ -100,6 +101,7 @@ public:
     void set_expiry_range(unsigned int expiry_min, unsigned int expiry_max);
     void set_key_prefix(const char *key_prefix);    
     void set_key_range(unsigned int key_min, unsigned int key_max);
+    void set_key_padding(unsigned int key_pad);
 
     virtual const char* get_key(unsigned int iter, unsigned int *len);
     virtual data_object* get_object(unsigned int iter);

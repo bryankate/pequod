@@ -41,6 +41,7 @@ object_generator::object_generator() :
     m_key_prefix(NULL),
     m_key_min(0),
     m_key_max(0),
+    m_key_pad(0),
     m_value_buffer(NULL),
     m_random_fd(-1)
 {
@@ -60,6 +61,7 @@ object_generator::object_generator(const object_generator& copy) :
     m_key_prefix(copy.m_key_prefix),
     m_key_min(copy.m_key_min),
     m_key_max(copy.m_key_max),
+    m_key_pad(copy.m_key_pad),
     m_value_buffer(NULL),
     m_random_fd(-1)
 
@@ -198,6 +200,11 @@ void object_generator::set_key_range(unsigned int key_min, unsigned int key_max)
     m_key_max = key_max;
 }
 
+void object_generator::set_key_padding(unsigned int key_pad)
+{
+    m_key_pad = key_pad;
+}
+
 void object_generator::random_init(void)
 {
     memset(&m_random_data_blob, 0, sizeof(m_random_data_blob));
@@ -253,7 +260,7 @@ const char* object_generator::get_key(unsigned int iter, unsigned int *len)
     
     // format key
     l = snprintf(m_key_buffer, sizeof(m_key_buffer)-1,
-        "%s%u", m_key_prefix, k);
+        "%s%0*u", m_key_prefix, m_key_pad, k);
     if (len != NULL) *len = l;
     
     return m_key_buffer;

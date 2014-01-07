@@ -109,6 +109,7 @@ static void config_print(FILE *file, struct benchmark_config *cfg)
         "key_minimum = %u\n"
         "key_maximum = %u\n"
         "key_pattern = %s\n"
+        "key_padding = %u\n"
         "reconnect_interval = %u\n"
         "multi_key_get = %u\n"
         "authenticate = %s\n"
@@ -141,6 +142,7 @@ static void config_print(FILE *file, struct benchmark_config *cfg)
         cfg->key_minimum,
         cfg->key_maximum,
         cfg->key_pattern,
+        cfg->key_padding,
         cfg->reconnect_interval,
         cfg->multi_key_get,
         cfg->authenticate ? cfg->authenticate : "",
@@ -196,6 +198,7 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
         o_key_minimum,
         o_key_maximum,
         o_key_pattern,
+        o_key_padding,
         o_show_config,
         o_client_stats,
         o_reconnect_interval,
@@ -234,6 +237,7 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
         { "key-minimum",                1, 0, o_key_minimum },
         { "key-maximum",                1, 0, o_key_maximum },
         { "key-pattern",                1, 0, o_key_pattern },
+        { "key-padding",                1, 0, o_key_padding },
         { "reconnect-interval",         1, 0, o_reconnect_interval },
         { "multi-key-get",              1, 0, o_multi_key_get },
         { "authenticate",               1, 0, 'a' },
@@ -430,6 +434,14 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
                             return -1;
                     }
                     break;
+                case o_key_padding:
+                    endptr = NULL;
+                    cfg->key_padding = (unsigned int) strtoul(optarg, &endptr, 10);
+                    if (cfg->key_padding< 1 || !endptr || *endptr != '\0') {
+                        fprintf(stderr, "error: key_padding must be greater than zero.\n");
+                        return -1;
+                    }
+                    break;
                 case o_reconnect_interval:
                     endptr = NULL;
                     cfg->reconnect_interval = (unsigned int) strtoul(optarg, &endptr, 10);
@@ -520,6 +532,7 @@ void usage() {
             "      --key-minimum=NUMBER       Key ID minimum value (default: 0)\n"
             "      --key-maximum=NUMBER       Key ID maximum value (default: 10000000)\n"
             "      --key-pattern=PATTERN      Set:Get pattern (default: R:R)\n"
+            "      --key-padding=NUMBER       Pad key ID values with zeros to be a fixed size (default: none)\n"
             "\n"
             "      --help                     Display this help\n"
             "      --version                  Display version information\n"
@@ -844,6 +857,7 @@ int main(int argc, char *argv[])
     if (!cfg.data_import || cfg.generate_keys) {
         obj_gen->set_key_prefix(cfg.key_prefix);
         obj_gen->set_key_range(cfg.key_minimum, cfg.key_maximum);
+        obj_gen->set_key_padding(cfg.key_padding);
     }
     obj_gen->set_expiry_range(cfg.expiry_range.min, cfg.expiry_range.max);
 

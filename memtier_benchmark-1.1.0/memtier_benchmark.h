@@ -60,6 +60,7 @@ struct benchmark_config {
     unsigned int key_minimum;
     unsigned int key_maximum;
     const char *key_pattern;
+    unsigned int key_padding;
     unsigned int reconnect_interval;
     int multi_key_get;
     const char *authenticate;
