@@ -23,14 +23,15 @@ tamed void populate(const Json& params) {
         MemcacheClient* mclient = nullptr;
         RedisClient* rclient = nullptr;
         Json j;
-        char key[32];
-        uint32_t ksz = params["prefix"].as_s().length() + 10;
+        char key[128];
+        uint32_t ksz;
+        uint32_t padding = params["padding"].as_i();
         String value = String::make_fill('.', params["valsize"].as_i());
         int32_t i;
         tamer::gather_rendezvous gr;
     }
 
-    assert(ksz < 32);
+    memset(key, 0, 128);
 
     switch(params["mode"].as_i()) {
         case mode_pequod:
@@ -56,7 +57,7 @@ tamed void populate(const Json& params) {
     }
 
     for (i = params["minkey"].as_i(); i < params["maxkey"].as_i(); ++i) {
-        sprintf(key, "%s%010u", params["prefix"].as_s().c_str(), i);
+        ksz = sprintf(key, "%s%0*u", params["prefix"].as_s().c_str(), padding, i);
 
         switch(params["mode"].as_i()) {
             case mode_pequod:
@@ -88,9 +89,10 @@ static Clp_Option options[] = {{ "host", 'h', 1000, Clp_ValStringNotOption, 0 },
                                { "minkey", 0, 1002, Clp_ValInt, 0 },
                                { "maxkey", 0, 1003, Clp_ValInt, 0 },
                                { "prefix", 0, 1004, Clp_ValStringNotOption, 0 },
-                               { "valsize", 0, 1005, Clp_ValInt, 0 },
-                               { "memcached", 0, 1006, 0, Clp_Negate },
-                               { "redis", 0, 1007, 0, Clp_Negate}};
+                               { "padding", 0, 1005, Clp_ValInt, 0 },
+                               { "valsize", 0, 1006, Clp_ValInt, 0 },
+                               { "memcached", 0, 1007, 0, Clp_Negate },
+                               { "redis", 0, 1008, 0, Clp_Negate}};
 
 int main(int argc, char** argv) {
     putenv(envstr);
@@ -101,6 +103,8 @@ int main(int argc, char** argv) {
                         .set("prefix", "m|")
                         .set("minkey", 0)
                         .set("maxkey", 1000000)
+                        .set("padding", 0)
+                        .set("valsize", 1024)
                         .set("mode", mode_pequod);
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
 
@@ -115,6 +119,8 @@ int main(int argc, char** argv) {
             params.set("maxkey", clp->val.i);
         else if (clp->option->long_name == String("prefix"))
             params.set("prefix", clp->val.s);
+        else if (clp->option->long_name == String("padding"))
+            params.set("padding", clp->val.i);
         else if (clp->option->long_name == String("valsize"))
             params.set("valsize", clp->val.i);
         else if (clp->option->long_name == String("memcached"))
