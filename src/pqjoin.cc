@@ -679,8 +679,8 @@ Json Pattern::unparse_json() const {
     const uint8_t* p = pat_;
     while (p != pat_ + plen_) {
 	if (*p >= 128) {
-	    j.push_back(Json::make_array(*p - 127, slotlen_[*p - 128],
-                                         slotpos_[*p - 128]));
+	    j.push_back(Json::array(*p - 127, slotlen_[*p - 128],
+                                    slotpos_[*p - 128]));
 	    ++p;
 	} else {
 	    const uint8_t* pfirst = p;

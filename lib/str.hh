@@ -29,9 +29,14 @@ struct Str : public String_base<Str> {
     }
     Str(const char *first, const char *last)
 	: s(first), len(last - first) {
+        precondition(first <= last);
     }
     Str(const unsigned char *first, const unsigned char *last)
 	: s(reinterpret_cast<const char*>(first)), len(last - first) {
+        precondition(first <= last);
+    }
+    Str(const std::string& str)
+        : s(str.data()), len(str.length()) {
     }
     Str(const uninitialized_type &unused) {
 	(void) unused;
@@ -99,6 +104,10 @@ struct Str : public String_base<Str> {
     }
     Str trim() const {
 	return String_generic::trim(*this);
+    }
+
+    operator std::string() const {
+        return std::string(s, len);
     }
 
     long to_i() const {		// XXX does not handle negative

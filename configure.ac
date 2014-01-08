@@ -354,8 +354,6 @@ if test "$enable_tamer_debug" != no; then
 fi
 AC_SUBST([TAMERFLAGS])
 
-AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
-
 dnl
 dnl CLICK_CHECK_ADDRESSABLE_VA_LIST
 dnl Checks whether the va_list type is addressable.
@@ -389,5 +387,7 @@ AC_CHECK_LIB([ev], [ev_backend], [:], [AC_MSG_ERROR([libev not found])])
 AC_CHECK_HEADER([boost/accumulators/accumulators.hpp], [:], [AC_MSG_ERROR([<boost/accumulators/accumulators.hpp> not found])])
 AC_CHECK_HEADER([boost/random.hpp], [:], [AC_MSG_ERROR([<boost/random.hpp> not found])])
 AC_CHECK_HEADER([boost/intrusive/set.hpp], [:], [AC_MSG_ERROR([<boost/intrusive/set.hpp> not found])])
+
+AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
 
 AC_OUTPUT

@@ -36,6 +36,7 @@ class String_generic {
     static int find_left(const char *s, int len, int start, const char *x, int x_len);
     static int find_right(const char *s, int len, int start, char x);
     static int find_right(const char *s, int len, int start, const char *x, int x_len);
+    static bool glob_match(const char* s, int slen, const char* pattern, int plen);
     template <typename T> static inline typename T::substring_type ltrim(const T &str);
     template <typename T> static inline typename T::substring_type rtrim(const T &str);
     template <typename T> static inline typename T::substring_type trim(const T &str);
@@ -140,9 +141,9 @@ class String_base {
     const char& back() const {
 	return data()[length() - 1];
     }
-    /** @brief Test if this string is equal to the C string @a c_str. */
-    bool equals(const char *c_str) const {
-	return String_generic::equals(data(), length(), c_str, strlen(c_str));
+    /** @brief Test if this string is equal to the C string @a cstr. */
+    bool equals(const char *cstr) const {
+	return String_generic::equals(data(), length(), cstr, strlen(cstr));
     }
     /** @brief Test if this string is equal to the first @a len characters
 	of @a s. */
@@ -154,14 +155,14 @@ class String_base {
     bool equals(const String_base<TT> &x) const {
 	return String_generic::equals(data(), length(), x.data(), x.length());
     }
-    /** @brief Compare this string with the C string @a c_str.
+    /** @brief Compare this string with the C string @a cstr.
 
-	Returns 0 if this string equals @a c_str, negative if this string is
-	less than @a c_str in lexicographic order, and positive if this
-	string is greater than @a c_str. Lexicographic order treats
+	Returns 0 if this string equals @a cstr, negative if this string is
+	less than @a cstr in lexicographic order, and positive if this
+	string is greater than @a cstr. Lexicographic order treats
 	characters as unsigned. */
-    int compare(const char *c_str) const {
-	return String_generic::compare(data(), length(), c_str, strlen(c_str));
+    int compare(const char *cstr) const {
+	return String_generic::compare(data(), length(), cstr, strlen(cstr));
     }
     /** @brief Compare this string with the first @a len characters of @a
 	s. */
@@ -178,9 +179,9 @@ class String_base {
     static int compare(const String_base<TT> &a, const String_base<UU> &b) {
         return String_generic::compare(a.data(), a.length(), b.data(), b.length());
     }
-    /** @brief Test if this string begins with the C string @a c_str. */
-    bool starts_with(const char *c_str) const {
-	return String_generic::starts_with(data(), length(), c_str, strlen(c_str));
+    /** @brief Test if this string begins with the C string @a cstr. */
+    bool starts_with(const char *cstr) const {
+	return String_generic::starts_with(data(), length(), cstr, strlen(cstr));
     }
     /** @brief Test if this string begins with the first @a len characters
 	of @a s. */
@@ -200,12 +201,12 @@ class String_base {
     int find_left(char x, int start = 0) const {
 	return String_generic::find_left(data(), length(), start, x);
     }
-    /** @brief Search for the C string @a c_str as a substring in this string.
+    /** @brief Search for the C string @a cstr as a substring in this string.
 
-	Return the index of the leftmost occurrence of @a c_str, starting at
+	Return the index of the leftmost occurrence of @a cstr, starting at
 	index @a start. Return -1 if the substring is not found. */
-    int find_left(const char *c_str, int start = 0) const {
-	return String_generic::find_left(data(), length(), start, c_str, strlen(c_str));
+    int find_left(const char *cstr, int start = 0) const {
+	return String_generic::find_left(data(), length(), start, cstr, strlen(cstr));
     }
     /** @brief Search for @a x as a substring in this string.
 
@@ -223,13 +224,13 @@ class String_base {
     int find_right(char c, int start = INT_MAX) const {
 	return String_generic::find_right(data(), length(), start, c);
     }
-    /** @brief Search backwards for the C string @a c_str as a substring in
+    /** @brief Search backwards for the C string @a cstr as a substring in
 	this string.
 
-	Return the index of the rightmost occurrence of @a c_str, starting
+	Return the index of the rightmost occurrence of @a cstr, starting
 	at index @a start. Return -1 if the substring is not found. */
-    int find_right(const char *c_str, int start = INT_MAX) const {
-	return String_generic::find_right(data(), length(), start, c_str, strlen(c_str));
+    int find_right(const char *cstr, int start = INT_MAX) const {
+	return String_generic::find_right(data(), length(), start, cstr, strlen(cstr));
     }
     /** @brief Search backwards for @a x as a substring in this string.
 
@@ -238,6 +239,19 @@ class String_base {
     template <typename TT>
     int find_right(const String_base<TT> &x, int start = INT_MAX) const {
 	return String_generic::find_right(data(), length(), start, x.data(), x.length());
+    }
+    /** @brief Test if this string matches the glob @a pattern.
+
+        Glob pattern syntax allows * (any number of characters), ? (one
+        arbitrary character), [] (character classes, possibly negated), and
+        \\ (escaping). */
+    bool glob_match(const char* pattern) const {
+        return String_generic::glob_match(data(), length(), pattern, strlen(pattern));
+    }
+    /** @overload */
+    template <typename TT>
+    bool glob_match(const String_base<TT>& pattern) const {
+        return String_generic::glob_match(data(), length(), pattern.data(), pattern.length());
     }
     /** @brief Return a 32-bit hash function of the characters in [@a first, @a last).
 
@@ -340,7 +354,7 @@ inline std::ostream &operator<<(std::ostream &f, const String_base<T> &str) {
 }
 
 template <typename T>
-inline hashcode_t hashcode(const String_base<T> &x) {
+inline hashcode_t hashcode(const String_base<T>& x) {
     return String_generic::hashcode(x.data(), x.length());
 }
 
@@ -376,4 +390,14 @@ inline typename T::substring_type String_generic::trim(const T &str) {
     return str.fast_substring(b, e);
 }
 
+#if HAVE_STD_HASH
+# define LCDF_MAKE_STRING_HASH(type) \
+    namespace std { template <> struct hash<type>          \
+        : public unary_function<const type&, size_t> {     \
+        size_t operator()(const type& x) const noexcept {  \
+            return x.hashcode();                           \
+        } }; }
+#else
+# define LCDF_MAKE_STRING_HASH(type)
+#endif
 #endif

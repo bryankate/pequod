@@ -40,7 +40,7 @@ void msgpack_fd::write(const Json& j) {
         w->pos = 0;
     }
     int old_len = w->sa.length();
-    msgpack::compact_unparser().unparse(w->sa, j);
+    msgpack::unparse(w->sa, j);
     wrsize_ += w->sa.length() - old_len;
     wrwake_();
     if (!wrblocked_ && wrelem_.front().sa.length() >= wrlowat)
@@ -73,7 +73,7 @@ bool msgpack_fd::read_one_message() {
     if (rdpos_ == rdlen_) {
         // make new buffer or reuse existing buffer
         if (rdcap - rdpos_ < 4096) {
-            if (rdbuf_.data_shared())
+            if (rdbuf_.is_shared())
                 rdbuf_ = String::make_uninitialized(rdcap);
             rdpos_ = rdlen_ = 0;
         }
