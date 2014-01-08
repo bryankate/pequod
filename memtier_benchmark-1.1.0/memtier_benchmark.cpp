@@ -229,7 +229,7 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
         { "pipeline",                   1, 0, o_pipeline },
         { "data-size",                  1, 0, 'd' },
         { "random-data",                0, 0, 'R' },
-        { "noop-get",                   1, 0, o_noop_get },
+        { "noop-get",                   0, 0, o_noop_get },
         { "data-size-range",            1, 0, o_data_size_range },
         { "data-size-list",             1, 0, o_data_size_list },
         { "expiry-range",               1, 0, o_expiry_range },

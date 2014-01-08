@@ -452,7 +452,8 @@ int pequod_protocol::parse_response(void) {
                 case -pq_insert:
                     break;
 
-                case -pq_get: {
+                case -pq_get:
+                case -pq_noop_get: {
                     int vlen = j[3].to_s().length();
                     char* val = (char*)malloc(vlen);
 
