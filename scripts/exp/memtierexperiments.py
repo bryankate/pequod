@@ -40,7 +40,6 @@ def define_experiments():
     
     exp['defs'].append({'name': "pequod",
                         'cachecmd': "%s" % (serverCmd),
-                        'populatecmd': "%s --padding=10 --maxkey=1" % (popCmd),
                         'clientcmd': "%s --ratio 0:1 --key-padding 10 -P pequod --noop-get" % (clientCmd)})
     exps.append(exp)
     
