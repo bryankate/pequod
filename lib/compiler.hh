@@ -835,6 +835,8 @@ MAKE_ALIASABLE(long);
 MAKE_ALIASABLE(unsigned long);
 MAKE_ALIASABLE(long long);
 MAKE_ALIASABLE(unsigned long long);
+MAKE_ALIASABLE(float);
+MAKE_ALIASABLE(double);
 #undef MAKE_ALIASABLE
 
 template <typename T>
