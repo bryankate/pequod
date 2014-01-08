@@ -34,5 +34,15 @@ def define_experiments():
              'clientcmd': "%s --key-maximum %d -P memcache_binary" % (clientBase, s-1)})
         
     exps.append(exp)
+    
+    
+    exp = {'name': "noop", 'defs': []}
+    
+    exp['defs'].append({'name': "pequod",
+                        'cachecmd': "%s" % (serverCmd),
+                        'populatecmd': "%s --padding=10 --maxkey=1" % (popCmd),
+                        'clientcmd': "%s --ratio 0:1 --key-padding 10 -P pequod --noop-get" % (clientCmd)})
+    exps.append(exp)
+    
 
 define_experiments()
