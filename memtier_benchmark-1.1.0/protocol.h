@@ -83,6 +83,7 @@ protected:
     struct evbuffer* m_read_buf;
     struct evbuffer* m_write_buf;
 
+    bool m_noop_get;
     bool m_keep_value;
     struct protocol_response m_last_response;
 public:
@@ -91,6 +92,7 @@ public:
     virtual abstract_protocol* clone(void) = 0;
     void set_buffers(struct evbuffer* read_buf, struct evbuffer* write_buf);    
     void set_keep_value(bool flag);
+    void set_noop_get(bool flag);
 
     virtual int select_db(int db) = 0;
     virtual int authenticate(const char *credentials) = 0;

@@ -129,6 +129,7 @@ bool client::setup_client(benchmark_config *config, abstract_protocol *protocol,
     m_protocol = protocol->clone();
     assert(m_protocol != NULL);
     m_protocol->set_buffers(m_read_buf, m_write_buf);
+    m_protocol->set_noop_get(m_config->noop_get);
 
     m_obj_gen = objgen->clone();
     assert(m_obj_gen != NULL);

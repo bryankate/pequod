@@ -53,6 +53,11 @@ void abstract_protocol::set_keep_value(bool flag)
     m_keep_value = flag;
 }
 
+void abstract_protocol::set_noop_get(bool flag)
+{
+    m_noop_get = flag;
+}
+
 /////////////////////////////////////////////////////////////////////////
 
 protocol_response::protocol_response()
@@ -393,8 +398,8 @@ int pequod_protocol::write_command_get(const char *key, int key_len) {
     assert(key_len > 0);
 
     StringAccum sa;
-    msgpack::compact_unparser().unparse(sa, Json::make_array(pq_get, seq_++,
-                                                             Str(key, key_len)));
+    msgpack::compact_unparser().unparse(sa, Json::make_array((m_noop_get) ? pq_noop_get : pq_get,
+                                                             seq_++, Str(key, key_len)));
 
     evbuffer_add(m_write_buf, sa.data(), sa.length());
     return sa.length();

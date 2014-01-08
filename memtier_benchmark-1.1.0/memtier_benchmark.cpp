@@ -98,6 +98,7 @@ static void config_print(FILE *file, struct benchmark_config *cfg)
         "pipeline = %u\n"
         "data_size = %u\n"
         "random_data = %s\n"
+        "noop_get = %s\n"
         "data_size_range = %u-%u\n"
         "data_size_list = %s\n"
         "expiry_range = %u-%u\n"
@@ -131,6 +132,7 @@ static void config_print(FILE *file, struct benchmark_config *cfg)
         cfg->pipeline,
         cfg->data_size,
         cfg->random_data ? "yes" : "no",
+        cfg->noop_get ? "yes" : "no",
         cfg->data_size_range.min, cfg->data_size_range.max,
         cfg->data_size_list.print(tmpbuf, sizeof(tmpbuf)-1),
         cfg->expiry_range.min, cfg->expiry_range.max,
@@ -188,6 +190,7 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
         o_test_time = 128,
         o_ratio,
         o_pipeline,
+        o_noop_get,
         o_data_size_range,
         o_data_size_list,
         o_expiry_range,
@@ -226,6 +229,7 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
         { "pipeline",                   1, 0, o_pipeline },
         { "data-size",                  1, 0, 'd' },
         { "random-data",                0, 0, 'R' },
+        { "noop-get",                   1, 0, o_noop_get },
         { "data-size-range",            1, 0, o_data_size_range },
         { "data-size-list",             1, 0, o_data_size_list },
         { "expiry-range",               1, 0, o_expiry_range },
@@ -375,6 +379,9 @@ static int config_parse_args(int argc, char *argv[], struct benchmark_config *cf
                 case 'R':
                     cfg->random_data = true;
                     break;
+                case o_noop_get:
+                    cfg->noop_get = true;
+                    break;
                 case o_data_size_range:
                     cfg->data_size_range = config_range(optarg);
                     if (!cfg->data_size_range.is_defined() || cfg->data_size_range.min < 1) {
@@ -519,6 +526,7 @@ void usage() {
             "      --data-size-range=RANGE    Use random-sized items in the specified range (min-max)\n"
             "      --data-size-list=LIST      Use sizes from weight list (size1:weight1,..sizeN:weightN)\n"
             "      --expiry-range=RANGE       Use random expiry values from the specified range\n"
+            "      --noop-get                 Send noop-get requests (Pequod only)\n"
             "\n"
             "Imported Data Options:\n"
             "      --data-import=FILE         Read object data from file\n"
@@ -753,6 +761,11 @@ int main(int argc, char *argv[])
             benchmark_error_log("error: setrlimit failed: %s\n", strerror(errno));
             exit(1);
         }
+    }
+
+    if (cfg.noop_get && strcmp(cfg.protocol, "pequod")) {
+        fprintf(stderr, "error: noop-get can only be used with pequod protocol.\n");
+        usage();
     }
 
     // create and configure object generator

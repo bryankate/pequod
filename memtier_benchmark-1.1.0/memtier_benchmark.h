@@ -49,6 +49,7 @@ struct benchmark_config {
     unsigned int pipeline;
     unsigned int data_size;
     bool random_data;
+    bool noop_get;
     struct config_range data_size_range;
     config_weight_list data_size_list;
     struct config_range expiry_range;
