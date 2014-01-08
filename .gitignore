@@ -10,6 +10,7 @@ perf.data.old
 /config.log
 /config.status
 /configure
+/conftest.*
 /obj
 /stamp-h
 *~

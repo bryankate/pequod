@@ -21,11 +21,11 @@ static void onetest(const char* file, int line,
     if (expected_take >= 0 && take != data + expected_take)
         test_error(file, line, data, len, division, "accept took " + String(take - data) + " chars, expected " + String(expected_take));
 
-    if (status == status_ok && !a.done())
+    if (status == status_ok && !a.success())
         test_error(file, line, data, len, division, "accept not done");
     if (status == status_error && !a.error())
         test_error(file, line, data, len, division, "accept not error");
-    if (status == status_incomplete && a.complete())
+    if (status == status_incomplete && a.done())
         test_error(file, line, data, len, division, "accept not incomplete");
 
     if (unparse && a.result().unparse() != unparse)
@@ -81,16 +81,16 @@ int main(int argc, char** argv) {
         Json j = Json::make_array(0, 0, 0);
         a.reset(j);
         a.consume("\x91\xC2", 2);
-        assert(a.done() && a.result().unparse() == "[false]");
+        assert(a.success() && a.result().unparse() == "[false]");
         a.reset();
         a.consume("\xC0", 1);
-        assert(a.done() && a.result().unparse() == "null");
+        assert(a.success() && a.result().unparse() == "null");
         a.reset();
         a.consume("\x82\xA7" "compact\xC3\x00\x00", 12);
-        assert(a.done() && a.result().unparse() == "{\"compact\":true,\"0\":0}");
+        assert(a.success() && a.result().unparse() == "{\"compact\":true,\"0\":0}");
         a.reset();
         a.consume("\x82\xA7" "compact\xC3\x00\x00", 12);
-        assert(a.done() && a.result().unparse() == "{\"compact\":true,\"0\":0}");
+        assert(a.success() && a.result().unparse() == "{\"compact\":true,\"0\":0}");
     }
 
     std::cout << "All tests pass!\n";

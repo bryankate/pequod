@@ -248,6 +248,7 @@ class streaming_parser {
     inline streaming_parser();
     inline void reset();
 
+    inline bool empty() const;
     inline bool done() const;
     inline bool success() const;
     inline bool error() const;
@@ -275,6 +276,7 @@ class streaming_parser {
     local_vector<selem, 2> stack_;
     String str_;
     Json json_;
+    Json jokey_;
 };
 
 class parser {
@@ -425,6 +427,10 @@ inline streaming_parser::streaming_parser()
 inline void streaming_parser::reset() {
     state_ = st_normal;
     stack_.clear();
+}
+
+inline bool streaming_parser::empty() const {
+    return state_ == st_normal && stack_.empty();
 }
 
 inline bool streaming_parser::done() const {
