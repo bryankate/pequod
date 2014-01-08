@@ -86,7 +86,7 @@ void process(pq::Server& server, const Json& j, Json& rj, Json& aj) {
 
 tamed void connector(tamer::fd cfd, pq::Server& server) {
     tvars {
-        Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
+        Json j, rj = Json::array(0, 0, 0), aj = Json::make_array();
         msgpack_fd mpfd(cfd);
     }
     while (cfd) {
@@ -122,7 +122,7 @@ tamed void interrupt_catcher() {
 
 tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
     tvars { msgpack_fd mpfd(fd); Json j; double delay = 0.005; }
-    twait { mpfd.call(Json::make_array(pq_control, 1, Json().set("quit", true)),
+    twait { mpfd.call(Json::array(pq_control, 1, Json().set("quit", true)),
                       make_event(j)); }
     fd.close();
     while (done) {

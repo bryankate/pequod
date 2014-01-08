@@ -51,7 +51,7 @@ bool redis_fd::read_once(String* receiver) {
     if (rdpos_ == rdlen_) {
         // make new buffer or reuse existing buffer
         if (rdcap - rdpos_ < 4096) {
-            if (rdbuf_.data_shared())
+            if (rdbuf_.is_shared())
                 rdbuf_ = String::make_uninitialized(rdcap);
             rdpos_ = rdlen_ = 0;
         }

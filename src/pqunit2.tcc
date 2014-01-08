@@ -22,7 +22,7 @@ tamed void test_mpfd_client(struct sockaddr* saddr, socklen_t saddr_len) {
     mpfd = new msgpack_fd(cfd);
     twait {
         for (int i = 0; i < 10; ++i)
-            mpfd->call(Json::make_array(1, i, "Foo", fill), make_event(j[i]));
+            mpfd->call(Json::array(1, i, "Foo", fill), make_event(j[i]));
     }
     for (int i = 0; i < 10; ++i) {
         if (j[i].is_a())
@@ -43,7 +43,7 @@ tamed void test_mpfd_server(tamer::fd serverfd) {
             shutdown(cfd.value(), SHUT_RD);
         }
         if (j && j.is_a())
-            mpfd->write(Json::make_array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
+            mpfd->write(Json::array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
         ++n;
     }
     twait { mpfd->flush(make_event()); }
@@ -92,7 +92,7 @@ tamed void test_mpfd2_client(tamer::fd rfd, tamer::fd wfd) {
     mpfd = new msgpack_fd(rfd, wfd);
     twait {
         for (int i = 0; i < 10; ++i)
-            one_test_mpfd2_client(mpfd, Json::make_array(1, i, "Foo", fill), j[i], make_event());
+            one_test_mpfd2_client(mpfd, Json::array(1, i, "Foo", fill), j[i], make_event());
     }
 }
 
@@ -102,7 +102,7 @@ tamed void test_mpfd2_server(tamer::fd rfd, tamer::fd wfd) {
     while ((rfd || wfd) && n < 6) {
         twait { mpfd->read_request(make_event(j)); }
         if (j && j.is_a())
-            mpfd->write(Json::make_array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
+            mpfd->write(Json::array(-j[0].as_i(), j[1], j[2].as_s() + " REPLY", j[3].as_s().substring(0, 4096)));
         ++n;
     }
     twait { mpfd->flush(make_event()); }

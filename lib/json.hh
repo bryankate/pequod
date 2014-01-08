@@ -4,6 +4,7 @@
 #include "straccum.hh"
 #include "str.hh"
 #include <vector>
+#include <string>
 #include <utility>
 #include <stdlib.h>
 
@@ -68,6 +69,7 @@ class Json {
     inline Json(bool x);
     inline Json(const String& x);
     inline Json(Str x);
+    inline Json(const std::string& x);
     inline Json(const char* x);
     template <typename T> inline Json(const std::vector<T>& x);
     template <typename T> inline Json(T first, T last);
@@ -1458,6 +1460,11 @@ inline Json::Json(const String& x) {
     u_.str.ref();
 }
 inline Json::Json(Str x) {
+    u_.str.reset_ref();
+    String str(x);
+    str.swap(u_.str);
+}
+inline Json::Json(const std::string& x) {
     u_.str.reset_ref();
     String str(x);
     str.swap(u_.str);

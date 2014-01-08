@@ -20,7 +20,7 @@ class String : public String_base<String> {
     inline String(String &&x);
 #endif
     template <typename T>
-    explicit inline String(const String_base<T>& str);
+    inline String(const String_base<T>& str);
     inline String(const char* cstr);
     inline String(const std::string& str);
     inline String(const char* s, int len);
