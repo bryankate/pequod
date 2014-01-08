@@ -18,6 +18,7 @@ class RemoteClient {
                         const String& joinspec, event<Json> e);
 
     tamed void get(const String& key, event<String> e);
+    tamed void noop_get(const String& key, event<String> e);
     tamed void insert(const String& key, const String& value, event<> e);
     tamed void erase(const String& key, event<> e);
 

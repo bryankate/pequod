@@ -20,7 +20,8 @@ enum {
     // other
     pq_add_join = 11,
     pq_stats = 12,
-    pq_control = 13
+    pq_control = 13,
+    pq_noop_get = 14
 };
 
 enum {

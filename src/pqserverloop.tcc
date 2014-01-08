@@ -28,6 +28,8 @@ typedef struct {
 } nrpc;
 nrpc diff_;
 
+static const String noop_val = String::make_fill('.', 512);
+
 namespace {
 
 tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
@@ -195,6 +197,11 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         }
 
         server.control(j[2]);
+        break;
+    case pq_noop_get:
+        rj[2] = pq_ok;
+        key = j[2].as_s();
+        rj[3] = noop_val;
         break;
     }
 
