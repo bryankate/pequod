@@ -2,7 +2,6 @@
 #ifndef REDIS_ADAPTER_HH
 #define REDIS_ADAPTER_HH
 
-#if HAVE_HIREDIS_HIREDIS_H
 #include "json.hh"
 #include "str.hh"
 #include "string.hh"
@@ -10,8 +9,10 @@
 #include "partitioner.hh"
 #include <vector>
 #include <tamer/tamer.hh>
+#if HAVE_HIREDIS_HIREDIS_H
 #include <hiredis/hiredis.h>
 #include <hiredis/async.h>
+#endif
 
 namespace pq {
 
@@ -44,10 +45,15 @@ class RedisClient {
     void done_get(Str k);
 
   private:
+#if HAVE_HIREDIS_HIREDIS_H
     enum { wbuffsz_lo = 2 << 19, wbuffsz_hi = 2 << 20 };
     enum { nout_lo = 2 << 15, nout_hi = 2 << 16 };
 
     redisAsyncContext* ctx_;
+#else
+    void* ctx_;
+#endif
+
     String host_;
     uint32_t port_;
     tamer::event<> pacer_;
@@ -56,11 +62,12 @@ class RedisClient {
     void check_pace();
 };
 
+#if HAVE_HIREDIS_HIREDIS_H
 void redis_cb_void(redisAsyncContext* c, void* reply, void* privdata);
 void redis_cb_string(redisAsyncContext* c, void* reply, void* privdata);
 void redis_cb_int32(redisAsyncContext* c, void* reply, void* privdata);
 void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata);
-
+#endif
 
 class RedisMultiClient {
   public:
@@ -146,6 +153,7 @@ inline RedisClient* RedisMultiClient::cache_for(Str key) {
 }
 
 
+#if HAVE_HIREDIS_HIREDIS_H
 struct RedisAdapterState {
     RedisAdapterState(redisAsyncContext *c);
 
@@ -162,8 +170,8 @@ tamed void redis_tamer_add_write(void* privdata);
 void redis_tamer_del_write(void* privdata);
 void redis_tamer_cleanup(void* privdata);
 int32_t redis_tamer_attach(redisAsyncContext* ac);
+#endif
 
 }
 
-#endif
 #endif

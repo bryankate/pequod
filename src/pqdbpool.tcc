@@ -38,9 +38,9 @@ void DBPool::connect() {
 }
 
 void DBPool::connect_all(const std::vector<String>& sess_init) {
+#if HAVE_LIBPQ
     mandatory_assert(conn_.empty() && "Must connect all at once!");
 
-#if HAVE_LIBPQ
     for (uint32_t i = 0; i < params_.max; ++i) {
         PGconn* conn = connect_one();
         assert(conn);
@@ -56,6 +56,7 @@ void DBPool::connect_all(const std::vector<String>& sess_init) {
         pool_.push(conn);
     }
 #else
+    (void)sess_init;
     mandatory_assert(false && "Database not configured.");
 #endif
 }

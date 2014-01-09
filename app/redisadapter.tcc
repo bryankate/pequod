@@ -1,9 +1,9 @@
 // -*- mode: c++ -*-
 #include "redisadapter.hh"
 
-#if HAVE_HIREDIS_HIREDIS_H
 namespace pq {
 
+#if HAVE_HIREDIS_HIREDIS_H
 // taken from the SDS dynamic C string library used in hiredis.
 // the header file is not installed with hiredis, but it is used internally
 struct sdshdr {
@@ -19,6 +19,7 @@ inline uint32_t wbuffsz(redisAsyncContext* ctx) {
     }
     return 0;
 }
+#endif
 
 
 RedisClient::RedisClient()
@@ -33,6 +34,7 @@ RedisClient::~RedisClient() {
     clear();
 }
 
+#if HAVE_HIREDIS_HIREDIS_H
 void RedisClient::connect() {
     if (ctx_)
         mandatory_assert(false && "Redis Error: Already connected?");
@@ -196,9 +198,6 @@ void RedisClient::check_pace() {
     }
 }
 
-void RedisClient::done_get(Str) {
-}
-
 void redis_check_reply(redisAsyncContext* c, void* reply) {
     if (!reply) {
         std::cerr << "Redis Error: " << c->errstr << std::endl;
@@ -235,6 +234,72 @@ void redis_cb_set(redisAsyncContext* c, void* reply, void* privdata) {
         result.push_back(r->element[i]->str);
 
     e->unblocker().trigger();
+}
+#else
+
+void RedisClient::connect() {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+void RedisClient::clear() {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::get(Str k, tamer::event<String> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::get(Str k, int32_t begin, tamer::event<String> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::getrange(Str k, int32_t begin, int32_t end, tamer::event<String> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::set(Str k, Str v, tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::append(Str k, Str v, tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::increment(Str k, tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::length(Str k, tamer::event<int32_t> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::sadd(Str k, Str v, tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::smembers(Str k, tamer::event<result_set> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::zadd(Str k, Str v, int32_t score, tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::zrangebyscore(Str k, int32_t begin, int32_t end,
+                                      tamer::event<result_set> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+tamed void RedisClient::pace(tamer::event<> e) {
+    mandatory_assert(false && "Redis library not available.");
+}
+
+void RedisClient::check_pace() {
+    mandatory_assert(false && "Redis library not available.");
+}
+#endif
+
+void RedisClient::done_get(Str) {
 }
 
 
@@ -275,6 +340,7 @@ tamed void RedisMultiClient::pace(tamer::event<> e) {
 }
 
 
+#if HAVE_HIREDIS_HIREDIS_H
 RedisAdapterState::RedisAdapterState(redisAsyncContext *c)
     : context(c), reading(false), writing(false) {
 }
@@ -357,6 +423,6 @@ int32_t redis_tamer_attach(redisAsyncContext* ac) {
 
     return REDIS_OK;
 }
+#endif
 
 }
-#endif
