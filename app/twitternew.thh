@@ -356,7 +356,7 @@ void TwitterNewRunner<S>::register_one(tamer::fd cfd) {
         mandatory_assert(j[1].as_i() == barrier_);
 
         twait { check_barrier(make_event()); }
-        mpfd.write(Json::make_array(-client_at_barrier, barrier_ - 1));
+        mpfd.write(Json::array(-client_at_barrier, barrier_ - 1));
         twait { mpfd.flush(make_event()); }
     }
 
@@ -412,7 +412,7 @@ void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
 
         twait {
             j.clear();
-            master_sync_->call(Json::make_array(client_at_barrier, barrier_),
+            master_sync_->call(Json::array(client_at_barrier, barrier_),
                                make_event(j));
         }
 
@@ -991,8 +991,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         }
 
         if (!stats.is_array()) {
-            old_stats = Json::make_array(old_stats);
-            stats = Json::make_array(stats);
+            old_stats = Json::array(old_stats);
+            stats = Json::array(stats);
         }
 
         uint32_t s = 0;

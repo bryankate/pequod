@@ -356,8 +356,6 @@ if test "$enable_tamer_debug" != no; then
 fi
 AC_SUBST([TAMERFLAGS])
 
-AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
-
 dnl
 dnl CLICK_CHECK_ADDRESSABLE_VA_LIST
 dnl Checks whether the va_list type is addressable.
@@ -398,5 +396,7 @@ AC_CHECK_LIB([boost_system-mt], [_ZTIN5boost6system14error_categoryE],
 	[BOOST_LIBS="-lboost_system -lboost_thread"],
         [AC_MSG_ERROR([Usable -lboost_system not found])])])
 AC_SUBST([BOOST_LIBS])
+
+AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_ACCESS], [1], [Define if unaligned accesses are OK.])
 
 AC_OUTPUT

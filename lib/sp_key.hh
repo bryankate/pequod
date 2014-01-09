@@ -1,6 +1,7 @@
 #ifndef SP_KEY_HH_
 #define SP_KEY_HH_
 #include "straccum.hh"
+#include "str.hh"
 #include <vector>
 #include <string>
 #include <sstream>
@@ -47,6 +48,7 @@ inline String make_spkey_last(const String &prefix, ARGS... args) {
 
 String extract_spkey(int field, const String &spkey);
 String extract_spkey(int field, const std::string &spkey);
+String extract_spkey(int field, Str spkey);
 
 
 class SPKey {

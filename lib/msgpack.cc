@@ -15,14 +15,6 @@ template <typename T> T grab(const uint8_t* x) {
 }
 }
 
-static inline bool in_range(uint8_t x, unsigned low, unsigned n) {
-    return (unsigned) x - low < n;
-}
-
-static inline bool in_wrapped_range(uint8_t x, unsigned low, unsigned n) {
-    return (unsigned) (int8_t) x - low < n;
-}
-
 const uint8_t* streaming_parser::consume(const uint8_t* first,
                                          const uint8_t* last,
                                          const String& str) {
@@ -63,16 +55,16 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
     while (first != last) {
         jx = stack_.empty() ? &json_ : stack_.back().jp;
 
-        if (in_wrapped_range(*first, -format::nfixnegint, format::nfixint)) {
+        if (format::is_fixint(*first)) {
             *jx = int(int8_t(*first));
             ++first;
         } else if (*first == format::fnull) {
             *jx = Json();
             ++first;
-        } else if (in_range(*first, format::ffalse, 2)) {
+        } else if (format::is_bool(*first)) {
             *jx = bool(*first - format::ffalse);
             ++first;
-        } else if (in_range(*first, format::ffixmap, format::nfixmap)) {
+        } else if (format::is_fixmap(*first)) {
             n = *first - format::ffixmap;
             ++first;
         map:
@@ -80,14 +72,14 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
                 jx->clear();
             else
                 *jx = Json::make_object();
-        } else if (in_range(*first, format::ffixarray, format::nfixarray)) {
+        } else if (format::is_fixarray(*first)) {
             n = *first - format::ffixarray;
             ++first;
         array:
             if (!jx->is_a())
                 *jx = Json::make_array_reserve(n);
             jx->resize(n);
-        } else if (in_range(*first, format::ffixstr, format::nfixstr)) {
+        } else if (format::is_fixstr(*first)) {
             n = *first - format::ffixstr;
             ++first;
         raw:
@@ -207,7 +199,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
     return first;
 }
 
-parser& parser::parse(Str& x) {
+parser& parser::operator>>(Str& x) {
     uint32_t len;
     if ((uint32_t) *s_ - 0xA0 < 32) {
         len = *s_ - 0xA0;
@@ -225,9 +217,9 @@ parser& parser::parse(Str& x) {
     return *this;
 }
 
-parser& parser::parse(String& x) {
+parser& parser::operator>>(String& x) {
     Str s;
-    parse(s);
+    *this >> s;
     if (str_)
         x = str_.substring(s.begin(), s.end());
     else
@@ -235,57 +227,4 @@ parser& parser::parse(String& x) {
     return *this;
 }
 
-void compact_unparser::unparse(StringAccum& sa, const Json& j) {
-    if (j.is_null())
-        sa.append(char(format::fnull));
-    else if (j.is_b())
-        sa.append(char(format::ffalse + j.as_b()));
-    else if (j.is_i()) {
-        uint8_t* x = (uint8_t*) sa.reserve(9);
-        sa.adjust_length(unparse(x, (int64_t) j.as_i()) - x);
-    } else if (j.is_d()) {
-        uint8_t* x = (uint8_t*) sa.reserve(9);
-        sa.adjust_length(unparse(x, j.as_d()) - x);
-    } else if (j.is_s()) {
-        uint8_t* x = (uint8_t*) sa.reserve(j.as_s().length() + 5);
-        sa.adjust_length(unparse(x, j.as_s()) - x);
-    } else if (j.is_a()) {
-        uint8_t* x = (uint8_t*) sa.reserve(5);
-        if (j.size() < 16) {
-            *x = 0x90 + j.size();
-            sa.adjust_length(1);
-        } else if (j.size() < 65536) {
-            *x = 0xDC;
-            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
-            sa.adjust_length(3);
-        } else {
-            *x = 0xDD;
-            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
-            sa.adjust_length(5);
-        }
-        for (auto it = j.cabegin(); it != j.caend(); ++it)
-            unparse(sa, *it);
-    } else if (j.is_o()) {
-        uint8_t* x = (uint8_t*) sa.reserve(5);
-        if (j.size() < 16) {
-            *x = 0x80 + j.size();
-            sa.adjust_length(1);
-        } else if (j.size() < 65536) {
-            *x = 0xDE;
-            *reinterpret_cast<uint16_t*>(x + 1) = host_to_net_order((uint16_t) j.size());
-            sa.adjust_length(3);
-        } else {
-            *x = 0xDF;
-            *reinterpret_cast<uint32_t*>(x + 1) = host_to_net_order((uint32_t) j.size());
-            sa.adjust_length(5);
-        }
-        for (auto it = j.cobegin(); it != j.coend(); ++it) {
-            uint8_t* x = (uint8_t*) sa.reserve(it.key().length() + 5);
-            sa.adjust_length(unparse(x, it.key()) - x);
-            unparse(sa, it.value());
-        }
-    } else
-        sa.append(char(format::fnull));
-}
-
-}
+} // namespace msgpack

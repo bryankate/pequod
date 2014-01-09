@@ -237,8 +237,8 @@ void HackernewsRunner<S>::run(event<> e) {
     twait { server_.control(Json().set("get_log", true), make_event(logs)); }
 
     if (!stats.is_array()) {
-        old_stats = Json::make_array(old_stats);
-        stats = Json::make_array(stats);
+        old_stats = Json::array(old_stats);
+        stats = Json::array(stats);
     }
 
     uint32_t s = 0;

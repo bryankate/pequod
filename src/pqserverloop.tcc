@@ -35,7 +35,7 @@ namespace {
 tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                                 tamer::event<bool> done) {
     tvars {
-        Json j, rj = Json::make_array(0, 0, 0), aj = Json::make_array();
+        Json j, rj = Json::array(0, 0, 0), aj = Json::make_array();
         int32_t command;
         String key, first, last, scanlast;
         pq::Table* t;
@@ -47,6 +47,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     twait { mpfd->read_request(make_event(j)); }
 
     if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i()) {
+        std::cerr << "bad rpc: " << j << std::endl;
         done(false);
         return;
     }
@@ -251,7 +252,7 @@ tamed void interrupt_catcher() {
 
 tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
     tvars { msgpack_fd mpfd(fd); Json j; double delay = 0.005; }
-    twait { mpfd.call(Json::make_array(pq_control, 1, Json().set("quit", true)),
+    twait { mpfd.call(Json::array(pq_control, 1, Json().set("quit", true)),
                       make_event(j)); }
     fd.close();
     while (done) {

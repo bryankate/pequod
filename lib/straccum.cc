@@ -12,8 +12,8 @@
  * preserve this copyright notice, and you cannot mention the copyright
  * holders in advertising related to the Software without their permission.
  * The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
- * notice is a summary of the Click LICENSE file; the license in that file is
- * legally binding.
+ * notice is a summary of the Click LICENSE file; the license in that file
+ * is legally binding.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -124,7 +124,7 @@ StringAccum::hard_extend(int nadjust, int nreserve)
 }
 
 void StringAccum::transfer_from(String& x) {
-    if (x.data_shared() || x._r.memo_offset != -memo_space) {
+    if (x.is_shared() || x._r.memo_offset != -memo_space) {
         append(x.begin(), x.end());
         x._r.deref();
     } else {

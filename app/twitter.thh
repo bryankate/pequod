@@ -325,8 +325,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     gettimeofday(&tv[1], 0);
     twait { server_.stats(make_event(stats)); }
     if (!stats.is_array()) {
-        old_stats = Json::make_array(old_stats);
-        stats = Json::make_array(stats);
+        old_stats = Json::array(old_stats);
+        stats = Json::array(stats);
     }
 
     uint32_t s = 0;

@@ -27,7 +27,7 @@ def define_experiments():
                            'cachecmd': "%s" % (serverCmd),
                            'initcmd': "%s" % (initCmd),
                            'populatecmd': "%s %s" % (populateCmd, users),
-                           'clientcmd': "%s" % (clientBase)}]})
+                           'clientcmd': "%s --fetch" % (clientBase)}]})
     
     exps.append({'name': "writearound", 
                  'defs': [{'def_part': partfunc,

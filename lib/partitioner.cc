@@ -151,7 +151,7 @@ Json partition1::unparse_json() const {
     if (nservers() == 1)
 	j.set("server", first_server());
     else
-	j.set("server", Json::make_array(first_server(), last_server()));
+	j.set("server", Json::array(first_server(), last_server()));
     return j;
 }
 

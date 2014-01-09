@@ -48,7 +48,9 @@ class String : public String_base<String> {
     static inline String make_stable(const char* cstr);
     static inline String make_stable(const char* s, int len);
     static inline String make_stable(const char* first, const char* last);
-    static String make_fill(int c, int n); // n copies of c
+    template <typename T>
+    static inline String make_stable(const String_base<T>& str);
+    static String make_fill(int c, int n);
     static inline const String& make_zero();
 
     inline const char* data() const;
@@ -132,9 +134,12 @@ class String : public String_base<String> {
     // String operator+(String, const char *);
     // String operator+(const char *, const String &);
 
+    inline bool is_shared() const;
+    inline bool is_stable() const;
+
+    inline String unique() const;
     inline String compact() const;
 
-    inline bool data_shared() const;
     char* mutable_data();
     inline unsigned char* mutable_udata();
     char* mutable_c_str();
@@ -489,6 +494,12 @@ inline String String::make_stable(const char* first, const char* last) {
     return String(first, (first < last ? last - first : 0), null_memo());
 }
 
+/** @overload */
+template <typename T>
+inline String String::make_stable(const String_base<T>& str) {
+    return String(str.data(), str.length(), null_memo());
+}
+
 /** @brief Return a pointer to the string's data.
 
     Only the first length() characters are valid, and the string
@@ -732,15 +743,31 @@ inline String &String::operator+=(const String_base<T> &x) {
     return *this;
 }
 
-/** @brief Test if the String's data is shared or immutable. */
-inline bool String::data_shared() const {
+/** @brief Test if the String's data is shared or stable. */
+inline bool String::is_shared() const {
     memo_type* m = _r.memo();
     return !m || m->refcount != 1;
 }
 
+/** @brief Test if the String's data is stable. */
+inline bool String::is_stable() const {
+    return !_r.memo();
+}
+
+/** @brief Return a unique version of this String.
+
+    The return value shares no data with any other non-stable String. */
+inline String String::unique() const {
+    memo_type* m = _r.memo();
+    if (!m || m->refcount == 1)
+	return *this;
+    else
+	return String(_r.data, _r.data + _r.length);
+}
+
 /** @brief Return a compact version of this String.
 
-    The compact version shares no more than 256 bytes of data with any other
+    The return value shares no more than 256 bytes of data with any other
     non-stable String. */
 inline String String::compact() const {
     memo_type* m = _r.memo();

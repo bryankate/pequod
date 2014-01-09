@@ -18,6 +18,9 @@
 #define static_assert(x, msg) switch (x) case 0: case !!(x):
 #endif
 
+#define precondition assert
+#define invariant assert
+
 #if !HAVE_CXX_CONSTEXPR
 #define constexpr const
 #endif
@@ -198,6 +201,15 @@ template <typename B> struct sized_compiler_operations<1, B> {
 	return __sync_fetch_and_add(object, addend);
 #endif
     }
+    static inline void atomic_or(type* object, type addend) {
+#if __x86__
+	asm volatile("lock; orb %0,%1"
+		     : "=r" (addend), "+m" (*object) : : "cc");
+	B()();
+#else
+        __sync_fetch_and_or(object, addend);
+#endif
+    }
 };
 
 template <typename B> struct sized_compiler_operations<2, B> {
@@ -245,6 +257,15 @@ template <typename B> struct sized_compiler_operations<2, B> {
 	return __sync_fetch_and_add(object, addend);
 #endif
     }
+    static inline void atomic_or(type* object, type addend) {
+#if __x86__
+	asm volatile("lock; orw %0,%1"
+		     : "=r" (addend), "+m" (*object) : : "cc");
+	B()();
+#else
+        __sync_fetch_and_or(object, addend);
+#endif
+    }
 };
 
 template <typename B> struct sized_compiler_operations<4, B> {
@@ -290,6 +311,15 @@ template <typename B> struct sized_compiler_operations<4, B> {
 	return addend;
 #else
 	return __sync_fetch_and_add(object, addend);
+#endif
+    }
+    static inline void atomic_or(type* object, type addend) {
+#if __x86__
+	asm volatile("lock; orl %0,%1"
+		     : "=r" (addend), "+m" (*object) : : "cc");
+	B()();
+#else
+        __sync_fetch_and_or(object, addend);
 #endif
     }
 };
@@ -361,6 +391,17 @@ template <typename B> struct sized_compiler_operations<8, B> {
 # else
 	return __sync_fetch_and_add(object, addend);
 # endif
+    }
+#endif
+#if __x86_64__ || HAVE___SYNC_FETCH_AND_OR_8
+    static inline void atomic_or(type* object, type addend) {
+#if __x86_64__
+	asm volatile("lock; orq %0,%1"
+		     : "=r" (addend), "+m" (*object) : : "cc");
+	B()();
+#else
+        __sync_fetch_and_or(object, addend);
+#endif
     }
 #endif
 };
@@ -494,6 +535,36 @@ template <typename T>
 inline void test_and_set_release(T* object) {
     release_fence();
     *object = T();
+}
+
+
+/** @brief Atomic fetch-and-or. Returns nothing.
+ * @param object pointer to integer
+ * @param addend value to or */
+template <typename T>
+inline void atomic_or(T* object, T addend) {
+    typedef sized_compiler_operations<sizeof(T), fence_function> sco_t;
+    typedef typename sco_t::type type;
+    sco_t::atomic_or((type*) object, (type) addend);
+}
+
+inline void atomic_or(int8_t* object, int addend) {
+    atomic_or(object, int8_t(addend));
+}
+inline void atomic_or(uint8_t* object, int addend) {
+    atomic_or(object, uint8_t(addend));
+}
+inline void atomic_or(int16_t* object, int addend) {
+    atomic_or(object, int16_t(addend));
+}
+inline void atomic_or(uint16_t* object, int addend) {
+    atomic_or(object, uint16_t(addend));
+}
+inline void atomic_or(unsigned* object, int addend) {
+    atomic_or(object, unsigned(addend));
+}
+inline void atomic_or(unsigned long* object, int addend) {
+    atomic_or(object, (unsigned long)(addend));
 }
 
 
@@ -840,13 +911,46 @@ MAKE_ALIASABLE(double);
 #undef MAKE_ALIASABLE
 
 template <typename T>
-inline void write_in_net_order(char* s, T x) {
-    *reinterpret_cast<typename make_aliasable<T>::type*>(s) = host_to_net_order(x);
+inline char* write_in_host_order(char* s, T x) {
+#if HAVE_INDIFFERENT_ALIGNMENT
+    *reinterpret_cast<typename make_aliasable<T>::type*>(s) = x;
+#else
+    memcpy(s, &x, sizeof(x));
+#endif
+    return s + sizeof(x);
 }
 
 template <typename T>
-inline void write_in_net_order(uint8_t* s, T x) {
-    write_in_net_order(reinterpret_cast<char*>(s), x);
+inline uint8_t* write_in_host_order(uint8_t* s, T x) {
+    return reinterpret_cast<uint8_t*>
+        (write_in_host_order(reinterpret_cast<char*>(s), x));
+}
+
+template <typename T>
+inline T read_in_host_order(const char* s) {
+#if HAVE_INDIFFERENT_ALIGNMENT
+    return *reinterpret_cast<const typename make_aliasable<T>::type*>(s);
+#else
+    T x;
+    memcpy(&x, s, sizeof(x));
+    return x;
+#endif
+}
+
+template <typename T>
+inline T read_in_host_order(const uint8_t* s) {
+    return read_in_host_order<T>(reinterpret_cast<const char*>(s));
+}
+
+template <typename T>
+inline char* write_in_net_order(char* s, T x) {
+    return write_in_host_order<T>(s, host_to_net_order(x));
+}
+
+template <typename T>
+inline uint8_t* write_in_net_order(uint8_t* s, T x) {
+    return reinterpret_cast<uint8_t*>
+        (write_in_net_order(reinterpret_cast<char*>(s), x));
 }
 
 template <typename T>
