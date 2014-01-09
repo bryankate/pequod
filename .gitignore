@@ -19,3 +19,10 @@ results
 last
 drivers
 .redis_one.conf
+.DS_Store
+
+.project
+.cproject
+.pydevproject
+.externalToolBuilders
+.settings
