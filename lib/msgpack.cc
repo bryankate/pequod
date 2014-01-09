@@ -3,16 +3,17 @@ namespace msgpack {
 
 namespace {
 const uint8_t nbytes[] = {
-    /* 0xC0-0xC9 */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    /* 0xCA float */ 5, /* 0xCB double */ 9,
+    /* 0xC0-0xC3 */ 0, 0, 0, 0,
+    /* 0xC4-0xC6 fbin8-fbin32 */ 2, 3, 5,
+    /* 0xC7-0xC9 fext */ 0, 0, 0,
+    /* 0xCA ffloat32 */ 5,
+    /* 0xCB ffloat64 */ 9,
     /* 0xCC-0xD3 ints */ 2, 3, 5, 9, 2, 3, 5, 9,
-    /* 0xD4-0xD9 */ 0, 0, 0, 0, 0, 0,
-    /* 0xDA-0xDF */ 3, 5, 3, 5, 3, 5
+    /* 0xD4-0xD8 ffixext */ 0, 0, 0, 0, 0,
+    /* 0xD9-0xDB fstr8-fstr32 */ 2, 3, 5,
+    /* 0xDC-0xDD farray16-farray32 */ 3, 5,
+    /* 0xDE-0xDF fmap16-fmap32 */ 3, 5
 };
-
-template <typename T> T grab(const uint8_t* x) {
-    return net_to_host_order(*reinterpret_cast<const T*>(x));
-}
 }
 
 const uint8_t* streaming_parser::consume(const uint8_t* first,
@@ -97,7 +98,7 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             }
             first += n;
         } else {
-            uint8_t type = *first - 0xC0;
+            uint8_t type = *first - format::fnull;
             if (!nbytes[type])
                 goto error;
             if (last - first < nbytes[type]) {
@@ -137,23 +138,29 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
             case format::fint64 - format::fnull:
                 *jx = read_in_net_order<int64_t>(first - 8);
                 break;
-            case 0x1A:
-                n = grab<uint16_t>(first - 2);
+            case format::fbin8 - format::fnull:
+            case format::fstr8 - format::fnull:
+                n = first[-1];
                 goto raw;
-            case 0x1B:
-                n = grab<uint32_t>(first - 4);
+            case format::fbin16 - format::fnull:
+            case format::fstr16 - format::fnull:
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto raw;
-            case 0x1C:
-                n = grab<uint16_t>(first - 2);
+            case format::fbin32 - format::fnull:
+            case format::fstr32 - format::fnull:
+                n = read_in_net_order<uint32_t>(first - 4);
+                goto raw;
+            case format::farray16 - format::fnull:
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto array;
-            case 0x1D:
-                n = grab<uint32_t>(first - 4);
+            case format::farray32 - format::fnull:
+                n = read_in_net_order<uint32_t>(first - 4);
                 goto array;
-            case 0x1E:
-                n = grab<uint16_t>(first - 2);
+            case format::fmap16 - format::fnull:
+                n = read_in_net_order<uint16_t>(first - 2);
                 goto map;
-            case 0x1F:
-                n = grab<uint32_t>(first - 4);
+            case format::fmap32 - format::fnull:
+                n = read_in_net_order<uint32_t>(first - 4);
                 goto map;
             }
         }
@@ -201,15 +208,18 @@ const uint8_t* streaming_parser::consume(const uint8_t* first,
 
 parser& parser::operator>>(Str& x) {
     uint32_t len;
-    if ((uint32_t) *s_ - 0xA0 < 32) {
-        len = *s_ - 0xA0;
+    if ((uint32_t) *s_ - format::ffixstr < format::nfixstr) {
+        len = *s_ - format::ffixstr;
         ++s_;
-    } else if (*s_ == 0xDA) {
-        len = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+    } else if (*s_ == format::fbin8 || *s_ == format::fstr8) {
+        len = s_[1];
+        s_ += 2;
+    } else if (*s_ == format::fbin16 || *s_ == format::fstr16) {
+        len = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
     } else {
-        assert(*s_ == 0xDB);
-        len = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+        assert(*s_ == format::fbin32 || *s_ == format::fstr32);
+        len = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
     }
     x.assign(reinterpret_cast<const char*>(s_), len);

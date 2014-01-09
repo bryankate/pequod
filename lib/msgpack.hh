@@ -324,7 +324,6 @@ class parser {
 	} else
 	    return false;
     }
-
     inline int read_tiny_int() {
         assert(format::is_fixint(*s_));
         return (int8_t) *s_++;
@@ -438,36 +437,36 @@ class parser {
 template <typename T>
 void parser::hard_read_int(T& x) {
     switch (*s_) {
-    case 0xCC:
+    case format::fuint8:
         x = s_[1];
         s_ += 2;
         break;
-    case 0xCD:
-        x = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+    case format::fuint16:
+        x = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
         break;
-    case 0xCE:
-        x = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+    case format::fuint32:
+        x = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
         break;
-    case 0xCF:
-        x = net_to_host_order(*reinterpret_cast<const uint64_t*>(s_ + 1));
+    case format::fuint64:
+        x = read_in_net_order<uint64_t>(s_ + 1);
         s_ += 9;
         break;
-    case 0xD0:
+    case format::fint8:
         x = (int8_t) s_[1];
         s_ += 2;
         break;
-    case 0xD1:
-        x = net_to_host_order(*reinterpret_cast<const int16_t*>(s_ + 1));
+    case format::fint16:
+        x = read_in_net_order<int16_t>(s_ + 1);
         s_ += 3;
         break;
-    case 0xD2:
-        x = net_to_host_order(*reinterpret_cast<const int32_t*>(s_ + 1));
+    case format::fint32:
+        x = read_in_net_order<int32_t>(s_ + 1);
         s_ += 5;
         break;
-    case 0xD3:
-        x = net_to_host_order(*reinterpret_cast<const int64_t*>(s_ + 1));
+    case format::fint64:
+        x = read_in_net_order<int64_t>(s_ + 1);
         s_ += 9;
         break;
     }
@@ -525,15 +524,15 @@ inline T& unparse_wide(T& s, const X& x) {
 template <typename T>
 parser& parser::operator>>(::std::vector<T>& x) {
     uint32_t sz;
-    if ((uint32_t) *s_ - 0x90 < 16) {
-        sz = *s_ - 0x90;
+    if ((uint32_t) *s_ - format::ffixarray < format::nfixarray) {
+        sz = *s_ - format::ffixarray;
         ++s_;
-    } else if (*s_ == 0xDC) {
-        sz = net_to_host_order(*reinterpret_cast<const uint16_t*>(s_ + 1));
+    } else if (*s_ == format::farray16) {
+        sz = read_in_net_order<uint16_t>(s_ + 1);
         s_ += 3;
     } else {
-        assert(*s_ == 0xDD);
-        sz = net_to_host_order(*reinterpret_cast<const uint32_t*>(s_ + 1));
+        assert(*s_ == format::farray32);
+        sz = read_in_net_order<uint32_t>(s_ + 1);
         s_ += 5;
     }
     for (; sz != 0; --sz) {

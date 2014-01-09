@@ -955,7 +955,7 @@ inline uint8_t* write_in_net_order(uint8_t* s, T x) {
 
 template <typename T>
 inline T read_in_net_order(const char* s) {
-    return net_to_host_order(*reinterpret_cast<const typename make_aliasable<T>::type*>(s));
+    return net_to_host_order(read_in_host_order<T>(s));
 }
 
 template <typename T>
