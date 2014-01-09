@@ -140,6 +140,7 @@ $(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqinterconnect.hh 
 $(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
+$(OBJDIR)/pqpersistent.hh: $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
@@ -259,7 +260,7 @@ $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) -levent
+	$(CXXLINK) -o $@ $^ $(LDFLAGS) -levent -lpthread
 
 tamer/compiler/tamer $(LIBTAMER): tamer-update
 
