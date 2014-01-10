@@ -147,6 +147,7 @@ $(OBJDIR)/mpfd.o: $(OBJDIR)/mpfd.cc $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/mpfd.hh
 $(OBJDIR)/pqjoin.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqclient.o: $(OBJDIR)/pqclient.hh
+$(OBJDIR)/pqclient.hh: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqinterconnect.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqinterconnect.hh: $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/pqmulticlient.o: $(OBJDIR)/pqmulticlient.hh 
