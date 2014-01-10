@@ -369,6 +369,7 @@ for x in exps:
             full_cmd = pin + initcmd
             run_cmd(full_cmd, fartfile, fartfile)
 
+	sys.exit()
         if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
             print "Populating backend from database archive."
             dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
