@@ -140,6 +140,7 @@ $(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqinterconnect.hh 
 $(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
+$(OBJDIR)/pqpersistent.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqpersistent.hh: $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/pqsource.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqsink.o: $(OBJDIR)/pqserver.hh
