@@ -539,7 +539,7 @@ bool Table::hard_flush_for_pull(uint64_t now) {
 }
 
 tamed void Table::fetch_persisted(String first, String last, tamer::event<> done) {
-    assert(!triecut_);
+    assert(!parent_->triecut_);
 
     tvars {
         PersistedRange* pr = new PersistedRange(this, first, last);
@@ -602,7 +602,7 @@ void Table::evict_persisted(PersistedRange* pr) {
 
 tamed void Table::fetch_remote(String first, String last, int32_t owner,
                                tamer::event<> done) {
-    assert(!triecut_);
+    assert(!parent_->triecut_);
 
     tvars {
         RemoteRange* rr = new RemoteRange(this, first, last, owner);
@@ -631,7 +631,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
 }
 
 void Table::evict_remote(RemoteRange* rr) {
-    assert(!triecut_);
+    assert(!parent_->triecut_);
     assert(!rr->pending());
     assert(!rr->evicted());
 
@@ -670,7 +670,7 @@ void Table::evict_remote(RemoteRange* rr) {
 }
 
 void Table::evict_sink(SinkRange* sink) {
-    assert(!triecut_);
+    assert(!parent_->triecut_);
 
     //std::cerr << "evicting sink range " << sink->interval() << std::endl;
 
