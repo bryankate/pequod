@@ -179,7 +179,7 @@ bool JoinRange::validate_step(validate_args& va, int joinpos) {
 
     bool complete = true;
     auto it = srcval.second;
-    auto itend = sourcet->subtable_end();
+    auto itend = it.table_end();
     if (it != itend) {
         Match::state mstate(va.rm.match.save());
         const Pattern& pat = join_->source(joinpos);

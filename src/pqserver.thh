@@ -57,8 +57,6 @@ class Table : public Datum {
     class iterator;
     inline iterator begin();
     inline iterator end();
-    inline iterator subtable_begin();
-    inline iterator subtable_end();
     iterator lower_bound(Str key);
     size_t count(Str key) const;
     size_t size() const;
@@ -379,14 +377,6 @@ inline auto Table::begin() -> iterator {
 
 inline auto Table::end() -> iterator {
     return iterator(this, store_.end());
-}
-
-inline auto Table::subtable_begin() -> iterator {
-    return iterator(this, store_.begin(), this);
-}
-
-inline auto Table::subtable_end() -> iterator {
-    return iterator(this, store_.end(), this);
 }
 
 inline bool Table::subtable_hashable() const {
