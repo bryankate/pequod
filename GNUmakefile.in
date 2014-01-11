@@ -45,6 +45,10 @@ ifdef NDEBUG
   CXXFLAGS += -DNDEBUG
 endif
 
+ifdef NO_OPT
+  CXXFLAGS += -O0
+endif
+
 CXXCOMPILE = $(CXX) $(DEFS) $(CPPFLAGS) $(CXXFLAGS)
 CXXLINK = $(CXX) $(CXXFLAGS)
 
