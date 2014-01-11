@@ -57,6 +57,8 @@ class Table : public Datum {
     class iterator;
     inline iterator begin();
     inline iterator end();
+    inline iterator subtable_begin();
+    inline iterator subtable_end();
     iterator lower_bound(Str key);
     size_t count(Str key) const;
     size_t size() const;
@@ -148,7 +150,7 @@ class Table : public Datum {
 class Table::iterator : public std::iterator<std::forward_iterator_tag, Datum> {
   public:
     inline iterator() = default;
-    inline iterator(Table* table, ServerStore::iterator it);
+    inline iterator(Table* table, ServerStore::iterator it, Table* top = nullptr);
 
     inline Datum& operator*() const;
     inline Datum* operator->() const;
@@ -158,9 +160,12 @@ class Table::iterator : public std::iterator<std::forward_iterator_tag, Datum> {
 
     inline void operator++();
 
+    inline iterator table_end();
+
   private:
     ServerStore::iterator it_;
     Table* table_;
+    Table* top_;
 
     inline void maybe_fix();
     void fix();
@@ -291,8 +296,8 @@ inline void Table::iterator::maybe_fix() {
         fix();
 }
 
-inline Table::iterator::iterator(Table* table, ServerStore::iterator it)
-    : it_(it), table_(table) {
+inline Table::iterator::iterator(Table* table, ServerStore::iterator it, Table* top)
+    : it_(it), table_(table), top_(top) {
     maybe_fix();
 }
 
@@ -315,6 +320,12 @@ inline bool Table::iterator::operator!=(const iterator& x) const {
 inline void Table::iterator::operator++() {
     ++it_;
     maybe_fix();
+}
+
+inline Table::iterator Table::iterator::table_end() {
+    if (top_)
+        return iterator(top_, top_->store_.end(), top_);
+    return iterator(table_, table_->store_.end());
 }
 
 inline Str Table::name() const {
@@ -368,6 +379,14 @@ inline auto Table::begin() -> iterator {
 
 inline auto Table::end() -> iterator {
     return iterator(this, store_.end());
+}
+
+inline auto Table::subtable_begin() -> iterator {
+    return iterator(this, store_.begin(), this);
+}
+
+inline auto Table::subtable_end() -> iterator {
+    return iterator(this, store_.end(), this);
 }
 
 inline bool Table::subtable_hashable() const {

@@ -23,7 +23,7 @@ const char Datum::table_marker[] = "TABLE MARKER";
 void Table::iterator::fix() {
  retry:
     if (it_ == table_->store_.end()) {
-        if (table_->parent_) {
+        if (table_->parent_ && (!top_ || top_ != table_)) {
             it_ = table_->parent_->store_.iterator_to(*table_);
             table_ = table_->parent_;
             ++it_;
@@ -104,7 +104,7 @@ auto Table::lower_bound(Str key) -> iterator {
         tbl = static_cast<Table*>(it.operator->());
         goto retry;
     }
-    return iterator(tbl, it);
+    return iterator(tbl, it, this); // will not iterate out of subtable
 }
 
 size_t Table::count(Str key) const {
@@ -401,7 +401,7 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
                     && !itx->owner()->need_update()) {
                 if (itx->owner()->join()->maintained())
                     server_->lru_touch(const_cast<SinkRange*>(itx->owner()));
-                return std::make_pair(true, iterator(this, it));
+                return std::make_pair(true, iterator(this, it, this));
             }
         }
         for (auto it = t->join_ranges_.begin_overlaps(first, last);
@@ -555,8 +555,7 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     //std::cerr << "persisted data fetch: " << pr->interval() << " returned "
     //          << res.size() << " results" << std::endl;
 
-    // XXX: not sure if this is correct. what if the range goes outside this triecut?
-    Table& sourcet = server_->make_table_for(first);
+    Table& sourcet = server_->make_table_for(first, last);
     for (auto it = res.begin(); it != res.end(); ++it)
         sourcet.insert(it->first, it->second);
 
@@ -621,8 +620,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     //std::cerr << "remote data fetch: " << rr->interval() << " returned "
     //          << res.size() << " results" << std::endl;
 
-    // XXX: not sure if this is correct. what if the range goes outside this triecut?
-    Table& sourcet = server_->make_table_for(first);
+    Table& sourcet = server_->make_table_for(first, last);
     for (auto it = res.begin(); it != res.end(); ++it)
         sourcet.insert(it->key(), it->value());
 

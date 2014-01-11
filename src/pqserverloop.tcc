@@ -88,7 +88,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         rj[2] = pq_ok;
         key = j[2].as_s();
         twait { server.validate(key, make_event(it)); }
-        auto itend = server.table_for(key).end();
+        auto itend = it.table_end();
         if (it != itend && it->key() == key)
             rj[3] = it->value();
         else
@@ -109,7 +109,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         first = j[2].as_s(), last = j[3].as_s();
         scanlast = (j[4] && j[4].is_s()) ? j[4].as_s() : last;
         twait { server.validate(first, last, make_event(it)); }
-        rj[3] = std::distance(it, server.table_for(first).lower_bound(scanlast));
+        rj[3] = std::distance(it, server.table_for(first, last).lower_bound(scanlast));
         ++diff_.ncount;
         break;
     case pq_unsubscribe:
@@ -144,7 +144,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         if (unlikely(peer >= 0))
             server.subscribe(first, last, peer);
 
-        auto itend = server.table_for(first).end();
+        auto itend = it.table_end();
         assert(!aj.shared());
         aj.clear();
         while (it != itend && it->key() < scanlast) {

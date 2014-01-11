@@ -185,7 +185,7 @@ inline void DirectClient::control(const Json& cmd, event<Json> e) {
 template <typename R>
 inline void DirectClient::get(const String& key, preevent<R, String> e) {
     auto it = server_.validate(key);
-    auto itend = server_.table_for(key).end();
+    auto itend = it.table_end();
     if (it != itend && it->key() == key)
         e(it->value());
     else
@@ -225,7 +225,7 @@ template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
                                 const String& scanlast, preevent<R, size_t> e) {
     auto it = server_.validate(first, last);
-    e(std::distance(it, server_.table_for(first).lower_bound(scanlast)));
+    e(std::distance(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 template <typename R>
@@ -238,7 +238,7 @@ template <typename R>
 inline void DirectClient::add_count(const String& first, const String& last,
                                     const String& scanlast, preevent<R, size_t> e) {
     auto it = server_.validate(first, last);
-    e(e.result() + std::distance(it, server_.table_for(first).lower_bound(scanlast)));
+    e(e.result() + std::distance(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 template <typename R>
@@ -251,7 +251,7 @@ template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                const String& scanlast, preevent<R, scan_result> e) {
     auto it = server_.validate(first, last);
-    e(scan_result(it, server_.table_for(first).lower_bound(scanlast)));
+    e(scan_result(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 template <typename R>

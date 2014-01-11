@@ -9,7 +9,7 @@ tamed void DirectClient::get(const String& key, event<String> e) {
     }
 
     twait { server_.validate(key, make_event(it)); }
-    auto itend =  server_.table_for(key).end();
+    auto itend =  it.table_end();
     if (it != itend && it->key() == key)
         e(it->value());
     else
@@ -28,7 +28,7 @@ tamed void DirectClient::count(const String& first, const String& last, const St
     }
 
     twait { server_.validate(first, last, make_event(it)); }
-    e(std::distance(it, server_.table_for(first).lower_bound(scanlast)));
+    e(std::distance(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 tamed void DirectClient::add_count(const String& first, const String& last,
@@ -43,7 +43,7 @@ tamed void DirectClient::add_count(const String& first, const String& last, cons
     }
 
     twait { server_.validate(first, last, make_event(it)); }
-    e(e.result() + std::distance(it, server_.table_for(first).lower_bound(scanlast)));
+    e(e.result() + std::distance(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 tamed void DirectClient::scan(const String& first, const String& last,
@@ -58,7 +58,7 @@ tamed void DirectClient::scan(const String& first, const String& last, const Str
     }
 
     twait { server_.validate(first, last, make_event(it)); }
-    e(scan_result(it, server_.table_for(first).lower_bound(scanlast)));
+    e(scan_result(it, server_.table_for(first, last).lower_bound(scanlast)));
 }
 
 }
