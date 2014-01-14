@@ -75,6 +75,7 @@ static Clp_Option options[] = {
     { "evict-inline", 0, 3026, 0, Clp_Negate },
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
     { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
+    { "limit", 0, 3029, Clp_ValInt, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -138,6 +139,7 @@ int main(int argc, char** argv) {
     pq::DBPoolParams db_param;
     bool monitordb = false;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
+    uint32_t round_robin = 8;
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
@@ -185,6 +187,8 @@ int main(int argc, char** argv) {
             nbacking = clp->val.i;
         else if (clp->option->long_name == String("writearound"))
             tp_param.set("writearound", !clp->negated);
+        else if (clp->option->long_name == String("round-robin"))
+            round_robin = clp->val.i;
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -391,9 +395,10 @@ int main(int argc, char** argv) {
         extern void server_loop(pq::Server& server, int port, bool kill,
                                 const pq::Hosts* hosts, const pq::Host* me,
                                 const pq::Partitioner* part,
-                                uint64_t mem_lo_mb, uint64_t mem_hi_mb);
+                                uint64_t mem_lo_mb, uint64_t mem_hi_mb,
+                                uint32_t round_robin);
         server_loop(server, listen_port, kill_old_server,
-                    hosts, me, part, mem_lo_mb, mem_hi_mb);
+                    hosts, me, part, mem_lo_mb, mem_hi_mb, round_robin);
     } else if (mode == mode_twitter || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);

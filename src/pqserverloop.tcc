@@ -15,6 +15,7 @@
 
 std::vector<pq::Interconnect*> interconnect_;
 bool backend_ = true;
+uint32_t round_robin_ = 0;
 
 pq::Log log_(tstamp());
 typedef struct {
@@ -215,6 +216,7 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
     tvars {
         msgpack_fd* mpfd_;
         bool ok;
+        uint32_t proc = 0;
     }
 
     if (mpfd)
@@ -228,7 +230,10 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
             break;
 
         // round robin connections with data to read
-        //twait { tamer::at_asap(make_event()); }
+        if (round_robin_ && ++proc == round_robin_) {
+            twait { tamer::at_asap(make_event()); }
+            proc = 0;
+        }
     }
 
     cfd.close();
@@ -364,7 +369,8 @@ tamed void periodic_eviction(pq::Server& server, uint64_t low, uint64_t high) {
 tamed void server_loop(pq::Server& server, int port, bool kill,
                        const pq::Hosts* hosts, const pq::Host* me,
                        const pq::Partitioner* part,
-                       uint64_t mem_lo_mb, uint64_t mem_hi_mb) {
+                       uint64_t mem_lo_mb, uint64_t mem_hi_mb,
+                       uint32_t round_robin) {
     tvars {
         tamer::fd killer;
         bool connected = false;
@@ -378,6 +384,8 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
         assert(mem_lo_mb < mem_hi_mb);
         periodic_eviction(server, mem_lo_mb << 20, mem_hi_mb << 20);
     }
+
+    round_robin_ = round_robin;
 
     if (kill) {
         twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, port, make_event(killer)); }
