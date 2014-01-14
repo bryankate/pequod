@@ -31,6 +31,7 @@ parser.add_option("-M", "--moveports", action="store_true", dest="moveports", de
 parser.add_option("-a", "--affinity", action="store_true", dest="affinity", default=False)
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
+parser.add_option("-S", "--straceserver", action="store", type="int", dest="straceserver", default=-1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
 parser.add_option("-D", "--dbstartport", action="store", type="int", dest="dbstartport", default=10000)
@@ -50,6 +51,7 @@ moveports = options.moveports
 affinity = options.affinity
 startcpu = options.startcpu
 perfserver = options.perfserver
+straceserver = options.straceserver
 ngroups = options.ngroups
 dbstartport = options.dbstartport
 dumpdb = options.dumpdb
@@ -428,6 +430,10 @@ for x in exps:
             for p in procs:
                 wait_for_proc(p)
 
+        if straceserver >= 0:
+            full_cmd = "strace -c -p " + str(serverprocs[straceserver][0].pid) + \
+                       " -o " + os.path.join(resdir, "strace_" + str(straceserver) + ".dat")
+            run_cmd_bg(full_cmd)
 
         print "Starting app clients."
         clientprocs = []
