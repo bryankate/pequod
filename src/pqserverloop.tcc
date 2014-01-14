@@ -55,7 +55,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     }
     else
         // allow the server to read and start processing another
-        // rpc while this one is being handled
+        // rpc while this one is being handled (iff it blocks)
         done(true);
 
     command = j[0].as_i();
