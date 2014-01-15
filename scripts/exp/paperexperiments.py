@@ -56,7 +56,7 @@ def define_experiments():
              'def_part': partfunc,
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s" % (initCmd),
+             'initcmd': "%s --push" % (initCmd),
              'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
     
@@ -194,7 +194,7 @@ def define_experiments():
          'def_part': "twitternew-text",
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initBase),
+         'initcmd': "%s --push" % (initBase),
          'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
     
