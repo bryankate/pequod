@@ -101,9 +101,12 @@ def prepare_experiment(xname, ename):
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
 
-def kill_proc(p):
+def kill_proc(p, term = False):
     (proc, outfd, errfd) = p
-    proc.kill()
+    if term:
+        proc.terminate()
+    else:
+        proc.kill()
     if outfd:
         outfd.close()
     if errfd:
@@ -335,13 +338,8 @@ for x in exps:
       
                 if affinity:
                     pin = "numactl -C " + str(startcpu + s) + " "
-                    
-                if s == perfserver:
-                    perf = "perf record -g -o " + os.path.join(resdir, "perf-") + str(s) + ".dat "
-                else:
-                    perf = ""
     
-                full_cmd = pin + perf + servercmd + serverargs + " -kl=" + str(startport + s)
+                full_cmd = pin + servercmd + serverargs + " -kl=" + str(startport + s)
                 serverprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile))
         
             if usedb:
@@ -430,10 +428,20 @@ for x in exps:
             for p in procs:
                 wait_for_proc(p)
 
+        dbgprocs = []
+        
+        if perfserver >= 0:
+            pid = dbprocs[perfserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[perfserver][0].pid
+            full_cmd = "perf record -g -p " + str(pid) + \
+                        " -o " + os.path.join(resdir, "perf-") + str(perfserver) + ".dat "
+            dbgprocs.append(run_cmd_bg(full_cmd))
+
         if straceserver >= 0:
-            full_cmd = "strace -c -p " + str(serverprocs[straceserver][0].pid) + \
+            pid = dbprocs[straceserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[straceserver][0].pid
+            full_cmd = "strace -c -p " + str(pid) + \
                        " -o " + os.path.join(resdir, "strace_" + str(straceserver) + ".dat")
-            run_cmd_bg(full_cmd)
+            dbgprocs.append(run_cmd_bg(full_cmd))
+
 
         print "Starting app clients."
         clientprocs = []
@@ -471,6 +479,9 @@ for x in exps:
     
         for p in serverprocs + dbprocs:
             kill_proc(p)
+            
+        for p in dbgprocs:
+            kill_proc(p, True)
         
         if killall:
             Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
