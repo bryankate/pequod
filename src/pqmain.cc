@@ -44,6 +44,7 @@ static Clp_Option options[] = {
     { "partfunc", 'P', 2005, Clp_ValStringNotOption, 0 },
     { "nbacking", 'B', 2006, Clp_ValInt, 0 },
     { "writearound", 0, 2007, 0, Clp_Negate },
+    { "round-robin", 0, 2008, Clp_ValInt, 0 },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -75,7 +76,6 @@ static Clp_Option options[] = {
     { "evict-inline", 0, 3026, 0, Clp_Negate },
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
     { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
-    { "limit", 0, 3029, Clp_ValInt, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
