@@ -206,7 +206,11 @@ void msgpack_fd::write_once() {
         total += iov[i].iov_len;
     }
 
-    ssize_t amt = writev(wfd_.value(), iov, iov_count);
+    ssize_t amt;
+    if (iov_count > 1)
+        amt = writev(wfd_.value(), iov, iov_count);
+    else
+        amt = ::write(wfd_.value(), iov[0].iov_base, iov[0].iov_len);
     wrblocked_ = amt == 0 || amt == (ssize_t) -1;
 
     if (amt != 0 && amt != (ssize_t) -1) {
