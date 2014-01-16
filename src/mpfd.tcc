@@ -42,9 +42,9 @@ void msgpack_fd::write(const Json& j) {
     int old_len = w->sa.length();
     msgpack::unparse(w->sa, j);
     wrsize_ += w->sa.length() - old_len;
-    wrwake_();
-    if (!wrblocked_ && wrelem_.front().sa.length() >= wrlowat)
-        write_once();
+    if (wrwake_)
+        tamer::at_asap(std::move(wrwake_));
+    assert(!wrwake_);
 }
 
 void msgpack_fd::flush(tamer::event<bool> done) {
