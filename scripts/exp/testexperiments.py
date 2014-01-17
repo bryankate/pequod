@@ -68,6 +68,7 @@ def define_experiments():
                  'defs': [{'def_part': partfunc,
                            'def_db_type': "postgres",
                            'def_db_writearound': True,
+                           'def_db_sql_script': "scripts/exp/cache.sql",
                            'backendcmd': "%s --evict-periodic --mem-lo=20 --mem-hi=25" % (serverCmd),
                            'cachecmd': "%s --evict-periodic --mem-lo=15 --mem-hi=20" % (serverCmd),
                            'initcmd': "%s" % (initCmd),
