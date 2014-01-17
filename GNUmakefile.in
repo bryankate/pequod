@@ -61,6 +61,9 @@ all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo $(OBJDIR)/poptable
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
+	
+$(OBJDIR)/%.o: $(top_srcdir)/lib/%.cpp config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
+	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.c config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
@@ -215,7 +218,8 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
         $(OBJDIR)/facebook.o \
         $(OBJDIR)/rwmicro.o \
         $(OBJDIR)/redisadapter.o \
-        $(OBJDIR)/memcacheadapter.o
+        $(OBJDIR)/memcacheadapter.o \
+        $(OBJDIR)/MurmurHash3.o
 
 PQMAIN_OBJS = $(PQSERVER_OBJS) \
 	$(OBJDIR)/pqmain.o
