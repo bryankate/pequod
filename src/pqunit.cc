@@ -12,6 +12,7 @@
 #include "json.hh"
 #include "time.hh"
 #include "check.hh"
+#include "partitioner.hh"
 
 namespace  {
 
@@ -808,6 +809,24 @@ void test_op_sum() {
     CHECK_EQ(sum1->value(), "8");
 }
 
+void test_partitioner_analyze() {
+    pq::Partitioner* part = pq::Partitioner::make("twitternew-text", 6, -1);
+    std::vector<pq::keyrange> parts;
+
+    part->analyze("t|", "t}", 0, parts);
+    CHECK_EQ(parts.size(), 100000);
+
+    parts.clear();
+    part->analyze("t|00000000|", "t|00000000}", 0, parts);
+    CHECK_EQ(parts.size(), 1);
+    CHECK_EQ(parts.begin()->key, "t|00000000|");
+
+    parts.clear();
+    part->analyze("t|00000000|00000003", "t|00000000}", 0, parts);
+    CHECK_EQ(parts.size(), 1);
+    CHECK_EQ(parts.begin()->key, "t|00000000|00000003");
+}
+
 #if 0
 void test_op_bounds() {
     pq::Server server;
@@ -1156,6 +1175,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_max);
     ADD_TEST(test_op_sum);
     //ADD_TEST(test_op_bounds);
+    ADD_TEST(test_partitioner_analyze);
     ADD_TEST(test_iupdate);
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);

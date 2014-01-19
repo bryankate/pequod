@@ -61,11 +61,13 @@ class Table : public Datum {
     size_t count(Str key) const;
     size_t size() const;
 
-    std::pair<bool, iterator> validate(Str first, Str last, uint64_t now,
-                                       uint32_t& log, tamer::gather_rendezvous& gr);
+    inline std::pair<bool, iterator> validate(Str first, Str last,
+                                              uint64_t now, uint32_t& log,
+                                              tamer::gather_rendezvous& gr);
 
-    inline std::pair<bool, iterator> validate(Str key, uint64_t now,
-                                              uint32_t& log, tamer::gather_rendezvous& gr);
+    inline std::pair<bool, iterator> validate(Str key, uint64_t now, uint32_t& log,
+                                              tamer::gather_rendezvous& gr);
+
     void invalidate_dependents(Str key);
     void invalidate_dependents(Str first, Str last);
     void invalidate_remote(Str first, Str last);
@@ -135,6 +137,14 @@ class Table : public Datum {
 
     void add_subscription(Str first, Str last, int32_t peer);
     void remove_subscription(Str first, Str last, int32_t peer);
+
+    std::pair<bool, iterator> validate_local(Str first, Str last,
+                                             uint64_t now, uint32_t& log,
+                                             tamer::gather_rendezvous& gr);
+
+    std::pair<bool, iterator> validate_remote(Str first, Str last,
+                                              int32_t owner, uint32_t& log,
+                                              tamer::gather_rendezvous& gr);
 
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
@@ -215,6 +225,8 @@ class Server {
     inline Interconnect* interconnect(int32_t seqid) const;
     inline RemoteSink* remote_sink(int32_t seqid) const;  // ugh
     inline int32_t owner_for(const Str& key) const;
+    inline bool partitions_for(const Str& first, const Str& last,
+                               std::vector<keyrange>& parts) const;
     inline bool is_remote(int32_t owner) const;
     inline bool is_owned_public(int32_t owner) const;
     inline void set_cluster_details(int32_t me,
@@ -476,6 +488,40 @@ inline size_t Server::count(Str first, Str last) const {
     return std::distance(t.lower_bound(first), t.lower_bound(last));
 }
 
+inline std::pair<bool, Table::iterator> Table::validate(Str first, Str last,
+                                                        uint64_t now, uint32_t& log,
+                                                        tamer::gather_rendezvous& gr) {
+    std::vector<keyrange> parts;
+
+    if (server_->partitions_for(first, last, parts)) {
+        if (parts.size() > 1) {
+            parts.push_back(keyrange(last, -1));
+
+            keyrange* k = parts.data();
+            keyrange* kend = parts.data() + parts.size() - 1;
+            bool completed = true;
+
+            for (; k != kend; ++k) {
+                Table* t = &server_->table_for(k[0].key, k[1].key);
+
+                if (server_->is_remote(k->owner))
+                    completed &= t->validate_remote(k[0].key, k[1].key, k->owner, log, gr).first;
+                else
+                    completed &= t->validate_local(k[0].key, k[1].key, now, log, gr).first;
+            }
+
+            // todo: we could save the return of the first validation, and
+            // if the whole validation is ok, we can return that iterator and
+            // save a call to lower_bound
+            return std::make_pair(completed, lower_bound(first));
+        }
+        else if (server_->is_remote(parts.begin()->owner))
+            return validate_remote(first, last, parts.begin()->owner, log, gr);
+    }
+
+    return validate_local(first, last, now, log, gr);
+}
+
 inline std::pair<bool, Table::iterator> Table::validate(Str key, uint64_t now,
                                                         uint32_t& log,
                                                         tamer::gather_rendezvous& gr) {
@@ -682,6 +728,15 @@ inline int32_t Server::owner_for(const Str& key) const {
     if (!part_)
         return -1;
     return part_->owner(key);
+}
+
+inline bool Server::partitions_for(const Str& first, const Str& last,
+                                   std::vector<keyrange>& parts) const {
+    if (!part_)
+        return false;
+
+    part_->analyze(first, last, 0, parts);
+    return true;
 }
 
 inline bool Server::is_remote(int32_t owner) const {

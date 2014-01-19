@@ -320,8 +320,9 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
 
 static bool cross_table_warning = false;
 
-std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t now,
-                                                 uint32_t& log, tamer::gather_rendezvous& gr) {
+std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
+                                                       uint64_t now, uint32_t& log,
+                                                       tamer::gather_rendezvous& gr) {
     if (triecut_ && !cross_table_warning) {
         std::cerr << "warning: [" << first << "," << last << ") crosses subtable boundary\n";
         cross_table_warning = true;
@@ -333,62 +334,8 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
 
     bool completed = true;
     bool fetching = false;
-    int32_t owner = server_->owner_for(first);
 
-    // todo: if we guarantee that a subtable is all remote, we can
-    // do this check once when we create the subtable.
-    if (server_->is_remote(owner)) {
-        Str have = first;
-        auto r = t->remote_ranges_.begin_overlaps(first, last);
-
-        while(r != t->remote_ranges_.end()) {
-            if (r->ibegin() > have) {
-                if (last < r->ibegin())
-                    break;
-                else {
-                    t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
-                    fetching = true;
-                }
-            }
-            have = r->iend();
-
-            if (r->pending()) {
-                r->add_waiting(gr.make_event());
-                fetching = true;
-            }
-
-            if (r->evicted()) {
-                RemoteRange* rr = r.operator->();
-                ++r;
-
-                t->remote_ranges_.erase(*rr);
-                t->invalidate_dependents(rr->ibegin(), rr->iend());
-                server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
-                                                          server_->me(), tamer::event<>());
-                t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
-
-                fetching = true;
-                delete rr;
-            }
-            else {
-                if (!r->pending())
-                    server_->lru_touch(r.operator->());
-                ++r;
-            }
-
-            if (have >= last)
-                break;
-        }
-
-        if (have < last) {
-            t->fetch_remote(have, last, owner, gr.make_event());
-            fetching = true;
-        }
-
-        if (fetching)
-            log |= ValidateRecord::fetch_remote;
-    }
-    else if (t->njoins_ != 0) {
+    if (t->njoins_ != 0) {
         if (hn_interleaved_hack || t->njoins_ == 1) {
             auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
@@ -462,6 +409,74 @@ std::pair<bool, Table::iterator> Table::validate(Str first, Str last, uint64_t n
         if (fetching)
             log |= ValidateRecord::fetch_persisted;
     }
+
+    completed &= !fetching;
+    return std::make_pair(completed, lower_bound(first));
+}
+
+std::pair<bool, Table::iterator> Table::validate_remote(Str first, Str last,
+                                                        int32_t owner, uint32_t& log,
+                                                        tamer::gather_rendezvous& gr) {
+    if (triecut_ && !cross_table_warning) {
+        std::cerr << "warning: [" << first << "," << last << ") crosses subtable boundary\n";
+        cross_table_warning = true;
+    }
+
+    Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
+    bool completed = true;
+    bool fetching = false;
+    Str have = first;
+
+    auto r = t->remote_ranges_.begin_overlaps(first, last);
+    while(r != t->remote_ranges_.end()) {
+        if (r->ibegin() > have) {
+            if (last < r->ibegin())
+                break;
+            else {
+                t->fetch_remote(have, r->ibegin(), owner, gr.make_event());
+                fetching = true;
+            }
+        }
+        have = r->iend();
+
+        if (r->pending()) {
+            r->add_waiting(gr.make_event());
+            fetching = true;
+        }
+
+        if (r->evicted()) {
+            RemoteRange* rr = r.operator->();
+            ++r;
+
+            t->remote_ranges_.erase(*rr);
+            t->invalidate_dependents(rr->ibegin(), rr->iend());
+            server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
+                                                      server_->me(), tamer::event<>());
+            t->fetch_remote(rr->ibegin(), rr->iend(), owner, gr.make_event());
+
+            fetching = true;
+            delete rr;
+        }
+        else {
+            if (!r->pending())
+                server_->lru_touch(r.operator->());
+            ++r;
+        }
+
+        if (have >= last)
+            break;
+    }
+
+    if (have < last) {
+        t->fetch_remote(have, last, owner, gr.make_event());
+        fetching = true;
+    }
+
+    if (fetching)
+        log |= ValidateRecord::fetch_remote;
 
     completed &= !fetching;
     return std::make_pair(completed, lower_bound(first));
