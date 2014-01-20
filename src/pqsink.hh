@@ -197,6 +197,7 @@ class LoadableRange : public ServerRangeBase {
     inline void notify_waiting();
     inline void mark_evicted();
     inline bool evicted() const;
+    inline Table* table() const;
 
   protected:
     Table* table_;
@@ -428,6 +429,10 @@ inline void LoadableRange::notify_waiting() {
         waiting_.front().operator()();
         waiting_.pop_front();
     }
+}
+
+inline Table* LoadableRange::table() const {
+    return table_;
 }
 
 inline int32_t RemoteRange::owner() const {

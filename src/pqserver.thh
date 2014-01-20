@@ -112,6 +112,11 @@ class Table : public Datum {
     Server* server_;
     Table* parent_;
 
+    struct swr {
+        uint32_t remote;
+        uint32_t persisted;
+    } nsubtables_with_ranges_;
+
   public:
     uint64_t ninsert_;
     uint64_t nmodify_;
@@ -145,6 +150,16 @@ class Table : public Datum {
     std::pair<bool, iterator> validate_remote(Str first, Str last,
                                               int32_t owner, uint32_t& log,
                                               tamer::gather_rendezvous& gr);
+
+    template <typename RT, typename RM, typename RC>
+    inline void collect_ranges(Str first, Str last,
+                               local_vector<RT, 4>& ranges,
+                               RM member, RC counter);
+
+    template <typename RT, typename RM, typename RC>
+    inline void collect_subtable_ranges(Str first, Str last,
+                                        local_vector<RT, 4>& ranges,
+                                        RM member, RC counter);
 
     tamed void fetch_remote(String first, String last, int32_t owner,
                             tamer::event<> done);
@@ -530,6 +545,47 @@ inline std::pair<bool, Table::iterator> Table::validate(Str key, uint64_t now,
     memcpy(next_key.mutable_data(), key.data(), key.length());
     next_key.mutable_data()[key.length()] = 0;
     return validate(key, next_key, now, log, gr);
+}
+
+template <typename RT, typename RS, typename RC>
+inline void Table::collect_subtable_ranges(Str first, Str last,
+                                           local_vector<RT, 4>& ranges,
+                                           RS rangeset, RC counter) {
+
+    for (auto it = store_.lower_bound(first, KeyCompare());
+            it != store_.end() && it->key() < last; ++it) {
+
+        if (it->is_table()) {
+            Table& t = it->table();
+
+            if (!(t.*rangeset).empty()) {
+                for (auto rit = (t.*rangeset).begin_overlaps(first, last);
+                        rit != (t.*rangeset).end(); ++rit)
+                    ranges.push_back(rit.operator->());
+            }
+
+            if (t.nsubtables_with_ranges_.*counter)
+                t.collect_subtable_ranges(first, last, ranges, rangeset, counter);
+        }
+    }
+}
+
+template <typename RT, typename RS, typename RC>
+inline void Table::collect_ranges(Str first, Str last,
+                                  local_vector<RT, 4>& ranges,
+                                  RS rangeset, RC counter) {
+
+    for (Table* t = this; t->parent_; t = t->parent_) {
+        if (!(t->*rangeset).empty())
+            for (auto it = (t->*rangeset).begin_overlaps(first, last);
+                    it != (t->*rangeset).end(); ++it)
+                ranges.push_back(it.operator->());
+    }
+
+    if (this->nsubtables_with_ranges_.*counter)
+        collect_subtable_ranges(first, last, ranges, rangeset, counter);
+
+    std::sort(ranges.begin(), ranges.end());
 }
 
 inline void Table::unlink_source(SourceRange* r) {
