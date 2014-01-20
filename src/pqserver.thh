@@ -585,7 +585,9 @@ inline void Table::collect_ranges(Str first, Str last,
     if (this->nsubtables_with_ranges_.*counter)
         collect_subtable_ranges(first, last, ranges, rangeset, counter);
 
-    std::sort(ranges.begin(), ranges.end());
+    if (ranges.size() > 1)
+        std::sort(ranges.begin(), ranges.end(),
+                  [](RT a, RT b) { return a->ibegin() < b->ibegin(); });
 }
 
 inline void Table::unlink_source(SourceRange* r) {
