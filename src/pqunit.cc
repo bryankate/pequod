@@ -814,16 +814,16 @@ void test_partitioner_analyze() {
     std::vector<pq::keyrange> parts;
 
     part->analyze("t|", "t}", 0, parts);
-    CHECK_EQ(parts.size(), 100000);
+    CHECK_EQ(parts.size(), (uint32_t)100000);
 
     parts.clear();
     part->analyze("t|00000000|", "t|00000000}", 0, parts);
-    CHECK_EQ(parts.size(), 1);
+    CHECK_EQ(parts.size(), (uint32_t)1);
     CHECK_EQ(parts.begin()->key, "t|00000000|");
 
     parts.clear();
     part->analyze("t|00000000|00000003", "t|00000000}", 0, parts);
-    CHECK_EQ(parts.size(), 1);
+    CHECK_EQ(parts.size(), (uint32_t)1);
     CHECK_EQ(parts.begin()->key, "t|00000000|00000003");
 }
 
