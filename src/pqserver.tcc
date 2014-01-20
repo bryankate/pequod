@@ -331,12 +331,12 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
     }
 
     Table* t = this;
+    while (t->parent_->triecut_)
+        t = t->parent_;
+
     bool completed = true;
 
     if (t->njoins_ != 0) {
-        while (t->parent_->triecut_)
-            t = t->parent_;
-
         if (hn_interleaved_hack || t->njoins_ == 1) {
             auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
