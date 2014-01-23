@@ -15,6 +15,7 @@ class Server;
 class Match;
 class RangeMatch;
 class JoinRange;
+class Sink;
 class Interconnect;
 
 class ServerRangeBase {
@@ -54,7 +55,7 @@ class Evictable : public boost::intrusive::list_base_hook<> {
 
 class IntermediateUpdate : public ServerRangeBase {
   public:
-    IntermediateUpdate(Str first, Str last, SinkRange* sink, int joinpos, const Match& m, int notifier);
+    IntermediateUpdate(Str first, Str last, Sink* sink, int joinpos, const Match& m, int notifier);
 
     typedef Str endpoint_type;
     inline Str context() const;
@@ -69,12 +70,12 @@ class IntermediateUpdate : public ServerRangeBase {
     int joinpos_;
     int notifier_;
 
-    friend class SinkRange;
+    friend class Sink;
 };
 
 class Restart {
   public:
-    Restart(SinkRange* sink, int joinpos, const Match& match, int notifier);
+    Restart(Sink* sink, int joinpos, const Match& match, int notifier);
     inline Str context() const;
     inline int notifier() const;
 
@@ -83,40 +84,78 @@ class Restart {
     int joinpos_;
     int notifier_;
 
-    friend class SinkRange;
+    friend class Sink;
 };
 
-class SinkRange : public pequod_set_base_hook, public KeyHook<SinkRange>, public Evictable {
+class SinkRange : public ServerRangeBase, public Evictable {
   public:
-    SinkRange(JoinRange* jr, const RangeMatch& rm, uint64_t now);
+    SinkRange(Str first, Str last, Table* table);
     ~SinkRange();
+
+    bool validate(Str first, Str last, Server& server,
+                  uint64_t now, uint32_t& log,
+                  tamer::gather_rendezvous& gr);
+
+    bool add_sink(JoinRange* jr, Server& server,
+                  uint64_t now, uint32_t& log,
+                  tamer::gather_rendezvous& gr);
+
+    void invalidate();
+
+    virtual void evict();
+
+  public:
+    rblinks<SinkRange> rblinks_;
+  private:
+    Table* table_;
+    local_vector<Sink*, 4> sinks_;
+    uint64_t flush_at_;
+
+    inline bool validate_one(Str first, Str last,
+                             Sink* sink, Server& server,
+                             uint64_t now, uint32_t& log,
+                             tamer::gather_rendezvous& gr);
+    struct validate_args;
+    bool validate_step(validate_args& va, int joinpos);
+    bool validate_filters(validate_args& va);
+
+    friend class Sink;
+};
+
+class Sink {
+  public:
+    Sink(JoinRange* jr, SinkRange* sr);
+    ~Sink();
 
     inline void ref();
     inline void deref();
 
-    typedef Str key_type;
-    inline key_type key() const;
     inline Str ibegin() const;
     inline Str iend() const;
     inline ::interval<Str> interval() const;
 
     inline bool valid() const;
+    inline void set_valid();
     void invalidate();
     inline void prefetch() const;
 
     inline Join* join() const;
+    inline SinkRange* range() const;
     inline Table* table() const;
     inline Table& make_table_for(Str key) const;
     inline unsigned context_mask() const;
     inline Str context() const;
 
     inline bool has_expired(uint64_t now) const;
+    inline void set_expiration(uint64_t from);
 
     inline void add_datum(Datum* d) const;
     inline void remove_datum(Datum* d) const;
 
+    inline void clear_updates();
     void add_update(int joinpos, Str context, Str key, int notifier);
     void add_invalidate(Str key);
+    void add_invalidate(Str first, Str last);
     void add_restart(int joinpos, const Match& match, int notifier);
     inline bool need_update() const;
     inline bool need_restart() const;
@@ -128,18 +167,13 @@ class SinkRange : public pequod_set_base_hook, public KeyHook<SinkRange>, public
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
     inline Datum* hint() const;
 
-    virtual void evict();
-
-    friend std::ostream& operator<<(std::ostream&, const SinkRange&);
+    friend std::ostream& operator<<(std::ostream&, const Sink&);
 
     static uint64_t invalidate_hit_keys;
     static uint64_t invalidate_miss_keys;
 
-  public:
-    pequod_set_member_hook member_hook_;
   private:
-    LocalStr<24> ibegin_;
-    LocalStr<24> iend_;
+    bool valid_;
     Table* table_;
     mutable Datum* hint_;
     unsigned context_mask_;
@@ -153,6 +187,7 @@ class SinkRange : public pequod_set_base_hook, public KeyHook<SinkRange>, public
     mutable local_vector<Datum*, 12> data_;
   protected:
     JoinRange* jr_;
+    SinkRange* sr_;
 
     bool update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
                    Server& server, uint64_t now, uint32_t& log,
@@ -162,30 +197,13 @@ class SinkRange : public pequod_set_base_hook, public KeyHook<SinkRange>, public
 class JoinRange : public ServerRangeBase {
   public:
     JoinRange(Str first, Str last, Join* join);
-    ~JoinRange();
 
     inline Join* join() const;
-    inline size_t valid_ranges_size() const;
-
-    bool validate(Str first, Str last, Server& server,
-                  uint64_t now, uint32_t& log,
-                  tamer::gather_rendezvous& gr);
 
   public:
     rblinks<JoinRange> rblinks_;
   private:
     Join* join_;
-    boost::intrusive::set<SinkRange> valid_ranges_;
-    uint64_t flush_at_;
-
-    inline bool validate_one(Str first, Str last, Server& server,
-                             uint64_t now, uint32_t& log,
-                             tamer::gather_rendezvous& gr);
-    struct validate_args;
-    bool validate_step(validate_args& va, int joinpos);
-    bool validate_filters(validate_args& va);
-
-    friend class SinkRange;
 };
 
 class LoadableRange : public ServerRangeBase {
@@ -234,7 +252,7 @@ class RemoteRange : public LoadableRange, public Evictable {
  * source/sink architecture can be used to notify remote servers of
  * changes to data. It has no connection to an actual table or join.
  */
-class RemoteSink : public SinkRange {
+class RemoteSink : public Sink {
   public:
     RemoteSink(Interconnect* conn, uint32_t peer);
     ~RemoteSink();
@@ -288,60 +306,73 @@ inline Join* JoinRange::join() const {
     return join_;
 }
 
-inline size_t JoinRange::valid_ranges_size() const {
-    return valid_ranges_.size();
+inline Str Sink::ibegin() const {
+    return sr_->ibegin();
 }
 
-inline void SinkRange::ref() {
+inline Str Sink::iend() const {
+    return sr_->iend();
+}
+
+inline ::interval<Str> Sink::interval() const {
+    return sr_->interval();
+}
+
+inline void Sink::ref() {
     ++refcount_;
 }
 
-inline void SinkRange::deref() {
+inline void Sink::deref() {
     if (--refcount_ == 0 && !valid())
         delete this;
 }
 
-inline SinkRange::key_type SinkRange::key() const {
-    return ibegin_;
+inline bool Sink::valid() const {
+    return valid_;
 }
 
-inline Str SinkRange::ibegin() const {
-    return ibegin_;
+inline void Sink::set_valid() {
+    assert(!valid_);
+    valid_ = true;
 }
 
-inline Str SinkRange::iend() const {
-    return iend_;
-}
-
-inline ::interval<Str> SinkRange::interval() const {
-    return make_interval(ibegin(), iend());
-}
-
-inline bool SinkRange::valid() const {
-    return table_;
-}
-
-inline Join* SinkRange::join() const {
+inline Join* Sink::join() const {
     return jr_->join();
 }
 
-inline Table* SinkRange::table() const {
+inline SinkRange* Sink::range() const {
+    return sr_;
+}
+
+inline Table* Sink::table() const {
     return table_;
 }
 
-inline unsigned SinkRange::context_mask() const {
+inline unsigned Sink::context_mask() const {
     return context_mask_;
 }
 
-inline Str SinkRange::context() const {
+inline Str Sink::context() const {
     return context_;
 }
 
-inline bool SinkRange::has_expired(uint64_t now) const {
+inline void Sink::clear_updates() {
+    while (IntermediateUpdate* iu = updates_.unlink_leftmost_without_rebalance())
+        delete iu;
+    for (auto it = restarts_.begin(); it != restarts_.end(); ++it)
+        delete *it;
+}
+
+inline bool Sink::has_expired(uint64_t now) const {
     return expires_at_ && expires_at_ < now;
 }
 
-inline void SinkRange::add_datum(Datum* d) const {
+inline void Sink::set_expiration(uint64_t from) {
+    if (!jr_->join()->maintained())
+        expires_at_ = from + jr_->join()->staleness();
+}
+
+inline void Sink::add_datum(Datum* d) const {
     assert(d->owner() == this);
     uintptr_t pos = data_free_;
     if (pos == uintptr_t(-1)) {
@@ -354,22 +385,22 @@ inline void SinkRange::add_datum(Datum* d) const {
     d->owner_position_ = pos;
 }
 
-inline void SinkRange::remove_datum(Datum* d) const {
+inline void Sink::remove_datum(Datum* d) const {
     assert(d->owner() == this
            && (size_t) d->owner_position_ < (size_t) data_.size());
     data_[d->owner_position_] = (Datum*) data_free_;
     data_free_ = d->owner_position_;
 }
 
-inline bool SinkRange::need_update() const {
+inline bool Sink::need_update() const {
     return !updates_.empty();
 }
 
-inline bool SinkRange::need_restart() const {
+inline bool Sink::need_restart() const {
     return !restarts_.empty();
 }
 
-inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
+inline void Sink::update_hint(const ServerStore& store, ServerStore::iterator hint) const {
 #if HAVE_HINT_ENABLED
     Datum* hd = hint == store.end() ? 0 : hint.operator->();
     if (hd)
@@ -383,12 +414,12 @@ inline void SinkRange::update_hint(const ServerStore& store, ServerStore::iterat
 #endif
 }
 
-inline Datum* SinkRange::hint() const {
+inline Datum* Sink::hint() const {
     return hint_ && hint_->valid() ? hint_ : 0;
 }
 
-inline bool operator<(const SinkRange& a, const SinkRange& b) {
-    return a.key() < b.key();
+inline bool operator<(const Sink& a, const Sink& b) {
+    return a.ibegin() < b.ibegin();
 }
 
 inline Str IntermediateUpdate::context() const {

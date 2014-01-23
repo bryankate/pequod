@@ -159,7 +159,6 @@ void test_celebrity() {
     server.validate("t|00001|0000000001", "t|00001}");
     //for (auto it = server.begin(); it != server.end(); ++it)
     //    std::cerr << "  " << *it << "\n";
-    server.validate("t|00001|0000000001", "t|00001}");
     CHECK_EQ(server.count("t|00001|0000000001", "t|00001}"), size_t(4));
 
     server.insert("p|10000|0000000022", "This should appear in t|00001");
@@ -827,6 +826,51 @@ void test_partitioner_analyze() {
     CHECK_EQ(parts.begin()->key, "t|00000000|00000003");
 }
 
+void test_cross() {
+    pq::Server server;
+    pq::Join j1, j2;
+
+    CHECK_TRUE(j1.assign_parse(
+        "t|<user>|<time>|<poster> = "
+        "copy p|<poster>|<time> "
+        "using s|<user>|<poster> "
+        "where user:5t, time:10, poster:5t"));
+    j1.ref();
+    server.add_join("t|", "t}", &j1);
+
+    CHECK_TRUE(j2.assign_parse(
+        "u|<user>|<time>|<poster> = "
+        "copy p|<poster>|<time> "
+        "using s|<user>|<poster> "
+        "where user:5, time:10, poster:5"));
+    j2.ref();
+    server.add_join("u|", "u}", &j2);
+
+    std::pair<const char*, const char*> values[] = {
+        {"s|00001|00002", "1"},
+        {"s|00001|10000", "1"},
+        {"s|00002|10000", "1"},
+        {"p|00002|0000000000", "Should not appear"},
+        {"p|00002|0000000001", "Hello,"},
+        {"p|00002|0000000022", "Which is awesome"},
+        {"p|10000|0000000010", "My name is"},
+        {"p|10000|0000000018", "Jennifer Jones"},
+        {"p|10001|0000000011", "Not whatever the next thing claims"},
+        {"p|10001|0000000019", ", Idiot,"}
+    };
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second);
+
+    // crosses subtables
+    server.validate("t|00001|0000000000", "t|00002}");
+    CHECK_EQ(server.count("t|00001|0000000000", "t|00002}"), size_t(7));
+
+    // crosses top-level tables
+    // todo: not supported right now...
+    //server.validate("t|00001|0000000000", "u|00002}");
+    //CHECK_EQ(server.count("t|00001|0000000000", "u|00002}"), size_t(14));
+}
+
 #if 0
 void test_op_bounds() {
     pq::Server server;
@@ -1176,6 +1220,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_op_sum);
     //ADD_TEST(test_op_bounds);
     ADD_TEST(test_partitioner_analyze);
+    ADD_TEST(test_cross);
     ADD_TEST(test_iupdate);
     ADD_TEST(test_iupdate2);
     ADD_TEST(test_iupdate3);

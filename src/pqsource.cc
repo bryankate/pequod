@@ -44,7 +44,7 @@ void SourceRange::take_results(SourceRange& r) {
     r.results_.clear();
 }
 
-void SourceRange::remove_sink(SinkRange* sink, Str context) {
+void SourceRange::remove_sink(Sink* sink, Str context) {
     assert(join() == sink->join());
     for (int i = 0; i != results_.size(); )
         if (results_[i].sink == sink && results_[i].context == context) {
@@ -183,7 +183,7 @@ bool SubscribedRange::can_evict() const {
     return true;
 }
 
-void CopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String&, int notifier) const {
+void CopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String&, int notifier) const {
 #if HAVE_VALUE_SHARING_ENABLED
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) {
              return notifier >= 0 ? src->value() : erase_marker();
@@ -199,13 +199,13 @@ bool CopySourceRange::can_evict() const {
     return true;
 }
 
-void CountSourceRange::notify(Str sink_key, SinkRange* sink, const Datum*, const String&, int notifier) const {
+void CountSourceRange::notify(Str sink_key, Sink* sink, const Datum*, const String&, int notifier) const {
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum* dst) {
             return String(notifier + (dst ? dst->value().to_i() : 0));
         });
 }
 
-void MinSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const {
+void MinSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const {
     sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst || src->value() < dst->value())
                  return src->value();
@@ -217,7 +217,7 @@ void MinSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
         });
 }
 
-void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const {
+void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const {
     sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst || dst->value() < src->value())
                 return src->value();
@@ -229,7 +229,7 @@ void MaxSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
         });
 }
 
-void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int) const {
+void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int) const {
     long diff = src->value().to_i() - old_value.to_i();
     sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
             if (!dst)
@@ -241,7 +241,7 @@ void SumSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, con
         });
 }
 
-void BoundedCopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& oldval, int notifier) const {
+void BoundedCopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& oldval, int notifier) const {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) -> String {
@@ -250,7 +250,7 @@ void BoundedCopySourceRange::notify(Str sink_key, SinkRange* sink, const Datum* 
 }
 
 
-void BoundedCountSourceRange::notify(Str sink_key, SinkRange* sink, const Datum* src, const String& oldval, int notifier) const {
+void BoundedCountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& oldval, int notifier) const {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
     if (!notifier)

@@ -336,7 +336,7 @@ int Join::pattern_subtable_length(int i) const {
 }
 
 SourceRange* Join::make_source(Server& server, const Match& m,
-                               Str ibegin, Str iend, SinkRange* sink) {
+                               Str ibegin, Str iend, Sink* sink) {
     SourceRange::parameters p{server, this, nsource() - 1, m,
             ibegin, iend, sink};
     if (jvt() == jvt_copy_last)

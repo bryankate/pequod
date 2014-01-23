@@ -148,7 +148,7 @@ void Table::add_source(SourceRange* r) {
     source_ranges_.insert(*r);
 }
 
-void Table::remove_source(Str first, Str last, SinkRange* sink, Str context) {
+void Table::remove_source(Str first, Str last, Sink* sink, Str context) {
     for (auto it = source_ranges_.begin_overlaps(first, last);
 	 it != source_ranges_.end(); ) {
         SourceRange* source = it.operator->();
@@ -263,7 +263,7 @@ void Table::erase(Str key) {
     ++nerase_;
 }
 
-std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const SinkRange* sink, ServerStore::insert_commit_data& cd) {
+std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink* sink, ServerStore::insert_commit_data& cd) {
     assert(name() && sink);
     assert(!triecut_ || key.length() < triecut_);
     std::pair<ServerStore::iterator, bool> p;
@@ -287,7 +287,7 @@ std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink
 
 void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
                           const store_type::insert_commit_data& cd,
-                          Datum* d, Str key, const SinkRange* sink,
+                          Datum* d, Str key, const Sink* sink,
                           String value) {
     SourceRange::notify_type n = SourceRange::notify_update;
     if (!is_marker(value)) {
@@ -305,7 +305,7 @@ void Table::finish_modify(std::pair<ServerStore::iterator, bool> p,
             goto done;
     } else if (is_invalidate_marker(value)) {
         invalidate_dependents(d->key());
-        const_cast<SinkRange*>(sink)->add_invalidate(key);
+        const_cast<Sink*>(sink)->add_invalidate(key);
         goto done;
     } else
         goto done;
@@ -337,6 +337,8 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
     bool completed = true;
 
     if (t->njoins_ != 0) {
+        //std::cerr << "validating join range [" << first << ", " << last << ")" << std::endl;
+
         if (hn_interleaved_hack || t->njoins_ == 1) {
             auto it = store_.lower_bound(first, KeyCompare());
             auto itx = it;
@@ -348,13 +350,53 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                     && !itx->owner()->need_restart()
                     && !itx->owner()->need_update()) {
                 if (itx->owner()->join()->maintained())
-                    server_->lru_touch(const_cast<SinkRange*>(itx->owner()));
+                    server_->lru_touch(const_cast<SinkRange*>(itx->owner()->range()));
                 return std::make_pair(true, iterator(this, it, this));
             }
         }
-        for (auto it = t->join_ranges_.begin_overlaps(first, last);
-                it != t->join_ranges_.end(); ++it)
-            completed &= it->validate(first, last, *server_, now, log, gr);
+
+        local_vector<SinkRange*, 4> ranges;
+        collect_ranges(first, last, ranges,
+                       &Table::sink_ranges_, &Table::swr::sink);
+
+        Str have = first;
+        uint32_t inserted = 0;
+
+        auto it = ranges.begin();
+        while (have < last) {
+            SinkRange* sr;
+
+            if (it != ranges.end() && have >= (*it)->ibegin()) {
+                sr = *it;
+                //std::cerr << "  existing sink range: " << sr->interval() << std::endl;
+                completed &= sr->validate(first, last, *server_, now, log, gr);
+                ++it;
+            }
+            else {
+                Str sr_last = last;
+                if (it != ranges.end() && sr_last > (*it)->ibegin())
+                    sr_last = (*it)->ibegin();
+
+                sr = new SinkRange(have, sr_last, this);
+                for (auto j = t->join_ranges_.begin_overlaps(first, last);
+                        j != t->join_ranges_.end(); ++j) {
+
+                    //std::cerr << "  adding join to sink range: " << j->interval()
+                    //          << " -> " << sr->interval() << std::endl;
+                    completed &= sr->add_sink(j.operator->(), *server_, now, log, gr);
+                }
+
+                sink_ranges_.insert(*sr);
+                server_->lru_add(sr);
+                ++inserted;
+            }
+
+            have = sr->iend();
+        }
+
+        if (inserted)
+            for (t = parent_; t; t = t->parent_)
+                t->nsubtables_with_ranges_.sink += inserted;
     }
     else if (server_->persistent_store()) {
         Str have = first;
@@ -412,8 +454,9 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
             ++inserted;
         }
 
-        for (t = parent_; t; t = t->parent_)
-            t->nsubtables_with_ranges_.persisted += inserted;
+        if (inserted)
+            for (t = parent_; t; t = t->parent_)
+                t->nsubtables_with_ranges_.persisted += inserted;
 
         if (fetching)
             log |= ValidateRecord::fetch_persisted;
@@ -730,13 +773,15 @@ void Table::invalidate_remote(Str first, Str last) {
 }
 
 void Table::evict_sink(SinkRange* sink) {
-    assert(!parent_->triecut_);
-
     //std::cerr << "evicting sink range " << sink->interval() << std::endl;
 
-    uint64_t before = SinkRange::invalidate_hit_keys;
-    sink->invalidate(); // lru removal is handled within
-    nevict_sink_ += (SinkRange::invalidate_hit_keys - before);
+    uint64_t before = Sink::invalidate_hit_keys;
+
+    sink_ranges_.erase(*sink);
+    server_->lru_remove(sink);
+    delete sink; // sinks invalidated within
+
+    nevict_sink_ += (Sink::invalidate_hit_keys - before);
 }
 
 void Table::add_subscription(Str first, Str last, int32_t peer) {
@@ -854,15 +899,19 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     done(it.second);
 }
 
-void Table::add_stats(Json& j) const {
+void Table::add_stats(Json& j) {
     j["ninsert"] += ninsert_;
     j["nmodify"] += nmodify_;
     j["nmodify_nohint"] += nmodify_nohint_;
     j["nerase"] += nerase_;
     j["store_size"] += store_.size();
     j["source_ranges_size"] += source_ranges_.size();
-    for (auto& jr : join_ranges_)
-        j["sink_ranges_size"] += jr.valid_ranges_size();
+
+    local_vector<SinkRange*, 4> sinks;
+    collect_ranges(name(), name() + "}", sinks,
+                   &Table::sink_ranges_, &Table::swr::sink);
+
+    j["sink_ranges_size"] += sinks.size();
     j["remote_ranges_size"] += remote_ranges_.size();
     j["nvalidate"] += nvalidate_;
     j["nevict_persistent"] += nevict_persistent_;
@@ -958,10 +1007,10 @@ Json Server::stats() const {
         answer.set("source_allocated_key_bytes", SourceRange::allocated_key_bytes);
     if (ServerRangeBase::allocated_key_bytes)
         answer.set("sink_allocated_key_bytes", ServerRangeBase::allocated_key_bytes);
-    if (SinkRange::invalidate_hit_keys)
-        answer.set("invalidate_hits", SinkRange::invalidate_hit_keys);
-    if (SinkRange::invalidate_miss_keys)
-        answer.set("invalidate_misses", SinkRange::invalidate_miss_keys);
+    if (Sink::invalidate_hit_keys)
+        answer.set("invalidate_hits", Sink::invalidate_hit_keys);
+    if (Sink::invalidate_miss_keys)
+        answer.set("invalidate_misses", Sink::invalidate_miss_keys);
     return answer.set("tables", tables);
 }
 

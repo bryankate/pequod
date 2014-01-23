@@ -13,7 +13,7 @@ class ErrorHandler;
 namespace pq {
 class Join;
 class SourceRange;
-class SinkRange;
+class Sink;
 class Server;
 class Table;
 
@@ -162,7 +162,7 @@ class Join {
     inline const Json& jvt_config() const;
 
     SourceRange* make_source(Server& server, const Match& m,
-                             Str ibegin, Str iend, SinkRange* sink);
+                             Str ibegin, Str iend, Sink* sink);
 
     bool assign_parse(Str str, ErrorHandler* errh = 0);
 

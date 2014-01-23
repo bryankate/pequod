@@ -74,14 +74,14 @@ class Table : public Datum {
 
     void add_source(SourceRange* r);
     inline void unlink_source(SourceRange* r);
-    void remove_source(Str first, Str last, SinkRange* sink, Str context);
+    void remove_source(Str first, Str last, Sink* sink, Str context);
     void add_join(Str first, Str last, Join* j, ErrorHandler* errh);
 
     local_iterator insert(Table& t);
     void insert(Str key, String value);
     tamed void insert(Str key, String value, tamer::event<> done);
     template <typename F>
-    inline void modify(Str key, const SinkRange* sink, const F& func);
+    inline void modify(Str key, const Sink* sink, const F& func);
     void erase(Str key);
     tamed void erase(Str key, tamer::event<> done);
     inline iterator erase(iterator it);
@@ -94,7 +94,7 @@ class Table : public Datum {
     void evict_remote(RemoteRange* rr);
     void evict_sink(SinkRange* sink);
 
-    void add_stats(Json& j) const;
+    void add_stats(Json& j);
     void print_sources(std::ostream& stream) const;
 
   private:
@@ -102,6 +102,7 @@ class Table : public Datum {
     int triecut_;
     interval_tree<SourceRange> source_ranges_;
     interval_tree<JoinRange> join_ranges_;
+    interval_tree<SinkRange> sink_ranges_;
     interval_tree<RemoteRange> remote_ranges_;
     interval_tree<PersistedRange> persisted_ranges_;
     enum { subtable_hash_size = 8 };
@@ -113,6 +114,7 @@ class Table : public Datum {
     Table* parent_;
 
     struct swr {
+        uint32_t sink;
         uint32_t remote;
         uint32_t persisted;
     } nsubtables_with_ranges_;
@@ -133,8 +135,8 @@ class Table : public Datum {
     inline uint64_t subtable_hash_for(Str key) const;
     Table* next_table_for(Str key);
     Table* make_next_table_for(Str key);
-    std::pair<store_type::iterator, bool> prepare_modify(Str key, const SinkRange* sink, store_type::insert_commit_data& cd);
-    void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const SinkRange* sink, String value);
+    std::pair<store_type::iterator, bool> prepare_modify(Str key, const Sink* sink, store_type::insert_commit_data& cd);
+    void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const Sink* sink, String value);
     void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
     bool hard_flush_for_pull(uint64_t now);
     inline void invalidate_dependents_local(Str first, Str last);
@@ -373,7 +375,7 @@ inline void Table::prefetch() const {
     ::prefetch(&store_);
 }
 
-inline void SinkRange::prefetch() const {
+inline void Sink::prefetch() const {
     ::prefetch(&table_);
 }
 
@@ -456,7 +458,7 @@ inline Table& Table::make_table_for(Str first, Str last) {
     return *t;
 }
 
-inline Table& SinkRange::make_table_for(Str key) const {
+inline Table& Sink::make_table_for(Str key) const {
     return table_->make_table_for(key);
 }
 
@@ -595,7 +597,7 @@ inline void Table::unlink_source(SourceRange* r) {
 }
 
 template <typename F>
-inline void Table::modify(Str key, const SinkRange* sink, const F& func) {
+inline void Table::modify(Str key, const Sink* sink, const F& func) {
     store_type::insert_commit_data cd;
     std::pair<ServerStore::iterator, bool> p = prepare_modify(key, sink, cd);
     Datum* d = p.second ? NULL : p.first.operator->();

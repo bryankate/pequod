@@ -5,7 +5,7 @@
 #include "local_str.hh"
 
 namespace pq {
-class SinkRange;
+class Sink;
 class Table;
 
 typedef boost::intrusive::set_base_hook<
@@ -27,7 +27,7 @@ class Datum : public pequod_set_base_hook, public KeyHook<Datum> {
     static const char table_marker[];
 
     explicit inline Datum(Str key);
-    inline Datum(Str key, const SinkRange* owner);
+    inline Datum(Str key, const Sink* owner);
     inline Datum(Str key, const String& value);
 
     inline bool is_table() const;
@@ -37,7 +37,7 @@ class Datum : public pequod_set_base_hook, public KeyHook<Datum> {
     inline bool valid() const;
     inline void invalidate();
 
-    inline const SinkRange* owner() const;
+    inline const Sink* owner() const;
 
     inline void ref();
     inline void deref();
@@ -55,11 +55,11 @@ class Datum : public pequod_set_base_hook, public KeyHook<Datum> {
     String value_;
     int refcount_;
     int owner_position_;
-    const SinkRange* owner_;
+    const Sink* owner_;
   public:
     pequod_set_member_hook member_hook_;
 
-    friend class SinkRange;
+    friend class Sink;
 };
 
 struct KeyCompare {
@@ -104,7 +104,7 @@ inline Datum::Datum(Str key)
     : key_(key), refcount_(0), owner_{nullptr} {
 }
 
-inline Datum::Datum(Str key, const SinkRange* owner)
+inline Datum::Datum(Str key, const Sink* owner)
     : key_{key}, refcount_{0}, owner_{owner} {
 }
 
@@ -126,7 +126,7 @@ inline void Datum::invalidate() {
         delete this;
 }
 
-inline const SinkRange* Datum::owner() const {
+inline const Sink* Datum::owner() const {
     return owner_;
 }
 

@@ -26,7 +26,7 @@ class SourceRange {
         const Match& match;
         Str first;
         Str last;
-        SinkRange* sink;
+        Sink* sink;
     };
 
     SourceRange(const parameters& p);
@@ -47,7 +47,7 @@ class SourceRange {
     inline Join* join() const;
     inline int joinpos() const;
     void take_results(SourceRange& r);
-    void remove_sink(SinkRange* sink, Str context);
+    void remove_sink(Sink* sink, Str context);
     virtual bool can_evict() const;
 
     enum notify_type {
@@ -70,7 +70,7 @@ class SourceRange {
   protected:
     struct result {
         LocalStr<12> context;
-        SinkRange* sink;
+        Sink* sink;
     };
 
     Join* join_;
@@ -78,7 +78,7 @@ class SourceRange {
     mutable local_vector<result, 4> results_;
 
     virtual void kill();
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const = 0;
 };
 
 
@@ -88,7 +88,7 @@ class InvalidatorRange : public SourceRange {
     virtual void notify(const Datum* src, const String& old_value, int notifier) const;
     virtual bool can_evict() const;
   protected:
-    virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
+    virtual void notify(Str, Sink*, const Datum*, const String&, int) const {}
 };
 
 
@@ -102,7 +102,7 @@ class SubscribedRange : public SourceRange {
     virtual bool can_evict() const;
   protected:
     virtual void kill();
-    virtual void notify(Str, SinkRange*, const Datum*, const String&, int) const {}
+    virtual void notify(Str, Sink*, const Datum*, const String&, int) const {}
   private:
     Server& server_;
 };
@@ -113,7 +113,7 @@ class CopySourceRange : public SourceRange {
     inline CopySourceRange(const parameters& p);
     virtual bool can_evict() const;
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 
@@ -121,28 +121,28 @@ class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
 };
 
 class Bounds {
@@ -165,7 +165,7 @@ class BoundedCopySourceRange : public SourceRange {
   public:
     inline BoundedCopySourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
@@ -175,7 +175,7 @@ class BoundedCountSourceRange : public SourceRange {
   public:
     inline BoundedCountSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, SinkRange* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
   private:
     Bounds bounds_;
 };
