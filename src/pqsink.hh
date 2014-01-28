@@ -361,6 +361,7 @@ inline void Sink::clear_updates() {
         delete iu;
     for (auto it = restarts_.begin(); it != restarts_.end(); ++it)
         delete *it;
+    restarts_.clear();
 }
 
 inline bool Sink::has_expired(uint64_t now) const {
