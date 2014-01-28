@@ -424,6 +424,8 @@ bool Sink::restart(Str first, Str last, Server& server,
 
     for (int32_t i = 0; i < nrestart; ++i) {
         Restart* r = restarts_.front();
+        restarts_.pop_front();
+
         SinkRange::validate_args va(first, last, server, now, this,
                                     r->notifier_, log, gr);
         join->assign_context(va.rm.match, r->context_);
@@ -432,7 +434,6 @@ bool Sink::restart(Str first, Str last, Server& server,
         //std::cerr << "RESTART: [" << va.rm.first << ", " << va.rm.last
         //          << ") match: " << va.rm.match << std::endl;
         complete &= sr_->validate_step(va, r->joinpos_);
-        restarts_.pop_front();
         delete r;
     }
 
@@ -447,12 +448,20 @@ void Sink::invalidate() {
             data_[pos] = 0;
         }
 
+        if (hint_) {
+            hint_->deref();
+            hint_ = nullptr;
+        }
+
         Table* t = table();
         for (auto d : data_)
             if (d) {
                 t->invalidate_erase(d);
                 ++invalidate_hit_keys;
             }
+
+        data_.clear();
+        data_free_ = uintptr_t(-1);
 
         clear_updates();
         valid_ = false;
