@@ -9,8 +9,20 @@ namespace pq {
 
 uint64_t SourceRange::allocated_key_bytes = 0;
 
+BloomFilter* make_bloom(Server& server, Str first, Str last) {
+    BloomFilter* bloom = new BloomFilter(1 << 18, 0.001);
+
+    auto it = server.table_for(first, last).lower_bound(first);
+    auto itend = it.table_end();
+
+    for (; it != itend; ++it)
+        bloom->add(it->key().data(), it->key().length());
+
+    return bloom;
+}
+
 SourceRange::SourceRange(const parameters& p)
-    : ibegin_(p.first), iend_(p.last), join_(p.join), joinpos_(p.joinpos) {
+    : ibegin_(p.first), iend_(p.last), join_(p.join), joinpos_(p.joinpos), purged_(false) {
     assert(table_name(p.first, p.last));
     if (!ibegin_.is_local())
         allocated_key_bytes += ibegin_.length();
@@ -57,15 +69,16 @@ void SourceRange::remove_sink(Sink* sink, Str context) {
         kill();
 }
 
-bool SourceRange::can_evict() const {
-    return false;
+bool SourceRange::purge(Server&) {
+    purged_ = true;
+    return true;
 }
 
 bool SourceRange::check_match(Str key) const {
     return join_->source(joinpos_).match(key);
 }
 
-void SourceRange::notify(const Datum* src, const String& old_value, int notifier) const {
+void SourceRange::notify(const Datum* src, const String& old_value, int notifier) {
     using std::swap;
     result* endit = results_.end();
     for (result* it = results_.begin(); it != endit; ) {
@@ -116,8 +129,7 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     return stream << "}";
 }
 
-
-void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const {
+void InvalidatorRange::notify(const Datum* d, const String&, int notifier) {
     using std::swap;
 
     if (!notifier)
@@ -138,11 +150,7 @@ void InvalidatorRange::notify(const Datum* d, const String&, int notifier) const
     }
 
     if (results_.empty())
-        const_cast<InvalidatorRange*>(this)->kill();
-}
-
-bool InvalidatorRange::can_evict() const {
-    return true;
+        kill();
 }
 
 void SubscribedRange::invalidate() {
@@ -164,61 +172,100 @@ bool SubscribedRange::check_match(Str) const {
     return true;
 }
 
-void SubscribedRange::notify(const Datum* src, const String&, int notifier) const {
+void SubscribedRange::notify(const Datum* src, const String&, int notifier) {
     for (result* it = results_.begin(); it != results_.end(); ++it) {
         RemoteSink* sink = reinterpret_cast<RemoteSink*>(it->sink);
-        switch(notifier) {
-            case SourceRange::notify_erase:
-                sink->conn()->notify_erase(src->key(), tamer::event<>());
-                break;
-            case SourceRange::notify_insert:
-            case SourceRange::notify_update:
-                sink->conn()->notify_insert(src->key(), src->value(), tamer::event<>());
-                break;
-        }
+        if (notifier < 0)
+            sink->conn()->notify_erase(src->key(), tamer::event<>());
+        else
+            sink->conn()->notify_insert(src->key(), src->value(), tamer::event<>());
     }
 }
 
-bool SubscribedRange::can_evict() const {
-    return true;
-}
-
-void CopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String&, int notifier) const {
+void CopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                             const String&, int notifier) {
 #if HAVE_VALUE_SHARING_ENABLED
     sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) {
              return notifier >= 0 ? src->value() : erase_marker();
         });
 #else
     sink->table()->modify(sink_key, sink, [=](Datum*) {
-             return notifier >= 0 ? String(src->value().data(), src->value().length()) : erase_marker();
+             return notifier >= 0 ? String(src->value().data(), src->value().length())
+                                  : erase_marker();
         });
 #endif
 }
 
-bool CopySourceRange::can_evict() const {
+bool CountSourceRange::purge(Server& server) {
+    if (!bloom_)
+        bloom_ = make_bloom(server, ibegin(), iend());
+    purged_ = true;
     return true;
 }
 
-void CountSourceRange::notify(Str sink_key, Sink* sink, const Datum*, const String&, int notifier) const {
-    sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum* dst) {
+void CountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                              const String&, int notifier) {
+    if (bloom_) {
+        switch(notifier) {
+            case notify_erase:
+                // we can only get this notifier if the source key is present,
+                // meaning it was added after eviction or it belonged to a
+                // range that overlaps with this source but was not evicted.
+                // it is safe to decrement the counter in this case.
+                goto mod;
+
+            case notify_insert:
+                // we can count it if it is a new insertion
+                if (!bloom_->check(src->key().data(), src->key().length())) {
+                    bloom_->add(src->key().data(), src->key().length());
+                    goto mod;
+                }
+                break;
+
+            case notify_update:
+                // we can only get an update notification for a key that
+                // is present in the store and already counted. ignore it.
+                return;
+
+            case notify_erase_missing:
+                // an erase command was issued by the client but the key
+                // was not in the store. if it is not in the filter
+                // then it is spurious and can be ignored
+                if (!bloom_->check(src->key().data(), src->key().length()))
+                    return;
+                break;
+        }
+
+        // we cannot guarantee correctness, so invalidate the source
+        invalidate();
+        return;
+    }
+
+    mod:
+    sink->make_table_for(sink_key).modify(sink_key, sink,
+        [=](Datum* dst) {
             return String(notifier + (dst ? dst->value().to_i() : 0));
         });
 }
 
-void MinSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const {
-    sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
+void MinSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                            const String& old_value, int notifier) {
+    sink->make_table_for(sink_key).modify(sink_key, sink,
+        [&](Datum* dst) -> String {
             if (!dst || src->value() < dst->value())
-                 return src->value();
+                return src->value();
             else if (old_value == dst->value()
-                     && (notifier < 0 || src->value() != old_value))
+                    && (notifier < 0 || src->value() != old_value))
                 return invalidate_marker();
             else
                 return unchanged_marker();
         });
 }
 
-void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const {
-    sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
+void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                            const String& old_value, int notifier) {
+    sink->make_table_for(sink_key).modify(sink_key, sink,
+        [&](Datum* dst) -> String {
             if (!dst || dst->value() < src->value())
                 return src->value();
             else if (old_value == dst->value()
@@ -229,9 +276,55 @@ void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const St
         });
 }
 
-void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int) const {
+bool SumSourceRange::purge(Server& server) {
+    if (!bloom_)
+        bloom_ = make_bloom(server, ibegin(), iend());
+    purged_ = true;
+    return true;
+}
+
+void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                            const String& old_value, int notifier) {
+    if (bloom_) {
+        switch(notifier) {
+            case notify_erase:
+                // we can only get this notifier if the source key is present,
+                // meaning it was added after eviction or it belonged to a
+                // range that overlaps with this source but was not evicted.
+                // it is safe to decrement the sum in this case
+                goto mod;
+
+            case notify_insert:
+                // we can count it if it is a new insertion
+                if (!bloom_->check(src->key().data(), src->key().length())) {
+                    bloom_->add(src->key().data(), src->key().length());
+                    goto mod;
+                }
+                break;
+
+            case notify_update:
+                // we can only get an update notification for a key
+                // that is in the store. handle it accordingly.
+                goto mod;
+
+            case notify_erase_missing:
+                // an erase command was issued by the client but the key
+                // was not in the store. if it is not in the filter
+                // then it is spurious and can be ignored
+                if (!bloom_->check(src->key().data(), src->key().length()))
+                    return;
+                break;
+        }
+
+        // we cannot guarantee correctness, so invalidate the source
+        invalidate();
+        return;
+    }
+
+    mod:
     long diff = src->value().to_i() - old_value.to_i();
-    sink->make_table_for(sink_key).modify(sink_key, sink, [&](Datum* dst) -> String {
+    sink->make_table_for(sink_key).modify(sink_key, sink,
+        [&](Datum* dst) -> String {
             if (!dst)
                 return src->value();
             else if (diff)
@@ -241,23 +334,20 @@ void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const St
         });
 }
 
-void BoundedCopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& oldval, int notifier) const {
+void BoundedCopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                                    const String& oldval, int notifier) {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
-    sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum*) -> String {
-            return notifier >= 0 ? src->value() : erase_marker();
-        });
+    CopySourceRange::notify(sink_key, sink, src, oldval, notifier);
 }
 
-
-void BoundedCountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src, const String& oldval, int notifier) const {
+void BoundedCountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
+                                     const String& oldval, int notifier) {
     if (!bounds_.check_bounds(src->value(), oldval, notifier))
         return;
     if (!notifier)
         return;
-    sink->make_table_for(sink_key).modify(sink_key, sink, [=](Datum* dst) {
-            return String(notifier + (dst ? dst->value().to_i() : 0));
-        });
+    CountSourceRange::notify(sink_key, sink, src, oldval, notifier);
 }
 
 } // namespace pq

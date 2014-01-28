@@ -260,10 +260,19 @@ void Table::erase(Str key) {
     auto it = store_.find(key, KeyCompare());
     if (it != store_.end())
         erase(iterator(this, it));
+    else if (enable_memory_tracking) {
+        // if eviction is enabled, the key being erased might have already
+        // been evicted. generate a special notification because some
+        // source ranges (e.g. CopySourceRange) can handle this case.
+        // the notification will only be passed to sources that cover evicted ranges
+        Datum tmp(key, erase_marker());
+        notify(&tmp, erase_marker(), SourceRange::notify_erase_missing);
+    }
     ++nerase_;
 }
 
-std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink* sink, ServerStore::insert_commit_data& cd) {
+std::pair<ServerStore::iterator, bool> Table::prepare_modify(Str key, const Sink* sink,
+                                                             ServerStore::insert_commit_data& cd) {
     assert(name() && sink);
     assert(!triecut_ || key.length() < triecut_);
     std::pair<ServerStore::iterator, bool> p;
@@ -435,8 +444,10 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 // todo: do not invalidate remote sinks - some peers might have the range
                 // and a scan by another peer will invalidate all the others!
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
-                t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
+                t->nevict_persistent_ += t->erase_purge(pr->ibegin(), pr->iend());
+                server_->lru_remove(pr);
 
+                t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
                 fetching = true;
                 delete pr;
             }
@@ -504,12 +515,14 @@ std::pair<bool, Table::iterator> Table::validate_remote(Str first, Str last,
         if (rr->evicted()) {
             Table* rrt = rr->table();
 
-            rrt->remote_ranges_.erase(*rr);
+            nevict_remote_ += rrt->erase_purge(rr->ibegin(), rr->iend());
             rrt->invalidate_dependents(rr->ibegin(), rr->iend());
+            rrt->remote_ranges_.erase(*rr);
 
             for (Table* t = rrt->parent_; t; t = t->parent_)
                 --t->nsubtables_with_ranges_.remote;
 
+            server_->lru_remove(rr);
             server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
                                                       server_->me(), tamer::event<>());
 
@@ -545,6 +558,10 @@ void Table::notify(Datum* d, const String& old_value, SourceRange::notify_type n
         // SourceRange::notify() might remove the SourceRange from the tree
         SourceRange* source = it.operator->();
         ++it;
+        if (enable_memory_tracking &&
+            notifier == SourceRange::notify_erase_missing &&
+            !source->purged())
+            continue;
         if (source->check_match(key))
             source->notify(d, old_value, notifier);
     }
@@ -634,41 +651,37 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
 
 void Table::evict_persisted(PersistedRange* pr) {
     assert(!pr->pending());
-    assert(!pr->evicted());
+    assert(!nsubtables_with_ranges_.persisted);
 
     uint32_t kept = 0;
-    auto sit = source_ranges_.begin_overlaps(pr->ibegin(), pr->iend());
-    while(sit != source_ranges_.end()) {
-        SourceRange* sr = sit.operator->();
-        ++sit;
+    Table* t = this;
 
-        if (!sr->can_evict())
-            sr->invalidate();
-        else
+    retry:
+    for (auto sit = t->source_ranges_.begin_overlaps(pr->ibegin(), pr->iend());
+            sit != t->source_ranges_.end(); ++sit)
+        if (sit->purge(*server_))
             ++kept;
-    }
 
-    auto it = lower_bound(pr->ibegin());
-    auto itx = lower_bound(pr->iend());
-    while(it != itx) {
-        it = erase_invalid(it);
-        ++nevict_persistent_;
-    }
+    if ((t = t->parent_) && t->triecut_)
+        goto retry;
 
+    nevict_persistent_ += erase_purge(pr->ibegin(), pr->iend());
+    
     //std::cerr << "evicting persisted range " << pr->interval()
     //          << ", keeping " << kept << " source ranges in place " << std::endl;
-
-    server_->lru_remove(pr);
 
     if (!kept) {
         for (Table* t = parent_; t; t = t->parent_)
             --t->nsubtables_with_ranges_.persisted;
 
+        server_->lru_remove(pr);
         persisted_ranges_.erase(*pr);
         delete pr;
     }
-    else
+    else {
         pr->mark_evicted();
+        server_->lru_touch(pr);
+    }
 }
 
 tamed void Table::fetch_remote(String first, String last, int32_t owner,
@@ -702,31 +715,24 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
 
 void Table::evict_remote(RemoteRange* rr) {
     assert(!rr->pending());
-    assert(!rr->evicted());
+    assert(!nsubtables_with_ranges_.remote);
 
     uint32_t kept = 0;
-    auto sit = source_ranges_.begin_overlaps(rr->ibegin(), rr->iend());
-    while(sit != source_ranges_.end()) {
-        SourceRange* sr = sit.operator->();
-        ++sit;
+    Table* t = this;
 
-        if (!sr->can_evict())
-            sr->invalidate();
-        else
+    retry:
+    for (auto sit = t->source_ranges_.begin_overlaps(rr->ibegin(), rr->iend());
+            sit != t->source_ranges_.end(); ++sit)
+        if (sit->purge(*server_))
             ++kept;
-    }
 
-    auto it = lower_bound(rr->ibegin());
-    auto itx = lower_bound(rr->iend());
-    while(it != itx) {
-        it = erase_invalid(it);
-        ++nevict_remote_;
-    }
+    if ((t = t->parent_) && t->triecut_)
+        goto retry;
+
+    nevict_remote_ += erase_purge(rr->ibegin(), rr->iend());
 
     //std::cerr << "evicting remote range " << rr->interval()
     //          << ", keeping " << kept << " source ranges in place " << std::endl;
-
-    server_->lru_remove(rr);
 
     if (!kept) {
         server_->interconnect(rr->owner())->unsubscribe(rr->ibegin(), rr->iend(),
@@ -735,11 +741,14 @@ void Table::evict_remote(RemoteRange* rr) {
         for (Table* t = parent_; t; t = t->parent_)
             --t->nsubtables_with_ranges_.remote;
 
+        server_->lru_remove(rr);
         remote_ranges_.erase(*rr);
         delete rr;
     }
-    else
+    else {
         rr->mark_evicted();
+        server_->lru_touch(rr);
+    }
 }
 
 void Table::invalidate_remote(Str first, Str last) {
@@ -772,14 +781,18 @@ void Table::invalidate_remote(Str first, Str last) {
     }
 }
 
-void Table::evict_sink(SinkRange* sink) {
+void Table::evict_sink(SinkRange* sr) {
+    assert(!sr->evicted());
+
+    //todo: purge sources and keep sinkrange
+
     //std::cerr << "evicting sink range " << sink->interval() << std::endl;
 
     uint64_t before = Sink::invalidate_hit_keys;
 
-    sink_ranges_.erase(*sink);
-    server_->lru_remove(sink);
-    delete sink; // sinks invalidated within
+    sink_ranges_.erase(*sr);
+    server_->lru_remove(sr);
+    delete sr; // sinks invalidated within
 
     nevict_sink_ += (Sink::invalidate_hit_keys - before);
 }

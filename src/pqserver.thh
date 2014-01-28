@@ -87,6 +87,7 @@ class Table : public Datum {
     inline iterator erase(iterator it);
     inline void invalidate_erase(Datum* d);
     inline iterator erase_invalid(iterator it);
+    inline uint32_t erase_purge(Str first, Str last);
 
     inline bool flush_for_pull(uint64_t now);
 
@@ -135,9 +136,13 @@ class Table : public Datum {
     inline uint64_t subtable_hash_for(Str key) const;
     Table* next_table_for(Str key);
     Table* make_next_table_for(Str key);
+
     std::pair<store_type::iterator, bool> prepare_modify(Str key, const Sink* sink, store_type::insert_commit_data& cd);
-    void finish_modify(std::pair<store_type::iterator, bool> p, const store_type::insert_commit_data& cd, Datum* d, Str key, const Sink* sink, String value);
+    void finish_modify(std::pair<store_type::iterator, bool> p,
+                       const store_type::insert_commit_data& cd,
+                       Datum* d, Str key, const Sink* sink, String value);
     void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
+
     bool hard_flush_for_pull(uint64_t now);
     inline void invalidate_dependents_local(Str first, Str last);
     void invalidate_dependents_down(Str first, Str last);
@@ -630,6 +635,19 @@ inline auto Table::erase_invalid(iterator it) -> iterator {
     it.maybe_fix();
     d->invalidate();
     return it;
+}
+
+inline uint32_t Table::erase_purge(Str first, Str last) {
+    uint32_t purged = 0;
+    auto it = lower_bound(first);
+    auto itx = lower_bound(last);
+
+    while(it != itx) {
+        it = erase_invalid(it);
+        ++purged;
+    }
+
+    return purged;
 }
 
 inline bool Table::flush_for_pull(uint64_t now) {

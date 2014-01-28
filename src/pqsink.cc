@@ -9,7 +9,13 @@ uint64_t ServerRangeBase::allocated_key_bytes = 0;
 uint64_t Sink::invalidate_hit_keys = 0;
 uint64_t Sink::invalidate_miss_keys = 0;
 
-Evictable::Evictable() : last_access_(0) {
+Loadable::Loadable(Table* table) : table_(table) {
+}
+
+Loadable::~Loadable() {
+}
+
+Evictable::Evictable() : evicted_(false), last_access_(0) {
 }
 
 Evictable::~Evictable() {
@@ -103,7 +109,6 @@ bool SinkRange::validate(Str first, Str last, Server& server,
 //        }
 
         if (!sink->valid()) {
-            // avoid re-validating the whole range, if possible
             sink->add_invalidate(ibegin(), iend());
             sink->set_valid();
         }
@@ -471,12 +476,8 @@ void Sink::invalidate() {
     }
 }
 
-LoadableRange::LoadableRange(Table* table, Str first, Str last)
-    : ServerRangeBase(first, last), table_(table), evicted_(false) {
-}
-
 PersistedRange::PersistedRange(Table* table, Str first, Str last)
-    : LoadableRange(table, first, last) {
+    : ServerRangeBase(first, last), Loadable(table) {
 }
 
 void PersistedRange::evict() {
@@ -485,7 +486,7 @@ void PersistedRange::evict() {
 }
 
 RemoteRange::RemoteRange(Table* table, Str first, Str last, int32_t owner)
-    : LoadableRange(table, first, last), owner_(owner) {
+    : ServerRangeBase(first, last), Loadable(table), owner_(owner) {
 }
 
 void RemoteRange::evict() {
