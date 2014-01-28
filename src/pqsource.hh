@@ -9,6 +9,7 @@
 #include "pqsink.hh"
 #include "local_vector.hh"
 #include "local_str.hh"
+#include "bloom.hh"
 #include <iostream>
 
 namespace pq {
@@ -48,14 +49,19 @@ class SourceRange {
     inline int joinpos() const;
     void take_results(SourceRange& r);
     void remove_sink(Sink* sink, Str context);
-    virtual bool can_evict() const;
+
+    virtual bool purge(Server& server);
+    inline bool purged() const;
 
     enum notify_type {
-	notify_erase = -1, notify_update = 0, notify_insert = 1
+	notify_erase_missing = -2,
+	notify_erase = -1,
+	notify_update = 0,
+	notify_insert = 1
     };
 
     virtual bool check_match(Str key) const;
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
 
     friend std::ostream& operator<<(std::ostream&, const SourceRange&);
 
@@ -76,19 +82,20 @@ class SourceRange {
     Join* join_;
     int joinpos_;
     mutable local_vector<result, 4> results_;
+    bool purged_;
 
     virtual void kill();
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const = 0;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier) = 0;
 };
 
 
 class InvalidatorRange : public SourceRange {
   public:
     inline InvalidatorRange(const parameters& p);
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
-    virtual bool can_evict() const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
   protected:
-    virtual void notify(Str, Sink*, const Datum*, const String&, int) const {}
+    virtual void notify(Str, Sink*, const Datum*, const String&, int) { }
 };
 
 
@@ -98,11 +105,10 @@ class SubscribedRange : public SourceRange {
 
     virtual void invalidate();
     virtual bool check_match(Str key) const;
-    virtual void notify(const Datum* src, const String& old_value, int notifier) const;
-    virtual bool can_evict() const;
+    virtual void notify(const Datum* src, const String& old_value, int notifier);
   protected:
     virtual void kill();
-    virtual void notify(Str, Sink*, const Datum*, const String&, int) const {}
+    virtual void notify(Str, Sink*, const Datum*, const String&, int) { }
   private:
     Server& server_;
 };
@@ -111,38 +117,52 @@ class SubscribedRange : public SourceRange {
 class CopySourceRange : public SourceRange {
   public:
     inline CopySourceRange(const parameters& p);
-    virtual bool can_evict() const;
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 
 class CountSourceRange : public SourceRange {
   public:
     inline CountSourceRange(const parameters& p);
+    inline ~CountSourceRange();
+
+    virtual bool purge(Server& server);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    BloomFilter* bloom_;
+
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class MinSourceRange : public SourceRange {
   public:
     inline MinSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class MaxSourceRange : public SourceRange {
   public:
     inline MaxSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class SumSourceRange : public SourceRange {
   public:
     inline SumSourceRange(const parameters& p);
+    inline ~SumSourceRange();
+
+    virtual bool purge(Server& server);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    BloomFilter* bloom_;
+
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
 };
 
 class Bounds {
@@ -161,21 +181,23 @@ class Bounds {
     long upper_;
 };
 
-class BoundedCopySourceRange : public SourceRange {
+class BoundedCopySourceRange : public CopySourceRange {
   public:
     inline BoundedCopySourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
   private:
     Bounds bounds_;
 };
 
 
-class BoundedCountSourceRange : public SourceRange {
+class BoundedCountSourceRange : public CountSourceRange {
   public:
     inline BoundedCountSourceRange(const parameters& p);
   protected:
-    virtual void notify(Str sink_key, Sink* sink, const Datum* src, const String& old_value, int notifier) const;
+    virtual void notify(Str sink_key, Sink* sink, const Datum* src,
+                        const String& old_value, int notifier);
   private:
     Bounds bounds_;
 };
@@ -216,6 +238,10 @@ inline void SourceRange::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
 }
 
+inline bool SourceRange::purged() const {
+    return purged_;
+}
+
 inline InvalidatorRange::InvalidatorRange(const parameters& p)
     : SourceRange(p) {
 }
@@ -229,7 +255,11 @@ inline CopySourceRange::CopySourceRange(const parameters& p)
 }
 
 inline CountSourceRange::CountSourceRange(const parameters& p)
-    : SourceRange(p) {
+    : SourceRange(p), bloom_(nullptr) {
+}
+
+inline CountSourceRange::~CountSourceRange() {
+    delete bloom_;
 }
 
 inline MinSourceRange::MinSourceRange(const parameters& p)
@@ -241,7 +271,11 @@ inline MaxSourceRange::MaxSourceRange(const parameters& p)
 }
 
 inline SumSourceRange::SumSourceRange(const parameters& p)
-    : SourceRange(p) {
+    : SourceRange(p), bloom_(nullptr) {
+}
+
+inline SumSourceRange::~SumSourceRange() {
+    delete bloom_;
 }
 
 inline Bounds::Bounds(const Json& param)
@@ -286,12 +320,11 @@ inline bool Bounds::check_bounds(const String& src, const String& old,
 
 
 inline BoundedCopySourceRange::BoundedCopySourceRange(const parameters& p)
-    : SourceRange(p), bounds_(p.join->jvt_config()) {
+    : CopySourceRange(p), bounds_(p.join->jvt_config()) {
 }
 
-
 inline BoundedCountSourceRange::BoundedCountSourceRange(const parameters& p)
-    : SourceRange(p), bounds_(p.join->jvt_config()) {
+    : CountSourceRange(p), bounds_(p.join->jvt_config()) {
 }
 
 } // namespace pq

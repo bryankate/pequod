@@ -44,13 +44,32 @@ class Evictable : public boost::intrusive::list_base_hook<> {
 
     virtual void evict() = 0;
 
+    inline void mark_evicted();
+    inline bool evicted() const;
     inline uint64_t last_access() const;
     inline void set_last_access(uint64_t now);
 
   public:
     boost::intrusive::list_member_hook<> member_hook_;
   private:
+    bool evicted_;
     uint64_t last_access_;
+};
+
+class Loadable {
+  public:
+    Loadable(Table* table);
+    virtual ~Loadable();
+
+    inline bool pending() const;
+    inline void add_waiting(tamer::event<> w);
+    inline void notify_waiting();
+    inline Table* table() const;
+
+  protected:
+    Table* table_;
+  private:
+    std::list<tamer::event<>> waiting_;
 };
 
 class IntermediateUpdate : public ServerRangeBase {
@@ -206,25 +225,7 @@ class JoinRange : public ServerRangeBase {
     Join* join_;
 };
 
-class LoadableRange : public ServerRangeBase {
-  public:
-    LoadableRange(Table* table, Str first, Str last);
-
-    inline bool pending() const;
-    inline void add_waiting(tamer::event<> w);
-    inline void notify_waiting();
-    inline void mark_evicted();
-    inline bool evicted() const;
-    inline Table* table() const;
-
-  protected:
-    Table* table_;
-  private:
-    std::list<tamer::event<>> waiting_;
-    bool evicted_;
-};
-
-class PersistedRange : public LoadableRange, public Evictable {
+class PersistedRange : public ServerRangeBase, public Loadable, public Evictable {
   public:
     PersistedRange(Table* table, Str first, Str last);
 
@@ -234,7 +235,7 @@ class PersistedRange : public LoadableRange, public Evictable {
     rblinks<PersistedRange> rblinks_;
 };
 
-class RemoteRange : public LoadableRange, public Evictable {
+class RemoteRange : public ServerRangeBase, public Loadable, public Evictable {
   public:
     RemoteRange(Table* table, Str first, Str last, int32_t owner);
 
@@ -292,6 +293,33 @@ inline Str ServerRangeBase::subtree_iend() const {
 
 inline void ServerRangeBase::set_subtree_iend(Str subtree_iend) {
     subtree_iend_ = subtree_iend;
+}
+
+inline bool Loadable::pending() const {
+    return !waiting_.empty();
+}
+
+inline void Loadable::add_waiting(tamer::event<> w) {
+    waiting_.push_back(w);
+}
+
+inline void Loadable::notify_waiting() {
+    while(!waiting_.empty()) {
+        waiting_.front().operator()();
+        waiting_.pop_front();
+    }
+}
+
+inline Table* Loadable::table() const {
+    return table_;
+}
+
+inline void Evictable::mark_evicted() {
+    evicted_ = true;
+}
+
+inline bool Evictable::evicted() const {
+    return evicted_;
 }
 
 inline uint64_t Evictable::last_access() const {
@@ -437,34 +465,6 @@ inline Str Restart::context() const {
 
 inline int Restart::notifier() const {
     return notifier_;
-}
-
-inline void LoadableRange::mark_evicted() {
-    assert(!evicted_);
-    evicted_ = true;
-}
-
-inline bool LoadableRange::evicted() const {
-    return evicted_;
-}
-
-inline bool LoadableRange::pending() const {
-    return !waiting_.empty();
-}
-
-inline void LoadableRange::add_waiting(tamer::event<> w) {
-    waiting_.push_back(w);
-}
-
-inline void LoadableRange::notify_waiting() {
-    while(!waiting_.empty()) {
-        waiting_.front().operator()();
-        waiting_.pop_front();
-    }
-}
-
-inline Table* LoadableRange::table() const {
-    return table_;
 }
 
 inline int32_t RemoteRange::owner() const {
