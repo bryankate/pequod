@@ -16,7 +16,7 @@ import math
 import lib.aggregate
 from lib.aggregate import aggregate_dir
 import lib.gnuplotter
-from lib.gnuplotter import make_gnuplot
+from lib.gnuplotter import make_gnuplots
 
 
 parser = OptionParser()
@@ -32,6 +32,7 @@ parser.add_option("-a", "--affinity", action="store_true", dest="affinity", defa
 parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu", default=0)
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-S", "--straceserver", action="store", type="int", dest="straceserver", default=-1)
+parser.add_option("-R", "--repeat", action="store", type="int", dest="repeat", default=1)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
 parser.add_option("-D", "--dbstartport", action="store", type="int", dest="dbstartport", default=10000)
@@ -52,6 +53,7 @@ affinity = options.affinity
 startcpu = options.startcpu
 perfserver = options.perfserver
 straceserver = options.straceserver
+repeat = options.repeat
 ngroups = options.ngroups
 dbstartport = options.dbstartport
 dumpdb = options.dumpdb
@@ -70,7 +72,7 @@ hostpath = None
 begintime = time.time()
 localhost = socket.gethostname()
 
-def prepare_experiment(xname, ename):
+def prepare_experiment(xname, ename, run):
     global topdir, uniquedir, hostpath
     if topdir is None:
         topdir = "results"
@@ -97,7 +99,7 @@ def prepare_experiment(xname, ename):
             hfile.write(localhost + "\t" + str(startport + h) + "\n");
         hfile.close()
         
-    resdir = os.path.join(uniquedir, xname, ename if ename else "")
+    resdir = os.path.join(uniquedir, xname, run, ename if ename else "")
     os.makedirs(resdir)
     return (os.path.join(uniquedir, xname), resdir)
 
@@ -255,250 +257,252 @@ for x in exps:
         elif not args and e.get("disabled"):
             continue
 
-        if killall:
-            Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
-
-        print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
-              " in test '" + x['name'] + "'."
-        (expdir, resdir) = prepare_experiment(x["name"], expname)
-        logfd = open(os.path.join(resdir, "cmd_log.txt"), "w")
-        
-        if 'def_build' in e:
-            fartfile = os.path.join(resdir, "fart_build.txt")
-            run_cmd(e['def_build'], fartfile, fartfile, sh=True)
-             
-        usedb = True if 'def_db_type' in e else False
-        rediscompare = e.get('def_redis_compare')
-        memcachecompare = e.get('def_memcache_compare')
-        dbcompare = e.get('def_db_compare')
-        dbmonitor = e.get('def_db_writearound')
-        serverprocs = [] 
-        dbprocs = []
-        
-        if usedb or rediscompare:
-            dbenvpath = os.path.join(resdir, "store")
-            check_database_env(e)
-            os.makedirs(dbenvpath)
-        
-        if dbcompare:
-            # if we are comparing to a db, don't start any pequod servers.
-            # the number of caching servers (-c) will be used as the number 
-            # of simultaneous connections to the database.
-            if ncaching < 1:
-                print "ERROR: -c must be > 0 for DB comparison experiments"
-                exit(-1)
-                
-            dbprocs.append(start_postgres(e, 0, ncaching))
+        for rep in range(repeat):
+            if killall:
+                Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
+    
+            print "Running experiment" + ((" '" + expname + "'") if expname else "") + \
+                  " in test '" + x['name'] + "'."
+ 
+            (expdir, resdir) = prepare_experiment(x["name"], expname, str(rep) if repeat > 1 else "")
+            logfd = open(os.path.join(resdir, "cmd_log.txt"), "w")
             
-        elif rediscompare:
-            if ncaching < 1:
-                print "ERROR: -c must be > 0 for redis comparison experiments"
-                exit(-1)
-                
-            for s in range(ncaching):
-                dbprocs.append(start_redis(e, s))
-                
-        elif memcachecompare:
-            if ncaching < 1:
-                print "ERROR: -c must be > 0 for memcache comparison experiments"
-                exit(-1)
-                
-            for s in range(ncaching):
-                dbprocs.append(start_memcache(e, s))
-                
-        else:
-            if usedb:
-                dbhostpath = os.path.join(resdir, "dbhosts.txt")
-                dbfile = open(dbhostpath, "w")
-                
-            for s in range(nprocesses):
-                if s < nbacking:
-                    servercmd = e['backendcmd']
-                else:
-                    servercmd = e['cachecmd']
-                
-                if usedb and s < ndbs:
-                    if e['def_db_type'] == 'berkeleydb':
-                        servercmd = servercmd + \
-                            " --berkeleydb --dbname=pequod_" + str(s) + \
-                            " --dbenvpath=" + dbenvpath
-                    elif e['def_db_type'] == 'postgres':
-                        servercmd = servercmd + \
-                            " --postgres --dbname=pequod" + \
-                            " --dbhost=" + dbhost + " --dbport=" + str(dbstartport + s)
-                        if dbmonitor:
-                            servercmd = servercmd + " --monitordb"
-    
-                        dbfile.write(dbhost + "\t" + str(dbstartport + s) + "\n");
-                        dbprocs.append(start_postgres(e, s, 1))
-    
-                part = options.part if options.part else e['def_part']
-                serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
-                fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
-      
-                if affinity:
-                    pin = "numactl -C " + str(startcpu + s) + " "
-    
-                full_cmd = pin + servercmd + serverargs + " -kl=" + str(startport + s)
-                serverprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile))
-        
-            if usedb:
-                dbfile.close()
-                
-        sleep(3)
-
-        clientcpulist = ""
-        if startcpu + nprocesses + ngroups > maxcpus:
-            # if we want to run more clients than we have processors left, 
-            # just run them all on the set of remaining cpus
-            clientcpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
-
-        if 'initcmd' in e:
-            print "Initializing cache servers."
-            initcmd = e['initcmd']
-            fartfile = os.path.join(resdir, "fart_init.txt")
+            if 'def_build' in e:
+                fartfile = os.path.join(resdir, "fart_build.txt")
+                run_cmd(e['def_build'], fartfile, fartfile, sh=True)
+                 
+            usedb = True if 'def_db_type' in e else False
+            rediscompare = e.get('def_redis_compare')
+            memcachecompare = e.get('def_memcache_compare')
+            dbcompare = e.get('def_db_compare')
+            dbmonitor = e.get('def_db_writearound')
+            serverprocs = [] 
+            dbprocs = []
+            
+            if usedb or rediscompare:
+                dbenvpath = os.path.join(resdir, "store")
+                check_database_env(e)
+                os.makedirs(dbenvpath)
             
             if dbcompare:
-                initcmd = initcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching)
-            else:
-                initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
-            
-            if affinity:
-                pin = "numactl -C " + str(startcpu + nprocesses) + " "
-            
-            full_cmd = pin + initcmd
-            run_cmd(full_cmd, fartfile, fartfile)
-
-        if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
-            print "Populating backend from database archive."
-            dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
-            procs = []
-            for s in range(ndbs):
-                archfile = os.path.join(dbarchive, "pequod_" + str(s))
-                cmd = "pg_restore -p " + str(dbport + s) + " -d pequod -a " + archfile
-                procs.append(run_cmd_bg(cmd))
-                
-            for p in procs:
-                wait_for_proc(p)
-                
-        elif 'populatecmd' in e:
-            print "Populating backend."
-            popcmd = e['populatecmd']
-            npop = 1 if e.get('def_single_pop') else ngroups
+                # if we are comparing to a db, don't start any pequod servers.
+                # the number of caching servers (-c) will be used as the number 
+                # of simultaneous connections to the database.
+                if ncaching < 1:
+                    print "ERROR: -c must be > 0 for DB comparison experiments"
+                    exit(-1)
                     
-            if dbcompare:
-                if npop >= ncaching:
-                    pool = 1;
-                else:
-                    pool = math.ceil(ncaching / npop)
+                dbprocs.append(start_postgres(e, 0, ncaching))
+                
+            elif rediscompare:
+                if ncaching < 1:
+                    print "ERROR: -c must be > 0 for redis comparison experiments"
+                    exit(-1)
                     
-                popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, pool)
+                for s in range(ncaching):
+                    dbprocs.append(start_redis(e, s))
+                    
+            elif memcachecompare:
+                if ncaching < 1:
+                    print "ERROR: -c must be > 0 for memcache comparison experiments"
+                    exit(-1)
+                    
+                for s in range(ncaching):
+                    dbprocs.append(start_memcache(e, s))
+                    
             else:
-                popcmd = popcmd + " -H=" + hostpath + " -B=" + str(nbacking)
-            
-            if dbmonitor:
-                popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
+                if usedb:
+                    dbhostpath = os.path.join(resdir, "dbhosts.txt")
+                    dbfile = open(dbhostpath, "w")
+                    
+                for s in range(nprocesses):
+                    if s < nbacking:
+                        servercmd = e['backendcmd']
+                    else:
+                        servercmd = e['cachecmd']
+                    
+                    if usedb and s < ndbs:
+                        if e['def_db_type'] == 'berkeleydb':
+                            servercmd = servercmd + \
+                                " --berkeleydb --dbname=pequod_" + str(s) + \
+                                " --dbenvpath=" + dbenvpath
+                        elif e['def_db_type'] == 'postgres':
+                            servercmd = servercmd + \
+                                " --postgres --dbname=pequod" + \
+                                " --dbhost=" + dbhost + " --dbport=" + str(dbstartport + s)
+                            if dbmonitor:
+                                servercmd = servercmd + " --monitordb"
+        
+                            dbfile.write(dbhost + "\t" + str(dbstartport + s) + "\n");
+                            dbprocs.append(start_postgres(e, s, 1))
+        
+                    part = options.part if options.part else e['def_part']
+                    serverargs = " -H=" + hostpath + " -B=" + str(nbacking) + " -P=" + part
+                    fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
           
-            popprocs = []
-            for c in range(npop):
-                fartfile = os.path.join(resdir, "fart_pop_" + str(c) + ".txt")
-                            
-                if affinity:
-                    pin = "numactl -C " + (clientcpulist if clientcpulist and npop > 1 \
-                                                         else str(startcpu + nprocesses + c)) + " "
-                            
-                full_cmd = pin + popcmd + \
-                    " --ngroups=" + str(npop) + " --groupid=" + str(c)
-
-                popprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile));
+                    if affinity:
+                        pin = "numactl -C " + str(startcpu + s) + " "
+        
+                    full_cmd = pin + servercmd + serverargs + " -kl=" + str(startport + s)
+                    serverprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile))
             
-            for p in popprocs:
-                wait_for_proc(p)
-            
-        if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
-            print "Dumping backend database after population."
-            procs = []
-            dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
-            for s in range(ndbs):
-                archfile = os.path.join(dbarchive, "pequod_" + str(s))
-                system("rm -rf " + archfile + "; mkdir -p " + dbarchive)
-                cmd = "pg_dump -p " + str(dbport + s) + " -f " + archfile + " -a -F d pequod" 
-                procs.append(run_cmd(cmd))
+                if usedb:
+                    dbfile.close()
+                    
+            sleep(3)
+    
+            clientcpulist = ""
+            if startcpu + nprocesses + ngroups > maxcpus:
+                # if we want to run more clients than we have processors left, 
+                # just run them all on the set of remaining cpus
+                clientcpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
+    
+            if 'initcmd' in e:
+                print "Initializing cache servers."
+                initcmd = e['initcmd']
+                fartfile = os.path.join(resdir, "fart_init.txt")
                 
-            for p in procs:
-                wait_for_proc(p)
-
-        dbgprocs = []
-        
-        if perfserver >= 0:
-            pid = dbprocs[perfserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[perfserver][0].pid
-            full_cmd = "perf record -g -p " + str(pid) + \
-                        " -o " + os.path.join(resdir, "perf-") + str(perfserver) + ".dat "
-            dbgprocs.append(run_cmd_bg(full_cmd))
-
-        if straceserver >= 0:
-            pid = dbprocs[straceserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[straceserver][0].pid
-            full_cmd = "strace -c -p " + str(pid) + \
-                       " -o " + os.path.join(resdir, "strace_" + str(straceserver) + ".dat")
-            dbgprocs.append(run_cmd_bg(full_cmd))
-
-
-        print "Starting app clients."
-        clientprocs = []
-                    
-        for c in range(ngroups):
-            outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
-            fartfile = os.path.join(resdir, "fart_app_" + str(c) + ".txt")
-            clientcmd = e['clientcmd']
-            
-            if dbcompare:
-                if ngroups >= ncaching:
-                    pool = 1;
+                if dbcompare:
+                    initcmd = initcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, ncaching)
                 else:
-                    pool = math.ceil(ncaching / ngroups)
+                    initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
+                
+                if affinity:
+                    pin = "numactl -C " + str(startcpu + nprocesses) + " "
+                
+                full_cmd = pin + initcmd
+                run_cmd(full_cmd, fartfile, fartfile)
+    
+            if loaddb and dbmonitor and e['def_db_type'] == 'postgres':
+                print "Populating backend from database archive."
+                dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
+                procs = []
+                for s in range(ndbs):
+                    archfile = os.path.join(dbarchive, "pequod_" + str(s))
+                    cmd = "pg_restore -p " + str(dbport + s) + " -d pequod -a " + archfile
+                    procs.append(run_cmd_bg(cmd))
                     
-                clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % \
-                            (dbstartport, pool)
-            else:
-                clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
-            
-            if dbmonitor:
-                clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
-            
-            if affinity:
-                pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
-
-            full_cmd = pin + clientcmd + \
-                       " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
-
-            clientprocs.append(run_cmd_bg(full_cmd, outfile, fartfile));
-            
-        # wait for clients to finish
-        for p in clientprocs:
-            wait_for_proc(p)
+                for p in procs:
+                    wait_for_proc(p)
+                    
+            elif 'populatecmd' in e:
+                print "Populating backend."
+                popcmd = e['populatecmd']
+                npop = 1 if e.get('def_single_pop') else ngroups
+                        
+                if dbcompare:
+                    if npop >= ncaching:
+                        pool = 1;
+                    else:
+                        pool = math.ceil(ncaching / npop)
+                        
+                    popcmd = popcmd + " --dbport=%d --dbpool-max=%d" % (dbstartport, pool)
+                else:
+                    popcmd = popcmd + " -H=" + hostpath + " -B=" + str(nbacking)
+                
+                if dbmonitor:
+                    popcmd = popcmd + " --writearound --dbhostfile=" + dbhostpath
+              
+                popprocs = []
+                for c in range(npop):
+                    fartfile = os.path.join(resdir, "fart_pop_" + str(c) + ".txt")
+                                
+                    if affinity:
+                        pin = "numactl -C " + (clientcpulist if clientcpulist and npop > 1 \
+                                                             else str(startcpu + nprocesses + c)) + " "
+                                
+                    full_cmd = pin + popcmd + \
+                        " --ngroups=" + str(npop) + " --groupid=" + str(c)
     
-        for p in serverprocs + dbprocs:
-            kill_proc(p)
-            
-        for p in dbgprocs:
-            kill_proc(p, True)
-        
-        if killall:
-            Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
-        
-        if moveports:
-            startport += 100
-            dbstartport += 100
-        
-        if ngroups > 1:
-            aggregate_dir(resdir, x['name'])
+                    popprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile));
+                
+                for p in popprocs:
+                    wait_for_proc(p)
+                
+            if dumpdb and dbmonitor and e['def_db_type'] == 'postgres':
+                print "Dumping backend database after population."
+                procs = []
+                dbarchive = os.path.join("dumps", x["name"], e["name"], "nshard_" + str(ndbs))
+                for s in range(ndbs):
+                    archfile = os.path.join(dbarchive, "pequod_" + str(s))
+                    system("rm -rf " + archfile + "; mkdir -p " + dbarchive)
+                    cmd = "pg_dump -p " + str(dbport + s) + " -f " + archfile + " -a -F d pequod" 
+                    procs.append(run_cmd(cmd))
+                    
+                for p in procs:
+                    wait_for_proc(p)
     
-        if usedb and e.get('def_db_in_memory'):
-           shutil.rmtree(dbenvpath)
-
-        logfd.close()
-        print "Done experiment. Results are stored at", resdir
+            dbgprocs = []
+            
+            if perfserver >= 0:
+                pid = dbprocs[perfserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[perfserver][0].pid
+                full_cmd = "perf record -g -p " + str(pid) + \
+                            " -o " + os.path.join(resdir, "perf-") + str(perfserver) + ".dat "
+                dbgprocs.append(run_cmd_bg(full_cmd))
+    
+            if straceserver >= 0:
+                pid = dbprocs[straceserver][0].pid if (dbcompare or rediscompare or memcachecompare) else serverprocs[straceserver][0].pid
+                full_cmd = "strace -c -p " + str(pid) + \
+                           " -o " + os.path.join(resdir, "strace_" + str(straceserver) + ".dat")
+                dbgprocs.append(run_cmd_bg(full_cmd))
+    
+    
+            print "Starting app clients."
+            clientprocs = []
+                        
+            for c in range(ngroups):
+                outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
+                fartfile = os.path.join(resdir, "fart_app_" + str(c) + ".txt")
+                clientcmd = e['clientcmd']
+                
+                if dbcompare:
+                    if ngroups >= ncaching:
+                        pool = 1;
+                    else:
+                        pool = math.ceil(ncaching / ngroups)
+                        
+                    clientcmd = clientcmd + " --dbport=%d --dbpool-max=%d" % \
+                                (dbstartport, pool)
+                else:
+                    clientcmd = clientcmd + " -H=" + hostpath + " -B=" + str(nbacking)
+                
+                if dbmonitor:
+                    clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
+                
+                if affinity:
+                    pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
+    
+                full_cmd = pin + clientcmd + \
+                           " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
+    
+                clientprocs.append(run_cmd_bg(full_cmd, outfile, fartfile));
+                
+            # wait for clients to finish
+            for p in clientprocs:
+                wait_for_proc(p)
+        
+            for p in serverprocs + dbprocs:
+                kill_proc(p)
+                
+            for p in dbgprocs:
+                kill_proc(p, True)
+            
+            if killall:
+                Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
+            
+            if moveports:
+                startport += 100
+                dbstartport += 100
+            
+            if ngroups > 1:
+                aggregate_dir(resdir, x['name'])
+        
+            if usedb and e.get('def_db_in_memory'):
+               shutil.rmtree(dbenvpath)
+    
+            logfd.close()
+            print "Done experiment. Results are stored at", resdir
     
     if expdir and 'plot' in x:
-        make_gnuplot(x['name'], expdir, x['plot'])
+        make_gnuplots(x['name'], expdir, x['plot'], repeat)
         
