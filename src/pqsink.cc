@@ -108,21 +108,26 @@ bool SinkRange::validate(Str first, Str last, Server& server,
 //            flush_at_ = now;
 //        }
 
-        if (!sink->valid()) {
-            sink->add_invalidate(ibegin(), iend());
-            sink->set_valid();
-        }
-        else if (sink->has_expired(now)) {
+        sink->set_validating(true);
+
+        if (unlikely(sink->has_expired(now))) {
             assert(!sink->join()->maintained());
             sink->clear_updates();
             sink->add_invalidate(ibegin(), iend());
             sink->set_expiration(now);
+            sink->set_valid();
+        }
+        else if (!sink->valid()) {
+            sink->add_invalidate(ibegin(), iend());
+            sink->set_valid();
         }
 
         if (sink->need_restart())
             complete &= sink->restart(first, last, server, now, log, gr);
         if (!sink->need_restart() && sink->need_update())
             complete &= sink->update(first, last, server, now, log, gr);
+
+        sink->set_validating(false);
     }
 
     if (complete)
@@ -156,6 +161,7 @@ bool SinkRange::validate_filters(validate_args& va) {
 
 bool SinkRange::validate_step(validate_args& va, int joinpos) {
     Join* join = va.sink->join();
+    assert(va.sink->valid());
 
     if (!join->maintained() && join->source_is_filter(joinpos)) {
         if (!va.filters)
@@ -181,7 +187,8 @@ bool SinkRange::validate_step(validate_args& va, int joinpos) {
     // need to validate the source ranges in case they have not been
     // expanded yet or they are missing.
     std::pair<bool, Table::iterator> srcval =
-            sourcet->validate(Str(kf, kflen), Str(kl, kllen), va.now, va.log, va.pending);
+            sourcet->validate(Str(kf, kflen), Str(kl, kllen),
+                              va.now, va.log, va.pending);
 
     if (!srcval.first) {
         va.sink->add_restart(joinpos, va.rm.match, va.notifier);
@@ -295,7 +302,8 @@ Restart::Restart(Sink* sink, int joinpos, const Match& m, int notifier)
 }
 
 Sink::Sink(JoinRange* jr, SinkRange* sr)
-    : valid_(true), table_(sr->table_), hint_{nullptr}, dangerous_slot_(0),
+    : valid_(true), validating_(false),
+      table_(sr->table_), hint_{nullptr}, dangerous_slot_(0),
       expires_at_(0), refcount_(0), data_free_(uintptr_t(-1)),
       jr_(jr), sr_(sr) {
 
@@ -369,7 +377,7 @@ void Sink::add_invalidate(Str first, Str last) {
 bool Sink::update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remaining,
                           Server& server, uint64_t now, uint32_t& log,
                           tamer::gather_rendezvous& gr) {
-
+    assert(valid());
     LocalStr<24> f = first, l = last;
 
     if (f < iu->ibegin())
@@ -400,6 +408,7 @@ bool Sink::update_iu(Str first, Str last, IntermediateUpdate* iu, bool& remainin
 
 bool Sink::update(Str first, Str last, Server& server,
                        uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr) {
+    assert(valid());
 
     for (auto it = updates_.begin_overlaps(first, last); it != updates_.end(); ) {
         log |= ValidateRecord::update;
@@ -446,7 +455,7 @@ bool Sink::restart(Str first, Str last, Server& server,
 }
 
 void Sink::invalidate() {
-    if (valid()) {
+    if (valid() && !validating_) {
         while (data_free_ != uintptr_t(-1)) {
             uintptr_t pos = data_free_;
             data_free_ = (uintptr_t) data_[pos];
