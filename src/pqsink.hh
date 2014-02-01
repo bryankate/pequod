@@ -156,10 +156,11 @@ class Sink {
     inline bool valid() const;
     inline void set_valid();
     void invalidate();
-    inline void prefetch() const;
+    inline void set_validating(bool validating);
 
     inline Join* join() const;
     inline SinkRange* range() const;
+    inline void prefetch() const;
     inline Table* table() const;
     inline Table& make_table_for(Str key) const;
     inline unsigned context_mask() const;
@@ -193,6 +194,7 @@ class Sink {
 
   private:
     bool valid_;
+    bool validating_;
     Table* table_;
     mutable Datum* hint_;
     unsigned context_mask_;
@@ -362,6 +364,10 @@ inline bool Sink::valid() const {
 inline void Sink::set_valid() {
     assert(!valid_);
     valid_ = true;
+}
+
+inline void Sink::set_validating(bool validating) {
+    validating_ = validating;
 }
 
 inline Join* Sink::join() const {
