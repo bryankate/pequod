@@ -21,6 +21,18 @@ Evictable::Evictable() : evicted_(false), last_access_(0) {
 Evictable::~Evictable() {
 }
 
+uint32_t Evictable::priority() const {
+    return pri_none;
+}
+
+void Evictable::unlink() {
+    lru_hook::unlink();
+}
+
+bool Evictable::is_linked() const {
+    return lru_hook::is_linked();
+}
+
 JoinRange::JoinRange(Str first, Str last, Join* join)
     : ServerRangeBase(first, last), join_(join) {
 }
@@ -285,6 +297,10 @@ void SinkRange::evict() {
     table_->evict_sink(this);
 }
 
+uint32_t SinkRange::priority() const {
+    return pri_sink;
+}
+
 IntermediateUpdate::IntermediateUpdate(Str first, Str last,
                                        Sink* sink, int joinpos, const Match& m,
                                        int notifier)
@@ -494,6 +510,10 @@ void PersistedRange::evict() {
     table_->evict_persisted(this);
 }
 
+uint32_t PersistedRange::priority() const {
+    return pri_persistent;
+}
+
 RemoteRange::RemoteRange(Table* table, Str first, Str last, int32_t owner)
     : ServerRangeBase(first, last), Loadable(table), owner_(owner) {
 }
@@ -501,6 +521,10 @@ RemoteRange::RemoteRange(Table* table, Str first, Str last, int32_t owner)
 void RemoteRange::evict() {
     assert(table_);
     table_->evict_remote(this);
+}
+
+uint32_t RemoteRange::priority() const {
+    return pri_remote;
 }
 
 RemoteSink::RemoteSink(Interconnect* conn, uint32_t peer)

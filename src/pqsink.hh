@@ -37,20 +37,26 @@ class ServerRangeBase {
     Str subtree_iend_;
 };
 
-class Evictable : public boost::intrusive::list_base_hook<> {
+namespace bi = boost::intrusive;
+typedef bi::list_base_hook<bi::link_mode<bi::auto_unlink>> lru_hook;
+
+class Evictable : public lru_hook {
   public:
     Evictable();
     virtual ~Evictable();
 
+    enum { pri_none = 0, pri_persistent, pri_remote, pri_sink, pri_max };
+
     virtual void evict() = 0;
+    virtual uint32_t priority() const;
 
     inline void mark_evicted();
     inline bool evicted() const;
     inline uint64_t last_access() const;
     inline void set_last_access(uint64_t now);
+    void unlink();
+    bool is_linked() const;
 
-  public:
-    boost::intrusive::list_member_hook<> member_hook_;
   private:
     bool evicted_;
     uint64_t last_access_;
@@ -122,6 +128,7 @@ class SinkRange : public ServerRangeBase, public Evictable {
     void invalidate();
 
     virtual void evict();
+    virtual uint32_t priority() const;
 
   public:
     rblinks<SinkRange> rblinks_;
@@ -232,6 +239,7 @@ class PersistedRange : public ServerRangeBase, public Loadable, public Evictable
     PersistedRange(Table* table, Str first, Str last);
 
     virtual void evict();
+    virtual uint32_t priority() const;
 
   public:
     rblinks<PersistedRange> rblinks_;
@@ -243,6 +251,7 @@ class RemoteRange : public ServerRangeBase, public Loadable, public Evictable {
 
     inline int32_t owner() const;
     virtual void evict();
+    virtual uint32_t priority() const;
 
   public:
     rblinks<RemoteRange> rblinks_;
