@@ -66,6 +66,7 @@ struct TwitterGraphNode {
     std::vector<uint32_t> followers_;
     std::vector<uint32_t> posts_;
     std::vector<std::pair<uint32_t, uint32_t>> timeline_;
+    std::set<String> fetched_;
 
     static struct _TimelineCompare {
         bool operator() (const std::pair<uint32_t, uint32_t>& left, uint32_t right) {
@@ -486,32 +487,13 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
 
 #if TIMELINE_SANITY_CHECK
         {
-            auto tbegin = lower_bound(user->timeline_.begin(), user->timeline_.end(), beg_scan, TwitterUser::TimelineCompare);
-            auto tend = lower_bound(user->timeline_.begin(), user->timeline_.end(), end_scan, TwitterUser::TimelineCompare);
-            uint32_t nexpected = std::distance(tbegin, tend);
-
-            if (count < nexpected) {
-                std::cerr << "SANITY CHECK: Missing expected posts!"
-                          << " (user: " << user->uid() << " beg: " << beg_scan
-                          << " end: " << end_scan << ")" << std::endl;
-
-                std::cerr << "Expected Posts:" << std::endl;
-                while(tbegin != tend) {
-                    std::cerr << "  " << tbegin->first << " " << tbegin->second << std::endl;
-                    ++tbegin;
-                }
-
-                std::cerr << "Fetched Posts:" << std::endl;
-                for (auto it = sr.begin(); it != sr.end(); ++it)
-                    if (tp_.binary())
-                        std::cerr << "  " << read_in_net_order<uint32_t>(it->key().data() + 7)
-                                  << " " << read_in_net_order<uint32_t>(it->key().data() + 12) << std::endl;
-                    else
-                        std::cerr << "  " << Str(it->key().data() + 11, 10)
-                                  << " " << Str(it->key().data() + 22, 8) << std::endl;
-
-                mandatory_assert(false);
-            }
+            for (auto it = sr.begin(); it != sr.end(); ++it)
+                if (tp_.binary())
+                    user->fetched_.insert(String(read_in_net_order<uint32_t>(it->key().data() + 7)) + " " +
+                                          String(read_in_net_order<uint32_t>(it->key().data() + 12)));
+                else
+                    user->fetched_.insert(Str(it->key().data() + 11, 10) + " " +
+                                          Str(it->key().data() + 22, 8));
         }
 #endif
     }
@@ -960,6 +942,39 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         }
     }
     twait { drain(gr, make_event()); }
+
+#if TIMELINE_SANITY_CHECK
+    {
+        bool insane = false;
+        for (u = 0; u < active_.size(); ++u) {
+            user = tp_.managed_user(active_[u]);
+            size_t expected = user->timeline_.size();
+            size_t actual = user->fetched_.size();
+
+            if (actual != expected) {
+                if (!insane) {
+                    std::cerr << "SANITY CHECK: Incorrect number of fetched posts!" << std::endl;
+                    insane = true;
+                }
+
+                std::cerr << "  (user: " << user->uid() << ", expected: " << expected
+                          << ", actual: " << actual << ")" << std::endl;
+
+                /*
+                std::cerr << "Expected Posts:" << std::endl;
+                for (auto it = user->timeline_.begin(); it != user->timeline_.end(); ++it)
+                    std::cerr << "  " << it->first << " " << it->second << std::endl;
+
+                std::cerr << "Fetched Posts:" << std::endl;
+                for (auto it = user->fetched_.begin(); it != user->fetched_.end(); ++it)
+                    std::cerr << "  " << *it << std::endl;
+                */
+            }
+        }
+
+        mandatory_assert(!insane);
+    }
+#endif
 
     if (tp_.ngroups() > 1) {
         twait { wait_at_barrier(make_event()); }
