@@ -26,6 +26,7 @@ class Interconnect;
 class ValidateRecord;
 
 enum { enable_validation_logging = 0 };
+enum { multilevel_eviction = 1 };
 
 class Table : public Datum {
   public:
@@ -205,7 +206,7 @@ class Table::iterator : public std::iterator<std::forward_iterator_tag, Datum> {
 class Server {
   public:
     typedef ServerStore store_type;
-    typedef bi::list<Evictable> lru_type;
+    typedef bi::list<Evictable, bi::constant_time_size<false>> lru_type;
 
     Server();
     ~Server();
@@ -259,8 +260,6 @@ class Server {
     inline void set_persistent_store(PersistentStore* store, bool writethrough);
     inline bool writethrough() const;
 
-    inline void lru_add(Evictable* e);
-    inline void lru_remove(Evictable* e);
     inline void lru_touch(Evictable* e);
     inline void maybe_evict();
     inline bool evict_one();
@@ -286,7 +285,7 @@ class Server {
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
-    lru_type lru_;
+    std::vector<lru_type> lru_;
     boost::mt19937 gen_;
     boost::uniform_real<> prob_rng_;
     uint64_t evict_lo_;
@@ -719,19 +718,17 @@ inline bool Server::writethrough() const {
     return writethrough_;
 }
 
-inline void Server::lru_add(Evictable* e) {
-    e->set_last_access(tstamp());
-    lru_.push_back(*e);
-}
-
-inline void Server::lru_remove(Evictable* e) {
-    lru_.erase(lru_.iterator_to(*e));
-}
-
 inline void Server::lru_touch(Evictable* e) {
-    lru_.erase(lru_.iterator_to(*e));
+    assert(e->priority() < Evictable::pri_max);
+
     e->set_last_access(tstamp());
-    lru_.push_back(*e);
+    if (e->is_linked())
+        e->unlink();
+
+    if (!multilevel_eviction || e->evicted())
+        lru_[Evictable::pri_none].push_back(*e);
+    else
+        lru_[e->priority()].push_back(*e);
 }
 
 inline void Server::maybe_evict() {
@@ -752,12 +749,20 @@ inline bool Server::evict_one() {
     struct timeval tv[2];
     gettimeofday(&tv[0], NULL);
 
-    if (!lru_.empty())
-        (&lru_.front())->evict();
-    return !lru_.empty();
+    bool evicted = false, more = false;
+    for (auto l = lru_.rbegin(); l != lru_.rend(); ++l) {
+        if (!evicted && !l->empty()) {
+            (&l->front())->evict();
+            evicted = true;
+        }
+        if ((more = !l->empty()))
+            break;
+    }
 
     gettimeofday(&tv[1], NULL);
     evict_time_ += to_real(tv[1] - tv[0]);
+
+    return more;
 }
 
 inline void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb) {

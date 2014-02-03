@@ -396,7 +396,7 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 }
 
                 sink_ranges_.insert(*sr);
-                server_->lru_add(sr);
+                server_->lru_touch(sr);
                 ++inserted;
             }
 
@@ -425,7 +425,7 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 else {
                     PersistedRange* pri = new PersistedRange(this, have, pr->ibegin());
                     persisted_ranges_.insert(*pri);
-                    server_->lru_add(pri);
+                    server_->lru_touch(pri);
                     ++inserted;
                 }
             }
@@ -445,7 +445,6 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 // and a scan by another peer will invalidate all the others!
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
                 t->nevict_persistent_ += t->erase_purge(pr->ibegin(), pr->iend());
-                server_->lru_remove(pr);
 
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
                 fetching = true;
@@ -461,7 +460,7 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
         if (have < last) {
             PersistedRange* pri = new PersistedRange(this, have, last);
             persisted_ranges_.insert(*pri);
-            server_->lru_add(pri);
+            server_->lru_touch(pri);
             ++inserted;
         }
 
@@ -522,7 +521,6 @@ std::pair<bool, Table::iterator> Table::validate_remote(Str first, Str last,
             for (Table* t = rrt->parent_; t; t = t->parent_)
                 --t->nsubtables_with_ranges_.remote;
 
-            server_->lru_remove(rr);
             server_->interconnect(owner)->unsubscribe(rr->ibegin(), rr->iend(),
                                                       server_->me(), tamer::event<>());
 
@@ -645,7 +643,7 @@ tamed void Table::fetch_persisted(String first, String last, tamer::event<> done
     for (auto it = res.begin(); it != res.end(); ++it)
         server_->make_table_for(it->first).insert(it->first, it->second);
 
-    server_->lru_add(pr);
+    server_->lru_touch(pr);
     pr->notify_waiting();
 }
 
@@ -674,7 +672,6 @@ void Table::evict_persisted(PersistedRange* pr) {
         for (Table* t = parent_; t; t = t->parent_)
             --t->nsubtables_with_ranges_.persisted;
 
-        server_->lru_remove(pr);
         persisted_ranges_.erase(*pr);
         delete pr;
     }
@@ -709,7 +706,7 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
     for (auto it = res.begin(); it != res.end(); ++it)
         server_->make_table_for(it->key()).insert(it->key(), it->value());
 
-    server_->lru_add(rr);
+    server_->lru_touch(rr);
     rr->notify_waiting();
 }
 
@@ -741,7 +738,6 @@ void Table::evict_remote(RemoteRange* rr) {
         for (Table* t = parent_; t; t = t->parent_)
             --t->nsubtables_with_ranges_.remote;
 
-        server_->lru_remove(rr);
         remote_ranges_.erase(*rr);
         delete rr;
     }
@@ -775,8 +771,6 @@ void Table::invalidate_remote(Str first, Str last) {
         while(it != itend)
             it = erase_invalid(it);
 
-        if (!rr->evicted())
-            server_->lru_remove(rr);
         delete rr;
     }
 }
@@ -791,7 +785,6 @@ void Table::evict_sink(SinkRange* sr) {
     uint64_t before = Sink::invalidate_hit_keys;
 
     sink_ranges_.erase(*sr);
-    server_->lru_remove(sr);
     delete sr; // sinks invalidated within
 
     nevict_sink_ += (Sink::invalidate_hit_keys - before);
@@ -822,6 +815,9 @@ Server::Server()
       last_validate_at_(0), validate_time_(0), insert_time_(0), evict_time_(0),
       part_(nullptr), me_(-1),
       prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
+
+    for (uint32_t p = 0; p < Evictable::pri_max; ++p)
+        lru_.push_back(lru_type());
 
     gettimeofday(&start_tv_, NULL);
     gen_.seed(112181);
