@@ -491,8 +491,8 @@ for x in exps:
                 Popen("killall pqserver postgres memcached redis-server", shell=True).wait()
             
             if moveports:
-                startport += 100
-                dbstartport += 100
+                startport += nprocesses
+                dbstartport += nprocesses
             
             if ngroups > 1:
                 aggregate_dir(resdir, x['name'])
