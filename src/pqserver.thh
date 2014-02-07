@@ -285,7 +285,7 @@ class Server {
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
-    std::vector<lru_type> lru_;
+    lru_type lru_[Evictable::pri_max];
     boost::mt19937 gen_;
     boost::uniform_real<> prob_rng_;
     uint64_t evict_lo_;
@@ -750,12 +750,12 @@ inline bool Server::evict_one() {
     gettimeofday(&tv[0], NULL);
 
     bool evicted = false, more = false;
-    for (auto l = lru_.rbegin(); l != lru_.rend(); ++l) {
-        if (!evicted && !l->empty()) {
-            (&l->front())->evict();
+    for (int i = Evictable::pri_max - 1; i >= 0; --i) {
+        if (!evicted && !lru_[i].empty()) {
+	    lru_[i].front().evict();
             evicted = true;
         }
-        if ((more = !l->empty()))
+        if ((more = !lru_[i].empty()))
             break;
     }
 
