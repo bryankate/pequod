@@ -8,6 +8,7 @@
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
+#include <boost/move/move.hpp>
 
 namespace pq {
 
@@ -815,9 +816,6 @@ Server::Server()
       last_validate_at_(0), validate_time_(0), insert_time_(0), evict_time_(0),
       part_(nullptr), me_(-1),
       prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
-
-    for (uint32_t p = 0; p < Evictable::pri_max; ++p)
-        lru_.push_back(lru_type());
 
     gettimeofday(&start_tv_, NULL);
     gen_.seed(112181);
