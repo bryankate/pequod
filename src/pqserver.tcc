@@ -8,6 +8,7 @@
 #include "json.hh"
 #include "error.hh"
 #include <sys/resource.h>
+#include <boost/move/move.hpp>
 
 namespace pq {
 
