@@ -85,7 +85,7 @@ $(OBJDIR)/%.cc: $(top_srcdir)/src/%.tcc config.h $(OBJDIR)/stamp $(DEPSDIR)/stam
 
 $(OBJDIR)/%.hh: $(top_srcdir)/src/%.thh config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp $(TAMER)
 	$(TAMER) $(TAMERFLAGS) -F .deps/$*.hh.d -o $@ $<
-	
+
 $(MEMTIER_OBJDIR)/%.o: $(MEMTIER_SRCDIR)/%.cpp $(MEMTIER_SRCDIR)/config.h $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -include $(MEMTIER_SRCDIR)/config.h -I$(MEMTIER_SRCDIR) -c -o $@ $<
 
@@ -249,7 +249,7 @@ $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 
 $(OBJDIR)/pqinfo: $(PQINFO_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-	
+
 $(OBJDIR)/poptable: $(POPTABLE_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
@@ -268,16 +268,6 @@ $(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 $(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) -levent -lpthread
 
-tamer/compiler/tamer $(LIBTAMER): tamer-update
-
-tamer-update:
-	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating tamer... 1>&2; cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
-	cd tamer && $(MAKE) --no-print-directory compiler tamer
-
-$(OBJDIR)/stamp $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp:
-	mkdir -p $(dir $@)
-	touch $@
-
 config.h: stamp-h
 
 GNUmakefile: GNUmakefile.in config.status
@@ -292,6 +282,16 @@ config.status: $(top_srcdir)/configure
 stamp-h: $(top_srcdir)/config.h.in config.status
 	CONFIG_FILES= $(SHELL) ./config.status
 	echo > stamp-h
+
+$(OBJDIR)/stamp $(MEMTIER_OBJDIR)/stamp $(DEPSDIR)/stamp:
+	mkdir -p $(dir $@)
+	touch $@
+
+tamer/compiler/tamer $(LIBTAMER): tamer-update
+
+tamer-update:
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status tamer | head -c 41 | tail -c +2` && if test "$$cur" != $(TAMER_COMMIT) && test -z `cd tamer; git rev-list -n1 $(TAMER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating tamer... 1>&2; cd tamer; git checkout -f master >/dev/null; git pull; cd ..; git submodule update tamer); fi
+	cd tamer && $(MAKE) --no-print-directory compiler tamer
 
 $(MEMTIER_SRCDIR)/configure $(MEMTIER_SRCDIR)/config.h.in: $(MEMTIER_SRCDIR)/configure.ac
 	cd $(MEMTIER_SRCDIR) && autoreconf -ivf && touch config.h.in
