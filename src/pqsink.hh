@@ -125,7 +125,7 @@ class SinkRange : public ServerRangeBase, public Evictable {
                   uint64_t now, uint32_t& log,
                   tamer::gather_rendezvous& gr);
 
-    void invalidate();
+    inline bool valid(uint64_t now) const;
 
     virtual void evict();
     virtual uint32_t priority() const;
@@ -339,6 +339,19 @@ inline uint64_t Evictable::last_access() const {
 
 inline void Evictable::set_last_access(uint64_t now) {
     last_access_ = now;
+}
+
+inline bool SinkRange::valid(uint64_t now) const {
+
+    for (auto sit = sinks_.begin(); sit != sinks_.end(); ++sit) {
+        Sink* sink = *sit;
+
+        if (!sink->valid() || sink->need_restart() || 
+                sink->need_update() || sink->has_expired(now))
+            return false;
+    }
+
+    return true;
 }
 
 inline Join* JoinRange::join() const {

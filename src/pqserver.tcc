@@ -342,25 +342,44 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
 
     bool completed = true;
 
-    if (t->njoins_ != 0) {
+    if (t->njoins_) {
         //std::cerr << "validating join range [" << first << ", " << last << ")" << std::endl;
 
-        if (t->njoins_ == 1) {
-            auto it = store_.lower_bound(first, KeyCompare());
-            auto itx = it;
-            if ((itx == store_.end() || itx->key() >= last) && itx != store_.begin())
-                --itx;
-            if (itx != store_.end() && itx->key() < last && itx->owner()
-                    && itx->owner()->valid() && !itx->owner()->has_expired(now)
-                    && itx->owner()->ibegin() <= first && last <= itx->owner()->iend()
-                    && !itx->owner()->need_restart()
-                    && !itx->owner()->need_update()) {
-                if (itx->owner()->join()->maintained())
-                    server_->lru_touch(const_cast<SinkRange*>(itx->owner()->range()));
-                return std::make_pair(true, iterator(this, it, this));
+        // first, lookup a key in this range. if it's SinkRange is valid and
+        // covers the whole lookup we do not need to do anymore work
+        auto kit = store_.lower_bound(first, KeyCompare());
+        auto kitx = kit;
+        SinkRange* sr = nullptr;
+
+        if ((kitx == store_.end() || kitx->key() >= last) && kitx != store_.begin())
+            --kitx;
+        if (kitx != store_.end() && kitx->key() < last && kitx->owner()) {
+            sr = const_cast<SinkRange*>(kitx->owner()->range());
+
+            // single range covers lookup?
+            if (sr->ibegin() <= first && last <= sr->iend()) {
+                if (sr->valid(now)) {
+                    server_->lru_touch(sr);
+                    return std::make_pair(true, iterator(this, kit, this));
+                }
             }
+            else
+                sr = nullptr;
         }
 
+        // we found a single SinkRange above that covers the lookup range, 
+        // but it is invalid. just try to validate it and move on
+        if (sr) {
+            if (sr->validate(first, last, *server_, now, log, gr)) {
+                server_->lru_touch(sr);
+                return std::make_pair(true, lower_bound(first));
+            }
+            else
+                return std::make_pair(false, end());
+        }
+
+        // either no valid SinkRange was found or the lookup is 
+        // outside the span of the SinkRange found. fill in the gaps.
         local_vector<SinkRange*, 4> ranges;
         collect_ranges(first, last, ranges,
                        &Table::sink_ranges_, &Table::swr::sink);
@@ -370,8 +389,6 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
 
         auto it = ranges.begin();
         while (have < last) {
-            SinkRange* sr;
-
             if (it != ranges.end() && have >= (*it)->ibegin()) {
                 sr = *it;
                 //std::cerr << "  existing sink range: " << sr->interval() << std::endl;
