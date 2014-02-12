@@ -93,7 +93,7 @@ def make_lineplot(expname, resdir, params):
             datafile.write(str(p))
             
             for l in params['lines']:
-                datafile.write('\t' + extract_data(os.path.join(resdir, l + "_" + str(p)), d))
+                datafile.write('\t' + extract_data(os.path.join(resdir, l + "-" + str(p)), d))
             datafile.write("\n")
         datafile.close()
 
@@ -180,7 +180,7 @@ def make_agg_data(resdir, expname, repeat):
         df = df.dropna(axis=1)
         dfs.append(df)
         
-    alldf = pd.concat(dfs).groupby(level=0).agg([np.mean, np.std, np.min, np.max])
+    alldf = pd.concat(dfs).groupby(level=0).agg([np.mean, np.std, np.median, np.min, np.max])
     
     with open(os.path.join(resdir, expname + ".dat"), "w") as fp:
         fp.write("#")
@@ -188,6 +188,7 @@ def make_agg_data(resdir, expname, repeat):
 
 def make_summary(expname, resdir, params, repeat):
     cols = [d['attr'] for d in params['data']]
+    nstat = 5
     
     if params['type'] == 'line':
         dcount = 0
@@ -201,9 +202,9 @@ def make_summary(expname, resdir, params, repeat):
             
             plotfile.write("plot ")
             for i in range(len(params['lines'])):
-                plotfile.write("'" + plotname + ".dat' u 1:" + str(i+2) + \
+                plotfile.write("'" + plotname + ".dat' u 1:" + str(i*nstat+4) + \
                                " w l ls " + str(i+1) + " t '" + params['lines'][i] + "', \\\n     " + \
-                               "'" + plotname + ".dat' u 1:" + str(i+2) + ":" + str(i+4) + ":" + str(i+5) + \
+                               "'" + plotname + ".dat' u 1:" + str(i*nstat+4) + ":" + str(i*nstat+5) + ":" + str(i*nstat+6) + \
                                " w errorbars ls " + str(i+1) + " notitle")
                 if i < len(params['lines']) - 1:
                     plotfile.write(", \\\n")
@@ -226,7 +227,7 @@ def make_summary(expname, resdir, params, repeat):
                            "set boxwidth 0.9\n" + \
                            "unset key\n\n")
             
-            plotfile.write("plot '" + plotname + ".dat' u 2:4:5:xtic(1) w hist lt 1 fs solid 0.6 t col")
+            plotfile.write("plot '" + plotname + ".dat' u 4:5:6:xtic(1) w hist lt 1 fs solid 0.6 t col")
                     
             plotfile.close()
             dcount += 1
