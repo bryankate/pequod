@@ -90,8 +90,6 @@ class Table : public Datum {
     inline iterator erase_invalid(iterator it);
     inline uint32_t erase_purge(Str first, Str last);
 
-    inline bool flush_for_pull(uint64_t now);
-
     void evict_persisted(PersistedRange* pr);
     void evict_remote(RemoteRange* rr);
     void evict_sink(SinkRange* sink);
@@ -110,8 +108,6 @@ class Table : public Datum {
     enum { subtable_hash_size = 8 };
     HashTable<uint64_t, Table*> subtables_;
     unsigned njoins_;
-    uint64_t flush_at_;
-    bool all_pull_;
     Server* server_;
     Table* parent_;
 
@@ -144,7 +140,6 @@ class Table : public Datum {
                        Datum* d, Str key, const Sink* sink, String value);
     void notify(Datum* d, const String& old_value, SourceRange::notify_type notifier);
 
-    bool hard_flush_for_pull(uint64_t now);
     inline void invalidate_dependents_local(Str first, Str last);
     void invalidate_dependents_down(Str first, Str last);
 
@@ -647,10 +642,6 @@ inline uint32_t Table::erase_purge(Str first, Str last) {
     }
 
     return purged;
-}
-
-inline bool Table::flush_for_pull(uint64_t now) {
-    return all_pull_ && flush_at_ != now && hard_flush_for_pull(now);
 }
 
 inline void Server::insert(Str key, const String& value) {

@@ -38,7 +38,7 @@ JoinRange::JoinRange(Str first, Str last, Join* join)
 }
 
 SinkRange::SinkRange(Str first, Str last, Table* table)
-    : ServerRangeBase(first, last), table_(table), flush_at_(0) {
+    : ServerRangeBase(first, last), table_(table) {
 }
 
 SinkRange::~SinkRange() {
@@ -107,19 +107,6 @@ bool SinkRange::validate(Str first, Str last, Server& server,
 
     for (auto sit = sinks_.begin(); sit != sinks_.end(); ++sit) {
         Sink* sink = *sit;
-
-//        if (!sink->join()->maintained() && !sink->join()->staleness() && flush_at_ != now) {
-//            Table& t = server.table_for(first, last);
-//            if (t.flush_for_pull(now)) {
-//                while (Sink* sink = valid_ranges_.unlink_leftmost_without_rebalance())
-//                    delete sink;        // XXX be careful of refcounting
-//            } else {
-//                while (!valid_ranges_.empty())
-//                    valid_ranges_.begin()->invalidate();
-//            }
-//            flush_at_ = now;
-//        }
-
         sink->set_validating(true);
 
         if (unlikely(sink->has_expired(now))) {

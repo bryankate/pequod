@@ -135,7 +135,6 @@ class SinkRange : public ServerRangeBase, public Evictable {
   private:
     Table* table_;
     local_vector<Sink*, 4> sinks_;
-    uint64_t flush_at_;
 
     inline bool validate_one(Str first, Str last,
                              Sink* sink, Server& server,

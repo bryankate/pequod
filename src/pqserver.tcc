@@ -34,8 +34,7 @@ void Table::iterator::fix() {
 
 Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
-      triecut_(0), njoins_(0), flush_at_(0), all_pull_(true),
-      server_{server}, parent_{parent}, 
+      triecut_(0), njoins_(0), server_{server}, parent_{parent}, 
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
       nevict_persistent_(0), nevict_remote_(0), nevict_local_(0), nevict_sink_(0) {
 
@@ -82,7 +81,6 @@ Table* Table::make_next_table_for(Str key) {
         return &it->table();
 
     Table* t = new Table(key.prefix(triecut_), this, server_);
-    t->all_pull_ = false;
     store_.insert_before(it, *t);
 
     if (can_hash)
@@ -167,8 +165,6 @@ void Table::add_join(Str first, Str last, Join* join, ErrorHandler* errh) {
         }
 
     join_ranges_.insert(*new JoinRange(first, last, join));
-    if (join->maintained() || join->staleness())
-        all_pull_ = false;
     ++njoins_;
 }
 
@@ -230,7 +226,6 @@ void Table::insert(Str key, String value) {
 
     notify(d, value, p.second ? SourceRange::notify_insert : SourceRange::notify_update);
     ++ninsert_;
-    all_pull_ = false;
 }
 
 tamed void Table::erase(Str key, tamer::event<> done) {
@@ -623,16 +618,6 @@ void Table::invalidate_dependents(Str first, Str last) {
     t->invalidate_dependents_local(first, last);
     if ((t = t->parent_) && t->triecut_)
         goto retry;
-}
-
-bool Table::hard_flush_for_pull(uint64_t now) {
-    while (Datum* d = store_.unlink_leftmost_without_rebalance()) {
-        assert(!d->is_table());
-        invalidate_dependents(d->key());
-        d->invalidate();
-    }
-    flush_at_ = now;
-    return true;
 }
 
 tamed void Table::fetch_persisted(String first, String last, tamer::event<> done) {
