@@ -266,9 +266,6 @@ def define_experiments():
     # cache join comparison
     # compute karma as a single table or interleaved with article data
     # can be run on a multiprocessor
-    #
-    # note: a hack needs to be enabled by turning on the compile-time flag 
-    #       hn_interleaved_hack flag
     exp = {'name': "karma", 'defs': []}
     clientBase = "./obj/pqserver --hn --nops=10000000 --large --run_only"
     populateCmd = "./obj/pqserver --hn --narticles=100000 --nusers=50000 --populate_only"
