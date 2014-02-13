@@ -34,7 +34,7 @@ def define_experiments():
                      (clientCmd, users, active, active)
         
         exp['defs'].append(
-            {'name': "hybrid-%d" % (active),
+            {'name': "hybrid_%d" % (active),
              'def_part': partfunc,
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
@@ -43,7 +43,7 @@ def define_experiments():
              'clientcmd': "%s --no-prevalidate" % (clientBase)})
     
         exp['defs'].append(
-            {'name': "pull-%d" % (active),
+            {'name': "pull_%d" % (active),
              'def_part': partfunc,
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
@@ -52,7 +52,7 @@ def define_experiments():
              'clientcmd': "%s --pull" % (clientBase)})
         
         exp['defs'].append(
-            {'name': "push-%d" % (active),
+            {'name': "push_%d" % (active),
              'def_part': partfunc,
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
