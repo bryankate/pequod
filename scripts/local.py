@@ -2,6 +2,7 @@
 
 import sys
 import os
+import platform
 from os import system
 import signal
 import subprocess
@@ -139,7 +140,11 @@ def run_cmd_bg(cmd, outfile=None, errfile=None, sh=False):
     
     print cmd
     logfd.write(cmd + "\n")
-    return (Popen(cmd.split(), stdout=outfd, stderr=errfd, shell=sh), outfd, errfd)
+
+    proc = Popen(cmd.split(), stdout=outfd, stderr=errfd, shell=sh)
+    if platform.system() == 'Linux':
+        subprocess.call("sudo sh -c 'echo -1000 > /proc/" + str(proc.pid) + "/oom_score_adj'", shell=True)
+    return (proc, outfd, errfd)
 
 def run_cmd(cmd, outfile=None, errfile=None, sh=False):
     wait_for_proc(run_cmd_bg(cmd, outfile, errfile, sh))
