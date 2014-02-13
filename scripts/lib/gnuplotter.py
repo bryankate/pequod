@@ -93,7 +93,7 @@ def make_lineplot(expname, resdir, params):
             datafile.write(str(p))
             
             for l in params['lines']:
-                datafile.write('\t' + extract_data(os.path.join(resdir, l + "-" + str(p)), d))
+                datafile.write('\t' + extract_data(os.path.join(resdir, l + "_" + str(p)), d))
             datafile.write("\n")
         datafile.close()
 
