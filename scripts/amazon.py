@@ -30,6 +30,7 @@ parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngro
 parser.add_option("-G", "--clustergroups", action="store", type="int", dest="cgroups", default=1)
 parser.add_option("-t", "--terminate", action="store_true", dest="terminate", default=False)
 parser.add_option("-P", "--preponly", action="store_true", dest="preponly", default=False)
+parser.add_option("-N", "--noprep", action="store_true", dest="noprep", default=False)
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
 parser.add_option("-A", "--keepalive", action="store_true", dest="keepalive", default=False)
 parser.add_option("-R", "--keeproles", action="store_true", dest="keeproles", default=False)
@@ -49,6 +50,7 @@ ngroups = options.ngroups
 cgroups = options.cgroups
 terminate = options.terminate
 preponly = options.preponly
+noprep = options.noprep
 justkill = options.kill
 invoke = options.invoke
 filter = options.filter
@@ -243,50 +245,52 @@ serverconns = []
 
 remote_tmpdir = "/mnt/pequod"
 
-print "Testing SSH connections."
-for h in running:
-    while ec2.run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
-        print "Waiting for SSH access to " + h.public_dns_name
-        sleep(5)
+if not noprep:
+    print "Testing SSH connections."
+    for h in running:
+        while ec2.run_ssh_command(h.public_dns_name, "echo 2>&1 \"%s is alive\"" % (h.public_dns_name)) != 0:
+            print "Waiting for SSH access to " + h.public_dns_name
+            sleep(5)
 
-debs = ("htop iftop numactl build-essential gdb valgrind autoconf libtool " + 
-        "git libev-dev libjemalloc-dev flex bison " +
-        "libboost-dev libboost-thread-dev libboost-system-dev")
+    debs = ("htop iftop numactl build-essential gdb valgrind autoconf libtool " + 
+            "git libev-dev libjemalloc-dev flex bison " +
+            "libboost-dev libboost-thread-dev libboost-system-dev")
 
-installcmd = "sudo mkdir -p " + remote_tmpdir + \
-             "; sudo chown ubuntu:ubuntu " + remote_tmpdir + \
-             "; sudo chmod 777 " + remote_tmpdir + \
-             "; mkdir -p " + os.path.join(remote_tmpdir, "cores") + \
-             "; sudo bash -c 'echo " + os.path.join(remote_tmpdir, "cores", "core.%p") + " > /proc/sys/kernel/core_pattern'; " + \
-             "; sudo apt-get -qq update; sudo apt-get -y install " + debs
+    installcmd = "sudo mkdir -p " + remote_tmpdir + \
+                 "; sudo chown ubuntu:ubuntu " + remote_tmpdir + \
+                 "; sudo chmod 777 " + remote_tmpdir + \
+                 "; mkdir -p " + os.path.join(remote_tmpdir, "cores") + \
+                 "; sudo bash -c 'echo " + os.path.join(remote_tmpdir, "cores", "core.%p") + " > /proc/sys/kernel/core_pattern'" + \
+                 "; sudo apt-get -qq update; sudo apt-get -y install " + debs
 
-buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
-           "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
-           "cd pequod; git checkout multi2; autoconf < configure.ac; " + \
-           "./bootstrap.sh; ./configure --with-malloc=jemalloc; make; exit"
+    buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
+               "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
+               "cd pequod; git checkout bk-master; autoconf < configure.ac; " + \
+               "./bootstrap.sh; ./configure --with-malloc=jemalloc; make; exit"
 
-graph = 'twitter_graph_40M.dat'
-graphcmd = "cd " + remote_tmpdir + "; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
-           "tar -zxf " + graph + ".tar.gz; chmod 666 twitter*; exit"
+    graph = 'twitter_graph_40M.dat'
+    graphcmd = "cd " + remote_tmpdir + "; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
+               "tar -zxf " + graph + ".tar.gz; chmod 666 twitter*; exit"
 
-print "Checking instance preparedness."
-prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software")
-prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
-prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph) + " ]", graphcmd, "Fetching Twitter graph")
 
-for h in running:
-    print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
-    ec2.run_ssh_command(h.public_dns_name, "cd pequod; git pull -q; make -s; exit")
+    print "Checking instance preparedness."
+    prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software")
+    prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
+    #prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph) + " ]", graphcmd, "Fetching Twitter graph")
 
-print "Checking that pequod is built on all servers."
-pqexists = True
-for h in running:
-    if ec2.run_ssh_command(h.public_dns_name, "[ -x pequod/obj/pqserver ]") != 0:
-        print "Instance " + h.id + " (" + h.public_dns_name + ") does not have pqserver!"
-        pqexists = False
+    for h in running:
+        print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
+        ec2.run_ssh_command(h.public_dns_name, "cd pequod; git pull -q; make -s; exit")
 
-if not pqexists:        
-    exit(-1)
+    print "Checking that pequod is built on all servers."
+    pqexists = True
+    for h in running:
+        if ec2.run_ssh_command(h.public_dns_name, "[ -x pequod/obj/pqserver ]") != 0:
+            print "Instance " + h.id + " (" + h.public_dns_name + ") does not have pqserver!"
+            pqexists = False
+
+    if not pqexists:        
+        exit(-1)
 
 if (preponly):
     exit(0)
@@ -338,7 +342,7 @@ for x in exps:
             logfd.flush()
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; ulimit -c unlimited; " + full_cmd))
 
-        sleep(5)
+        sleep(30)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
@@ -351,6 +355,8 @@ for x in exps:
             logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
             logfd.flush()
             ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; ulimit -c unlimited; " + full_cmd)
+
+        sleep(5)
 
         if 'populatecmd' in e:
             print "Populating backend."
@@ -371,6 +377,8 @@ for x in exps:
             
             for p in clientprocs:
                 p.wait()
+
+        sleep(5)
 
         print "Starting app clients."
         clientcmd = e['clientcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
