@@ -208,44 +208,60 @@ void PQHackerNewsShim<S>::initialize(bool log, bool mk, bool ma, bool push, tame
     if (mk) {
         // Materialize karma in a separate table
         std::cerr << "Materializing karma table\n";
-        join_str = "k|<author:7> = "
-            "count v|<author><seqid:7>|<voter:7>";
+        join_str = "k|<author> = "
+            "count v|<author><seqid>|<voter> "
+            "where author:7, seqid:7, voter:7";
         start = "k|";
         end = "k}";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
+
+        // Materialize the article vote count
+        join_str = "p|<aid> = "
+            "count v|<aid>|<voter> "
+            "where aid:14, voter:7";
+        start = "p|";
+        end = "p}";
+        twait { this->server_.add_join(start, end, join_str, make_event(j[1])); }
     }
     if (ma) {
-        // Materialize all articles
         std::cerr << "Materializing all article pages\n";
         start = "ma|";
         end = "ma}";
+
         // Materialize articles
-        join_str = "ma|<author:7><seqid:7>|a = "
-            "a|<author><seqid> ";
+        join_str = "ma|<aid>|a = "
+            "a|<aid> "
+            "where aid:14";
         twait { this->server_.add_join(start, end, join_str, make_event(j[0])); }
+
         // Materialize votes
-        join_str = "ma|<author:7><seqid:7>|v = "
-            "count v|<author><seqid>|<voter:7> ";
+        join_str = "ma|<aid>|v = "
+            "copy p|<aid> "
+            "where aid:14";
         twait { this->server_.add_join(start, end, join_str, make_event(j[1])); } 
+
         // Materialize comments
-        join_str = "ma|<author:7><seqid:7>|c|<cid:7>|<commenter:7> = "
-            "c|<author><seqid>|<cid>|<commenter> ";
+        join_str = "ma|<aid>|c|<cid>|<commenter> = "
+            "c|<aid>|<cid>|<commenter> "
+            "where aid:14, cid:7, commenter:7";
         twait { this->server_.add_join(start, end, join_str, make_event(j[2])); }
 
     } 
     if (ma && !mk) {
         std::cerr << "Materialize karma inline\n";
         mandatory_assert(false && "This is producing irregular counts");
-        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
+        join_str = "ma|<aid>|k|<cid>|<commenter> = "
             "using c|<aid>|<cid>|<commenter> "
-            "count v|<commenter><seq:7>|<voter:7>";
+            "count v|<commenter><seqid>|<voter> "
+            "where aid:14, cid:7, commenter:7, seqid:7, voter:7";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     if (ma && mk) {
         std::cerr << "Materialize karma inline from karma table\n";
-        join_str = "ma|<aid:14>|k|<cid:7>|<commenter:7> = "
+        join_str = "ma|<aid>|k|<cid>|<commenter> = "
             "using c|<aid>|<cid>|<commenter> "
-            "copy k|<commenter>";
+            "copy k|<commenter> "
+            "where aid:14, cid:7, commenter:7";
         twait { this->server_.add_join(start, end, join_str, make_event(j[3])); }
     }
     if (log) {
@@ -283,7 +299,7 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
                                        karmas_type& check_karmas, bool check, event<> e) {
     tvars {
         typename S::scan_result scan_resultma, scan_resultc;
-        String field, user, avalue, kvalue;
+        String field, user, avalue, kvalue, pvalue;
         uint32_t my_karma, karma;
         size_t votect;
         typename S::iterator bit, cit;
@@ -312,16 +328,17 @@ void PQHackerNewsShim<S>::read_article(uint32_t aid, uint32_t author,
             }
         }
     } else {
-        sprintf(buf1_, "a|%07d%07d c|%07d%07d| v|%07d%07d|", 
+        sprintf(buf1_, "a|%07d%07d c|%07d%07d| p|%07d%07d", 
                 author, aid, author, aid, author, aid);
-        sprintf(buf2_, "c|%07d%07d} v|%07d%07d}", author, aid, author, aid);
+        sprintf(buf2_, "c|%07d%07d}", author, aid);
 
         // get article, comments, and vote count in parallel
         server_.get(Str(buf1_, 16), gr.make_event(avalue));
         server_.scan(Str(buf1_ + 17, 17), Str(buf2_, 17), gr.make_event(scan_resultc));
-        server_.count(Str(buf1_ + 35, 17), Str(buf2_ + 18, 17), gr.make_event(votect));
+        server_.get(Str(buf1_ + 35, 16), gr.make_event(pvalue));
         twait(gr);
 
+        votect = pvalue.to_i();
         this->total_articles++;
 
         if (log_) {
