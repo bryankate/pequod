@@ -34,6 +34,7 @@ parser.add_option("-A", "--startcpu", action="store", type="int", dest="startcpu
 parser.add_option("-P", "--perfserver", action="store", type="int", dest="perfserver", default=-1)
 parser.add_option("-S", "--straceserver", action="store", type="int", dest="straceserver", default=-1)
 parser.add_option("-R", "--repeat", action="store", type="int", dest="repeat", default=1)
+parser.add_option("-Y", "--syncport", action="store", type="int", dest="syncport", default=13333)
 parser.add_option("-f", "--part", action="store", type="string", dest="part", default=None)
 parser.add_option("-g", "--clientgroups", action="store", type="int", dest="ngroups", default=1)
 parser.add_option("-D", "--dbstartport", action="store", type="int", dest="dbstartport", default=10000)
@@ -55,6 +56,7 @@ startcpu = options.startcpu
 perfserver = options.perfserver
 straceserver = options.straceserver
 repeat = options.repeat
+syncport = options.syncport
 ngroups = options.ngroups
 dbstartport = options.dbstartport
 dumpdb = options.dumpdb
@@ -416,9 +418,13 @@ for x in exps:
                         pin = "numactl -C " + (clientcpulist if clientcpulist and npop > 1 \
                                                              else str(startcpu + nprocesses + c)) + " "
                                 
-                    full_cmd = pin + popcmd + \
-                        " --ngroups=" + str(npop) + " --groupid=" + str(c)
-    
+                    if npop > 1:
+                        grouparg = " --ngroups=" + str(npop) + " --groupid=" + str(c) + \
+                                   " --master-port=" + str(syncport)
+                    else:
+                        grouparg = ""
+
+                    full_cmd = pin + popcmd + grouparg
                     popprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile));
                 
                 for p in popprocs:
@@ -477,9 +483,13 @@ for x in exps:
                 if affinity:
                     pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
     
-                full_cmd = pin + clientcmd + \
-                           " --ngroups=" + str(ngroups) + " --groupid=" + str(c)
-    
+                if ngroups > 1:
+                    grouparg = " --ngroups=" + str(npop) + " --groupid=" + str(c) + \
+                               " --master-port=" + str(syncport)
+                else:
+                    grouparg = ""
+
+                full_cmd = pin + clientcmd + grouparg
                 clientprocs.append(run_cmd_bg(full_cmd, outfile, fartfile));
                 
             # wait for clients to finish
