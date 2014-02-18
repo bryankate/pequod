@@ -71,7 +71,7 @@ exph.close()
 
 def kill():
     print "Going nuclear on EC2"
-    ec2.terminate_machines(ec2.get_all_instances())
+    ec2.terminate_machines([i for i in ec2.get_all_instances() if 'hold' not in i.tags])
     ec2.cancel_spot_requests(ec2.get_all_spot_requests())
     exit(0)
 
