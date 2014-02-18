@@ -58,7 +58,7 @@ ondemand = options.ondemand
 keepalive = options.keepalive
 keeproles = options.keeproles
 user = options.user
-startport = 9000
+startport = 7000
 
 topdir = None
 uniquedir = None
