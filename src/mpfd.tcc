@@ -33,6 +33,8 @@ msgpack_fd::~msgpack_fd() {
 
 void msgpack_fd::write(const Json& j) {
     wrelem* w = &wrelem_.back();
+    if (wrsize_ >= wrlowat_ && !wrblocked_)
+        write_once();
     if (w->sa.length() >= wrhiwat) {
         wrelem_.push_back(wrelem());
         w = &wrelem_.back();

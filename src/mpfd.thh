@@ -14,6 +14,9 @@ class msgpack_fd {
     inline msgpack_fd(tamer::fd rfd, tamer::fd wfd);
     ~msgpack_fd();
 
+    inline size_t wrlowat() const;
+    inline void set_wrlowat(size_t wrlowat);
+
     void write(const Json& j);
     template <typename R>
     void read_request(tamer::preevent<R, Json> done);
@@ -29,7 +32,7 @@ class msgpack_fd {
     tamer::fd wfd_;
     tamer::fd rfd_;
 
-    enum { wrcap = 1 << 17, wrlowat = 1 << 12, wrhiwat = wrcap - 2048 };
+    enum { wrcap = 1 << 17, wrhiwat = wrcap - 2048 };
     struct wrelem {
         StringAccum sa;
         int pos;
@@ -41,6 +44,7 @@ class msgpack_fd {
     std::deque<wrelem> wrelem_;
     size_t wrpos_;
     size_t wrsize_;
+    size_t wrlowat_;
     bool wrblocked_;
     std::deque<flushelem> flushelem_;
     tamer::event<> wrwake_;
@@ -85,12 +89,12 @@ class msgpack_fd {
 };
 
 inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd)
-    : wfd_(wfd), rfd_(rfd) {
+    : wfd_(wfd), rfd_(rfd), wrlowat_((size_t) -1) {
     initialize();
 }
 
 inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : wfd_(fd), rfd_(fd) {
+    : wfd_(fd), rfd_(fd), wrlowat_((size_t) -1) {
     initialize();
 }
 
@@ -147,6 +151,14 @@ inline Json msgpack_fd::status() const {
     return Json().set("buffered_write_bytes", wrsize_)
         .set("buffered_read_bytes", rdlen_ - rdpos_)
         .set("waiting_readers", rdreqwait_.size() + rdreplywait_.size());
+}
+
+inline size_t msgpack_fd::wrlowat() const {
+    return wrlowat_;
+}
+
+inline void msgpack_fd::set_wrlowat(size_t wrlowat) {
+    wrlowat_ = wrlowat;
 }
 
 #endif

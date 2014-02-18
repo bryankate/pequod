@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_CONFIG_AUX_DIR(tamer)
+AC_CONFIG_AUX_DIR([tamer])
 AC_PREREQ(2.60)
 
 AC_INIT([pequod], [0.1])
