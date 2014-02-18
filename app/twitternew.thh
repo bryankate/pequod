@@ -124,6 +124,7 @@ class TwitterNewPopulator {
     inline bool prevalidate_inactive() const { return prevalidate_inactive_; }
     inline bool prevalidate_before_sub() const { return prevalidate_before_sub_; }
     inline bool writearound() const { return writearound_; }
+    inline bool report() const { return report_ && ngroups_ > 1; }
     inline bool log() const { return log_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
@@ -202,6 +203,7 @@ class TwitterNewPopulator {
     bool prevalidate_inactive_;
     bool prevalidate_before_sub_;
     bool writearound_;
+    bool report_;
     bool log_;
     bool synchronous_;
     bool visualize_;
@@ -892,7 +894,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
         ++currtime_;
 
-        if (tp_.ngroups() > 1 && currtime_ % PROG_REPORT_PERIOD == 0) {
+        if (tp_.report() && currtime_ % PROG_REPORT_PERIOD == 0) {
             twait { drain(gr, make_event()); }
             twait { server_.update_progress(currtime_, make_event(slowest)); }
             if (currtime_ - slowest >= RATE_LIMIT_THRESH)

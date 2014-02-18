@@ -83,6 +83,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
       prevalidate_before_sub_(param["prevalidate_before_sub"].as_b(false)),
       writearound_(param["writearound"].as_b(false)),
+      report_(param["progress_report"].as_b(true)),
       log_(param["log"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
