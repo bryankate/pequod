@@ -311,6 +311,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
         TwitterNewRunner<remote_shim_type>* tr = new TwitterNewRunner<remote_shim_type>(*shim, tp);
     }
     twait { mc->connect(make_event()); }
+    mc->set_wrlowat(1 << 11);
     twait { tr->initialize(make_event()); }
     twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }

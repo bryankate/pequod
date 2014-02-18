@@ -54,6 +54,7 @@ tamed void run_rwmicro_pqremote(Json& tp_param, int client_port) {
     }
     twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)}, client_port, make_event(fd)); }
     rc = new RemoteClient(fd);
+    rc->set_wrlowat(1 << 11);
     shim = new pq_shim_type(*rc);
     rw = new pq::RwMicro<pq_shim_type>(tp_param, *shim);
     rw->safe_run();

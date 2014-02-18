@@ -16,6 +16,7 @@ tamed void run_hn_remote(HackernewsPopulator& hp, int client_port,
         double start, midway, end;
     }
     twait { mc->connect(make_event()); }
+    mc->set_wrlowat(1 << 11);
     twait { hr->populate(make_event()); }
     midway = tstamp();
     twait { hr->run(make_event()); }

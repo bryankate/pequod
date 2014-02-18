@@ -56,6 +56,8 @@ class MultiClient {
     tamed void pace(tamer::event<> done);
     tamed void flush(tamer::event<> done);
 
+    inline void set_wrlowat(size_t limit);
+
   private:
     inline RemoteClient* cache_for(const String &key) const;
     inline DBPool* backend_for(const String &key) const;
@@ -95,6 +97,13 @@ inline RemoteClient* MultiClient::cache_for(const String &key) const {
         assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
         return clients_[owner];
     }
+}
+
+inline void MultiClient::set_wrlowat(size_t limit) {
+    for (auto &c : clients_)
+        c->set_wrlowat(limit);
+    if (localNode_)
+        localNode_->set_wrlowat(limit);
 }
 
 }

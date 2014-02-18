@@ -37,6 +37,8 @@ class RemoteClient {
     template <typename R>
     inline void pace(tamer::preevent<R> done);
 
+    inline void set_wrlowat(size_t limit);
+
     class iterator;
     class scanpair {
       public:
@@ -146,6 +148,11 @@ inline msgpack_fd* RemoteClient::fd() const {
 template <typename R>
 inline void RemoteClient::pace(tamer::preevent<R> done) {
     fd_->pace(done);
+}
+
+inline void RemoteClient::set_wrlowat(size_t limit) {
+    assert(fd_);
+    fd_->set_wrlowat(limit);
 }
 
 } // namespace pq
