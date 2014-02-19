@@ -172,7 +172,7 @@ def scp_from(machine, fromfile, tofile):
     Popen(cmd, shell=True).wait()
 
 def run_ssh_command_bg(machine, cmd):
-    sshcmd = "ssh -A -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s ubuntu@%s \"%s\"" % \
+    sshcmd = "ssh -A -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlPath=none -i %s ubuntu@%s \"%s\"" % \
              (SSH_KEY, machine, cmd)
     return Popen(shlex.split(sshcmd))
 
