@@ -14,6 +14,7 @@
 #include <sys/resource.h>
 
 std::vector<pq::Interconnect*> interconnect_;
+bool ready_ = false;
 bool backend_ = true;
 uint32_t round_robin_ = 0;
 
@@ -59,6 +60,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         done(true);
 
     command = j[0].as_i();
+    assert(ready_ || command == pq_control);
 
     rj[0] = -command;
     rj[1] = j[1];
@@ -184,7 +186,9 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
 
         // stuff the server does not know about
         if (j[2].is_o()) {
-            if (j[2]["get_log"])
+            if (j[2]["is_ready"])
+                rj[3] = true;
+            else if (j[2]["get_log"])
                 rj[3] = Json().set("backend", backend_)
                               .set("data", log_.as_json())
                               .set("internal", server.logs());
@@ -398,14 +402,16 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
         }
     }
 
+    if (hosts) {
+        backend_ = part->is_backend(me->seqid());
+        interconnect_.assign(hosts->size(), nullptr);
+    }
+
     std::cerr << "listening on port " << port << "\n";
     acceptor(tamer::tcp_listen(port), server);
 
     // if this is a cluster deployment, make connections to each server
     if (hosts) {
-        backend_ = part->is_backend(me->seqid());
-        interconnect_.assign(hosts->size(), nullptr);
-
         do {
             twait { tamer::at_delay(delay, make_event()); }
             twait { initialize_interconnect(server, hosts, me, part,
@@ -415,5 +421,6 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
         server.set_cluster_details(me->seqid(), interconnect_, part);
     }
 
+    ready_ = true;
     interrupt_catcher();
 }
