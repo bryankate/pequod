@@ -398,6 +398,9 @@ for x in exps:
             logfd.write(chost + ": " + full_cmd + "\n")
             logfd.flush()
             clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; ulimit -c unlimited; " + full_cmd))
+
+            if (c == 0):
+                sleep(5)
             
         # wait for clients to finish
         for p in clientprocs:
