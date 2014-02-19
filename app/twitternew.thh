@@ -738,7 +738,7 @@ void TwitterNewRunner<S>::drain(gather_rendezvous& r, event<> e) {
     // to generate more I/O, hence the need for the loop.
     while(r.has_waiting()) {
         twait { server_.flush(make_event()); }
-        twait { tamer::at_delay_msec(10, make_event()); }
+        twait { tamer::at_delay_msec(1, make_event()); }
     }
     e();
 }
@@ -762,6 +762,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
+        bool servers_ready = true;
         tamer::gather_rendezvous gr;
     }
 
@@ -774,6 +775,22 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait { register_with_master(make_event()); }
     else if (tp_.ngroups() > 1)
         registrar();
+
+    if (!tp_.groupid()) {
+        do {
+            if (tp_.verbose()) { std::cerr << "Checking server readiness." << std::endl; }
+            twait { tamer::at_delay_sec(1, make_event()); }
+            twait { server_.control(Json().set("is_ready", true), make_event(j)); }
+        
+            if (!j.is_array())
+                j = Json::array(j);
+
+            servers_ready = true;
+            for (auto it = j.abegin(); it != j.aend(); ++it)
+                servers_ready &= it->as_b();
+        }
+        while(!servers_ready);
+    }
 
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
