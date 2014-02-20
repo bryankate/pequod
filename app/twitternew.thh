@@ -831,6 +831,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait { drain(gr, make_event()); }
     }
 
+    if (tp_.ngroups() > 1)
+        twait { wait_at_barrier(make_event()); }
+
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
     gettimeofday(&tv[0], 0);
