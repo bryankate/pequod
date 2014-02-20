@@ -13,8 +13,7 @@ def define_experiments():
     serverCmd = "./obj/pqserver"
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
-    populateCmd = "%s %s --no-initialize --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s %s --no-initialize --no-populate " % (appCmd, binaryflag, fetch)
+    clientCmd = "%s %s %s --no-initialize --popduration=0" % (appCmd, binaryflag, fetch)
 
     # policy experiment
     # can be run on on a multiprocessor
@@ -28,7 +27,6 @@ def define_experiments():
     
     points = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     for active in points:
-        popBase = "%s %s --popduration=0" % (populateCmd, users)
         clientBase = "%s %s --pactive=%d --duration=1000000000 --postlimit=1000000 " \
                      "--ppost=1 --pread=%d --psubscribe=0 --plogout=0" % \
                      (clientCmd, users, active, active)
@@ -39,7 +37,6 @@ def define_experiments():
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
              'initcmd': "%s" % (initCmd),
-             'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --no-prevalidate" % (clientBase)})
     
         exp['defs'].append(
@@ -48,7 +45,6 @@ def define_experiments():
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
              'initcmd': "%s --pull" % (initCmd),
-             'populatecmd': "%s" % (popBase),
              'clientcmd': "%s --pull" % (clientBase)})
         
         exp['defs'].append(
@@ -57,7 +53,6 @@ def define_experiments():
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
              'initcmd': "%s --push" % (initCmd),
-             'populatecmd': "%s --push" % (popBase),
              'clientcmd': "%s --push --prevalidate --prevalidate-inactive" % (clientBase)})
     
     exp['plot'] = {'type': "line",
@@ -77,7 +72,6 @@ def define_experiments():
     # fix the post:check ratio at 1:100 
     exp = {'name': "client_push", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    popBase = "%s %s --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
@@ -88,7 +82,6 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s" % (popBase),
          'clientcmd': "%s --no-prevalidate" % (clientBase)})
     
     exp['defs'].append(
@@ -97,7 +90,6 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s" % (popBase),
          'clientcmd': "%s --prevalidate" % (clientBase)})
     
     exp['defs'].append(
@@ -106,7 +98,6 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --push" % (initCmd),
-         'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
     
     exp['plot'] = {'type': "stackedbar",
@@ -138,7 +129,6 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s %s --popduration=0" % (populateCmd, users),
          'clientcmd': "%s" % (clientBase)})
     exps.append(exp)
     
@@ -158,7 +148,6 @@ def define_experiments():
     # 2. with backing servers to demonstrate the added latency for the extra hop
     exp = {'name': "computation", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    popBase = "%s %s --popduration=1000000" % (populateCmd, users),
     clientBase = "%s %s --no-prevalidate --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
@@ -169,8 +158,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s" % (popBase),
-         'clientcmd': "%s" % (clientBase)})
+         'clientcmd': "%s --popduration=1000000" % (clientBase)})
     exps.append(exp)
     
    
@@ -184,7 +172,6 @@ def define_experiments():
     exp = {'name': "compare", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     initBase = "%s --no-binary" % (initCmd)
-    popBase = "%s %s --no-binary --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --no-binary --pactive=70 --duration=1000000000 --checklimit=62795845 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
@@ -195,7 +182,6 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --push" % (initBase),
-         'populatecmd': "%s --push" % (popBase),
          'clientcmd': "%s --push" % (clientBase)})
     
     exp['defs'].append(
@@ -204,13 +190,11 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initBase),
-         'populatecmd': "%s" % (popBase),
          'clientcmd': "%s" % (clientBase)})
     
     exp['defs'].append(
         {'name': "redis",
          'def_redis_compare': True,
-         'populatecmd': "%s --push --redis" % (popBase),
          'clientcmd': "%s --push --redis" % (clientBase)})
     
     exp['defs'].append(
@@ -218,7 +202,6 @@ def define_experiments():
          'def_single_pop': True,
          'def_memcache_compare': True,
          'def_memcache_args': "-m 61440 -M",
-         'populatecmd': "%s --push --memcached" % (popBase),
          'clientcmd': "%s --push --memcached" % (clientBase)})
     
     exp['defs'].append(
@@ -231,8 +214,8 @@ def define_experiments():
                          "-c full_page_writes=off  -c bgwriter_lru_maxpages=0 " + \
                          "-c shared_buffers=10GB  -c bgwriter_delay=10000 " + \
                          "-c checkpoint_segments=600 ",
-         'populatecmd': "%s --initialize --dbshim --dbpool-max=10 --dbpool-depth=100 " % (popBase),
-         'clientcmd': "%s --initialize --dbshim --dbpool-depth=100" % (clientBase)})
+         'populatecmd': "%s --initialize --no-execute --popduration=0 --no-binary --dbshim --dbpool-max=10 --dbpool-depth=100 " % (appCmd),
+         'clientcmd': "%s --initialize --no-populate --dbshim --dbpool-depth=100" % (clientBase)})
     
     exp['plot'] = {'type': "bar",
                    'data': [{'from': "client",
@@ -247,7 +230,6 @@ def define_experiments():
     exp = {'name': "scale", 'defs': []}
     users = "--graph=/pequod/twitter_graph_40M.dat"
     
-    popBase = "%s %s --popduration=0" % (populateCmd, users)
     clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
@@ -258,8 +240,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'populatecmd': "%s" % (popBase),
-         'clientcmd': "%s --no-prevalidate" % (clientBase)})
+         'clientcmd': "%s --no-prevalidate --no-progress-report" % (clientBase)})
     exps.append(exp)
 
 
