@@ -11,9 +11,11 @@
 #include "pqlog.hh"
 #include "sock_helper.hh"
 #include <vector>
+#include <set>
 #include <sys/resource.h>
 
 std::vector<pq::Interconnect*> interconnect_;
+std::set<msgpack_fd*> clients_;
 bool ready_ = false;
 bool backend_ = true;
 uint32_t round_robin_ = 0;
@@ -196,11 +198,20 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                 log_.write_json(std::cerr);
             else if (j[2]["clear_log"])
                 log_.clear();
+            else if (j[2]["client_status"]) {
+                rj[3].set("clients", Json::array()).set("interconnect", Json::array());
+                for (auto& c : clients_)
+                    rj[3]["clients"].push_back(c->status());
+                for (auto& i : interconnect_)
+                    rj[3]["interconnect"].push_back((i) ? i->fd()->status() : Json());
+            }
             else if (j[2]["interconnect"]) {
                 peer = j[2]["interconnect"].as_i();
                 assert(peer >= 0 && peer < (int32_t)interconnect_.size());
+
                 interconnect_[peer] = new pq::Interconnect(mpfd);
                 interconnect_[peer]->set_wrlowat(1 << 12);
+                clients_.erase(mpfd);
             }
         }
 
@@ -226,8 +237,11 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
 
     if (mpfd)
         mpfd_ = mpfd;
-    else
+    else {
         mpfd_ = new msgpack_fd(cfd);
+        clients_.insert(mpfd_);
+    }
+
     mpfd_->set_wrlowat(1 << 13);
 
     while (cfd) {
@@ -242,6 +256,7 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
         }
     }
 
+    clients_.erase(mpfd_);
     cfd.close();
     if (!mpfd)
         delete mpfd_;
