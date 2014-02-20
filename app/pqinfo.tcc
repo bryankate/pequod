@@ -11,7 +11,7 @@ using std::cerr;
 using std::endl;
 using namespace pq;
 
-tamed void print_stats(const String& host, uint32_t port) {
+tamed void print_info(const String& host, uint32_t port) {
     tvars {
         tamer::fd fd;
         struct sockaddr_in sin;
@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
             assert(false && "Not a parsable option.");
     }
 
-    print_stats(host, port);
+    print_info(host, port);
     tamer::loop();
     tamer::cleanup();
 
