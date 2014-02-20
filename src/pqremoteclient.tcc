@@ -146,19 +146,25 @@ tamed void RemoteClient::scan(const String& first, const String& last,
 tamed void RemoteClient::stats(event<Json> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
     twait {
+        assert(fd_->valid());
+        std::cerr << "sending stats request to " << fd_ << std::endl;
         fd_->call(Json::array(pq_stats, seq_), make_event(j));
         ++seq_;
     }
+    std::cerr << fd_ << " returned from stats: " << j << std::endl;
     e(j && j[2].to_i() == pq_ok ? j[3] : Json::make_object());
 }
 
 tamed void RemoteClient::control(const Json& cmd, event<Json> e) {
     tvars { Json j; }
     twait {
+        assert(fd_->valid());
+        std::cerr << "sending control request to " << fd_ << std::endl;
         fd_->call(Json::array(pq_control, seq_, cmd), make_event(j));
         ++seq_;
     }
 
+    std::cerr << fd_ << " returned from control: " << j << std::endl;
     assert(j && j[2].to_i() == pq_ok);
     e(j[3]);
 }

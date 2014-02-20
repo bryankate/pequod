@@ -672,7 +672,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     for (auto u = tp_.begin_managed(); u != tp_.end_managed(); ++u)
         if (tp_.is_celebrity(*u))
             server_.mark_celebrity(*u, gr.make_event());
-    twait { drain(gr, make_event()); }
+    // twait { drain(gr, make_event()); }
+    twait(gr);
 
     if (tp_.verbose()) { std::cerr << "Populating twittersphere." << std::endl; }
     while(currtime_ < post_end_time) {
@@ -682,7 +683,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
 
         twait{ server_.pace(make_event()); }
     }
-    twait { drain(gr, make_event()); }
+    // twait { drain(gr, make_event()); }
+    twait(gr);
 
     twait { server_.control(Json().set("flush_db_queue", true), make_event(j)); }
 
@@ -718,14 +720,16 @@ void TwitterNewRunner<S>::select_active(event<> done) {
             twait{ server_.pace(make_event()); }
         }
     }
-    twait { drain(gr, make_event()); }
+    // twait { drain(gr, make_event()); }
+    twait(gr);
 
     if (tp_.prevalidate_inactive()) {
         for (u = 0; u != inactive_.size(); ++u) {
             prevalidate(tp_.managed_user(inactive_[u]), gr.make_event());
             twait{ server_.pace(make_event()); }
         }
-        twait { drain(gr, make_event()); }
+        // twait { drain(gr, make_event()); }
+        twait(gr);
     }
 
     std::random_shuffle(active_.begin(), active_.end(), RandomAdapter(gen));
@@ -822,10 +826,11 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     if (!tp_.groupid()) {
         twait { server_.control(Json().set("clear_log", true), make_event(j)); }
-
-        server_.stats(gr.make_event(old_stats));
-        twait { drain(gr, make_event()); }
+        server_.stats(gr.make_event(old_stats));        
+        // twait { drain(gr, make_event()); }
+        twait(gr);
     }
+    if (tp_.verbose()) { std::cerr << "Master ready." << std::endl; }
 
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
@@ -927,14 +932,16 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         }
 
         if (tp_.synchronous())
-            twait { drain(gr, make_event()); }
+            // twait { drain(gr, make_event()); }
+            twait(gr);
         else
             twait { server_.pace(make_event()); }
 
         ++currtime_;
 
         if (tp_.report() && currtime_ % PROG_REPORT_PERIOD == 0) {
-            twait { drain(gr, make_event()); }
+            // twait { drain(gr, make_event()); }
+            twait(gr);
             twait { server_.update_progress(currtime_, make_event(slowest)); }
             if (currtime_ - slowest >= RATE_LIMIT_THRESH)
                 rate_limit = true;
@@ -969,7 +976,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             }
         }
     }
-    twait { drain(gr, make_event()); }
+    // twait { drain(gr, make_event()); }
+    twait(gr);
 
     // do a final scan for every loggedin user. this helps to ensure that
     // each distributed experiment does roughly the same amount of work
@@ -982,7 +990,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
             twait { server_.pace(make_event()); }
         }
     }
-    twait { drain(gr, make_event()); }
+    // twait { drain(gr, make_event()); }
+    twait(gr);
 
 #if TIMELINE_SANITY_CHECK
     {
@@ -1035,7 +1044,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     if (!tp_.groupid()) {
         server_.stats(gr.make_event(stats));
-        twait { drain(gr, make_event()); }
+        // twait { drain(gr, make_event()); }
+        twait(gr);
         twait {
             server_.control(Json().set("print_validation_log", true)
                                   .set("get_log", true),
