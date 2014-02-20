@@ -24,7 +24,7 @@ void msgpack_fd::construct() {
     wrelem_.back().pos = 0;
 }
 
-void msgpack_fd::initialize(tamer::fd wfd, tamer::fd rfd) {
+void msgpack_fd::initialize(tamer::fd rfd, tamer::fd wfd) {
     assert(!wfd_ && !rfd_ && !wrkill_ && !rdkill_ && !wrwake_ && !rdwake_);
     wfd_ = wfd;
     rfd_ = rfd;
