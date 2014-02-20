@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     tamer::initialize();
 
     String host = "localhost";
-    uint32_t port = 9000;
+    uint32_t port = 7000;
     String hostfile;
     const pq::Hosts* hosts = nullptr;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     }
     else
         print_info(host, port);
-    
+
     tamer::loop();
     tamer::cleanup();
 
