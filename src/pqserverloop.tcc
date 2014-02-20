@@ -187,7 +187,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         // stuff the server does not know about
         if (j[2].is_o()) {
             if (j[2]["is_ready"])
-                rj[3] = true;
+                rj[3] = ready_;
             else if (j[2]["get_log"])
                 rj[3] = Json().set("backend", backend_)
                               .set("data", log_.as_json())
