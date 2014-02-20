@@ -16,7 +16,7 @@ tamed void print_stats(const String& host, uint32_t port) {
         tamer::fd fd;
         struct sockaddr_in sin;
         RemoteClient *rclient;
-        Json j;
+        Json j, rj;
     }
 
     sock_helper::make_sockaddr(host.c_str(), port, sin);
@@ -27,9 +27,14 @@ tamed void print_stats(const String& host, uint32_t port) {
     }
 
     rclient = new RemoteClient(fd);
+    
     twait { rclient->stats(make_event(j)); }
+    rj.set("stats", j);
 
-    cout << j.unparse(Json::indent_depth(4)) << endl;
+    twait { rclient->control(Json().set("client_status", true), make_event(j)); }
+    rj.set("clients", j);
+
+    cout << rj.unparse(Json::indent_depth(4)) << endl;
     delete rclient;
 }
 
