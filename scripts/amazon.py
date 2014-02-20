@@ -349,7 +349,7 @@ for x in exps:
             logfd.flush()
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; ulimit -c unlimited; " + full_cmd))
 
-        sleep(30)
+        sleep(5)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
@@ -405,9 +405,7 @@ for x in exps:
             logfd.write(chost + ": " + full_cmd + "\n")
             logfd.flush()
             clientprocs.append(ec2.run_ssh_command_bg(chost, "cd pequod; ulimit -c unlimited; " + full_cmd))
-
-            if (c == 0):
-                sleep(5)
+            sleep(0.25)
             
         # wait for clients to finish
         for p in clientprocs:
