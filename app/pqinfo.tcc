@@ -32,7 +32,7 @@ tamed void print_stats(const String& host, uint32_t port) {
     rj.set("stats", j);
 
     twait { rclient->control(Json().set("client_status", true), make_event(j)); }
-    rj.set("clients", j);
+    rj.set("mpfd_status", j);
 
     cout << rj.unparse(Json::indent_depth(4)) << endl;
     delete rclient;
