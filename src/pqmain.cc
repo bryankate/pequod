@@ -451,14 +451,9 @@ int main(int argc, char** argv) {
 
             run_twitter_new_remote(*tp, client_port, hosts, part, dbhosts, &db_param);
         }
-        else {
-            pq::DirectClient client(server);
-            pq::TwitterNewShim<pq::DirectClient, pq::TwitterNewPopulator> shim(client, *tp);
-            pq::TwitterNewRunner<decltype(shim)> tr(shim, *tp);
-            tr.initialize(tamer::event<>());
-            tr.populate(tamer::event<>());
-            tr.run(tamer::event<>());
-        }
+        else
+            run_twitter_new_local(*tp, server);
+
     } else if (mode == mode_hn) {
         if (tp_param["large"]) {
             tp_param.set("narticles", 100000);

@@ -814,7 +814,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
 
-    if (loggedin_.empty())
+    if (active_.empty())
         twait { select_active(make_event()); }
 
     if (tp_.ngroups() > 1)
@@ -1084,6 +1084,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
 
 class DBPoolParams;
+class Server;
+
+tamed void run_twitter_new_local(TwitterNewPopulator& tp, Server& server);
 
 tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
                                   const Hosts* hosts, const Partitioner* part,

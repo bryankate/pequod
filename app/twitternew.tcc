@@ -2,6 +2,7 @@
 #include "twitternew.hh"
 #include "json.hh"
 #include "pqjoin.hh"
+#include "pqclient.hh"
 #include "pqmulticlient.hh"
 #include "pqdbpool.hh"
 #include "redisadapter.hh"
@@ -298,6 +299,24 @@ void TwitterNewPopulator::print_subscription_statistics(ostream& stream) {
            << ", max " << users_[nusers_ - 1]->nfollowers() << "\n";
 
     std::sort(users_.begin(), users_.end(), TwitterGraphNode::Compare(TwitterGraphNode::comp_uid));
+}
+
+
+typedef pq::TwitterNewShim<pq::DirectClient, pq::TwitterNewPopulator> local_shim_type;
+
+tamed void run_twitter_new_local(TwitterNewPopulator& tp, Server& server) {
+    tvars {
+        DirectClient* client = new DirectClient(server);
+        local_shim_type* shim = new local_shim_type(*client, tp);
+        TwitterNewRunner<local_shim_type>* tr = new TwitterNewRunner<local_shim_type>(*shim, tp);
+    }
+  
+    twait { tr->initialize(make_event()); }
+    twait { tr->populate(make_event()); }
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete client;
 }
 
 typedef pq::TwitterNewShim<pq::MultiClient, pq::TwitterNewPopulator> remote_shim_type;
