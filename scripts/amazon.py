@@ -185,7 +185,7 @@ def startup_instances(num, cluster, type, roletag):
         
     return running_
 
-def add_server_hosts(hfile, num, cluster, hosts):
+def add_server_hosts(hfile, efile, num, cluster, hosts):
     if num == 0:
         return
     
@@ -196,6 +196,7 @@ def add_server_hosts(hfile, num, cluster, hosts):
     c = 0
     for s in range(num):
         hfile.write(hosts[h].private_ip_address + "\t" + str(startport + s) + "\n")
+        efile.write(hosts[h].public_dns_name + "\t" + str(startport + s) + "\n")
         serverconns.append([hosts[h].public_dns_name, startport + s])
         c += 1
         if c % cluster == 0:
@@ -223,11 +224,11 @@ def prepare_experiment(xname, ename):
                 os.unlink(linkpath)
             os.symlink(expdir, linkpath)
 
-        hostpath = os.path.join(uniquedir, "hosts.txt")
-        hfile = open(hostpath, "w")
-        add_server_hosts(hfile, nbacking, cbacking, backinghosts)
-        add_server_hosts(hfile, ncaching, ccaching, cachehosts)
-        hfile.close()
+        hpath = os.path.join(uniquedir, "hosts.txt")
+        epath = os.path.join(uniquedir, "hosts-external.txt")
+        with open(hpath, "w") as hfile, open(epath, "w") as efile:
+            add_server_hosts(hfile, efile, nbacking, cbacking, backinghosts)
+            add_server_hosts(hfile, efile, ncaching, ccaching, cachehosts)
 
     resdir = os.path.join(uniquedir, xname, ename if ename else "")
     os.makedirs(resdir)
