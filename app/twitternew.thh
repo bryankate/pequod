@@ -825,12 +825,12 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait { wait_at_barrier(make_event()); }
 
     if (!tp_.groupid()) {
-        twait { server_.control(Json().set("clear_log", true), make_event(j)); }
+        server_.control(Json().set("clear_log", true), gr.make_event(j));
         server_.stats(gr.make_event(old_stats));        
         // twait { drain(gr, make_event()); }
         twait(gr);
+        if (tp_.verbose()) { std::cerr << "Master ready." << std::endl; }
     }
-    if (tp_.verbose()) { std::cerr << "Master ready." << std::endl; }
 
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
