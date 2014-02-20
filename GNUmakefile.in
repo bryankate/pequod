@@ -15,7 +15,7 @@ OBJDIR = obj
 MEMTIER_OBJDIR = $(OBJDIR)/memtier_obj
 MEMTIER_SRCDIR = $(top_srcdir)/memtier_benchmark-1.1.0
 
-TAMER_COMMIT = ea5f47c4616fd00a1205afa77ed3901355e05092
+TAMER_COMMIT = a15fad614f7f292ffb7264644a46a9a1a7af424e
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
@@ -61,7 +61,7 @@ all:    $(OBJDIR)/pqserver $(OBJDIR)/pqinfo $(OBJDIR)/poptable
 
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cc config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
-	
+
 $(OBJDIR)/%.o: $(top_srcdir)/lib/%.cpp config.h $(OBJDIR)/stamp $(DEPSDIR)/stamp
 	$(CXXCOMPILE) $(DEPCFLAGS) -c -o $@ $<
 
