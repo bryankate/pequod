@@ -10,9 +10,19 @@
 
 class msgpack_fd {
   public:
-    inline msgpack_fd(tamer::fd fd);
+    typedef bool (msgpack_fd::*unspecified_bool_type)() const;
+
+    inline msgpack_fd();
+    explicit inline msgpack_fd(tamer::fd fd);
     inline msgpack_fd(tamer::fd rfd, tamer::fd wfd);
     ~msgpack_fd();
+
+    inline void initialize(tamer::fd fd);
+    void initialize(tamer::fd rfd, tamer::fd wfd);
+
+    inline bool valid() const;
+    inline operator unspecified_bool_type() const;
+    inline bool operator!() const;
 
     inline size_t wrlowat() const;
     inline void set_wrlowat(size_t wrlowat);
@@ -26,6 +36,8 @@ class msgpack_fd {
     template <typename R>
     inline void pace(tamer::preevent<R> done);
 
+    inline size_t sent_bytes() const;
+    inline size_t recv_bytes() const;
     inline Json status() const;
 
   private:
@@ -45,6 +57,7 @@ class msgpack_fd {
     size_t wrpos_;
     size_t wrsize_;
     size_t wrlowat_;
+    size_t wrtotal_;
     bool wrblocked_;
     std::deque<flushelem> flushelem_;
     tamer::event<> wrwake_;
@@ -54,6 +67,7 @@ class msgpack_fd {
     String rdbuf_;
     size_t rdpos_;
     size_t rdlen_;
+    size_t rdtotal_;
     int rdquota_;
     msgpack::streaming_parser rdparser_;
 
@@ -82,20 +96,42 @@ class msgpack_fd {
     inline void check_coroutines();
     tamed void writer_coroutine();
     tamed void reader_coroutine();
+    void clear_write();
+    void clear_read();
 
     msgpack_fd(const msgpack_fd&) = delete;
     msgpack_fd& operator=(const msgpack_fd&) = delete;
-    void initialize();
+    void construct();
 };
 
-inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd)
-    : wfd_(wfd), rfd_(rfd), wrlowat_((size_t) -1) {
-    initialize();
+inline msgpack_fd::msgpack_fd() {
+    construct();
 }
 
-inline msgpack_fd::msgpack_fd(tamer::fd fd)
-    : wfd_(fd), rfd_(fd), wrlowat_((size_t) -1) {
-    initialize();
+inline msgpack_fd::msgpack_fd(tamer::fd rfd, tamer::fd wfd) {
+    construct();
+    initialize(wfd, rfd);
+}
+
+inline msgpack_fd::msgpack_fd(tamer::fd fd) {
+    construct();
+    initialize(fd);
+}
+
+inline void msgpack_fd::initialize(tamer::fd fd) {
+    initialize(fd, fd);
+}
+
+inline bool msgpack_fd::valid() const {
+    return rfd_.valid() && wfd_.valid();
+}
+
+inline msgpack_fd::operator unspecified_bool_type() const {
+    return valid() ? &msgpack_fd::valid : 0;
+}
+
+inline bool msgpack_fd::operator!() const {
+    return !valid();
 }
 
 template <typename R>
@@ -144,6 +180,14 @@ inline void msgpack_fd::pace(tamer::preevent<R> done) {
         pacer_ = tamer::distribute(std::move(pacer_), std::move(done));
     else
         done();
+}
+
+inline size_t msgpack_fd::sent_bytes() const {
+    return wrtotal_;
+}
+
+inline size_t msgpack_fd::recv_bytes() const {
+    return rdtotal_;
 }
 
 inline Json msgpack_fd::status() const {

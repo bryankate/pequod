@@ -6,22 +6,48 @@
 #define IOV_MAX 1024
 #endif
 
-void msgpack_fd::initialize() {
+void msgpack_fd::construct() {
     wrpos_ = 0;
     wrsize_ = 0;
+    wrlowat_ = (size_t) -1;
+    wrtotal_ = 0;
     wrblocked_ = false;
     rdbuf_ = String::make_uninitialized(rdcap);
     rdpos_ = 0;
     rdlen_ = 0;
+    rdtotal_ = 0;
     rdquota_ = rdbatch;
     rdreply_seq_ = 0;
 
     wrelem_.push_back(wrelem());
     wrelem_.back().sa.reserve(wrcap);
     wrelem_.back().pos = 0;
+}
 
+void msgpack_fd::initialize(tamer::fd wfd, tamer::fd rfd) {
+    assert(!wfd_ && !rfd_ && !wrkill_ && !rdkill_ && !wrwake_ && !rdwake_);
+    wfd_ = wfd;
+    rfd_ = rfd;
     writer_coroutine();
     reader_coroutine();
+}
+
+void msgpack_fd::clear_write() {
+    for (auto& e : flushelem_)
+        e.e.trigger((ssize_t) (wrpos_ - e.wpos) >= 0);
+    flushelem_.clear();
+    for (auto& e : rdreplywait_)
+        if ((ssize_t) (wrpos_ - e.wpos) < 0)
+            e.e.trigger(Json());
+}
+
+void msgpack_fd::clear_read() {
+    for (auto& e : rdreqwait_)
+        e.unblock();
+    rdreqwait_.clear();
+    for (auto& re : rdreplywait_)
+        re.e.unblock();
+    rdreplywait_.clear();
 }
 
 msgpack_fd::~msgpack_fd() {
@@ -29,6 +55,8 @@ msgpack_fd::~msgpack_fd() {
     rdkill_();
     wrwake_();
     rdwake_();
+    clear_write();
+    clear_read();
 }
 
 void msgpack_fd::write(const Json& j) {
@@ -44,6 +72,7 @@ void msgpack_fd::write(const Json& j) {
     int old_len = w->sa.length();
     msgpack::unparse(w->sa, j);
     wrsize_ += w->sa.length() - old_len;
+    wrtotal_ += w->sa.length() - old_len;
     if (wrwake_)
         tamer::at_asap(std::move(wrwake_));
     assert(!wrwake_);
@@ -84,9 +113,10 @@ bool msgpack_fd::read_one_message() {
                              const_cast<char*>(rdbuf_.data()) + rdpos_,
                              rdcap - rdpos_);
 
-        if (amt != 0 && amt != (ssize_t) -1)
+        if (amt != 0 && amt != (ssize_t) -1) {
             rdlen_ += amt;
-        else {
+            rdtotal_ += amt;
+        } else {
             if (amt == 0)
                 rfd_.close();
             else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
@@ -111,6 +141,11 @@ bool msgpack_fd::read_one_message() {
 }
 
 tamed void msgpack_fd::reader_coroutine() {
+    // NB The msgpack_fd::coroutines may outlive the msgpack_fd itself. They
+    // are programmed to survive the deletion of the msgpack_fd by checking
+    // whether `kill` is triggered. If `kill` has been triggered, the
+    // msgpack_fd is dead.
+
     tvars {
         tamer::event<> kill;
         tamer::rendezvous<> rendez;
@@ -126,6 +161,9 @@ tamed void msgpack_fd::reader_coroutine() {
         else if (rdreqwait_.empty() && rdreplywait_.empty())
             twait { rdwake_ = make_event(); }
 
+        if (!kill)
+            break;
+
         rdquota_ = rdbatch;
         while (rdquota_ && (!rdreqwait_.empty() || !rdreplywait_.empty())
                && read_one_message())
@@ -134,13 +172,10 @@ tamed void msgpack_fd::reader_coroutine() {
             pacer_();
     }
 
-    for (auto& e : rdreqwait_)
-        e.unblock();
-    rdreqwait_.clear();
-    for (auto& re : rdreplywait_)
-        re.e.unblock();
-    rdreplywait_.clear();
-    kill();                     // avoid leak of active event
+    if (kill) {
+        clear_read();
+        kill();                 // avoid leak of active event
+    }
 }
 
 bool msgpack_fd::dispatch(bool exit_on_request) {
@@ -246,6 +281,11 @@ void msgpack_fd::write_once() {
 }
 
 tamed void msgpack_fd::writer_coroutine() {
+    // NB The msgpack_fd::coroutines may outlive the msgpack_fd itself. They
+    // are programmed to survive the deletion of the msgpack_fd by checking
+    // whether `kill` is triggered. If `kill` has been triggered, the
+    // msgpack_fd is dead.
+
     tvars {
         tamer::event<> kill;
         tamer::rendezvous<> rendez;
@@ -258,16 +298,14 @@ tamed void msgpack_fd::writer_coroutine() {
             twait { wrwake_ = make_event(); }
         else if (wrblocked_) {
             twait { tamer::at_fd_write(wfd_.value(), make_event()); }
-            wrblocked_ = false;
+            if (kill)
+                wrblocked_ = false;
         } else
             write_once();
     }
 
-    for (auto& e : flushelem_)
-        e.e.trigger((ssize_t) (wrpos_ - e.wpos) >= 0);
-    flushelem_.clear();
-    for (auto& e : rdreplywait_)
-        if ((ssize_t) (wrpos_ - e.wpos) < 0)
-            e.e.trigger(Json());
-    kill();
+    if (kill) {
+        clear_write();
+        kill();
+    }
 }
