@@ -360,7 +360,6 @@ void TwitterNewRunner<S>::register_one(tamer::fd cfd) {
         mandatory_assert(j[0].as_i() == client_at_barrier);
         mandatory_assert(j[1].as_i() == barrier_);
 
-        std::cerr << "got barrier message from remote" << std::endl;
         twait { check_barrier(make_event()); }
         mpfd.write(Json::array(-client_at_barrier, barrier_ - 1));
     }
@@ -371,7 +370,6 @@ void TwitterNewRunner<S>::register_one(tamer::fd cfd) {
 tamed template <typename S>
 void TwitterNewRunner<S>::check_barrier(event<> e) {
     at_barrier_.push_back(e);
-    std::cerr << "increment barrier" << std::endl;
 
     if (at_barrier_.size() == tp_.ngroups()) {
         if (tp_.verbose())
@@ -412,10 +410,8 @@ void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
         std::cerr << tstamp() << ": waiting at barrier " << barrier_ << " ("
                   << nrpc_ << " rpcs sent)" << std::endl;
 
-    if (!tp_.groupid()) {
-        std::cerr << "master checking" << std::endl;
+    if (!tp_.groupid())
         check_barrier(e);
-    }
     else {
         mandatory_assert(master_sync_);
 
