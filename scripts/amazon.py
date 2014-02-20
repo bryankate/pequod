@@ -35,6 +35,7 @@ parser.add_option("-K", "--kill", action="store_true", dest="kill", default=Fals
 parser.add_option("-A", "--keepalive", action="store_true", dest="keepalive", default=False)
 parser.add_option("-R", "--keeproles", action="store_true", dest="keeproles", default=False)
 parser.add_option("-i", "--invoke", action="store", type="string", dest="invoke", default=None)
+parser.add_option("-I", "--invoke-bg", action="store", type="string", dest="invokebg", default=None)
 parser.add_option("-F", "--filter", action="store", type="string", dest="filter", default=None)
 parser.add_option("-D", "--ondemand", action="store_true", dest="ondemand", default=False)
 parser.add_option("-u", "--user", action="store", type="string", dest="user", default=getpass.getuser())
@@ -53,6 +54,7 @@ preponly = options.preponly
 noprep = options.noprep
 justkill = options.kill
 invoke = options.invoke
+invokebg = options.invokebg
 filter = options.filter
 ondemand = options.ondemand
 keepalive = options.keepalive
@@ -80,10 +82,15 @@ ec2.connect()
 if justkill:
     kill()
 
-if invoke:
+if invoke or invokebg:
     running = ec2.get_running_instances(tag=['role', filter] if filter else None)
-    for r in running:
-        ec2.run_ssh_command(r.public_dns_name, invoke)
+
+    if invokebg:
+        procs = [ec2.run_ssh_command_bg(r.public_dns_name, invokebg) for r in running]
+        for p in procs:
+            p.wait()
+    else:
+        [ec2.run_ssh_command(r.public_dns_name, invoke) for r in running]
     exit(0)
 
 running = []
