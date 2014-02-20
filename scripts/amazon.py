@@ -34,6 +34,7 @@ parser.add_option("-N", "--noprep", action="store_true", dest="noprep", default=
 parser.add_option("-K", "--kill", action="store_true", dest="kill", default=False)
 parser.add_option("-A", "--keepalive", action="store_true", dest="keepalive", default=False)
 parser.add_option("-R", "--keeproles", action="store_true", dest="keeproles", default=False)
+parser.add_option("-S", "--strace", action="store_true", dest="strace", default=False)
 parser.add_option("-i", "--invoke", action="store", type="string", dest="invoke", default=None)
 parser.add_option("-I", "--invoke-bg", action="store", type="string", dest="invokebg", default=None)
 parser.add_option("-F", "--filter", action="store", type="string", dest="filter", default=None)
@@ -59,6 +60,7 @@ filter = options.filter
 ondemand = options.ondemand
 keepalive = options.keepalive
 keeproles = options.keeproles
+strace = options.strace
 user = options.user
 startport = 7000
 
@@ -302,6 +304,11 @@ if not noprep:
 if (preponly):
     exit(0)
 
+if strace:
+    tracecmd = "sudo strace "
+else:
+    tracecmd = ""
+
 for x in exps:
     expdir = None
     
@@ -339,7 +346,7 @@ for x in exps:
             servercmd = e['backendcmd'] if s < nbacking else e['cachecmd']
             conn = serverconns[s]
             
-            full_cmd = servercmd + serverargs + \
+            full_cmd = tracecmd + servercmd + serverargs + \
                 " -kl=" + str(conn[1]) + \
                 " > " + outfile + str(s) + ".txt" + \
                 " 2> " + fartfile + str(s) + ".txt"
@@ -356,7 +363,7 @@ for x in exps:
             initcmd = e['initcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
             fartfile = os.path.join(remote_resdir, "fart_init.txt")
             
-            full_cmd = initcmd + " 2> " + fartfile
+            full_cmd = tracecmd + initcmd + " 2> " + fartfile
 
             print full_cmd
             logfd.write(clienthosts[0].public_dns_name + ": " + full_cmd + "\n")
@@ -372,7 +379,7 @@ for x in exps:
 
             clientprocs = []
             for c in range(ngroups):         
-                full_cmd = popcmd + \
+                full_cmd = tracecmd + popcmd + \
                            " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
                            " 2> " + fartfile + str(c) + ".txt"
     
@@ -394,7 +401,7 @@ for x in exps:
             
         clientprocs = []
         for c in range(ngroups):
-            full_cmd = clientcmd + \
+            full_cmd = tracecmd + clientcmd + \
                 " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
                 " --master-host=" + clienthosts[0].private_ip_address + \
                 " > " + outfile + str(c) + ".json" + \
