@@ -820,10 +820,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
 
-    gen.seed(13 + tp_.groupid());
-    periodic_logger(done);
-
-    log_.clear();
     if (!tp_.groupid()) {
         twait { server_.control(Json().set("clear_log", true), make_event(j)); }
 
@@ -833,6 +829,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
+
+    log_.clear();
+    periodic_logger(done);
+    gen.seed(13 + tp_.groupid());
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
