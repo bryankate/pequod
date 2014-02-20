@@ -303,8 +303,10 @@ class TwitterNewRunner {
                      uint32_t beg_scan, uint32_t end_scan, event<uint32_t> e);
     tamed void post(uint32_t u, uint32_t time, String value, event<> e);
     tamed void backfill(uint32_t u, uint32_t f, uint32_t time, event<uint32_t> e);
-    tamed void periodic_logger(event<> e);
     tamed void select_active(event<> e);
+
+    tamed void wait_for_server_ready(event<> e);
+    tamed void periodic_logger(event<> e);
     tamed void drain(gather_rendezvous& r, event<> e);
 
     tamed void registrar();
@@ -425,6 +427,33 @@ void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
     }
 }
 
+
+tamed template <typename S>
+void TwitterNewRunner<S>::wait_for_server_ready(event<> e) {
+    tvars {
+        Json j;
+        bool ready = false;
+    }
+
+    do {
+        if (tp_.verbose()) { std::cerr << "Checking server readiness." << std::endl; }
+        twait { tamer::at_delay_sec(1, make_event()); }
+        twait { server_.control(Json().set("is_ready", true), make_event(j)); }
+    
+        if (!j.is_array())
+            j = Json::array(j);
+
+        ready = true;
+        for (auto it = j.abegin(); it != j.aend(); ++it)
+            if (it->is_b())
+                ready &= it->as_b();
+            else
+                break; // not supported in client, assume server is ready
+    }
+    while(!ready);
+
+    e();
+}
 
 template <typename S> template <typename R>
 void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
@@ -591,8 +620,10 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
 
 tamed template <typename S>
 void TwitterNewRunner<S>::initialize(tamer::event<> done) {
-    if (tp_.initialize())
+    if (tp_.initialize()) {
+        twait { wait_for_server_ready(make_event()); }
         twait { server_.initialize(make_event()); }
+    }
     done();
 }
 
@@ -619,6 +650,8 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     // in some experiments we pre-populate the servers using another process
     if (!tp_.populate())
         goto finish;
+
+    twait { wait_for_server_ready(make_event()); }
 
     // in some experiments we want to prevalidate before adding the
     // subscriptions so that the first validation in the experiment for each
@@ -762,7 +795,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         TwitterUser* user = NULL;
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
-        bool servers_ready = true;
         tamer::gather_rendezvous gr;
     }
 
@@ -776,21 +808,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     else if (tp_.ngroups() > 1)
         registrar();
 
-    if (!tp_.groupid()) {
-        do {
-            if (tp_.verbose()) { std::cerr << "Checking server readiness." << std::endl; }
-            twait { tamer::at_delay_sec(1, make_event()); }
-            twait { server_.control(Json().set("is_ready", true), make_event(j)); }
-        
-            if (!j.is_array())
-                j = Json::array(j);
-
-            servers_ready = true;
-            for (auto it = j.abegin(); it != j.aend(); ++it)
-                servers_ready &= it->as_b();
-        }
-        while(!servers_ready);
-    }
+    if (!tp_.groupid())
+        twait { wait_for_server_ready(make_event()); }
 
     if (tp_.ngroups() > 1)
         twait { wait_at_barrier(make_event()); }
