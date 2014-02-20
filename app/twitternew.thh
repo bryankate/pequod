@@ -362,7 +362,6 @@ void TwitterNewRunner<S>::register_one(tamer::fd cfd) {
 
         twait { check_barrier(make_event()); }
         mpfd.write(Json::array(-client_at_barrier, barrier_ - 1));
-        twait { mpfd.flush(make_event()); }
     }
 
     cfd.close();
@@ -373,6 +372,9 @@ void TwitterNewRunner<S>::check_barrier(event<> e) {
     at_barrier_.push_back(e);
 
     if (at_barrier_.size() == tp_.ngroups()) {
+        if (tp_.verbose())
+            std::cerr << tstamp() << " passed barrier " << barrier_ << std::endl;
+
         for (auto& b : at_barrier_)
             b();
         at_barrier_.clear();
@@ -382,9 +384,7 @@ void TwitterNewRunner<S>::check_barrier(event<> e) {
 
 tamed template <typename S>
 void TwitterNewRunner<S>::register_with_master(event<> e) {
-    tvars {
-        struct sockaddr_in sin;
-    }
+    tvars { struct sockaddr_in sin; }
 
     do {
        twait { tamer::at_delay(0.1, make_event()); }
@@ -407,7 +407,7 @@ void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
     tvars { Json j; }
 
     if (tp_.verbose())
-        std::cerr << tstamp() << ": waiting at barrier ("
+        std::cerr << tstamp() << ": waiting at barrier " << barrier_ << " ("
                   << nrpc_ << " rpcs sent)" << std::endl;
 
     if (!tp_.groupid())
@@ -415,13 +415,14 @@ void TwitterNewRunner<S>::wait_at_barrier(event<> e) {
     else {
         mandatory_assert(master_sync_);
 
-        twait {
-            j.clear();
+        twait { 
             master_sync_->call(Json::array(client_at_barrier, barrier_),
                                make_event(j));
         }
-
         mandatory_assert(j && j[0] == -client_at_barrier && j[1].as_i() == barrier_);
+
+        if (tp_.verbose()) 
+            std::cerr << tstamp() << " passed barrier " << barrier_ << std::endl;
         ++barrier_;
         e();
     }
