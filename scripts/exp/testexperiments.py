@@ -8,7 +8,7 @@ def define_experiments():
     binaryflag = "" if binary else "--no-binary"
     partfunc = "twitternew" if binary else "twitternew-text"
     
-    serverCmd = "./obj/pqserver"
+    serverCmd = "./obj/pqserver --block-report"
     initCmd = "%s --twitternew --verbose %s --initialize --no-populate --no-execute" % (serverCmd, binaryflag)
     populateCmd = "%s --twitternew --verbose %s --no-initialize --no-execute --popduration=0" % (serverCmd, binaryflag)
     clientCmd = "%s --twitternew --verbose %s --no-initialize --no-populate" % (serverCmd, binaryflag)

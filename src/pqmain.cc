@@ -45,6 +45,7 @@ static Clp_Option options[] = {
     { "nbacking", 'B', 2006, Clp_ValInt, 0 },
     { "writearound", 0, 2007, 0, Clp_Negate },
     { "round-robin", 0, 2008, Clp_ValInt, 0 },
+    { "block-report", 0, 2009, 0, Clp_Negate },
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -144,6 +145,7 @@ int main(int argc, char** argv) {
     bool evict_inline = false, evict_periodic = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
+    bool block_report = false;
     std::set<String> testcases;
 
     while (Clp_Next(clp) != Clp_Done) {
@@ -190,6 +192,8 @@ int main(int argc, char** argv) {
             tp_param.set("writearound", !clp->negated);
         else if (clp->option->long_name == String("round-robin"))
             round_robin = clp->val.i;
+        else if (clp->option->long_name == String("block-report"))
+            block_report = !clp->negated;
 
         // general
         else if (clp->option->long_name == String("push"))
@@ -376,6 +380,10 @@ int main(int argc, char** argv) {
         hosts = pq::Hosts::get_instance(hostfile);
     if (dbhostfile)
         dbhosts = pq::Hosts::get_instance(dbhostfile);
+    if (block_report) {
+        extern void block_report_loop();
+        block_report_loop();
+    }
 
     if (mode == mode_tests || !testcases.empty()) {
         extern void unit_tests(const std::set<String> &);
