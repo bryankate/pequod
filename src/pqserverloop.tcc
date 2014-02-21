@@ -199,9 +199,13 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             else if (j[2]["clear_log"])
                 log_.clear();
             else if (j[2]["client_status"]) {
-                rj[3].set("clients", Json::array()).set("interconnect", Json::array());
+                rj[3].set("clients", Json::array())
+                     .set("interconnect", Json::array());
+                
                 for (auto& c : clients_)
-                    rj[3]["clients"].push_back(c->status());
+                    if (c != mpfd)
+                        rj[3]["clients"].push_back(c->status());
+                
                 for (auto& i : interconnect_)
                     rj[3]["interconnect"].push_back((i) ? i->fd()->status() : Json());
             }
