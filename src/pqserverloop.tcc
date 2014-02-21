@@ -446,9 +446,9 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
     interrupt_catcher();
 }
 
-tamed void block_report_loop() {
+tamed void block_report_loop(int32_t delay) {
     while (1) {
-        twait { tamer::at_delay(2, make_event(), true); }
+        twait { tamer::at_delay(delay, make_event(), true); }
         {
             std::vector<std::string> x;
             tamer::driver::main->blocked_locations(x);
