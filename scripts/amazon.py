@@ -224,9 +224,9 @@ def prepare_experiment(xname, ename):
                 os.unlink(linkpath)
             os.symlink(expdir, linkpath)
 
-        hpath = os.path.join(uniquedir, "hosts.txt")
+        hostpath = os.path.join(uniquedir, "hosts.txt")
         epath = os.path.join(uniquedir, "hosts-external.txt")
-        with open(hpath, "w") as hfile, open(epath, "w") as efile:
+        with open(hostpath, "w") as hfile, open(epath, "w") as efile:
             add_server_hosts(hfile, efile, nbacking, cbacking, backinghosts)
             add_server_hosts(hfile, efile, ncaching, ccaching, cachehosts)
 
