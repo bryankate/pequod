@@ -15,7 +15,7 @@ OBJDIR = obj
 MEMTIER_OBJDIR = $(OBJDIR)/memtier_obj
 MEMTIER_SRCDIR = $(top_srcdir)/memtier_benchmark-1.1.0
 
-TAMER_COMMIT = a15fad614f7f292ffb7264644a46a9a1a7af424e
+TAMER_COMMIT = 58b70a91a2a945dce67cb4e2cbae9f2bc5708f53
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
