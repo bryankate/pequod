@@ -43,7 +43,7 @@ inline uint64_t tstamp() {
 }
 
 inline std::ostream& operator<<(std::ostream& s, const timeval& t) {
-    return s << t.tv_sec << std::setfill('0') << std::setw(6) << t.tv_usec;
+    return s << t.tv_sec << '.' << std::setfill('0') << std::setw(6) << t.tv_usec;
 }
 
 #endif
