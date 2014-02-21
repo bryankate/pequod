@@ -270,8 +270,13 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
         }
     }
 
-    clients_.erase(mpfd_);
     cfd.close();
+
+    if (clients_.erase(mpfd_))
+        std::cerr << "closed client connection" << std::endl;
+    else
+        std::cerr << "closed interconnect" << std::endl;
+
     if (!mpfd)
         delete mpfd_;
 }
