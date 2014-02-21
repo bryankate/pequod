@@ -3,7 +3,7 @@
 #include "clp.h"
 #include "string.hh"
 #include "hosts.hh"
-#include "pqmulticlient.hh"
+#include "pqremoteclient.hh"
 #include "json.hh"
 #include "sock_helper.hh"
 
