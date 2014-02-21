@@ -38,6 +38,9 @@ tamed void get_info(const String& host, uint32_t port, Json& result) {
     twait { rclient->control(Json().set("client_status", true), make_event(j)); }
     rj.set("mpfd_status", j);
 
+    twait { rclient->control(Json().set("tamer_blocking", true), make_event(j)); }
+    rj.set("tamer_blocking", j);
+
     result.push_back(rj);
     delete rclient;
 }

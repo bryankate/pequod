@@ -200,6 +200,13 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                 log_.write_json(std::cerr);
             else if (j[2]["clear_log"])
                 log_.clear();
+            else if (j[2]["tamer_blocking"]) {
+                std::vector<std::string> x;
+                tamer::driver::main->blocked_locations(x);
+                rj[3] = Json::array();
+                for (size_t i = 0; i != x.size(); ++i)
+                    rj[3].push_back(x[i]);
+            }
             else if (j[2]["client_status"]) {
                 rj[3].set("clients", Json::array())
                      .set("interconnect", Json::array());
