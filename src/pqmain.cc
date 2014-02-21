@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
         else if (clp->option->long_name == String("round-robin"))
             round_robin = clp->val.i;
         else if (clp->option->long_name == String("block-report"))
-            block_report = !clp->val.i;
+            block_report = clp->val.i;
 
         // general
         else if (clp->option->long_name == String("push"))
