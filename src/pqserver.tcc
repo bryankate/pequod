@@ -692,14 +692,14 @@ tamed void Table::fetch_remote(String first, String last, int32_t owner,
         ++t->nsubtables_with_ranges_.remote;
     remote_ranges_.insert(*rr);
 
-    std::cerr << "fetching remote data: " << rr->interval() << std::endl;
+    // std::cerr << "fetching remote data: " << rr->interval() << std::endl;
     twait {
         server_->interconnect(owner)->subscribe(first, last, server_->me(),
                                                 make_event(res));
     }
 
-    std::cerr << "remote data fetch: " << rr->interval() << " returned "
-             << res.size() << " results" << std::endl;
+    // std::cerr << "remote data fetch: " << rr->interval() << " returned "
+    //          << res.size() << " results" << std::endl;
 
     for (auto it = res.begin(); it != res.end(); ++it)
         server_->make_table_for(it->key()).insert(it->key(), it->value());
