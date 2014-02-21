@@ -14,10 +14,11 @@
 #include <set>
 #include <sys/resource.h>
 
+const pq::Host* me_ = nullptr;
+const pq::Partitioner* part_ = nullptr;
 std::vector<pq::Interconnect*> interconnect_;
 std::set<msgpack_fd*> clients_;
 bool ready_ = false;
-bool backend_ = true;
 uint32_t round_robin_ = 0;
 
 pq::Log log_(tstamp());
@@ -137,6 +138,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             break;
         }
         first = j[2].as_s(), last = j[3].as_s(), scanlast = last;
+        assert(part_ && part_->owner(first) == me_->seqid());
         ++diff_.nsubscribe;
         goto do_scan;
     case pq_scan: {
@@ -191,7 +193,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             if (j[2]["is_ready"])
                 rj[3] = ready_;
             else if (j[2]["get_log"])
-                rj[3] = Json().set("backend", backend_)
+                rj[3] = Json().set("backend", (part_) ? part_->is_backend(me_->seqid()) : false)
                               .set("data", log_.as_json())
                               .set("internal", server.logs());
             else if (j[2]["write_log"])
@@ -295,9 +297,7 @@ tamed void kill_server(tamer::fd fd, int port, tamer::event<> done) {
     }
 }
 
-tamed void initialize_interconnect(pq::Server& server,
-                                   const pq::Hosts* hosts, const pq::Host* me,
-                                   const pq::Partitioner* part,
+tamed void initialize_interconnect(pq::Server& server, const pq::Hosts* hosts, 
                                    tamer::event<bool> done) {
     tvars {
         tamer::fd fd;
@@ -308,7 +308,7 @@ tamed void initialize_interconnect(pq::Server& server,
     }
 
     for (i = 0; i < hosts->size(); ++i) {
-        if (!interconnect_[i] && i < me->seqid()) {
+        if (!interconnect_[i] && i < me_->seqid()) {
             twait {
                 auto h = hosts->get_by_seqid(i);
                 pq::sock_helper::make_sockaddr(h->name().c_str(), h->port(), sin);
@@ -323,13 +323,13 @@ tamed void initialize_interconnect(pq::Server& server,
             interconnect_[i] = new pq::Interconnect(fd);
             interconnect_[i]->set_wrlowat(1 << 12);
             twait {
-                interconnect_[i]->control(Json().set("interconnect", me->seqid()),
+                interconnect_[i]->control(Json().set("interconnect", me_->seqid()),
                                           make_event(j));
             }
 
             connector(fd, interconnect_[i]->fd(), server);
         }
-        else if (!interconnect_[i] && i != me->seqid()) {
+        else if (!interconnect_[i] && i != me_->seqid()) {
             connected = false;
             break;
         }
@@ -422,7 +422,9 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
     }
 
     if (hosts) {
-        backend_ = part->is_backend(me->seqid());
+        mandatory_assert(part && me);
+        part_ = part;
+        me_ = me;
         interconnect_.assign(hosts->size(), nullptr);
     }
 
@@ -433,11 +435,11 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
     if (hosts) {
         do {
             twait { tamer::at_delay(delay, make_event()); }
-            twait { initialize_interconnect(server, hosts, me, part,
+            twait { initialize_interconnect(server, hosts, 
                                             make_event(connected)); }
         } while(!connected);
 
-        server.set_cluster_details(me->seqid(), interconnect_, part);
+        server.set_cluster_details(me_->seqid(), interconnect_, part_);
     }
 
     ready_ = true;
