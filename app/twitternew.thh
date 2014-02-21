@@ -475,7 +475,9 @@ void TwitterNewRunner<S>::prevalidate(TwitterUser* user, event<> done) {
         size_t count = 0;
     }
 
-    twait { server_.timeline_add_count(user->uid(), 0, END_TIME, make_event(count)); }
+    twait [String("prevalidate ") + String(user->uid())] {
+        server_.timeline_add_count(user->uid(), 0, END_TIME, make_event(count));
+    }
     ++nrpc_;
     done();
 }
@@ -488,6 +490,7 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         typename S::scan_result sr;
         size_t count = 0;
         uint64_t rtt;
+        std::stringstream buf;
     }
 
     user->checking_ = done;
@@ -496,9 +499,12 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     rtt = tstamp();
 #endif
 
+    buf << "twtl " << user->uid() << " " << beg_scan << " " << end_scan;
     if (tp_.fetch() || tp_.log() || TIMELINE_SANITY_CHECK) {
-        twait { server_.timeline_scan(user->uid(), beg_scan, end_scan,
-                                      make_event(sr)); }
+        twait [buf.str()] {
+            server_.timeline_scan(user->uid(), beg_scan, end_scan,
+                                  make_event(sr));
+        }
         count = sr.size();
 
         if (tp_.log()) {
@@ -530,8 +536,10 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
 #endif
     }
     else
-        twait { server_.timeline_add_count(user->uid(), beg_scan, end_scan,
-                                           make_event(count)); }
+        twait [buf.str()] {
+            server_.timeline_add_count(user->uid(), beg_scan, end_scan,
+                                       make_event(count));
+        }
 
 #if TIMELINE_LATENCY
     rtt = tstamp() - rtt;
@@ -587,7 +595,7 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
     }
 #endif
 
-    twait(gr);
+    twait ["twpush"] (gr);
     e();
 }
 
@@ -602,7 +610,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
     }
 
     server_.post_scan(f, time - LOGIN_WINDOW, time, gr.make_event(sr));
-    twait(gr);
+    twait ["twbackfill"] (gr);
     ++nrpc_;
 
     for (auto it = sr.begin(); it != sr.end(); ++it) {
@@ -614,7 +622,7 @@ void TwitterNewRunner<S>::backfill(uint32_t u, uint32_t f, uint32_t time, event<
         server_.push_post(u, gr.make_event());
         ++nrpc_;
     }
-    twait(gr);
+    twait ["twbackfill2"] (gr);
 
     e(e.result() + sr.size());
 }
@@ -664,7 +672,7 @@ void TwitterNewRunner<S>::populate(tamer::event<> done) {
     if (tp_.verbose()) { std::cerr << "Building subscription table." << std::endl; }
     for (s = 0; s != subs.size(); ++s) {
         subscribe(subs[s].first, subs[s].second, currtime_, gr.make_event());
-        twait { server_.pace(make_event()); }
+        twait ["twpace"] { server_.pace(make_event()); }
 
         if (tp_.verbose() && s && s % (subs.size() / 10) == 0)
             std::cerr << s / (subs.size() / 10) * 10 << "% complete" << std::endl;

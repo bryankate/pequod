@@ -6,6 +6,7 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
+#include <string>
 #include <iostream>
 class StringAccum;
 #define LCDF_CONSTANT_CSTR(cstr) ((cstr) && __builtin_constant_p(strlen((cstr))))
@@ -273,6 +274,10 @@ class String_base {
     /** @brief Return the integer value of this string. */
     long to_i() const {
         return String_generic::to_i(begin(), end());
+    }
+    /** @brief Return this string as a std::string. */
+    operator std::string() const {
+        return std::string(begin(), end());
     }
   protected:
     String_base() = default;

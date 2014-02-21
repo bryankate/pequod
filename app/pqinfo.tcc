@@ -30,7 +30,7 @@ tamed void get_info(const String& host, uint32_t port, Json& result) {
         exit(-1);
     }
 
-    rclient = new RemoteClient(fd);
+    rclient = new RemoteClient(fd, "");
     
     twait { rclient->stats(make_event(j)); }
     rj.set("stats", j);

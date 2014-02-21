@@ -5,13 +5,14 @@
 #include <iterator>
 #include "mpfd.hh"
 #include "pqrpc.hh"
+#include <sstream>
 namespace pq {
 using tamer::event;
 
 class RemoteClient {
   public:
-    inline RemoteClient(tamer::fd fd);
-    inline RemoteClient(msgpack_fd* mpfd);
+    inline RemoteClient(tamer::fd fd, String desc);
+    inline RemoteClient(msgpack_fd* mpfd, String desc);
     inline ~RemoteClient();
 
     tamed void add_join(const String& first, const String& last,
@@ -125,15 +126,20 @@ class RemoteClient {
     msgpack_fd* fd_;
     unsigned long seq_;
     bool alloc_;
+    String description_;
+
+    inline std::string twait_description(const char* prefix,
+                                         const String& first = String(),
+                                         const String& last = String()) const;
 };
 
 
-inline RemoteClient::RemoteClient(tamer::fd fd)
-    : fd_(new msgpack_fd(fd)), seq_(0), alloc_(true) {
+inline RemoteClient::RemoteClient(tamer::fd fd, String desc)
+    : fd_(new msgpack_fd(fd)), seq_(0), alloc_(true), description_(desc) {
 }
 
-inline RemoteClient::RemoteClient(msgpack_fd* fd)
-    : fd_(fd), seq_(0), alloc_(false) {
+inline RemoteClient::RemoteClient(msgpack_fd* fd, String desc)
+    : fd_(fd), seq_(0), alloc_(false), description_(desc) {
 }
 
 inline RemoteClient::~RemoteClient() {
@@ -153,6 +159,21 @@ inline void RemoteClient::pace(tamer::preevent<R> done) {
 inline void RemoteClient::set_wrlowat(size_t limit) {
     assert(fd_);
     fd_->set_wrlowat(limit);
+}
+
+inline std::string RemoteClient::twait_description(const char* prefix,
+                                                   const String& first,
+                                                   const String& last) const {
+    std::stringstream buf;
+    if (description_)
+        buf << description_ << " ";
+    if (prefix)
+        buf << prefix << (first || last ? " " : "");
+    if (first)
+        buf << first;
+    if (last)
+        buf << "," << last;
+    return buf.str();
 }
 
 } // namespace pq

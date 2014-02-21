@@ -33,7 +33,7 @@ tamed void MultiClient::connect(tamer::event<> done) {
     if (!hosts_ && !part_ && colocateCacheServer_ > 0) {
         twait { tamer::tcp_connect(in_addr{htonl(INADDR_LOOPBACK)},
                                    colocateCacheServer_, make_event(fd)); }
-        localNode_ = new RemoteClient(fd);
+        localNode_ = new RemoteClient(fd, "local");
     }
     else {
         for (i = 0; i < hosts_->size(); ++i) {
@@ -47,7 +47,7 @@ tamed void MultiClient::connect(tamer::event<> done) {
                 exit(1);
             }
 
-            clients_.push_back(new RemoteClient(fd));
+            clients_.push_back(new RemoteClient(fd, String(i)));
         }
 
         if (colocateCacheServer_ >= 0) {
@@ -183,7 +183,7 @@ tamed void MultiClient::stats(event<Json> e) {
         localNode_->stats(e);
     else {
         j = Json::make_array_reserve(clients_.size());
-        twait {
+        twait ["stats"] {
             for (uint32_t i = 0; i < clients_.size(); ++i)
                 clients_[i]->stats(make_event(j[i].value()));
         }
@@ -200,7 +200,7 @@ tamed void MultiClient::control(const Json& cmd, tamer::event<Json> done) {
         localNode_->control(cmd, done);
     else  {
         j = Json::make_array_reserve(clients_.size());
-        twait {
+        twait ["control"] {
             for (uint32_t i = 0; i < clients_.size(); ++i)
                 clients_[i]->control(cmd, make_event(j[i].value()));
         }
@@ -209,7 +209,7 @@ tamed void MultiClient::control(const Json& cmd, tamer::event<Json> done) {
 }
 
 tamed void MultiClient::pace(tamer::event<> done) {
-    twait {
+    twait ["pace"] {
         for (auto& r : clients_)
             r->pace(make_event());
     }

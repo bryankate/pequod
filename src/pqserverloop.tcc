@@ -222,7 +222,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                 peer = j[2]["interconnect"].as_i();
                 assert(peer >= 0 && peer < (int32_t)interconnect_.size());
 
-                interconnect_[peer] = new pq::Interconnect(mpfd);
+                interconnect_[peer] = new pq::Interconnect(mpfd, peer);
                 interconnect_[peer]->set_wrlowat(1 << 12);
                 clients_.erase(mpfd);
             }
@@ -327,7 +327,7 @@ tamed void initialize_interconnect(pq::Server& server, const pq::Hosts* hosts,
                 break;
             }
 
-            interconnect_[i] = new pq::Interconnect(fd);
+            interconnect_[i] = new pq::Interconnect(fd, i);
             interconnect_[i]->set_wrlowat(1 << 12);
             twait {
                 interconnect_[i]->control(Json().set("interconnect", me_->seqid()),

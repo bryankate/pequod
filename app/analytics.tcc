@@ -18,7 +18,7 @@ tamed void run_analytics_remote(const Json& tp, int client_port) {
                   << strerror(-fd.error()) << "\n";
         exit(1);
     }
-    rc = new RemoteClient(fd);
+    rc = new RemoteClient(fd, "");
     shim = new AnalyticsShim<RemoteClient>(*rc);
     ar = new AnalyticsRunner<AnalyticsShim<RemoteClient> >(*shim, tp);
     ar->safe_run();

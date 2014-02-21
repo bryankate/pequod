@@ -42,7 +42,7 @@ tamed void populate(const Json& params) {
                 exit(-1);
             }
 
-            pclient = new RemoteClient(fd);
+            pclient = new RemoteClient(fd, "");
             break;
 
         case mode_memcached:

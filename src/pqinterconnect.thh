@@ -14,8 +14,8 @@ class Interconnect : public RemoteClient {
   public:
     typedef typename RemoteClient::scan_result scan_result;
 
-    inline Interconnect(tamer::fd fd);
-    inline Interconnect(msgpack_fd* fd);
+    inline Interconnect(tamer::fd fd, int machineid);
+    inline Interconnect(msgpack_fd* fd, int machineid);
 
     tamed void subscribe(const String& first, const String& last,
                          int32_t subscriber, event<scan_result> e);
@@ -30,12 +30,12 @@ class Interconnect : public RemoteClient {
 };
 
 
-inline Interconnect::Interconnect(tamer::fd fd)
-    : RemoteClient(fd) {
+inline Interconnect::Interconnect(tamer::fd fd, int machineid)
+    : RemoteClient(fd, String("inter") + String(machineid)) {
 }
 
-inline Interconnect::Interconnect(msgpack_fd* fd)
-    : RemoteClient(fd) {
+inline Interconnect::Interconnect(msgpack_fd* fd, int machineid)
+    : RemoteClient(fd, String("inter") + String(machineid)) {
 }
 
 } // namespace pq

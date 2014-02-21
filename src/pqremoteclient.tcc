@@ -21,7 +21,7 @@ tamed void RemoteClient::add_join(const String& first, const String& last,
 
 tamed void RemoteClient::get(const String& key, event<String> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("get", key)] {
         fd_->call(Json::array(pq_get, seq_, key), make_event(j));
         ++seq_;
     }
@@ -31,7 +31,7 @@ tamed void RemoteClient::get(const String& key, event<String> e) {
 
 tamed void RemoteClient::noop_get(const String& key, event<String> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("noop_get", key)] {
         fd_->call(Json::array(pq_noop_get, seq_, key), make_event(j));
         ++seq_;
     }
@@ -42,7 +42,7 @@ tamed void RemoteClient::noop_get(const String& key, event<String> e) {
 tamed void RemoteClient::insert(const String& key, const String& value,
                                 event<> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("insert", key)] {
         fd_->call(Json::array(pq_insert, seq_, key, value), make_event(j));
         ++seq_;
     }
@@ -53,7 +53,7 @@ tamed void RemoteClient::insert(const String& key, const String& value,
 
 tamed void RemoteClient::erase(const String& key, event<> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("erase", key)] {
         fd_->call(Json::array(pq_erase, seq_, key), make_event(j));
         ++seq_;
     }
@@ -76,7 +76,7 @@ tamed void RemoteClient::erase_db(const String& key, event<> e) {
 tamed void RemoteClient::count(const String& first, const String& last,
                                event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("count", first, last)] {
         fd_->call(Json::array(pq_count, seq_, first, last), make_event(j));
         ++seq_;
     }
@@ -87,7 +87,7 @@ tamed void RemoteClient::count(const String& first, const String& last,
 tamed void RemoteClient::count(const String& first, const String& last,
                                const String& scanlast, event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("count", first, last)] {
         fd_->call(Json::array(pq_count, seq_, first, last, scanlast), make_event(j));
         ++seq_;
     }
@@ -98,7 +98,7 @@ tamed void RemoteClient::count(const String& first, const String& last,
 tamed void RemoteClient::add_count(const String& first, const String& last,
                                    event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("count", first, last)] {
         fd_->call(Json::array(pq_count, seq_, first, last), make_event(j));
         ++seq_;
     }
@@ -112,7 +112,7 @@ tamed void RemoteClient::add_count(const String& first, const String& last,
 tamed void RemoteClient::add_count(const String& first, const String& last,
                                    const String& scanlast, event<size_t> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("count", first, last)] {
         fd_->call(Json::array(pq_count, seq_, first, last, scanlast), make_event(j));
         ++seq_;
     }
@@ -126,7 +126,7 @@ tamed void RemoteClient::add_count(const String& first, const String& last,
 tamed void RemoteClient::scan(const String& first, const String& last,
                               event<scan_result> e) {
     tvars { Json j; }
-    twait {
+    twait [twait_description("scan", first, last)] {
         fd_->call(Json::array(pq_scan, seq_, first, last), make_event(j));
         ++seq_;
     }
@@ -136,7 +136,7 @@ tamed void RemoteClient::scan(const String& first, const String& last,
 tamed void RemoteClient::scan(const String& first, const String& last,
                               const String& scanlast, event<scan_result> e) {
     tvars { Json j; }
-    twait {
+    twait [twait_description("scan", first, last)] {
         fd_->call(Json::array(pq_scan, seq_, first, last, scanlast), make_event(j));
         ++seq_;
     }
@@ -145,7 +145,7 @@ tamed void RemoteClient::scan(const String& first, const String& last,
 
 tamed void RemoteClient::stats(event<Json> e) {
     tvars { Json j; unsigned long seq = this->seq_; }
-    twait {
+    twait [twait_description("stats")] {
         assert(fd_->valid());
         fd_->call(Json::array(pq_stats, seq_), make_event(j));
         ++seq_;
@@ -156,7 +156,7 @@ tamed void RemoteClient::stats(event<Json> e) {
 
 tamed void RemoteClient::control(const Json& cmd, event<Json> e) {
     tvars { Json j; }
-    twait {
+    twait [twait_description("control")] {
         assert(fd_->valid());
         fd_->call(Json::array(pq_control, seq_, cmd), make_event(j));
         ++seq_;
