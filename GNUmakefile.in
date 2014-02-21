@@ -167,7 +167,7 @@ $(OBJDIR)/pqunit2.o: $(OBJDIR)/memcacheadapter.hh $(OBJDIR)/redisadapter.hh $(OB
 $(OBJDIR)/twitter.hh: $(OBJDIR)/twittershim.hh
 $(OBJDIR)/twitter.o: $(OBJDIR)/twitter.hh $(OBJDIR)/pqmulticlient.hh
 $(OBJDIR)/twittershim.hh: $(OBJDIR)/pqclient.hh
-$(OBJDIR)/twitternew.o: $(OBJDIR)/twitternew.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqdbpool.hh
+$(OBJDIR)/twitternew.o: $(OBJDIR)/twitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/twitternew.hh: $(OBJDIR)/twitternewshim.hh
 $(OBJDIR)/analytics.o: $(OBJDIR)/analytics.hh $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hackernews.o: $(OBJDIR)/hackernews.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/redisadapter.hh
