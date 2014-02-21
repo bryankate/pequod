@@ -460,6 +460,7 @@ tamed void block_report_loop(int32_t delay) {
             std::vector<std::string> x;
             tamer::driver::main->blocked_locations(x);
             std::cerr << tamer::now() << ": Blocked at:\n";
+            std::sort(x.begin(), x.end());
             for (size_t i = 0; i != x.size(); ++i)
                 std::cerr << "  " << x[i] << std::endl;
         }
