@@ -373,7 +373,7 @@ void TwitterNewRunner<S>::check_barrier(event<> e) {
 
     if (at_barrier_.size() == tp_.ngroups()) {
         if (tp_.verbose())
-            std::cerr << tstamp() << " passed barrier " << barrier_ << std::endl;
+            std::cerr << tstamp() << ": passed barrier " << barrier_ << std::endl;
 
         for (auto& b : at_barrier_)
             b();
