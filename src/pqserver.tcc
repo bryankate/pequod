@@ -864,6 +864,7 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     do {
         twait(gr);
         it = t->validate(key, next_validate_at(), log, gr);
+        assert(gr.has_waiting() == !it.first);
     } while (gr.has_waiting());
 
     gettimeofday(&tv[1], NULL);
@@ -891,6 +892,7 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     do {
         twait(gr);
         it = t->validate(first, last, next_validate_at(), log, gr);
+        assert(gr.has_waiting() == !it.first);
     } while (gr.has_waiting());
 
     gettimeofday(&tv[1], NULL);
