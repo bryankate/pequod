@@ -854,20 +854,20 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     tvars {
         struct timeval tv[2];
         uint32_t log = 0;
+        uint64_t difft = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(key);
     }
 
-    gettimeofday(&tv[0], NULL);
-
     do {
+        gettimeofday(&tv[0], NULL);
         it = t->validate(key, next_validate_at(), log, gr);
+        gettimeofday(&tv[1], NULL);
+        difft += tv2us(tv[1] - tv[0]);
         twait(gr);
     } while(!it.first);
 
-    gettimeofday(&tv[1], NULL);
-    uint64_t difft = tv2us(tv[1] - tv[0]);
     validate_time_ += fromus(difft);
     if (enable_validation_logging)
         validate_log_.emplace_back(difft, log);
@@ -880,21 +880,21 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     tvars {
         struct timeval tv[2];
         uint32_t log = 0;
+        uint64_t difft = 0;
         std::pair<bool, Table::iterator> it;
         tamer::gather_rendezvous gr;
         Table* t = &this->make_table_for(first, last);
     }
 
-    gettimeofday(&tv[0], NULL);
-
     //std::cerr << "VALIDATING: [" << first << ", " << last << ")" << std::endl;
     do {
+        gettimeofday(&tv[0], NULL);
         it = t->validate(first, last, next_validate_at(), log, gr);
+        gettimeofday(&tv[1], NULL);
+        difft += tv2us(tv[1] - tv[0]);
         twait(gr);
     } while(!it.first);
 
-    gettimeofday(&tv[1], NULL);
-    uint64_t difft = tv2us(tv[1] - tv[0]);
     validate_time_ += fromus(difft);
     if (enable_validation_logging)
         validate_log_.emplace_back(difft, log);
