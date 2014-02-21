@@ -12,7 +12,7 @@ using std::cerr;
 using std::endl;
 using namespace pq;
 
-tamed void print_info(const String& host, uint32_t port) {
+tamed void get_info(const String& host, uint32_t port, Json& result) {
     tvars {
         tamer::fd fd;
         struct sockaddr_in sin;
@@ -38,7 +38,7 @@ tamed void print_info(const String& host, uint32_t port) {
     twait { rclient->control(Json().set("client_status", true), make_event(j)); }
     rj.set("mpfd_status", j);
 
-    cout << rj.unparse(Json::indent_depth(4)) << endl;
+    result.push_back(rj);
     delete rclient;
 }
 
@@ -56,6 +56,7 @@ int main(int argc, char** argv) {
     String hostfile;
     const pq::Hosts* hosts = nullptr;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
+    Json result = Json::array();
 
     while (Clp_Next(clp) != Clp_Done) {
         if (clp->option->long_name == String("host"))
@@ -71,13 +72,17 @@ int main(int argc, char** argv) {
     if (hostfile) {
         hosts = Hosts::get_instance(hostfile);
         for (auto& h : hosts->all())
-            print_info(h.name(), h.port());
+            get_info(h.name(), h.port(), result);
     }
     else
-        print_info(host, port);
+        get_info(host, port, result);
 
     tamer::loop();
     tamer::cleanup();
 
+    if (result.size() == 1)
+        result = result[0];
+
+    cout << result.unparse(Json::indent_depth(4)) << endl;
     return 0;
 }
