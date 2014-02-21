@@ -1,6 +1,8 @@
 #ifndef PEQUOD_TIME_HH
 #define PEQUOD_TIME_HH
 #include <sys/time.h>
+#include <iostream>
+#include <iomanip>
 #include "compiler.hh"
 
 extern uint64_t tstamp_adjustment;
@@ -38,6 +40,10 @@ inline uint64_t tstamp() {
     struct timeval tv;
     gettimeofday(&tv, 0);
     return tv2us(tv);
+}
+
+inline std::ostream& operator<<(std::ostream& s, const timeval& t) {
+    return s << t.tv_sec << std::setfill('0') << std::setw(6) << t.tv_usec;
 }
 
 #endif
