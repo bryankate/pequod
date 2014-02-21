@@ -862,9 +862,9 @@ tamed void Server::validate(Str key, tamer::event<Table::iterator> done) {
     gettimeofday(&tv[0], NULL);
 
     do {
-        it = t->validate(key, next_validate_at(), log, gr);
         twait(gr);
-    } while(!it.first);
+        it = t->validate(key, next_validate_at(), log, gr);
+    } while (gr.has_waiting());
 
     gettimeofday(&tv[1], NULL);
     uint64_t difft = tv2us(tv[1] - tv[0]);
@@ -889,9 +889,9 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
 
     //std::cerr << "VALIDATING: [" << first << ", " << last << ")" << std::endl;
     do {
-        it = t->validate(first, last, next_validate_at(), log, gr);
         twait(gr);
-    } while(!it.first);
+        it = t->validate(first, last, next_validate_at(), log, gr);
+    } while (gr.has_waiting());
 
     gettimeofday(&tv[1], NULL);
     uint64_t difft = tv2us(tv[1] - tv[0]);

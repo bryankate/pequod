@@ -209,14 +209,10 @@ tamed void MultiClient::control(const Json& cmd, tamer::event<Json> done) {
 }
 
 tamed void MultiClient::pace(tamer::event<> done) {
-    tvars {
-        tamer::gather_rendezvous gr;
+    twait {
+        for (auto& r : clients_)
+            r->pace(make_event());
     }
-
-    for (auto& r : clients_)
-        r->pace(gr.make_event());
-
-    twait(gr);
     done();
 }
 
