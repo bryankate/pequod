@@ -37,6 +37,27 @@ static const String noop_val = String::make_fill('.', 512);
 
 namespace {
 
+static std::vector<std::string>::iterator
+blocked_locations_shrink(std::vector<std::string>::iterator first,
+                         std::vector<std::string>::iterator last) {
+    std::vector<std::string>::iterator out = first;
+    while (first != last) {
+        std::vector<std::string>::iterator next = first + 1;
+        if (next != last && *next == *first) {
+            size_t n = 2;
+            for (++next; next != last && *next == *first; ++next, ++n)
+                /* nada */;
+            std::stringstream buf;
+            buf << *first << " * " << n;
+            *out = buf.str();
+        } else if (out != first)
+            *out = *first;
+        ++out;
+        first = next;
+    }
+    return out;
+}
+
 tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                                 tamer::event<bool> done) {
     tvars {
@@ -205,9 +226,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
                 std::vector<std::string> x;
                 tamer::driver::main->blocked_locations(x);
                 std::sort(x.begin(), x.end(), String::natural_comparator());
-                rj[3] = Json::array();
-                for (size_t i = 0; i != x.size(); ++i)
-                    rj[3].push_back(x[i]);
+                rj[3] = Json(x.begin(), blocked_locations_shrink(x.begin(), x.end()));
             }
             else if (j[2]["client_status"]) {
                 rj[3].set("clients", Json::array())
@@ -473,8 +492,9 @@ tamed void block_report_loop(int32_t delay) {
             tamer::driver::main->blocked_locations(x);
             std::cerr << tamer::now() << ": Blocked at:\n";
             std::sort(x.begin(), x.end(), String::natural_comparator());
-            for (size_t i = 0; i != x.size(); ++i)
-                std::cerr << "  " << x[i] << std::endl;
+            auto e = blocked_locations_shrink(x.begin(), x.end());
+            for (auto it = x.begin(); it != e; ++it)
+                std::cerr << "  " << *it << std::endl;
         }
     }
 }
