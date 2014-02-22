@@ -128,13 +128,16 @@ bool msgpack_fd::read_one_message() {
     }
 
     // process new data
-    rdpos_ += rdparser_.consume(rdbuf_.begin() + rdpos_, rdlen_ - rdpos_,
-                                rdbuf_);
+    size_t amt = rdparser_.consume(rdbuf_.begin() + rdpos_,
+                                   rdlen_ - rdpos_, rdbuf_);
+    rdpos_ += amt;
 
     if (rdparser_.done()) {
         --rdquota_;
         if (rdquota_ == 0)
             rdwake_();          // wake up coroutine [if it's sleeping]
+        if (rdparser_.error())
+            std::cerr << description_ << ": error in incoming msgpack near " << rdbuf_.substring(rdpos_ - amt, amt).to_hex() << "\n";
         return true;
     } else
         goto readmore;
