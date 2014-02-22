@@ -1,9 +1,10 @@
 dnl Process this file with autoconf to produce a configure script.
 
+AC_INIT([pequod], [0.1])
+
 AC_CONFIG_AUX_DIR([tamer])
 AC_PREREQ(2.60)
 
-AC_INIT([pequod], [0.1])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([GNUmakefile])
 AC_CONFIG_SUBDIRS([tamer])
@@ -22,11 +23,7 @@ AC_C_BIGENDIAN([AC_DEFINE([ENDIAN_BIG], [1], [big endian])],
                [AC_MSG_ERROR([Unknown endian])],
                [AC_MSG_ERROR([Universal endian])])
 
-AC_CHECK_HEADERS([sys/epoll.h numa.h ev++.h])
-if test -z "$ac_cv_header_evpp_h"; then
-    AC_MSG_ERROR([Cannot find <ev++.h>])
-fi
-
+AC_CHECK_HEADERS([sys/epoll.h numa.h])
 AC_SEARCH_LIBS([numa_available], [numa], [AC_DEFINE([HAVE_LIBNUMA], [1], [Define if you have libnuma.])])
 
 AC_CHECK_HEADERS([memcached/protocol_binary.h])
@@ -385,7 +382,6 @@ CLICK_CHECK_ADDRESSABLE_VA_LIST
 
 dnl check for presence of required libraries
 
-AC_CHECK_LIB([ev], [ev_backend], [:], [AC_MSG_ERROR([libev not found])])
 AC_CHECK_HEADER([boost/accumulators/accumulators.hpp], [:], [AC_MSG_ERROR([<boost/accumulators/accumulators.hpp> not found])])
 AC_CHECK_HEADER([boost/random.hpp], [:], [AC_MSG_ERROR([<boost/random.hpp> not found])])
 AC_CHECK_HEADER([boost/intrusive/set.hpp], [:], [AC_MSG_ERROR([<boost/intrusive/set.hpp> not found])])
