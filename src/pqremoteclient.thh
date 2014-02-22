@@ -136,10 +136,12 @@ class RemoteClient {
 
 inline RemoteClient::RemoteClient(tamer::fd fd, String desc)
     : fd_(new msgpack_fd(fd)), seq_(0), alloc_(true), description_(desc) {
+    fd_->set_description(description_);
 }
 
 inline RemoteClient::RemoteClient(msgpack_fd* fd, String desc)
     : fd_(fd), seq_(0), alloc_(false), description_(desc) {
+    fd_->set_description(description_);
 }
 
 inline RemoteClient::~RemoteClient() {

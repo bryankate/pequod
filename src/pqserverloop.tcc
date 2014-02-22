@@ -238,7 +238,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
         break;
     }
 
-    finish:
+ finish:
     mpfd->write(rj);
 }
 
@@ -253,6 +253,7 @@ tamed void connector(tamer::fd cfd, msgpack_fd* mpfd, pq::Server& server) {
         mpfd_ = mpfd;
     else {
         mpfd_ = new msgpack_fd(cfd);
+        mpfd_->set_description(String("clientfd") + String(cfd.value()));
         clients_.insert(mpfd_);
     }
 

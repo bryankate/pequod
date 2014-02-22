@@ -19,6 +19,7 @@ class msgpack_fd {
 
     inline void initialize(tamer::fd fd);
     void initialize(tamer::fd rfd, tamer::fd wfd);
+    inline void set_description(std::string description);
 
     inline bool valid() const;
     inline operator unspecified_bool_type() const;
@@ -86,6 +87,8 @@ class msgpack_fd {
     enum { wrpacerecover = 1 << 19, rdpacerecover = 1 << 13 };
     tamer::event<> pacer_;
 
+    std::string description_;
+
     void check() const;
     bool dispatch(bool exit_on_request);
     inline bool read_until_request(bool exit_on_request);
@@ -120,6 +123,10 @@ inline msgpack_fd::msgpack_fd(tamer::fd fd) {
 
 inline void msgpack_fd::initialize(tamer::fd fd) {
     initialize(fd, fd);
+}
+
+inline void msgpack_fd::set_description(std::string description) {
+    description_ = description;
 }
 
 inline bool msgpack_fd::valid() const {
