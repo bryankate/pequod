@@ -347,9 +347,9 @@ if test "$enable_timing" = yes; then
 fi
 
 AC_ARG_ENABLE([tamer-debug],
-    [AS_HELP_STRING([--enable-tamer-debug],
-	    [Enable extra tamer debugging])],
-    [], [enable_tamer_debug=no])
+    [AS_HELP_STRING([--disable-tamer-debug],
+	    [Disable extra tamer debugging])],
+    [], [enable_tamer_debug=yes])
 TAMERFLAGS=
 if test "$enable_tamer_debug" != no; then
     TAMERFLAGS=-g
