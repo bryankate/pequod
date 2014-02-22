@@ -155,17 +155,11 @@ tamed void msgpack_fd::reader_coroutine() {
 
     while (kill && rfd_) {
         if (rdquota_ == 0 && rdpos_ != rdlen_)
-            twait [description_] {
-                tamer::at_asap(make_event());
-            }
+            twait [description_] { tamer::at_asap(make_event()); }
         else if (rdquota_ == 0)
-            twait [description_] {
-                tamer::at_fd_read(rfd_.value(), make_event());
-            }
+            twait [description_] { tamer::at_fd_read(rfd_.value(), make_event()); }
         else if (rdreqwait_.empty() && rdreplywait_.empty())
-            twait [description_] {
-                rdwake_ = make_event();
-            }
+            twait [description_] { rdwake_ = make_event(); }
 
         if (!kill)
             break;
@@ -301,13 +295,9 @@ tamed void msgpack_fd::writer_coroutine() {
 
     while (kill && wfd_) {
         if (wrelem_.size() == 1 && wrelem_.front().sa.empty())
-            twait [description_] {
-                wrwake_ = make_event();
-            }
+            twait [description_] { wrwake_ = make_event(); }
         else if (wrblocked_) {
-            twait [description_] {
-                tamer::at_fd_write(wfd_.value(), make_event());
-            }
+            twait [description_] { tamer::at_fd_write(wfd_.value(), make_event()); }
             if (kill)
                 wrblocked_ = false;
         } else
