@@ -73,12 +73,10 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     twait { mpfd->read_request(make_event(j)); }
 
     if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i()) {
-        if (j)
-            std::cerr << "bad rpc: " << j << std::endl;
+        std::cerr << "bad rpc: " << j << std::endl;
         done(false);
         return;
-    }
-    else
+    } else
         // allow the server to read and start processing another
         // rpc while this one is being handled (iff it blocks)
         done(true);
