@@ -121,6 +121,7 @@ class RemoteClient {
     tamed void control(const Json& cmd, event<Json> e);
 
     inline msgpack_fd* fd() const;
+    inline String description() const;
 
   protected:
     msgpack_fd* fd_;
@@ -151,6 +152,10 @@ inline RemoteClient::~RemoteClient() {
 
 inline msgpack_fd* RemoteClient::fd() const {
     return fd_;
+}
+
+inline String RemoteClient::description() const {
+    return description_;
 }
 
 template <typename R>

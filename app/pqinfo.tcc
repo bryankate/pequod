@@ -33,6 +33,8 @@ tamed void get_info(const String& host, uint32_t port, Json& result) {
     rclient = new RemoteClient(fd, "");
     
     twait { rclient->stats(make_event(j)); }
+    if (j["id"])
+        rj.set("id", j["id"]); 
     rj.set("stats", j);
 
     twait { rclient->control(Json().set("client_status", true), make_event(j)); }

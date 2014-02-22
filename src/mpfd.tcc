@@ -309,3 +309,15 @@ tamed void msgpack_fd::writer_coroutine() {
         kill();
     }
 }
+
+Json msgpack_fd::status() const {
+    //check();
+    Json j = Json();
+    if (rfd_.value() == wfd_.value())
+        j.set("fd", rfd_.value());
+    else
+        j.set("rfd", rfd_.value()).set("wfd", wfd_.value());
+    return j.set("buffered_write_bytes", wrsize_)
+        .set("buffered_read_bytes", rdlen_ - rdpos_)
+        .set("waiting_readers", rdreqwait_.size() + rdreplywait_.size());
+}

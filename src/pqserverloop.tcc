@@ -183,6 +183,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
     case pq_stats:
         rj[2] = pq_ok;
         rj[3] = server.stats();
+        rj[3]["id"] = server.me();
         break;
     case pq_control:
         rj[2] = pq_ok;
@@ -211,13 +212,17 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             else if (j[2]["client_status"]) {
                 rj[3].set("clients", Json::array())
                      .set("interconnect", Json::array());
-                
                 for (auto& c : clients_)
                     if (c != mpfd)
                         rj[3]["clients"].push_back(c->status());
-                
-                for (auto& i : interconnect_)
-                    rj[3]["interconnect"].push_back((i) ? i->fd()->status() : Json());
+                Json interconnect;
+                for (size_t idx = 0; idx != interconnect_.size(); ++idx)
+                    if (pq::Interconnect* i = interconnect_[idx]) {
+                        Json j = Json().set("id", idx);
+                        interconnect.push_back(j.merge(i->fd()->status()));
+                    } else
+                        interconnect.push_back(Json());
+                rj[3]["interconnect"] = interconnect;
             }
             else if (j[2]["interconnect"]) {
                 peer = j[2]["interconnect"].as_i();
