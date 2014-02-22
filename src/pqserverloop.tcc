@@ -203,7 +203,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
             else if (j[2]["tamer_blocking"]) {
                 std::vector<std::string> x;
                 tamer::driver::main->blocked_locations(x);
-                std::sort(x.begin(), x.end());
+                std::sort(x.begin(), x.end(), String::natural_comparator());
                 rj[3] = Json::array();
                 for (size_t i = 0; i != x.size(); ++i)
                     rj[3].push_back(x[i]);
@@ -466,7 +466,7 @@ tamed void block_report_loop(int32_t delay) {
             std::vector<std::string> x;
             tamer::driver::main->blocked_locations(x);
             std::cerr << tamer::now() << ": Blocked at:\n";
-            std::sort(x.begin(), x.end());
+            std::sort(x.begin(), x.end(), String::natural_comparator());
             for (size_t i = 0; i != x.size(); ++i)
                 std::cerr << "  " << x[i] << std::endl;
         }

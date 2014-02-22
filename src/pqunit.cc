@@ -1193,6 +1193,44 @@ bb|<bid> = copy b|<bid> where bid:3"));
 
 } // namespace
 
+void test_string() {
+    // click_strcmp
+    CHECK_TRUE(String::natural_compare("a", "b") < 0);
+    CHECK_TRUE(String::natural_compare("a9", "a10") < 0);
+    CHECK_TRUE(String::natural_compare("a001", "a2") < 0);   // 1 < 2
+    CHECK_TRUE(String::natural_compare("a001", "a1") > 0);   // longer string of initial zeros
+    CHECK_TRUE(String::natural_compare("a", "B") < 0);
+    CHECK_TRUE(String::natural_compare("Baa", "baa") < 0);
+    CHECK_TRUE(String::natural_compare("Baa", "caa") < 0);
+    CHECK_TRUE(String::natural_compare("baa", "Caa") < 0);
+    CHECK_TRUE(String::natural_compare("baa", "Baa") > 0);
+    CHECK_TRUE(String::natural_compare("baA", "baA") == 0);
+    CHECK_TRUE(String::natural_compare("a9x", "a10") < 0);
+    CHECK_TRUE(String::natural_compare("a9x", "a9xy") < 0);
+    CHECK_TRUE(String::natural_compare("0", "0.1") < 0);
+    CHECK_TRUE(String::natural_compare("0", "0.") < 0);
+    CHECK_TRUE(String::natural_compare("0", "-0.1") > 0);
+    CHECK_TRUE(String::natural_compare("-0", "-0.1") > 0);
+    CHECK_TRUE(String::natural_compare("-9", "-0.1") < 0);
+    CHECK_TRUE(String::natural_compare("9", "0.1") > 0);
+    CHECK_TRUE(String::natural_compare("-0.2", "-0.1") < 0);
+    CHECK_TRUE(String::natural_compare("-2.2", "-2") < 0);
+    CHECK_TRUE(String::natural_compare("2.2", "2") > 0);
+    CHECK_TRUE(String::natural_compare("0.2", "0.1") > 0);
+    CHECK_TRUE(String::natural_compare("0.2", "0.39") < 0);
+    CHECK_TRUE(String::natural_compare(".2", "0.2") < 0);
+    CHECK_TRUE(String::natural_compare("a-2", "a-23") < 0);
+    CHECK_TRUE(String::natural_compare("a-2", "a-3") < 0);
+    CHECK_TRUE(String::natural_compare("a1.2", "a1a") > 0);
+    CHECK_TRUE(String::natural_compare("1.2.3.4", "10.2.3.4") < 0);
+    CHECK_TRUE(String::natural_compare("1.12", "1.2") < 0);
+    CHECK_TRUE(String::natural_compare("1.012", "1.2") < 0);
+    CHECK_TRUE(String::natural_compare("1.012.", "1.2.") < 0);
+    CHECK_TRUE(String::natural_compare("1.12.3.4", "1.2.3.4") > 0);
+    CHECK_TRUE(String::natural_compare("1.2.10.4", "1.2.9.4") > 0);
+    CHECK_TRUE(String::natural_compare("1.2.10.4:100", "1.2.10.4:2") > 0);
+}
+
 extern void test_mpfd();
 extern void test_mpfd2();
 extern void test_redis();
@@ -1227,6 +1265,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_iupdate4);
     ADD_TEST(test_iupdate_t);
     ADD_TEST(test_celebrity);
+    ADD_TEST(test_string);
     ADD_EXP_TEST(test_karma);
     ADD_EXP_TEST(test_ma);
     ADD_EXP_TEST(test_swap);
