@@ -9,7 +9,7 @@ import shlex
 import boto
 from boto.ec2.connection import EC2Connection
 
-REGION = 'us-west-2'
+REGION = 'us-east-1'
 
 AWS_ACCESS_KEY_ID = 'AKIAJSSPS6LP2VMU4WUA'
 AWS_SECRET_ACCESS_KEY = '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'
@@ -18,15 +18,16 @@ SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), KEY_NAME + "
 
 # note: instance have 10Gb ethernet only if launched in the same placement group
 INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script testing
-                  'cc2.8xlarge': {'bid': 0.75, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
-                  'cr1.8xlarge': {'bid': 0.75, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
-                  'hi1.4xlarge': {'bid': 0.75, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
-                  'hs1.8xlarge': {'bid': 0.75, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
+                  'cc2.8xlarge': {'bid': 2.41, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
+                  'cr1.8xlarge': {'bid': 3.51, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
+                  'hi1.4xlarge': {'bid': 0.76, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
+                  'hs1.8xlarge': {'bid': 0.76, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
 
-AMI_IDS = {'us-west-2': {'basic': 'ami-bf1d8a8f', 'hvm': 'ami-a11d8a91'}}
+AMI_IDS = {'us-west-2': {'basic': 'ami-ccf297fc', 'hvm': 'ami-f8f297c8'},
+           'us-east-1': {'basic': 'ami-bba18dd2', 'hvm': 'ami-e9a18d80'}}
 
-INSTANCE_TYPE_BACKING = 'cc2.8xlarge'
-INSTANCE_TYPE_CACHE = 'cc2.8xlarge'
+INSTANCE_TYPE_BACKING = 'cr1.8xlarge'
+INSTANCE_TYPE_CACHE = 'cr1.8xlarge'
 INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
 
 
@@ -162,19 +163,20 @@ def cancel_spot_requests(requests):
             conn.cancel_spot_instance_requests([r.id])
     
 def scp_to(machine, tofile, fromfile):
-    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ubuntu@%s:%s" % \
+    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r %s ec2-user@%s:%s" % \
           (SSH_KEY, fromfile, machine, tofile)
     Popen(cmd, shell=True).wait()
 
 def scp_from(machine, fromfile, tofile):
-    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ubuntu@%s:%s %s" % \
+    cmd = "scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i %s -r ec2-user@%s:%s %s" % \
           (SSH_KEY, machine, fromfile, tofile)
     Popen(cmd, shell=True).wait()
 
-def run_ssh_command_bg(machine, cmd):
-    sshcmd = "ssh -A -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlPath=none -i %s ubuntu@%s \"%s\"" % \
-             (SSH_KEY, machine, cmd)
+def run_ssh_command_bg(machine, cmd, tty=False):
+    sshcmd = "ssh -A -q " + ("-t " if tty else "") + \
+             "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ControlPath=none -i " + \
+             "%s ec2-user@%s \"%s\"" % (SSH_KEY, machine, cmd)
     return Popen(shlex.split(sshcmd))
 
-def run_ssh_command(machine, cmd):
-    return run_ssh_command_bg(machine, cmd).wait()
+def run_ssh_command(machine, cmd, tty=False):
+    return run_ssh_command_bg(machine, cmd, tty).wait()
