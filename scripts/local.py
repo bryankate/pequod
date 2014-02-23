@@ -484,7 +484,7 @@ for x in exps:
                     pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
     
                 if ngroups > 1:
-                    grouparg = " --ngroups=" + str(npop) + " --groupid=" + str(c) + \
+                    grouparg = " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \
                                " --master-port=" + str(syncport)
                 else:
                     grouparg = ""
