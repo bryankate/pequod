@@ -156,6 +156,7 @@ def check_database_env(expdef):
     
     # possibly redirect to ramfs
     if expdef.get('def_db_in_memory'):
+        '''
         cmd = "mount | grep '" + ramfs + "' | grep -o '[0-9]\\+[kmg]'"
         (a, _) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
         if a:
@@ -170,6 +171,7 @@ def check_database_env(expdef):
             print "[[31mFAIL[0m] '" + ramfs + "' not found or missing size."
             print "[[31mFAIL[0m] search command:\"%s\"." % (cmd)
             exit()
+        '''
         dbenvpath = os.path.join(ramfs, dbenvpath)
 
 def start_postgres(expdef, id, ncpus):
@@ -181,7 +183,7 @@ def start_postgres(expdef, id, ncpus):
     run_cmd(cmd, fartfile, fartfile)
 
     if affinity:
-        pin = "numactl -C " + ",".join([str(id + c) for c in range(ncpus)]) + " "
+        pin = "numactl -C " + ",".join([str(startcpu + id + c) for c in range(ncpus)]) + " "
     else:
         pin = ""
     
