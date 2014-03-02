@@ -78,6 +78,7 @@ static Clp_Option options[] = {
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
     { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
     { "progress-report", 0, 3029, 0, Clp_Negate },
+    { "subtables", 0, 3030, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -254,6 +255,8 @@ int main(int argc, char** argv) {
             tp_param.set("print_table", clp->val.s);
         else if (clp->option->long_name == String("progress-report"))
             tp_param.set("progress_report", !clp->negated);
+        else if (clp->option->long_name == String("subtables"))
+            tp_param.set("subtables", !clp->negated);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
