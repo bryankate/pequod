@@ -360,8 +360,9 @@ for x in exps:
             logfd.write(conn[0] + ": " + full_cmd + "\n")
             logfd.flush()
             serverprocs.append(ec2.run_ssh_command_bg(conn[0], "cd pequod; ulimit -c 1048576; " + full_cmd))
+            sleep(0.5)
 
-        sleep(5)
+        sleep(3)
 
         if 'initcmd' in e:
             print "Initializing cache servers."
@@ -375,7 +376,7 @@ for x in exps:
             logfd.flush()
             ec2.run_ssh_command(clienthosts[0].public_dns_name, "cd pequod; ulimit -c 1048576; " + full_cmd)
 
-        sleep(5)
+        sleep(3)
 
         if 'populatecmd' in e:
             print "Populating backend."
