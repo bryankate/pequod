@@ -52,8 +52,8 @@ def define_experiments():
              'def_part': partfunc,
              'backendcmd': "%s" % (serverCmd),
              'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s --push" % (initCmd),
-             'clientcmd': "%s --push --prevalidate --prevalidate-inactive" % (clientBase)})
+             'initcmd': "%s" % (initCmd),
+             'clientcmd': "%s --prevalidate --prevalidate-inactive" % (clientBase)})
     
     exp['plot'] = {'type': "line",
                    'data': [{'from': "client",
