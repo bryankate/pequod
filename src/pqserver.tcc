@@ -36,7 +36,8 @@ Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
       triecut_(0), njoins_(0), server_{server}, parent_{parent}, 
       ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      nevict_persistent_(0), nevict_remote_(0), nevict_local_(0), nevict_sink_(0) {
+      nevict_persistent_(0), nevict_remote_(0), nevict_sink_(0), 
+      nevict_range_reload_(0) {
 
     memset(&nsubtables_with_ranges_, 0, sizeof(nsubtables_with_ranges_));
 }
@@ -453,6 +454,7 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 // and a scan by another peer will invalidate all the others!
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
                 t->nevict_persistent_ += t->erase_purge(pr->ibegin(), pr->iend());
+                ++t->nevict_range_reload_;
 
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
                 fetching = true;
@@ -522,6 +524,7 @@ std::pair<bool, Table::iterator> Table::validate_remote(Str first, Str last,
         if (rr->evicted()) {
             Table* rrt = rr->table();
 
+            ++rrt->nevict_range_reload_;
             nevict_remote_ += rrt->erase_purge(rr->ibegin(), rr->iend());
             rrt->invalidate_dependents(rr->ibegin(), rr->iend());
             rrt->remote_ranges_.erase(*rr);
@@ -913,18 +916,14 @@ void Table::add_stats(Json& j) {
     j["nerase"] += nerase_;
     j["store_size"] += store_.size();
     j["source_ranges_size"] += source_ranges_.size();
-
-    local_vector<SinkRange*, 4> sinks;
-    collect_ranges(name(), name() + "}", sinks,
-                   &Table::sink_ranges_, &Table::swr::sink);
-
-    j["sink_ranges_size"] += sinks.size();
+    j["sink_ranges_size"] += sink_ranges_.size();
     j["remote_ranges_size"] += remote_ranges_.size();
+    j["persisted_ranges_size"] += persisted_ranges_.size();
     j["nvalidate"] += nvalidate_;
     j["nevict_persistent"] += nevict_persistent_;
     j["nevict_remote"] += nevict_remote_;
-    j["nevict_local"] += nevict_local_;
     j["nevict_sink"] += nevict_sink_;
+    j["nevict_range_reload"] += nevict_range_reload_;
 
     if (triecut_)
         for (auto& d : store_)

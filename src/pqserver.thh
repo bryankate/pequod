@@ -125,8 +125,8 @@ class Table : public Datum {
     uint64_t nvalidate_;
     uint64_t nevict_persistent_;
     uint64_t nevict_remote_;
-    uint64_t nevict_local_;
     uint64_t nevict_sink_;
+    uint64_t nevict_range_reload_;
 
   private:
     inline bool subtable_hashable() const;
