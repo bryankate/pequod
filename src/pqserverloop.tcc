@@ -412,18 +412,24 @@ tamed void periodic_logger() {
 }
 
 tamed void periodic_eviction(pq::Server& server, uint64_t low, uint64_t high) {
+    tvars {
+        uint64_t start;
+    }
     mandatory_assert(pq::enable_memory_tracking && "Cannot evict without memory tracking.");
 
     while(true) {
         // todo: use store size once its allocation is broken out
-        if (pq::mem_other_size >= high) {
-            do {
-                if (!server.evict_one())
-                    break;
-            } while(pq::mem_other_size > low);
+        while (pq::mem_other_size >= high) {
+            start = tstamp();
+            if (!server.evict_one())
+                break;
+
+            // let other stuff happen to avoid huge latency spikes
+            if (tstamp() - start > 1000)
+                twait volatile { tamer::at_delay_msec(1, make_event()); }
         }
 
-        twait volatile { tamer::at_delay_sec(1, make_event()); }
+        twait volatile { tamer::at_delay_msec(250, make_event()); }
     }
 }
 
