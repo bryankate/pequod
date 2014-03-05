@@ -118,15 +118,21 @@ class Table : public Datum {
     } nsubtables_with_ranges_;
 
   public:
+    struct evict_log {
+        uint32_t keys;
+        uint32_t ranges;
+        uint32_t reload;
+        uint32_t kept;
+    };
+
     uint64_t ninsert_;
     uint64_t nmodify_;
     uint64_t nmodify_nohint_;
     uint64_t nerase_;
     uint64_t nvalidate_;
-    uint64_t nevict_persistent_;
-    uint64_t nevict_remote_;
-    uint64_t nevict_sink_;
-    uint64_t nevict_range_reload_;
+    evict_log nevict_sink_;
+    evict_log nevict_remote_;
+    evict_log nevict_persisted_;
 
   private:
     inline bool subtable_hashable() const;
@@ -743,7 +749,7 @@ inline bool Server::evict_one() {
     bool evicted = false, more = false;
     for (int i = Evictable::pri_max - 1; i >= 0; --i) {
         if (!evicted && !lru_[i].empty()) {
-	    lru_[i].front().evict();
+	        lru_[i].front().evict();
             evicted = true;
         }
         if ((more = !lru_[i].empty()))

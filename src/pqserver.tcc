@@ -35,11 +35,12 @@ void Table::iterator::fix() {
 Table::Table(Str name, Table* parent, Server* server)
     : Datum(name, String::make_stable(Datum::table_marker)),
       triecut_(0), njoins_(0), server_{server}, parent_{parent}, 
-      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0),
-      nevict_persistent_(0), nevict_remote_(0), nevict_sink_(0), 
-      nevict_range_reload_(0) {
+      ninsert_(0), nmodify_(0), nmodify_nohint_(0), nerase_(0), nvalidate_(0) {
 
     memset(&nsubtables_with_ranges_, 0, sizeof(nsubtables_with_ranges_));
+    memset(&nevict_sink_, 0, sizeof(nevict_sink_));
+    memset(&nevict_remote_, 0, sizeof(nevict_remote_));
+    memset(&nevict_persisted_, 0, sizeof(nevict_persisted_));
 }
 
 Table::~Table() {
@@ -453,8 +454,8 @@ std::pair<bool, Table::iterator> Table::validate_local(Str first, Str last,
                 // todo: do not invalidate remote sinks - some peers might have the range
                 // and a scan by another peer will invalidate all the others!
                 t->invalidate_dependents(pr->ibegin(), pr->iend());
-                t->nevict_persistent_ += t->erase_purge(pr->ibegin(), pr->iend());
-                ++t->nevict_range_reload_;
+                t->nevict_persisted_.keys += t->erase_purge(pr->ibegin(), pr->iend());
+                ++t->nevict_persisted_.reload;
 
                 t->fetch_persisted(pr->ibegin(), pr->iend(), gr.make_event());
                 fetching = true;
@@ -524,8 +525,8 @@ std::pair<bool, Table::iterator> Table::validate_remote(Str first, Str last,
         if (rr->evicted()) {
             Table* rrt = rr->table();
 
-            ++rrt->nevict_range_reload_;
-            nevict_remote_ += rrt->erase_purge(rr->ibegin(), rr->iend());
+            nevict_remote_.keys += rrt->erase_purge(rr->ibegin(), rr->iend());
+            ++rrt->nevict_remote_.reload;
             rrt->invalidate_dependents(rr->ibegin(), rr->iend());
             rrt->remote_ranges_.erase(*rr);
 
@@ -664,7 +665,8 @@ void Table::evict_persisted(PersistedRange* pr) {
     if ((t = t->parent_) && t->triecut_)
         goto retry;
 
-    nevict_persistent_ += erase_purge(pr->ibegin(), pr->iend());
+    ++nevict_persisted_.ranges;
+    nevict_persisted_.keys += erase_purge(pr->ibegin(), pr->iend());
     
     //std::cerr << "evicting persisted range " << pr->interval()
     //          << ", keeping " << kept << " source ranges in place " << std::endl;
@@ -677,6 +679,7 @@ void Table::evict_persisted(PersistedRange* pr) {
         delete pr;
     }
     else {
+        ++nevict_persisted_.kept;
         pr->mark_evicted();
         server_->lru_touch(pr);
     }
@@ -727,7 +730,8 @@ void Table::evict_remote(RemoteRange* rr) {
     if ((t = t->parent_) && t->triecut_)
         goto retry;
 
-    nevict_remote_ += erase_purge(rr->ibegin(), rr->iend());
+    ++nevict_remote_.ranges;
+    nevict_remote_.keys += erase_purge(rr->ibegin(), rr->iend());
 
     //std::cerr << "evicting remote range " << rr->interval()
     //          << ", keeping " << kept << " source ranges in place " << std::endl;
@@ -743,6 +747,7 @@ void Table::evict_remote(RemoteRange* rr) {
         delete rr;
     }
     else {
+        ++nevict_remote_.kept;
         rr->mark_evicted();
         server_->lru_touch(rr);
     }
@@ -788,7 +793,8 @@ void Table::evict_sink(SinkRange* sr) {
     sink_ranges_.erase(*sr);
     delete sr; // sinks invalidated within
 
-    nevict_sink_ += (Sink::invalidate_hit_keys - before);
+    ++nevict_sink_.ranges;
+    nevict_sink_.keys += (Sink::invalidate_hit_keys - before);
 }
 
 void Table::add_subscription(Str first, Str last, int32_t peer) {
@@ -909,6 +915,20 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
     done(it.second);
 }
 
+void add_evict_stats(Json& j, String label, Table::evict_log& log) {
+    if (!log.keys && !log.ranges && !log.reload)
+        return;
+
+    if (!j[label])
+        j[label] = Json().set("keys", 0).set("ranges", 0)
+                         .set("reload", 0).set("kept", 0);
+
+    j[label]["keys"] += log.keys;
+    j[label]["ranges"] += log.ranges;
+    j[label]["reload"] += log.reload;
+    j[label]["kept"] += log.kept;
+}
+
 void Table::add_stats(Json& j) {
     j["ninsert"] += ninsert_;
     j["nmodify"] += nmodify_;
@@ -920,10 +940,10 @@ void Table::add_stats(Json& j) {
     j["remote_ranges_size"] += remote_ranges_.size();
     j["persisted_ranges_size"] += persisted_ranges_.size();
     j["nvalidate"] += nvalidate_;
-    j["nevict_persistent"] += nevict_persistent_;
-    j["nevict_remote"] += nevict_remote_;
-    j["nevict_sink"] += nevict_sink_;
-    j["nevict_range_reload"] += nevict_range_reload_;
+
+    add_evict_stats(j, "nevict_sink", nevict_sink_);
+    add_evict_stats(j, "nevict_remote", nevict_remote_);
+    add_evict_stats(j, "nevict_persisted", nevict_persisted_);
 
     if (triecut_)
         for (auto& d : store_)
