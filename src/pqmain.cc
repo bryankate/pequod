@@ -78,7 +78,6 @@ static Clp_Option options[] = {
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
     { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
     { "progress-report", 0, 3029, 0, Clp_Negate },
-    { "subtables", 0, 3030, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -215,8 +214,10 @@ int main(int argc, char** argv) {
             tp_param.set("nops", clp->val.i);
         else if (clp->option->long_name == String("verbose"))
             tp_param.set("verbose", !clp->negated);
-        else if (clp->option->long_name == String("subtables"))
+        else if (clp->option->long_name == String("subtables")) {
             pq::Join::allow_subtables = !clp->negated;
+            tp_param.set("subtables", !clp->negated);
+        }
         else if (clp->option->long_name == String("ngroups"))
             tp_param.set("ngroups", clp->val.i);
         else if (clp->option->long_name == String("groupid"))
@@ -255,8 +256,6 @@ int main(int argc, char** argv) {
             tp_param.set("print_table", clp->val.s);
         else if (clp->option->long_name == String("progress-report"))
             tp_param.set("progress_report", !clp->negated);
-        else if (clp->option->long_name == String("subtables"))
-            tp_param.set("subtables", !clp->negated);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
