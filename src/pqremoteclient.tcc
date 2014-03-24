@@ -103,7 +103,7 @@ tamed void RemoteClient::add_count(const String& first, const String& last,
         ++seq_;
     }
     assert(j[0] == -pq_count && j[1] == seq);
-    if (e.has_result() && j && j[2].to_i() == pq_ok)
+    if (e && j && j[2].to_i() == pq_ok)
         e(e.result() + j[3].to_u64());
     else
         e(0);
@@ -117,7 +117,7 @@ tamed void RemoteClient::add_count(const String& first, const String& last,
         ++seq_;
     }
     assert(j[0] == -pq_count && j[1] == seq);
-    if (e.has_result() && j && j[2].to_i() == pq_ok)
+    if (e && j && j[2].to_i() == pq_ok)
         e(e.result() + j[3].to_u64());
     else
         e(0);
