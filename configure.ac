@@ -352,6 +352,7 @@ if test "$enable_tamer_debug" != no; then
     TAMERFLAGS=-g
 fi
 AC_SUBST([TAMERFLAGS])
+AC_DEFINE([TAMER_PREFER_PREEVENT], [1], [Define if tamer::make_event() should return a preevent when possible.])
 
 dnl
 dnl CLICK_CHECK_ADDRESSABLE_VA_LIST
