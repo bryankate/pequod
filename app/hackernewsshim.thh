@@ -153,17 +153,17 @@ class PQHackerNewsShim {
 
     template <typename R>
     void stats(preevent<R, Json> e) {
-        server_.stats(e);
+        server_.stats(std::move(e));
     }
 
     template <typename R>
     void control(const Json& cmd, preevent<R, Json> e) {
-        server_.control(cmd, e);
+        server_.control(cmd, std::move(e));
     }
 
     template <typename R>
     void pace(preevent<R> e) {
-        server_.pace(e);
+        server_.pace(std::move(e));
     }
 
     template <typename R>

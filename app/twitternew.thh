@@ -467,7 +467,7 @@ void TwitterNewRunner<S>::subscribe(uint32_t subscriber, uint32_t poster,
     // in client push mode we reverse the subscriber key to make followers list
     server_.subscribe((tp_.push()) ? poster : subscriber,
                       (tp_.push()) ? subscriber : poster,
-                      e);
+                      std::move(e));
     ++nrpc_;
 }
 

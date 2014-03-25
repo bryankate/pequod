@@ -122,7 +122,7 @@ inline void TwitterShim<S>::get_follower(uint32_t poster, tamer::event<std::vect
 template <typename S> template <typename R>
 inline void TwitterShim<S>::add_follower(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "f|%05u|%05u", poster, subscriber);
-    server_.insert(Str(buf_, 13), Str("1", 1), done);
+    server_.insert(Str(buf_, 13), Str("1", 1), std::move(done));
 }
 
 tamed template <typename S>
@@ -213,21 +213,21 @@ void TwitterShim<S>::initialize(bool client_push, bool server_pull, uint32_t cel
 template <typename S> template <typename R>
 inline void TwitterShim<S>::subscribe(uint32_t subscriber, uint32_t poster, tamer::preevent<R> done) {
     sprintf(buf_, "s|%05u|%05u", subscriber, poster);
-    server_.insert(Str(buf_, 13), Str("1", 1), done);
+    server_.insert(Str(buf_, 13), Str("1", 1), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::mark_celebrity(uint32_t poster, tamer::preevent<R> done) {
     celeb_[poster] = true;
     sprintf(buf_, "c|%05u", poster);
-    server_.insert(Str(buf_, 7), Str("1", 1), done);
+    server_.insert(Str(buf_, 7), Str("1", 1), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::post(uint32_t poster, uint32_t time, const String& value, tamer::preevent<R> done) {
     bool nonceleb = celeb_.empty() || !celeb_[poster];
     sprintf(buf_, "cp|%05u|%010u", poster, time);
-    server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, done);
+    server_.insert(Str(&buf_[nonceleb], 19 - nonceleb), value, std::move(done));
 }
 
 template <typename S>
@@ -241,7 +241,7 @@ template <typename S> template <typename R>
 inline void TwitterShim<S>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     sprintf(buf_ + 2, "%05u", subscriber);
     buf_[7] = '|'; // replace terminating null
-    server_.insert(Str(buf_, 24), value_, done);
+    server_.insert(Str(buf_, 24), value_, std::move(done));
 }
 
 tamed template <typename S>
@@ -260,34 +260,34 @@ void TwitterShim<S>::timeline_scan_add_count(uint32_t subscriber, uint32_t start
 template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_scan(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, scan_result> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
-    server_.scan(Str(buf_, 18), Str(buf_ + 19, 8), done);
+    server_.scan(Str(buf_, 18), Str(buf_ + 19, 8), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_add_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
-    server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), done);
+    server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::timeline_set_initial_count(uint32_t subscriber, uint32_t start_time, uint32_t, tamer::preevent<R, size_t> done) {
     sprintf(buf_, "t|%05u|%010u t|%05u}", subscriber, start_time, subscriber);
-    server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), done);
+    server_.add_count(Str(buf_, 18), Str(buf_ + 19, 8), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::stats(tamer::preevent<R, Json> done) {
-    server_.stats(done);
+    server_.stats(std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void TwitterShim<S>::control(const Json& cmd, tamer::preevent<R, Json> done) {
-    server_.control(cmd, done);
+    server_.control(cmd, std::move(done));
 }
 
 
@@ -409,7 +409,7 @@ void TwitterHashShim<S>::timeline_set_initial_count(uint32_t subscriber, uint32_
 
 template <typename S> template <typename R>
 inline void TwitterHashShim<S>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 template <typename S> template <typename R>

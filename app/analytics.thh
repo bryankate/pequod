@@ -114,29 +114,29 @@ void AnalyticsShim<S>::initialize(bool push, bool prevalidate, tamer::event<> do
 
 template <typename S> template <typename R>
 inline void AnalyticsShim<S>::record_bps(uint32_t time, uint32_t bytes, tamer::preevent<R> done) {
-    server_.insert(String("Bps|") + to_base60(time), String(bytes), done);
+    server_.insert(String("Bps|") + to_base60(time), String(bytes), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void AnalyticsShim<S>::record_bpm(uint32_t time, uint32_t bytes, tamer::preevent<R> done) {
-    server_.insert(String("Bpm|") + to_base60(time).substring(0,6), String(bytes), done);
+    server_.insert(String("Bpm|") + to_base60(time).substring(0,6), String(bytes), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void AnalyticsShim<S>::bpm_add_count(uint32_t start_time, uint32_t now,
                                             tamer::preevent<R, size_t> done) {
     server_.add_count(String("Bpm|") + to_base60(start_time).substring(0,8),
-                      String("Bpm|") + to_base60(now), done);
+                      String("Bpm|") + to_base60(now), std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void AnalyticsShim<S>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 template <typename S> template <typename R>
 inline void AnalyticsShim<S>::stats(tamer::preevent<R, Json> done) {
-    server_.stats(done);
+    server_.stats(std::move(done));
 }
 
 template <typename S>
