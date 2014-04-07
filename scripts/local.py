@@ -157,6 +157,14 @@ def check_database_env(expdef):
     # possibly redirect to ramfs
     if expdef.get('def_db_in_memory'):
         '''
+        You need to create an in-memory file system beforehand for this to work.
+        For example:
+          mkdir /mnt/tmp
+          mount -t tmpfs -o size=1024m tmpfs /mnt/tmp
+        and maybe change some permissions for your user to write to it.
+        '''
+
+        '''
         cmd = "mount | grep '" + ramfs + "' | grep -o '[0-9]\\+[kmg]'"
         (a, _) = Popen(cmd, stdout=subprocess.PIPE, shell=True).communicate()
         if a:
