@@ -667,11 +667,11 @@ inline void TwitterNewRedisShim<S,P>::subscribe(uint32_t subscriber, uint32_t po
         memcpy(buf_, "s|XXXX XXXX", 11);
         write_in_net_order(buf_ + 2, subscriber);
         write_in_net_order(buf_ + 7, poster);
-        server_.sadd(Str(buf_, 6), Str(buf_ + 7, 4), done);
+        server_.sadd(Str(buf_, 6), Str(buf_ + 7, 4), std::move(done));
     }
     else {
         sprintf(buf_, "s|%08u %08u", subscriber, poster);
-        server_.sadd(Str(buf_, 10), Str(buf_ + 11, 8), done);
+        server_.sadd(Str(buf_, 10), Str(buf_ + 11, 8), std::move(done));
     }
 }
 
@@ -688,11 +688,11 @@ inline void TwitterNewRedisShim<S,P>::post(uint32_t poster, uint32_t time, const
         memcpy(buf_ + 12, value.data(), value.length());
         write_in_net_order(buf_ + 2, poster);
         write_in_net_order(buf_ + 7, time);
-        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 5 + value.length()), time, done);
+        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 5 + value.length()), time, std::move(done));
     }
     else {
         sprintf(buf_, "p|%08u %010u %s", poster, time, value.c_str());
-        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 11 + value.length()), time, done);
+        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 11 + value.length()), time, std::move(done));
     }
 }
 
@@ -716,11 +716,11 @@ template <typename S, typename P> template <typename R>
 inline void TwitterNewRedisShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     if (tp_.binary()) {
         write_in_net_order(buf_ + 2, subscriber);
-        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 10 + value_.length()), time_, done);
+        server_.zadd(Str(buf_, 6), Str(buf_ + 7, 10 + value_.length()), time_, std::move(done));
     }
     else {
         sprintf(buf_ + 2, "%08u", subscriber);
-        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 20 + value_.length()), time_, done);
+        server_.zadd(Str(buf_, 10), Str(buf_ + 11, 20 + value_.length()), time_, std::move(done));
     }
 }
 
@@ -836,7 +836,7 @@ void TwitterNewRedisShim<S,P>::post_scan(uint32_t poster,
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewRedisShim<S,P>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 tamed template <typename S, typename P>
@@ -945,7 +945,7 @@ inline void TwitterNewMemcacheShim<S,P>::prepare_push_post(uint32_t poster, uint
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     sprintf(buf_ + 2, "%08u", subscriber);
-    server_.append(Str(buf_, 10), Str(buf_ + 11, 20 + TWEET_LENGTH), done);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 20 + TWEET_LENGTH), std::move(done));
 }
 
 tamed template <typename S, typename P>
@@ -1071,7 +1071,7 @@ inline void TwitterNewMemcacheShim<S,P>::prepare_push_post(uint32_t poster, uint
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     sprintf(buf_ + 2, "%08u", subscriber);
-    server_.append(Str(buf_, 10), Str(buf_ + 11, 19), done);
+    server_.append(Str(buf_, 10), Str(buf_ + 11, 19), std::move(done));
 }
 
 tamed template <typename S, typename P>
@@ -1225,7 +1225,7 @@ void TwitterNewMemcacheShim<S,P>::follower_scan(uint32_t poster,
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewMemcacheShim<S,P>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 tamed template <typename S, typename P>
