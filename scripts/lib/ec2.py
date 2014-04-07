@@ -6,13 +6,17 @@ from time import sleep
 import subprocess
 from subprocess import Popen
 import shlex
+import json
 import boto
 from boto.ec2.connection import EC2Connection
 
 REGION = 'us-east-1'
 
-AWS_ACCESS_KEY_ID = 'AKIAJSSPS6LP2VMU4WUA'
-AWS_SECRET_ACCESS_KEY = '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'
+with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "aws.json")) as fp:
+    cred = json.load(fp)
+    AWS_ACCESS_KEY_ID = cred['AWS_ACCESS_KEY_ID']
+    AWS_SECRET_ACCESS_KEY = cred['AWS_SECRET_ACCESS_KEY']
+
 KEY_NAME = "pequod-" + REGION
 SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), KEY_NAME + ".pem")
 
@@ -34,6 +38,7 @@ INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
 conn = None
 
 def connect():
+    print AWS_ACCESS_KEY_ID
     global conn
     if conn is None:
         conn = boto.ec2.connect_to_region(REGION, 
