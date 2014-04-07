@@ -160,7 +160,7 @@ inline String RemoteClient::description() const {
 
 template <typename R>
 inline void RemoteClient::pace(tamer::preevent<R> done) {
-    fd_->pace(done);
+    fd_->pace(std::move(done));
 }
 
 inline void RemoteClient::set_wrlowat(size_t limit) {

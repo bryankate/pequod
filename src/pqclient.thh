@@ -218,7 +218,7 @@ inline void DirectClient::erase_db(const String&, preevent<R>) {
 template <typename R>
 inline void DirectClient::count(const String& first, const String& last,
                                 preevent<R, size_t> e) {
-    count(first, last, last, e);
+    count(first, last, last, std::move(e));
 }
 
 template <typename R>
@@ -231,7 +231,7 @@ inline void DirectClient::count(const String& first, const String& last,
 template <typename R>
 inline void DirectClient::add_count(const String& first, const String& last,
                                     preevent<R, size_t> e) {
-    add_count(first, last, last, e);
+    add_count(first, last, last, std::move(e));
 }
 
 template <typename R>
@@ -244,7 +244,7 @@ inline void DirectClient::add_count(const String& first, const String& last,
 template <typename R>
 inline void DirectClient::scan(const String& first, const String& last,
                                preevent<R, scan_result> e) {
-    scan(first, last, last, e);
+    scan(first, last, last, std::move(e));
 }
 
 template <typename R>

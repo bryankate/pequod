@@ -86,7 +86,7 @@ void msgpack_fd::flush(tamer::event<bool> done) {
 }
 
 void msgpack_fd::flush(tamer::event<> done) {
-    flush(tamer::unbind<bool>(done));
+    flush(tamer::rebind<bool>(done));
 }
 
 inline void msgpack_fd::check_coroutines() {

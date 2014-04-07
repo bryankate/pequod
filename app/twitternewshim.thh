@@ -267,16 +267,16 @@ inline void TwitterNewShim<S,P>::subscribe(uint32_t subscriber, uint32_t poster,
         write_in_net_order(buf_ + 2, subscriber);
         write_in_net_order(buf_ + 7, poster);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_, 11), Str("1", 1), done);
+            server_.insert_db(Str(buf_, 11), Str("1", 1), std::move(done));
         else
-            server_.insert(Str(buf_, 11), Str("1", 1), done);
+            server_.insert(Str(buf_, 11), Str("1", 1), std::move(done));
     }
     else {
         sprintf(buf_, "s|%08u|%08u", subscriber, poster);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_, 19), Str("1", 1), done);
+            server_.insert_db(Str(buf_, 19), Str("1", 1), std::move(done));
         else
-            server_.insert(Str(buf_, 19), Str("1", 1), done);
+            server_.insert(Str(buf_, 19), Str("1", 1), std::move(done));
     }
 }
 
@@ -286,16 +286,16 @@ inline void TwitterNewShim<S,P>::mark_celebrity(uint32_t poster, tamer::preevent
         memcpy(buf_, "c|XXXX", 6);
         write_in_net_order(buf_ + 2, poster);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_, 6), Str("1", 1), done);
+            server_.insert_db(Str(buf_, 6), Str("1", 1), std::move(done));
         else
-            server_.insert(Str(buf_, 6), Str("1", 1), done);
+            server_.insert(Str(buf_, 6), Str("1", 1), std::move(done));
     }
     else {
         sprintf(buf_, "c|%08u", poster);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_, 10), Str("1", 1), done);
+            server_.insert_db(Str(buf_, 10), Str("1", 1), std::move(done));
         else
-            server_.insert(Str(buf_, 10), Str("1", 1), done);
+            server_.insert(Str(buf_, 10), Str("1", 1), std::move(done));
     }
 }
 
@@ -307,16 +307,16 @@ inline void TwitterNewShim<S,P>::post(uint32_t poster, uint32_t time, const Stri
         write_in_net_order(buf_ + 3, poster);
         write_in_net_order(buf_ + 8, time);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_ + !celeb, 11 + celeb), value, done);
+            server_.insert_db(Str(buf_ + !celeb, 11 + celeb), value, std::move(done));
         else
-            server_.insert(Str(buf_ + !celeb, 11 + celeb), value, done);
+            server_.insert(Str(buf_ + !celeb, 11 + celeb), value, std::move(done));
     }
     else {
         sprintf(buf_, "cp|%08u|%010u", poster, time);
         if (tp_.writearound())
-            server_.insert_db(Str(buf_ + !celeb, 21 + celeb), value, done);
+            server_.insert_db(Str(buf_ + !celeb, 21 + celeb), value, std::move(done));
         else
-            server_.insert(Str(buf_ + !celeb, 21 + celeb), value, done);
+            server_.insert(Str(buf_ + !celeb, 21 + celeb), value, std::move(done));
     }
 }
 
@@ -338,12 +338,12 @@ template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::push_post(uint32_t subscriber, tamer::preevent<R> done) {
     if (tp_.binary()) {
         write_in_net_order(buf_ + 2, subscriber);
-        server_.insert(Str(buf_, 16), value_, done);
+        server_.insert(Str(buf_, 16), value_, std::move(done));
     }
     else {
         sprintf(buf_ + 2, "%08u", subscriber);
         buf_[10] = '|'; // replace terminating null
-        server_.insert(Str(buf_, 30), value_, done);
+        server_.insert(Str(buf_, 30), value_, std::move(done));
     }
 }
 
@@ -359,12 +359,12 @@ inline void TwitterNewShim<S,P>::timeline_scan(uint32_t subscriber,
         write_in_net_order(buf_ + 14, subscriber);
         write_in_net_order(buf_ + 22, subscriber);
         write_in_net_order(buf_ + 27, end_time);
-        server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), done);
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), std::move(done));
     }
     else {
         sprintf(buf_, "t|%08u|%010u t|%08u} t|%08u|%010u",
                 subscriber, start_time, subscriber, subscriber, end_time);
-        server_.scan(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), done);
+        server_.scan(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), std::move(done));
     }
 }
 
@@ -379,12 +379,12 @@ inline void TwitterNewShim<S,P>::timeline_add_count(uint32_t subscriber,
         write_in_net_order(buf_ + 14, subscriber);
         write_in_net_order(buf_ + 22, subscriber);
         write_in_net_order(buf_ + 27, end_time);
-        server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), done);
+        server_.add_count(Str(buf_, 11), Str(buf_ + 12, 7), Str(buf_ + 20, 11), std::move(done));
     }
     else {
         sprintf(buf_, "t|%08u|%010u t|%08u} t|%08u|%010u",
                 subscriber, start_time, subscriber, subscriber, end_time);
-        server_.add_count(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), done);
+        server_.add_count(Str(buf_, 21), Str(buf_ + 22, 11), Str(buf_ + 34, 21), std::move(done));
     }
 }
 
@@ -396,11 +396,11 @@ inline void TwitterNewShim<S,P>::follower_scan(uint32_t poster,
         memcpy(buf_, "s|XXXX s|XXXX}", 14);
         write_in_net_order(buf_ + 2, poster);
         write_in_net_order(buf_ + 9, poster);
-        server_.scan(Str(buf_, 6), Str(buf_ + 7, 7), done);
+        server_.scan(Str(buf_, 6), Str(buf_ + 7, 7), std::move(done));
     }
     else {
         sprintf(buf_, "s|%08u s|%08u}", poster, poster);
-        server_.scan(Str(buf_, 10), Str(buf_ + 11, 11), done);
+        server_.scan(Str(buf_, 10), Str(buf_ + 11, 11), std::move(done));
     }
 }
 
@@ -414,23 +414,23 @@ inline void TwitterNewShim<S,P>::post_scan(uint32_t poster,
         write_in_net_order(buf_ + 7, start_time);
         write_in_net_order(buf_ + 14, poster);
         write_in_net_order(buf_ + 19, end_time);
-        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), done);
+        server_.scan(Str(buf_, 11), Str(buf_ + 12, 11), std::move(done));
     }
     else {
         sprintf(buf_, "p|%08u|%010u p|%08u|%010u",
                 poster, start_time, poster, end_time);
-        server_.scan(Str(buf_, 21), Str(buf_ + 22, 21), done);
+        server_.scan(Str(buf_, 21), Str(buf_ + 22, 21), std::move(done));
     }
 }
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::pace(tamer::preevent<R> done) {
-    server_.pace(done);
+    server_.pace(std::move(done));
 }
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::flush(tamer::preevent<R> done) {
-    server_.flush(done);
+    server_.flush(std::move(done));
 }
 
 tamed template <typename S, typename P>
@@ -456,12 +456,12 @@ void TwitterNewShim<S,P>::update_progress(uint32_t prog, tamer::event<uint32_t> 
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::stats(tamer::preevent<R, Json> done) {
-    server_.stats(done);
+    server_.stats(std::move(done));
 }
 
 template <typename S, typename P> template <typename R>
 inline void TwitterNewShim<S,P>::control(const Json& cmd, tamer::preevent<R, Json> done) {
-    server_.control(cmd, done);
+    server_.control(cmd, std::move(done));
 }
 
 

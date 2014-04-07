@@ -151,7 +151,7 @@ void msgpack_fd::read_request(tamer::preevent<R, Json> receiver) {
         swap(*receiver.result_pointer(), rdparser_.result());
         receiver.unblock();
     } else
-        rdreqwait_.push_back(receiver);
+        rdreqwait_.push_back(std::move(receiver));
 }
 
 inline void msgpack_fd::call(const Json& j, tamer::event<Json> done) {
