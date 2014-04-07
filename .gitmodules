@@ -1,3 +1,6 @@
 [submodule "tamer"]
 	path = tamer
 	url = git://github.com/kohler/tamer.git
+[submodule "memtier_benchmark"]
+	path = memtier_benchmark
+	url = git://github.com/bryankate/memtier_benchmark.git

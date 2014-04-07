@@ -13,9 +13,10 @@ builddir = .
 
 OBJDIR = obj
 MEMTIER_OBJDIR = $(OBJDIR)/memtier_obj
-MEMTIER_SRCDIR = $(top_srcdir)/memtier_benchmark-1.1.0
+MEMTIER_SRCDIR = $(top_srcdir)/memtier_benchmark
 
 TAMER_COMMIT = 15d0d8513c78fb640b6614c77998b883f9435657
+MEMTIER_COMMIT = d0c75afe71317e643a4f4bc3ed5812ddfad9e5ca
 
 INCLUDES = -include config.h -I$(top_srcdir)/src -I$(top_srcdir)/lib \
            -I$(top_srcdir)/app -I$(top_srcdir)/tamer -I$(OBJDIR) -I/opt/local/include
@@ -308,7 +309,10 @@ $(MEMTIER_SRCDIR)/config.status: $(MEMTIER_SRCDIR)/configure
 $(MEMTIER_SRCDIR)/stamp-h: $(MEMTIER_SRCDIR)/config.h.in $(MEMTIER_SRCDIR)/config.status
 	echo > $(MEMTIER_SRCDIR)/stamp-h
 
-memtier: $(OBJDIR)/memtier_benchmark
+memtier: memtier-update $(OBJDIR)/memtier_benchmark
+
+memtier-update:
+	@cd ./`git rev-parse --show-cdup` && cur=`git submodule status memtier_benchmark | head -c 41 | tail -c +2` && if test "$$cur" != "$(MEMTIER_COMMIT)" -a -n "$(MEMTIER_COMMIT)" && test -z `cd memtier_benchmark; git rev-list -n1 $(MEMTIER_COMMIT)..HEAD 2>/dev/null`; then (echo Updating memtier_benchmark... 1>&2; cd memtier_benchmark; git checkout -f master >/dev/null; git pull; cd ..; git submodule update memtier_benchmark); fi
 
 clean:
 	rm -rf $(OBJDIR) $(DEPSDIR) $(GENDIR)
