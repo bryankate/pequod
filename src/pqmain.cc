@@ -10,11 +10,8 @@
 #include "pqclient.hh"
 #include "twitter.hh"
 #include "twitternew.hh"
-#include "facebook.hh"
 #include "hackernews.hh"
 #include "hackernewsshim.hh"
-#include "analytics.hh"
-#include "rwmicro.hh"
 #include "redisadapter.hh"
 #include "memcacheadapter.hh"
 #include "hashtableadapter.hh"
@@ -26,11 +23,8 @@ static Clp_Option options[] = {
     // modes (which builtin app to run
     { "twitter", 0, 1000, 0, Clp_Negate },
     { "twitternew", 0, 1001, 0, Clp_Negate },
-    { "facebook", 'f', 1002, 0, Clp_Negate },
-    { "rwmicro", 0, 1003, 0, Clp_Negate },
     { "tests", 0, 1004, 0, 0 },
     { "hn", 'h', 1005, 0, Clp_Negate },
-    { "analytics", 0, 1006, 0, Clp_Negate },
     { "builtinhash", 'b', 1008, 0, Clp_Negate },
     { "memcached", 0, 1009, 0, Clp_Negate },
     { "redis", 0, 1010, 0, Clp_Negate},
@@ -82,6 +76,7 @@ static Clp_Option options[] = {
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
     { "popduration", 0, 4001, Clp_ValInt, 0 },
+    { "pactive", 0, 7003, Clp_ValDouble, 0 },
     { "pread", 0, 4002, Clp_ValDouble, 0 },
     { "ppost", 0, 4003, Clp_ValDouble, 0 },
     { "psubscribe", 0, 4004, Clp_ValDouble, 0 },
@@ -112,23 +107,10 @@ static Clp_Option options[] = {
     { "large", 0, 5005, 0, Clp_Negate },
     { "super_materialize", 's', 5006, 0, Clp_Negate },
     { "populate_only", 0, 5007, 0, Clp_Negate },
-    { "run_only", 0, 5008, 0, Clp_Negate },
-
-    // mostly analytics params
-    { "proactive", 0, 6000, 0, Clp_Negate },
-    { "buffer", 0, 6001, 0, Clp_Negate },
-
-    // rwmicro params
-    { "prefresh", 0, 7000, Clp_ValDouble, 0 },
-    { "nfollower", 0, 7001, Clp_ValDouble, 0 },
-    { "pprerefresh", 0, 7002, Clp_ValDouble, 0 },
-    { "pactive", 0, 7003, Clp_ValDouble, 0 },
-    { "client_push", 0, 7004, 0, Clp_Negate },
-    { "postlen", 0, 7005, Clp_ValInt, 0 },
+    { "run_only", 0, 5008, 0, Clp_Negate }
 };
 
-enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_facebook,
-       mode_analytics, mode_listen, mode_tests, mode_rwmicro };
+enum { mode_unknown, mode_twitter, mode_twitternew, mode_hn, mode_listen, mode_tests };
 enum { db_unknown, db_postgres };
 
 int main(int argc, char** argv) {
@@ -154,16 +136,10 @@ int main(int argc, char** argv) {
             mode = mode_twitter;
         else if (clp->option->long_name == String("twitternew"))
             mode = mode_twitternew;
-        else if (clp->option->long_name == String("facebook"))
-            mode = mode_facebook;
-        else if (clp->option->long_name == String("rwmicro"))
-            mode = mode_rwmicro;
         else if (clp->option->long_name == String("tests"))
             mode = mode_tests;
         else if (clp->option->long_name == String("hn"))
             mode = mode_hn;
-        else if (clp->option->long_name == String("analytics"))
-            mode = mode_analytics;
         else if (clp->option->long_name == String("memcached"))
             tp_param.set("memcached", !clp->negated);
         else if (clp->option->long_name == String("redis"))
@@ -202,8 +178,8 @@ int main(int argc, char** argv) {
             tp_param.set("pull", !clp->negated);
         else if (clp->option->long_name == String("duration"))
             tp_param.set("duration", clp->val.i);
-	else if (clp->option->long_name == String("nusers"))
-	    tp_param.set("nusers", clp->val.i);
+	    else if (clp->option->long_name == String("nusers"))
+	        tp_param.set("nusers", clp->val.i);
         else if (clp->option->long_name == String("synchronous"))
             tp_param.set("synchronous", !clp->negated);
         else if (clp->option->long_name == String("seed"))
@@ -262,6 +238,8 @@ int main(int argc, char** argv) {
             tp_param.set("shape", clp->val.d);
         else if (clp->option->long_name == String("popduration"))
             tp_param.set("popduration", clp->val.i);
+        else if (clp->option->long_name == String("pactive"))
+            tp_param.set("pactive", clp->val.d);
         else if (clp->option->long_name == String("pread"))
             tp_param.set("pread", clp->val.d);
         else if (clp->option->long_name == String("ppost"))
@@ -304,44 +282,24 @@ int main(int argc, char** argv) {
             tp_param.set("master_port", clp->val.i);
 
         // hn
-	else if (clp->option->long_name == String("narticles"))
-	    tp_param.set("narticles", clp->val.i);
-	else if (clp->option->long_name == String("vote_rate"))
-	    tp_param.set("vote_rate", clp->val.i);
-	else if (clp->option->long_name == String("comment_rate"))
-	    tp_param.set("comment_rate", clp->val.i);
+    	else if (clp->option->long_name == String("narticles"))
+    	    tp_param.set("narticles", clp->val.i);
+    	else if (clp->option->long_name == String("vote_rate"))
+    	    tp_param.set("vote_rate", clp->val.i);
+    	else if (clp->option->long_name == String("comment_rate"))
+    	    tp_param.set("comment_rate", clp->val.i);
         else if (clp->option->long_name == String("pg"))
             tp_param.set("pg", !clp->negated);
         else if (clp->option->long_name == String("hnusers"))
             tp_param.set("hnusers", clp->val.i);
         else if (clp->option->long_name == String("large"))
             tp_param.set("large", !clp->negated);
-	else if (clp->option->long_name == String("super_materialize"))
-	    tp_param.set("super_materialize", !clp->negated);
+    	else if (clp->option->long_name == String("super_materialize"))
+    	    tp_param.set("super_materialize", !clp->negated);
         else if (clp->option->long_name == String("populate_only"))
             tp_param.set("populate_only", !clp->negated);
         else if (clp->option->long_name == String("run_only"))
             tp_param.set("run_only", !clp->negated);
-
-        // analytics
-        else if (clp->option->long_name == String("proactive"))
-            tp_param.set("proactive", !clp->negated);
-        else if (clp->option->long_name == String("buffer"))
-            tp_param.set("buffer", !clp->negated);
-
-        // rwmicro
-        else if (clp->option->long_name == String("prefresh"))
-            tp_param.set("prefresh", clp->val.d);
-        else if (clp->option->long_name == String("nfollower"))
-            tp_param.set("nfollower", clp->val.d);
-        else if (clp->option->long_name == String("pprerefresh"))
-            tp_param.set("pprerefresh", clp->val.d);
-        else if (clp->option->long_name == String("pactive"))
-            tp_param.set("pactive", clp->val.d);
-        else if (clp->option->long_name == String("client_push"))
-            tp_param.set("client_push", !clp->negated);
-        else if (clp->option->long_name == String("postlen"))
-            tp_param.set("postlen", clp->val.i);
 
         // run single unit test
         else
@@ -497,40 +455,6 @@ int main(int argc, char** argv) {
 	        hr.populate(tamer::event<>());
 	        hr.run(tamer::event<>());
 	    }
-        }
-    } else if (mode == mode_facebook) {
-        if (!tp_param.count("shape"))
-            tp_param.set("shape", 5);
-        pq::FacebookPopulator fp(tp_param);
-        pq::facebook_populate(server, fp);
-        pq::facebook_run(server, fp);
-    } else if (mode == mode_analytics) {
-        if (client_port >= 0)
-            pq::run_analytics_remote(tp_param, client_port);
-        else {
-            pq::DirectClient client(server);
-            pq::AnalyticsShim<pq::DirectClient> shim(client);
-            pq::AnalyticsRunner<decltype(shim)> ar(shim, tp_param);
-            ar.safe_run();
-        }
-    } else if (mode == mode_rwmicro) {
-        if (tp_param["builtinhash"]) {
-            pq::BuiltinHashClient client;
-            pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
-            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
-            rw.safe_run();
-        }
-        else if (tp_param["redis"])
-            pq::run_rwmicro_redis(tp_param);
-        else if (tp_param["memcache"])
-            pq::run_rwmicro_memcache(tp_param);
-        else if (client_port >= 0)
-            pq::run_rwmicro_pqremote(tp_param, client_port);
-        else {
-            pq::DirectClient client(server);
-            pq::TwitterShim<pq::DirectClient> shim(client);
-            pq::RwMicro<decltype(shim)> rw(tp_param, shim);
-            rw.safe_run();
         }
     }
 

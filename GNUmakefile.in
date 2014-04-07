@@ -115,16 +115,12 @@ $(OBJDIR)/pqunit2.cc: $(top_srcdir)/src/pqunit2.tcc
 $(OBJDIR)/hackernews.cc: $(top_srcdir)/app/hackernews.tcc
 $(OBJDIR)/hackernews.hh: $(top_srcdir)/app/hackernews.thh
 $(OBJDIR)/hackernewsshim.hh: $(top_srcdir)/app/hackernewsshim.thh
-$(OBJDIR)/rwmicro.cc: $(top_srcdir)/app/rwmicro.tcc
-$(OBJDIR)/rwmicro.hh: $(top_srcdir)/app/rwmicro.thh
 $(OBJDIR)/twitter.cc: $(top_srcdir)/app/twitter.tcc
 $(OBJDIR)/twitter.hh: $(top_srcdir)/app/twitter.thh
 $(OBJDIR)/twittershim.hh: $(top_srcdir)/app/twittershim.thh
 $(OBJDIR)/twitternew.cc: $(top_srcdir)/app/twitternew.tcc
 $(OBJDIR)/twitternew.hh: $(top_srcdir)/app/twitternew.thh
 $(OBJDIR)/twitternewshim.hh: $(top_srcdir)/app/twitternewshim.thh
-$(OBJDIR)/analytics.cc: $(top_srcdir)/app/analytics.tcc
-$(OBJDIR)/analytics.hh: $(top_srcdir)/app/analytics.thh
 $(OBJDIR)/redisadapter.hh: $(top_srcdir)/app/redisadapter.thh
 $(OBJDIR)/redisadapter.cc: $(top_srcdir)/app/redisadapter.tcc
 $(OBJDIR)/memcacheadapter.hh: $(top_srcdir)/app/memcacheadapter.thh
@@ -140,8 +136,6 @@ $(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
                     $(OBJDIR)/twitter.hh \
                     $(OBJDIR)/hackernews.hh \
                     $(OBJDIR)/twitternew.hh \
-                    $(OBJDIR)/analytics.hh \
-                    $(OBJDIR)/rwmicro.hh \
                     $(OBJDIR)/hashtableadapter.hh \
                     $(OBJDIR)/memcacheadapter.hh \
                     $(OBJDIR)/redisadapter.hh
@@ -170,12 +164,8 @@ $(OBJDIR)/twitter.o: $(OBJDIR)/twitter.hh $(OBJDIR)/pqmulticlient.hh
 $(OBJDIR)/twittershim.hh: $(OBJDIR)/pqclient.hh
 $(OBJDIR)/twitternew.o: $(OBJDIR)/twitternew.hh $(OBJDIR)/pqclient.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/pqdbpool.hh
 $(OBJDIR)/twitternew.hh: $(OBJDIR)/twitternewshim.hh
-$(OBJDIR)/analytics.o: $(OBJDIR)/analytics.hh $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/hackernews.o: $(OBJDIR)/hackernews.hh $(OBJDIR)/pqmulticlient.hh $(OBJDIR)/redisadapter.hh
 $(OBJDIR)/hackernews.hh: $(OBJDIR)/hackernewsshim.hh
-$(OBJDIR)/facebook.o: $(OBJDIR)/pqserver.hh
-$(OBJDIR)/rwmicro.o: $(OBJDIR)/rwmicro.hh $(OBJDIR)/twittershim.hh $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/redisadapter.hh
-$(OBJDIR)/hashtimer.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqinfo.o: $(OBJDIR)/pqinfo.cc $(OBJDIR)/pqremoteclient.hh
 $(OBJDIR)/poptable.o: $(OBJDIR)/poptable.cc $(OBJDIR)/pqremoteclient.hh $(OBJDIR)/memcacheadapter.hh $(OBJDIR)/redisadapter.hh
 
@@ -204,23 +194,20 @@ PQSERVER_OBJS = $(COMMON_OBJS) \
 	$(OBJDIR)/mpfd.o \
 	$(OBJDIR)/pqpersistent.o \
 	$(OBJDIR)/pqpartition.o \
-        $(OBJDIR)/pqmemory.o \
-        $(OBJDIR)/pqclient.o \
-        $(OBJDIR)/pqmulticlient.o \
-        $(OBJDIR)/pqremoteclient.o \
-        $(OBJDIR)/pqinterconnect.o \
-        $(OBJDIR)/pqdbpool.o \
-        $(OBJDIR)/pqunit.o \
-        $(OBJDIR)/pqunit2.o \
-        $(OBJDIR)/twitter.o \
-        $(OBJDIR)/twitternew.o \
-        $(OBJDIR)/hackernews.o \
-        $(OBJDIR)/analytics.o \
-        $(OBJDIR)/facebook.o \
-        $(OBJDIR)/rwmicro.o \
-        $(OBJDIR)/redisadapter.o \
-        $(OBJDIR)/memcacheadapter.o \
-        $(OBJDIR)/MurmurHash3.o
+    $(OBJDIR)/pqmemory.o \
+    $(OBJDIR)/pqclient.o \
+    $(OBJDIR)/pqmulticlient.o \
+    $(OBJDIR)/pqremoteclient.o \
+    $(OBJDIR)/pqinterconnect.o \
+    $(OBJDIR)/pqdbpool.o \
+    $(OBJDIR)/pqunit.o \
+    $(OBJDIR)/pqunit2.o \
+    $(OBJDIR)/twitter.o \
+    $(OBJDIR)/twitternew.o \
+    $(OBJDIR)/hackernews.o \
+    $(OBJDIR)/redisadapter.o \
+    $(OBJDIR)/memcacheadapter.o \
+    $(OBJDIR)/MurmurHash3.o
 
 PQMAIN_OBJS = $(PQSERVER_OBJS) \
 	$(OBJDIR)/pqmain.o
@@ -246,9 +233,6 @@ MEMTIER_OBJS = $(COMMON_OBJS) \
         $(MEMTIER_OBJDIR)/obj_gen.o \
         $(MEMTIER_OBJDIR)/protocol.o
 
-HASHTIMER_OBJS = $(PQSERVER_OBJS) \
-	$(OBJDIR)/hashtimer.o
-
 $(OBJDIR)/pqserver: $(PQMAIN_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
@@ -265,9 +249,6 @@ $(OBJDIR)/jsontest: $(COMMON_OBJS) $(OBJDIR)/jsontest.o
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/msgpacktest: $(COMMON_OBJS) $(OBJDIR)/msgpacktest.o
-	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
-
-$(OBJDIR)/hashtimer: $(HASHTIMER_OBJS) $(LIBTAMER)
 	$(CXXLINK) -o $@ $^ $(LDFLAGS) $(LIBS)
 
 $(OBJDIR)/memtier_benchmark: $(MEMTIER_OBJS)
@@ -334,7 +315,5 @@ endif
 always:
 	@:
 
-.PHONY: all clean distclean always tamer-update memtier
-.PRECIOUS: $(PROTOGENDIR)/%.pb.cc $(PROTOGENDIR)/%.pb.h \
-	$(PROTOGENDIR)/%.px.cc $(PROTOGENDIR)/%.px.hh \
-	$(OBJ)/%.cc $(OBJ)/%.hh
+.PHONY: all clean distclean always tamer-update memtier-update memtier
+.PRECIOUS: $(OBJ)/%.cc $(OBJ)/%.hh
