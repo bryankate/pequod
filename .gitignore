@@ -26,3 +26,6 @@ drivers
 .pydevproject
 .externalToolBuilders
 .settings
+
+*.pem
+aws.json
