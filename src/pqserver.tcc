@@ -903,7 +903,6 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
         it = t->validate(first, last, next_validate_at(), log, gr);
         gettimeofday(&tv[1], NULL);
         difft += tv2us(tv[1] - tv[0]);
-        it = t->validate(first, last, next_validate_at(), log, gr);
         assert(gr.has_waiting() == !it.first);
     } while (gr.has_waiting());
 
