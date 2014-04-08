@@ -383,7 +383,6 @@ inline bool Sink::valid() const {
 }
 
 inline void Sink::set_valid() {
-    assert(!valid_);
     valid_ = true;
 }
 
