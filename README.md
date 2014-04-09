@@ -26,8 +26,8 @@ Pequod builds on Linux and Mac OSX. To build:
     $ ./configure
     $ make
 
-Pequod requires a C++11 compatible compiler, and Apple-supplied compiler might
-not be suitable for building. To use an alternate compiler (such as one 
+Pequod requires a C++11 compatible compiler, and the Apple-supplied compiler might
+not be suitable for building on OSX. To use an alternate compiler (such as one 
 installed with `homebrew`), specify the `CXX` variable at configuration time:
 
     $ ./configure CXX='g++-4.8 -std=gnu++11'
