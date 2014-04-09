@@ -120,7 +120,7 @@ will produce JSON output similar to:
 </pre>
 
 
-## Network testing ##
+## Network Testing ##
 
 Pequod can be started as a server, listening on a port for clients:
 
