@@ -29,10 +29,15 @@ template <typename T> struct Json_rep_item<T, 8> {
 class Json {
     enum json_type { // order matters
         j_string = -1, j_null = 0,
-        j_array = 1, j_object = 2, j_int = 3, j_double = 4, j_bool = 5
+        j_array = 1, j_object = 2,
+        j_int = 3, j_unsigned = 4, j_double = 5, j_bool = 6
     };
 
   public:
+    struct null_t {
+        inline constexpr null_t() { }
+    };
+    static const null_t null;
     static const Json null_json;
 
     typedef int size_type;
@@ -59,6 +64,7 @@ class Json {
 #if HAVE_CXX_RVALUE_REFERENCES
     inline Json(Json&& x);
 #endif
+    inline Json(const null_t& x);
     inline Json(int x);
     inline Json(unsigned x);
     inline Json(long x);
@@ -78,21 +84,25 @@ class Json {
     static inline const Json& make_null();
     static inline Json make_array();
     static inline Json make_array_reserve(int n);
-    static inline Json array();
-    template <typename T, typename... U>
-    static inline Json array(T first, U... rest);
+    template <typename... Args>
+    static inline Json array(Args&&... rest);
     static inline Json make_object();
+    template <typename... Args>
+    static inline Json object(Args&&... rest);
     static inline Json make_string(const String& x);
     static inline Json make_string(const char* s, int len);
 
     // Type information
     inline bool truthy() const;
+    inline bool falsy() const;
     inline operator unspecified_bool_type() const;
     inline bool operator!() const;
 
     inline bool is_null() const;
     inline bool is_int() const;
     inline bool is_i() const;
+    inline bool is_unsigned() const;
+    inline bool is_u() const;
     inline bool is_double() const;
     inline bool is_d() const;
     inline bool is_number() const;
@@ -114,7 +124,8 @@ class Json {
     void clear();
 
     // Primitive extractors
-    inline long to_i() const;
+    inline int64_t to_i() const;
+    inline uint64_t to_u() const;
     inline uint64_t to_u64() const;
     inline bool to_i(int& x) const;
     inline bool to_i(unsigned& x) const;
@@ -122,10 +133,10 @@ class Json {
     inline bool to_i(unsigned long& x) const;
     inline bool to_i(long long& x) const;
     inline bool to_i(unsigned long long& x) const;
-    inline long as_i() const;
-    inline long as_i(long default_value) const;
-    inline unsigned long as_u() const;
-    inline unsigned long as_u(unsigned long default_value) const;
+    inline int64_t as_i() const;
+    inline int64_t as_i(int64_t default_value) const;
+    inline uint64_t as_u() const;
+    inline uint64_t as_u(uint64_t default_value) const;
 
     inline double to_d() const;
     inline bool to_d(double& x) const;
@@ -177,15 +188,18 @@ class Json {
     inline Json& at_insert(Str key);
     inline Json& at_insert(const char* key);
 
-    template <typename T> inline Json& set(const String& key, T value);
-#if HAVE_CXX_RVALUE_REFERENCES
-    inline Json& set(const String& key, Json&& x);
-#endif
+    inline Json& set(const String& key, Json value);
+    template <typename P>
+    inline Json& set(const String& key, const Json_proxy_base<P>& value);
     inline Json& unset(Str key);
+
+    inline Json& set_list();
+    template <typename T, typename... Args>
+    inline Json& set_list(const String& key, T value, Args&&... rest);
 
     inline std::pair<object_iterator, bool> insert(const object_value_type& x);
     inline object_iterator insert(object_iterator position,
-				  const object_value_type& x);
+                                  const object_value_type& x);
     inline object_iterator erase(object_iterator it);
     inline size_type erase(Str key);
 
@@ -205,23 +219,29 @@ class Json {
     inline const Json& back() const;
     inline Json& back();
 
-    template <typename T> inline Json& push_back(T x);
+    inline Json& push_back(Json x);
     template <typename P> inline Json& push_back(const Json_proxy_base<P>& x);
-#if HAVE_CXX_RVALUE_REFERENCES
-    inline Json& push_back(Json&& x);
-#endif
     inline void pop_back();
 
-    inline Json& insert_back();
-    template <typename T, typename... U>
-    inline Json& insert_back(T first, U... rest);
+    inline Json& push_back_list();
+    template <typename T, typename... Args>
+    inline Json& push_back_list(T first, Args&&... rest);
 
+    inline array_iterator insert(array_iterator position, Json x);
+    template <typename P>
+    inline array_iterator insert(array_iterator position, const Json_proxy_base<P>& x);
+    array_iterator erase(array_iterator first, array_iterator last);
+    inline array_iterator erase(array_iterator position);
+
+    void reserve(size_type n);
     void resize(size_type n);
 
     inline Json* array_data();
     inline const Json* array_data() const;
+    inline const Json* array_cdata() const;
     inline Json* end_array_data();
     inline const Json* end_array_data() const;
+    inline const Json* end_array_cdata() const;
 
     // Iteration
     inline const_object_iterator obegin() const;
@@ -306,22 +326,22 @@ class Json {
 
   private:
     enum {
-	st_initial = 0, st_array_initial = 1, st_array_delim = 2,
-	st_array_value = 3, st_object_initial = 4, st_object_delim = 5,
-	st_object_key = 6, st_object_colon = 7, st_object_value = 8,
-	max_depth = 2048
+        st_initial = 0, st_array_initial = 1, st_array_delim = 2,
+        st_array_value = 3, st_object_initial = 4, st_object_delim = 5,
+        st_object_key = 6, st_object_colon = 7, st_object_value = 8,
+        max_depth = 2048
     };
 
     struct ComplexJson {
-	int refcount;
+        int refcount;
         int size;
-	ComplexJson()
-	    : refcount(1) {
-	}
-	inline void ref();
-	inline void deref(json_type j);
+        ComplexJson()
+            : refcount(1) {
+        }
+        inline void ref();
+        inline void deref(json_type j);
       private:
-	ComplexJson(const ComplexJson& x); // does not exist
+        ComplexJson(const ComplexJson& x); // does not exist
     };
 
     struct ArrayJson;
@@ -333,21 +353,9 @@ class Json {
         Json_rep_item<uint64_t> u;
         Json_rep_item<double> d;
         String::rep_type str;
-        struct {
-            ArrayJson* a;
-            int padding;
-            int type;
-        } a;
-        struct {
-            ObjectJson* o;
-            int padding;
-            int type;
-        } o;
-        struct {
-            ComplexJson* c;
-            int padding;
-            int type;
-        } x;
+        Json_rep_item<ArrayJson*> a;
+        Json_rep_item<ObjectJson*> o;
+        Json_rep_item<ComplexJson*> x;
     } u_;
 
     inline void deref();
@@ -355,13 +363,16 @@ class Json {
     inline ObjectJson* ojson() const;
     inline ArrayJson* ajson() const;
 
-    long hard_to_i() const;
-    uint64_t hard_to_u64() const;
+    int64_t hard_to_i() const;
+    uint64_t hard_to_u() const;
     double hard_to_d() const;
     bool hard_to_b() const;
     String hard_to_s() const;
     inline void force_number();
+    inline void force_double();
+    inline Json& add(double x);
     template <typename T> inline Json& add(T x);
+    inline Json& subtract(double x);
     template <typename T> inline Json& subtract(T x);
 
     const Json& hard_get(Str key) const;
@@ -372,6 +383,7 @@ class Json {
     void hard_uniqueify_object(bool convert);
     inline void uniqueify_array(bool convert, int ncap);
     void hard_uniqueify_array(bool convert, int ncap);
+    void* uniqueify_array_insert(bool convert, size_type pos);
 
     static unparse_manipulator default_manipulator;
     bool unparse_is_complex() const;
@@ -384,6 +396,8 @@ class Json {
     friend class const_object_iterator;
     friend class array_iterator;
     friend class const_array_iterator;
+    friend Json operator+(Json);
+    friend Json operator-(Json);
 };
 
 
@@ -403,7 +417,7 @@ struct Json::ObjectItem {
     std::pair<const String, Json> v_;
     int next_;
     explicit ObjectItem(const String &key, const Json& value, int next)
-	: v_(key, value), next_(next) {
+        : v_(key, value), next_(next) {
     }
 };
 
@@ -413,34 +427,34 @@ struct Json::ObjectJson : public ComplexJson {
     int capacity_;
     std::vector<int> hash_;
     ObjectJson()
-	: os_(), n_(0), capacity_(0) {
+        : os_(), n_(0), capacity_(0) {
         size = 0;
     }
     ObjectJson(const ObjectJson& x);
     ~ObjectJson();
     void grow(bool copy);
     int bucket(const char* s, int len) const {
-	return String::hashcode(s, s + len) & (hash_.size() - 1);
+        return String::hashcode(s, s + len) & (hash_.size() - 1);
     }
     ObjectItem& item(int p) const {
-	return os_[p];
+        return os_[p];
     }
     int find(const char* s, int len) const {
-	if (hash_.size()) {
-	    int p = hash_[bucket(s, len)];
-	    while (p >= 0) {
-		ObjectItem &oi = item(p);
-		if (oi.v_.first.equals(s, len))
-		    return p;
-		p = oi.next_;
-	    }
-	}
-	return -1;
+        if (hash_.size()) {
+            int p = hash_[bucket(s, len)];
+            while (p >= 0) {
+                ObjectItem &oi = item(p);
+                if (oi.v_.first.equals(s, len))
+                    return p;
+                p = oi.next_;
+            }
+        }
+        return -1;
     }
     int find_insert(const String& key, const Json& value);
     inline Json& get_insert(const String& key) {
-	int p = find_insert(key, make_null());
-	return item(p).v_.second;
+        int p = find_insert(key, make_null());
+        return item(p).v_.second;
     }
     Json& get_insert(Str key);
     void erase(int p);
@@ -459,32 +473,32 @@ inline void Json::ComplexJson::ref() {
 
 inline void Json::ComplexJson::deref(json_type j) {
     if (refcount >= 1 && --refcount == 0) {
-	if (j == j_object)
-	    delete static_cast<ObjectJson*>(this);
-	else
+        if (j == j_object)
+            delete static_cast<ObjectJson*>(this);
+        else
             ArrayJson::destroy(static_cast<ArrayJson*>(this));
     }
 }
 
 inline Json::ArrayJson* Json::ajson() const {
     precondition(u_.x.type == j_null || u_.x.type == j_array);
-    return u_.a.a;
+    return u_.a.x;
 }
 
 inline Json::ObjectJson* Json::ojson() const {
     precondition(u_.x.type == j_null || u_.x.type == j_object);
-    return u_.o.o;
+    return u_.o.x;
 }
 
 inline void Json::uniqueify_array(bool convert, int ncap) {
-    if (u_.x.type != j_array || !u_.a.a || u_.a.a->refcount != 1
-        || (ncap > 0 && ncap > u_.a.a->capacity))
-	hard_uniqueify_array(convert, ncap);
+    if (u_.x.type != j_array || !u_.a.x || u_.a.x->refcount != 1
+        || (ncap > 0 && ncap > u_.a.x->capacity))
+        hard_uniqueify_array(convert, ncap);
 }
 
 inline void Json::uniqueify_object(bool convert) {
-    if (u_.x.type != j_object || !u_.o.o || u_.o.o->refcount != 1)
-	hard_uniqueify_object(convert);
+    if (u_.x.type != j_object || !u_.o.x || u_.o.x->refcount != 1)
+        hard_uniqueify_object(convert);
 }
 
 
@@ -498,47 +512,47 @@ class Json::const_object_iterator { public:
     }
     typedef bool (const_object_iterator::*unspecified_bool_type)() const;
     operator unspecified_bool_type() const {
-	return live() ? &const_object_iterator::live : 0;
+        return live() ? &const_object_iterator::live : 0;
     }
     bool live() const {
-	return i_ >= 0;
+        return i_ >= 0;
     }
     const value_type& operator*() const {
-	return j_->ojson()->item(i_).v_;
+        return j_->ojson()->item(i_).v_;
     }
     const value_type* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     const String& key() const {
-	return (**this).first;
+        return (**this).first;
     }
     const Json& value() const {
-	return (**this).second;
+        return (**this).second;
     }
     void operator++() {
-	++i_;
-	fix();
+        ++i_;
+        fix();
     }
     void operator++(int) {
-	++(*this);
+        ++(*this);
     }
   private:
     const Json* j_;
     int i_;
     const_object_iterator(const Json* j, int i)
-	: j_(j), i_(i) {
-	if (i_ >= 0)
-	    fix();
+        : j_(j), i_(i) {
+        if (i_ >= 0)
+            fix();
     }
     void fix() {
-	ObjectJson* oj = j_->ojson();
+        ObjectJson* oj = j_->ojson();
     retry:
-	if (!oj || i_ >= oj->n_)
-	    i_ = -1;
-	else if (oj->item(i_).next_ == -2) {
-	    ++i_;
-	    goto retry;
-	}
+        if (!oj || i_ >= oj->n_)
+            i_ = -1;
+        else if (oj->item(i_).next_ == -2) {
+            ++i_;
+            goto retry;
+        }
     }
     friend class Json;
     friend bool operator==(const const_object_iterator&, const const_object_iterator&);
@@ -551,18 +565,18 @@ class Json::object_iterator : public const_object_iterator { public:
     object_iterator() {
     }
     value_type& operator*() const {
-	const_cast<Json*>(j_)->uniqueify_object(false);
-	return j_->ojson()->item(i_).v_;
+        const_cast<Json*>(j_)->uniqueify_object(false);
+        return j_->ojson()->item(i_).v_;
     }
     value_type* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     Json& value() const {
-	return (**this).second;
+        return (**this).second;
     }
   private:
     object_iterator(Json* j, int i)
-	: const_object_iterator(j, i) {
+        : const_object_iterator(j, i) {
     }
     friend class Json;
 };
@@ -586,49 +600,49 @@ class Json::const_array_iterator { public:
     }
     typedef bool (const_array_iterator::*unspecified_bool_type)() const;
     operator unspecified_bool_type() const {
-	return live() ? &const_array_iterator::live : 0;
+        return live() ? &const_array_iterator::live : 0;
     }
     bool live() const {
-	ArrayJson* aj = j_->ajson();
-	return aj && i_ < aj->size;
+        ArrayJson* aj = j_->ajson();
+        return aj && i_ < aj->size;
     }
     const Json& operator*() const {
-	return j_->ajson()->a[i_];
+        return j_->ajson()->a[i_];
     }
     const Json& operator[](difference_type i) const {
-	return j_->ajson()->a[i_ + i];
+        return j_->ajson()->a[i_ + i];
     }
     const Json* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     const Json& value() const {
-	return **this;
+        return **this;
     }
     void operator++(int) {
-	++i_;
+        ++i_;
     }
     void operator++() {
-	++i_;
+        ++i_;
     }
     void operator--(int) {
-	--i_;
+        --i_;
     }
     void operator--() {
-	--i_;
+        --i_;
     }
     const_array_iterator& operator+=(difference_type x) {
-	i_ += x;
-	return *this;
+        i_ += x;
+        return *this;
     }
     const_array_iterator& operator-=(difference_type x) {
-	i_ -= x;
-	return *this;
+        i_ -= x;
+        return *this;
     }
   private:
     const Json* j_;
     int i_;
     const_array_iterator(const Json* j, int i)
-	: j_(j), i_(i) {
+        : j_(j), i_(i) {
     }
     friend class Json;
     friend class Json::array_iterator;
@@ -644,22 +658,30 @@ class Json::array_iterator : public const_array_iterator { public:
     array_iterator() {
     }
     Json& operator*() const {
-	const_cast<Json*>(j_)->uniqueify_array(false, 0);
-	return j_->ajson()->a[i_];
+        const_cast<Json*>(j_)->uniqueify_array(false, 0);
+        return j_->ajson()->a[i_];
     }
     Json& operator[](difference_type i) const {
-	const_cast<Json*>(j_)->uniqueify_array(false, 0);
-	return j_->ajson()->a[i_ + i];
+        const_cast<Json*>(j_)->uniqueify_array(false, 0);
+        return j_->ajson()->a[i_ + i];
     }
     Json* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     Json& value() const {
-	return **this;
+        return **this;
+    }
+    array_iterator& operator+=(difference_type x) {
+        i_ += x;
+        return *this;
+    }
+    array_iterator& operator-=(difference_type x) {
+        i_ -= x;
+        return *this;
     }
   private:
     array_iterator(Json* j, int i)
-	: const_array_iterator(j, i) {
+        : const_array_iterator(j, i) {
     }
     friend class Json;
 };
@@ -691,8 +713,14 @@ inline bool operator>=(const Json::const_array_iterator& a, const Json::const_ar
 inline Json::const_array_iterator operator+(Json::const_array_iterator a, Json::const_array_iterator::difference_type i) {
     return a += i;
 }
+inline Json::array_iterator operator+(Json::array_iterator a, Json::array_iterator::difference_type i) {
+    return a += i;
+}
 
 inline Json::const_array_iterator operator-(Json::const_array_iterator a, Json::const_array_iterator::difference_type i) {
+    return a -= i;
+}
+inline Json::array_iterator operator-(Json::array_iterator a, Json::array_iterator::difference_type i) {
     return a -= i;
 }
 
@@ -708,66 +736,66 @@ class Json::const_iterator { public:
     typedef std::forward_iterator_tag iterator_category;
 
     const_iterator()
-	: value_(String(), *(Json*) 0) {
+        : value_(String(), *(Json*) 0) {
     }
     typedef bool (const_iterator::*unspecified_bool_type)() const;
     operator unspecified_bool_type() const {
-	return live() ? &const_iterator::live : 0;
+        return live() ? &const_iterator::live : 0;
     }
     bool live() const {
-	return i_ >= 0;
+        return i_ >= 0;
     }
     const value_type& operator*() const {
-	return value_;
+        return value_;
     }
     const value_type* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     const String& key() const {
-	return (**this).first;
+        return (**this).first;
     }
     const Json& value() const {
-	return (**this).second;
+        return (**this).second;
     }
     void operator++() {
-	++i_;
-	fix();
+        ++i_;
+        fix();
     }
     void operator++(int) {
-	++(*this);
+        ++(*this);
     }
   private:
     const Json* j_;
     int i_;
     value_type value_;
     const_iterator(const Json* j, int i)
-	: j_(j), i_(i), value_(String(), *(Json*) 0) {
-	if (i_ >= 0)
-	    fix();
+        : j_(j), i_(i), value_(String(), *(Json*) 0) {
+        if (i_ >= 0)
+            fix();
     }
     void fix() {
-	if (j_->u_.x.type == j_object) {
-	    ObjectJson* oj = j_->ojson();
-	retry:
-	    if (!oj || i_ >= oj->n_)
-		i_ = -1;
-	    else if (oj->item(i_).next_ == -2) {
-		++i_;
-		goto retry;
-	    } else {
-		value_.~pair();
-		new((void *) &value_) value_type(oj->item(i_).v_.first,
-						 oj->item(i_).v_.second);
-	    }
-	} else {
-	    ArrayJson *aj = j_->ajson();
-	    if (!aj || unsigned(i_) >= unsigned(aj->size))
-		i_ = -1;
-	    else {
-		value_.~pair();
-		new((void *) &value_) value_type(String(i_), aj->a[i_]);
-	    }
-	}
+        if (j_->u_.x.type == j_object) {
+            ObjectJson* oj = j_->ojson();
+        retry:
+            if (!oj || i_ >= oj->n_)
+                i_ = -1;
+            else if (oj->item(i_).next_ == -2) {
+                ++i_;
+                goto retry;
+            } else {
+                value_.~pair();
+                new((void *) &value_) value_type(oj->item(i_).v_.first,
+                                                 oj->item(i_).v_.second);
+            }
+        } else {
+            ArrayJson *aj = j_->ajson();
+            if (!aj || unsigned(i_) >= unsigned(aj->size))
+                i_ = -1;
+            else {
+                value_.~pair();
+                new((void *) &value_) value_type(String(i_), aj->a[i_]);
+            }
+        }
     }
     friend class Json;
     friend bool operator==(const const_iterator &, const const_iterator &);
@@ -780,26 +808,26 @@ class Json::iterator : public const_iterator { public:
     iterator() {
     }
     value_type& operator*() const {
-	if (j_->u_.x.c->refcount != 1)
+        if (j_->u_.x.x->refcount != 1)
             uniqueify();
-	return const_cast<value_type&>(const_iterator::operator*());
+        return const_cast<value_type&>(const_iterator::operator*());
     }
     value_type* operator->() const {
-	return &(**this);
+        return &(**this);
     }
     Json& value() const {
-	return (**this).second;
+        return (**this).second;
     }
   private:
     iterator(Json *j, int i)
-	: const_iterator(j, i) {
+        : const_iterator(j, i) {
     }
     void uniqueify() const {
-	if (j_->u_.x.type == j_object)
-	    const_cast<Json*>(j_)->hard_uniqueify_object(false);
-	else
-	    const_cast<Json*>(j_)->hard_uniqueify_array(false, 0);
-	const_cast<iterator*>(this)->fix();
+        if (j_->u_.x.type == j_object)
+            const_cast<Json*>(j_)->hard_uniqueify_object(false);
+        else
+            const_cast<Json*>(j_)->hard_uniqueify_array(false, 0);
+        const_cast<iterator*>(this)->fix();
     }
     friend class Json;
 };
@@ -817,181 +845,193 @@ template <typename P>
 class Json_proxy_base {
   public:
     const Json& cvalue() const {
-	return static_cast<const P *>(this)->cvalue();
+        return static_cast<const P *>(this)->cvalue();
     }
     Json& value() {
-	return static_cast<P *>(this)->value();
+        return static_cast<P *>(this)->value();
     }
     operator const Json&() const {
-	return cvalue();
+        return cvalue();
     }
     operator Json&() {
-	return value();
+        return value();
     }
     bool truthy() const {
         return cvalue().truthy();
     }
+    bool falsy() const {
+        return cvalue().falsy();
+    }
     operator Json::unspecified_bool_type() const {
-	return cvalue();
+        return cvalue();
     }
     bool operator!() const {
-	return !cvalue();
+        return !cvalue();
     }
     bool is_null() const {
-	return cvalue().is_null();
+        return cvalue().is_null();
     }
     bool is_int() const {
-	return cvalue().is_int();
+        return cvalue().is_int();
     }
     bool is_i() const {
-	return cvalue().is_i();
+        return cvalue().is_i();
+    }
+    bool is_unsigned() const {
+        return cvalue().is_unsigned();
+    }
+    bool is_u() const {
+        return cvalue().is_u();
     }
     bool is_double() const {
-	return cvalue().is_double();
+        return cvalue().is_double();
     }
     bool is_d() const {
-	return cvalue().is_d();
+        return cvalue().is_d();
     }
     bool is_number() const {
-	return cvalue().is_number();
+        return cvalue().is_number();
     }
     bool is_n() const {
-	return cvalue().is_n();
+        return cvalue().is_n();
     }
     bool is_bool() const {
-	return cvalue().is_bool();
+        return cvalue().is_bool();
     }
     bool is_b() const {
-	return cvalue().is_b();
+        return cvalue().is_b();
     }
     bool is_string() const {
-	return cvalue().is_string();
+        return cvalue().is_string();
     }
     bool is_s() const {
-	return cvalue().is_s();
+        return cvalue().is_s();
     }
     bool is_array() const {
-	return cvalue().is_array();
+        return cvalue().is_array();
     }
     bool is_a() const {
-	return cvalue().is_a();
+        return cvalue().is_a();
     }
     bool is_object() const {
-	return cvalue().is_object();
+        return cvalue().is_object();
     }
     bool is_o() const {
-	return cvalue().is_o();
+        return cvalue().is_o();
     }
     bool is_primitive() const {
-	return cvalue().is_primitive();
+        return cvalue().is_primitive();
     }
     bool empty() const {
-	return cvalue().empty();
+        return cvalue().empty();
     }
     Json::size_type size() const {
-	return cvalue().size();
+        return cvalue().size();
     }
-    long to_i() const {
-	return cvalue().to_i();
+    int64_t to_i() const {
+        return cvalue().to_i();
+    }
+    uint64_t to_u() const {
+        return cvalue().to_u();
     }
     uint64_t to_u64() const {
-	return cvalue().to_u64();
+        return cvalue().to_u64();
     }
     bool to_i(int& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
     bool to_i(unsigned& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
     bool to_i(long& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
     bool to_i(unsigned long& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
     bool to_i(long long& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
     bool to_i(unsigned long long& x) const {
-	return cvalue().to_i(x);
+        return cvalue().to_i(x);
     }
-    long as_i() const {
-	return cvalue().as_i();
+    int64_t as_i() const {
+        return cvalue().as_i();
     }
-    long as_i(long default_value) const {
-	return cvalue().as_i(default_value);
+    int64_t as_i(int64_t default_value) const {
+        return cvalue().as_i(default_value);
     }
-    unsigned long as_u() const {
-	return cvalue().as_u();
+    uint64_t as_u() const {
+        return cvalue().as_u();
     }
-    unsigned long as_u(unsigned long default_value) const {
-	return cvalue().as_u(default_value);
+    uint64_t as_u(uint64_t default_value) const {
+        return cvalue().as_u(default_value);
     }
     double to_d() const {
-	return cvalue().to_d();
+        return cvalue().to_d();
     }
     bool to_d(double& x) const {
-	return cvalue().to_d(x);
+        return cvalue().to_d(x);
     }
     double as_d() const {
-	return cvalue().as_d();
+        return cvalue().as_d();
     }
     double as_d(double default_value) const {
-	return cvalue().as_d(default_value);
+        return cvalue().as_d(default_value);
     }
     bool to_b() const {
-	return cvalue().to_b();
+        return cvalue().to_b();
     }
     bool to_b(bool& x) const {
-	return cvalue().to_b(x);
+        return cvalue().to_b(x);
     }
     bool as_b() const {
-	return cvalue().as_b();
+        return cvalue().as_b();
     }
     bool as_b(bool default_value) const {
-	return cvalue().as_b(default_value);
+        return cvalue().as_b(default_value);
     }
     String to_s() const {
-	return cvalue().to_s();
+        return cvalue().to_s();
     }
     bool to_s(Str& x) const {
-	return cvalue().to_s(x);
+        return cvalue().to_s(x);
     }
     bool to_s(String& x) const {
-	return cvalue().to_s(x);
+        return cvalue().to_s(x);
     }
     const String& as_s() const {
-	return cvalue().as_s();
+        return cvalue().as_s();
     }
     const String& as_s(const String& default_value) const {
-	return cvalue().as_s(default_value);
+        return cvalue().as_s(default_value);
     }
     Json::size_type count(Str key) const {
-	return cvalue().count(key);
+        return cvalue().count(key);
     }
     const Json& get(Str key) const {
-	return cvalue().get(key);
+        return cvalue().get(key);
     }
     Json& get_insert(const String& key) {
-	return value().get_insert(key);
+        return value().get_insert(key);
     }
     Json& get_insert(Str key) {
-	return value().get_insert(key);
+        return value().get_insert(key);
     }
     Json& get_insert(const char* key) {
-	return value().get_insert(key);
+        return value().get_insert(key);
     }
     long get_i(Str key) const {
-	return cvalue().get_i(key);
+        return cvalue().get_i(key);
     }
     double get_d(Str key) const {
-	return cvalue().get_d(key);
+        return cvalue().get_d(key);
     }
     bool get_b(Str key) const {
-	return cvalue().get_b(key);
+        return cvalue().get_b(key);
     }
     String get_s(Str key) const {
-	return cvalue().get_s(key);
+        return cvalue().get_s(key);
     }
     inline const Json_get_proxy get(Str key, Json& x) const;
     inline const Json_get_proxy get(Str key, int& x) const;
@@ -1005,230 +1045,246 @@ class Json_proxy_base {
     inline const Json_get_proxy get(Str key, Str& x) const;
     inline const Json_get_proxy get(Str key, String& x) const;
     const Json& operator[](Str key) const {
-	return cvalue().get(key);
+        return cvalue().get(key);
     }
     Json_object_proxy<P> operator[](const String& key) {
-	return Json_object_proxy<P>(*static_cast<P*>(this), key);
+        return Json_object_proxy<P>(*static_cast<P*>(this), key);
     }
     Json_object_str_proxy<P> operator[](Str key) {
-	return Json_object_str_proxy<P>(*static_cast<P*>(this), key);
+        return Json_object_str_proxy<P>(*static_cast<P*>(this), key);
     }
     Json_object_str_proxy<P> operator[](const char* key) {
-	return Json_object_str_proxy<P>(*static_cast<P*>(this), key);
+        return Json_object_str_proxy<P>(*static_cast<P*>(this), key);
     }
     const Json& at(Str key) const {
-	return cvalue().at(key);
+        return cvalue().at(key);
     }
     Json& at_insert(const String& key) {
-	return value().at_insert(key);
+        return value().at_insert(key);
     }
     Json& at_insert(Str key) {
-	return value().at_insert(key);
+        return value().at_insert(key);
     }
     Json& at_insert(const char* key) {
-	return value().at_insert(key);
+        return value().at_insert(key);
     }
-    template <typename T> inline Json& set(const String& key, T value) {
-	return this->value().set(key, value);
+    inline Json& set(const String& key, Json value) {
+        return this->value().set(key, value);
     }
-#if HAVE_CXX_RVALUE_REFERENCES
-    inline Json& set(const String& key, Json&& value) {
-	return this->value().set(key, std::move(value));
+    template <typename Q>
+    inline Json& set(const String& key, const Json_proxy_base<Q>& value) {
+        return this->value().set(key, value);
     }
-#endif
     Json& unset(Str key) {
-	return value().unset(key);
+        return value().unset(key);
+    }
+    template <typename... Args>
+    inline Json& set_list(Args&&... args) {
+        return value().set_list(std::forward<Args>(args)...);
     }
     std::pair<Json::object_iterator, bool> insert(const Json::object_value_type &x) {
-	return value().insert(x);
+        return value().insert(x);
     }
     Json::object_iterator insert(Json::object_iterator position, const Json::object_value_type &x) {
-	return value().insert(position, x);
+        return value().insert(position, x);
     }
     Json::object_iterator erase(Json::object_iterator it) {
         return value().erase(it);
     }
     Json::size_type erase(Str key) {
-	return value().erase(key);
+        return value().erase(key);
     }
     Json& merge(const Json& x) {
-	return value().merge(x);
+        return value().merge(x);
     }
     template <typename P2> Json& merge(const Json_proxy_base<P2>& x) {
-	return value().merge(x.cvalue());
+        return value().merge(x.cvalue());
     }
     const Json& get(Json::size_type x) const {
-	return cvalue().get(x);
+        return cvalue().get(x);
     }
     Json& get_insert(Json::size_type x) {
-	return value().get_insert(x);
+        return value().get_insert(x);
     }
     const Json& operator[](int key) const {
-	return cvalue().at(key);
+        return cvalue().at(key);
     }
     Json_array_proxy<P> operator[](int key) {
-	return Json_array_proxy<P>(*static_cast<P*>(this), key);
+        return Json_array_proxy<P>(*static_cast<P*>(this), key);
     }
     const Json& at(Json::size_type x) const {
-	return cvalue().at(x);
+        return cvalue().at(x);
     }
     Json& at_insert(Json::size_type x) {
-	return value().at_insert(x);
+        return value().at_insert(x);
     }
     const Json& back() const {
-	return cvalue().back();
+        return cvalue().back();
     }
     Json& back() {
-	return value().back();
+        return value().back();
     }
-    template <typename T> Json& push_back(T x) {
-	return value().push_back(x);
+    Json& push_back(Json x) {
+        return value().push_back(std::move(x));
     }
-    template <typename Q> inline Json& push_back(const Json_proxy_base<Q>& x) {
+    template <typename Q> Json& push_back(const Json_proxy_base<Q>& x) {
         return value().push_back(x);
     }
-#if HAVE_CXX_RVALUE_REFERENCES
-    Json& push_back(Json&& x) {
-	return value().push_back(std::move(x));
-    }
-#endif
     void pop_back() {
-	value().pop_back();
+        value().pop_back();
+    }
+    template <typename... Args> Json& push_back_list(Args&&... args) {
+        return value().push_back_list(std::forward<Args>(args)...);
+    }
+    Json::array_iterator insert(Json::array_iterator position, Json x) {
+        return value().insert(position, std::move(x));
+    }
+    template <typename Q> Json::array_iterator insert(Json::array_iterator position, const Json_proxy_base<Q>& x) {
+        return value().insert(position, x);
+    }
+    Json::array_iterator erase(Json::array_iterator first, Json::array_iterator last) {
+        return value().erase(first, last);
+    }
+    Json::array_iterator erase(Json::array_iterator position) {
+        return value().erase(position);
     }
     void resize(Json::size_type n) {
         value().resize(n);
     }
     void unparse(StringAccum& sa) const {
-	return cvalue().unparse(sa);
+        return cvalue().unparse(sa);
     }
     void unparse(StringAccum& sa, const Json::unparse_manipulator& m) const {
-	return cvalue().unparse(sa, m);
+        return cvalue().unparse(sa, m);
     }
     String unparse() const {
-	return cvalue().unparse();
+        return cvalue().unparse();
     }
     String unparse(const Json::unparse_manipulator& m) const {
-	return cvalue().unparse(m);
+        return cvalue().unparse(m);
     }
     bool assign_parse(const String& str) {
-	return value().assign_parse(str);
+        return value().assign_parse(str);
     }
     bool assign_parse(const char* first, const char* last) {
-	return value().assign_parse(first, last);
+        return value().assign_parse(first, last);
+    }
+    void swap(Json& x) {
+        value().swap(x);
     }
     Json& operator++() {
-	return ++value();
+        return ++value();
     }
     void operator++(int) {
-	value()++;
+        value()++;
     }
     Json& operator--() {
-	return --value();
+        return --value();
     }
     void operator--(int) {
-	value()--;
+        value()--;
     }
     Json& operator+=(int x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(unsigned x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(long x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(unsigned long x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(long long x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(unsigned long long x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(double x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator+=(const Json& x) {
-	return value() += x;
+        return value() += x;
     }
     Json& operator-=(int x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(unsigned x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(long x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(unsigned long x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(long long x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(unsigned long long x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(double x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json& operator-=(const Json& x) {
-	return value() -= x;
+        return value() -= x;
     }
     Json::const_object_iterator obegin() const {
-	return cvalue().obegin();
+        return cvalue().obegin();
     }
     Json::const_object_iterator oend() const {
-	return cvalue().oend();
+        return cvalue().oend();
     }
     Json::object_iterator obegin() {
-	return value().obegin();
+        return value().obegin();
     }
     Json::object_iterator oend() {
-	return value().oend();
+        return value().oend();
     }
     Json::const_object_iterator cobegin() const {
-	return cvalue().cobegin();
+        return cvalue().cobegin();
     }
     Json::const_object_iterator coend() const {
-	return cvalue().coend();
+        return cvalue().coend();
     }
     Json::const_array_iterator abegin() const {
-	return cvalue().abegin();
+        return cvalue().abegin();
     }
     Json::const_array_iterator aend() const {
-	return cvalue().aend();
+        return cvalue().aend();
     }
     Json::array_iterator abegin() {
-	return value().abegin();
+        return value().abegin();
     }
     Json::array_iterator aend() {
-	return value().aend();
+        return value().aend();
     }
     Json::const_array_iterator cabegin() const {
-	return cvalue().cabegin();
+        return cvalue().cabegin();
     }
     Json::const_array_iterator caend() const {
-	return cvalue().caend();
+        return cvalue().caend();
     }
     Json::const_iterator begin() const {
-	return cvalue().begin();
+        return cvalue().begin();
     }
     Json::const_iterator end() const {
-	return cvalue().end();
+        return cvalue().end();
     }
     Json::iterator begin() {
-	return value().begin();
+        return value().begin();
     }
     Json::iterator end() {
-	return value().end();
+        return value().end();
     }
     Json::const_iterator cbegin() const {
-	return cvalue().cbegin();
+        return cvalue().cbegin();
     }
     Json::const_iterator cend() const {
-	return cvalue().cend();
+        return cvalue().cend();
     }
 };
 
@@ -1236,27 +1292,27 @@ template <typename T>
 class Json_object_proxy : public Json_proxy_base<Json_object_proxy<T> > {
   public:
     const Json& cvalue() const {
-	return base_.get(key_);
+        return base_.get(key_);
     }
     Json& value() {
-	return base_.get_insert(key_);
+        return base_.get_insert(key_);
     }
     Json& operator=(const Json& x) {
-	return value() = x;
+        return value() = x;
     }
 #if HAVE_CXX_RVALUE_REFERENCES
     Json& operator=(Json&& x) {
-	return value() = std::move(x);
+        return value() = std::move(x);
     }
 #endif
     Json& operator=(const Json_object_proxy<T>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     template <typename P> Json& operator=(const Json_proxy_base<P>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     Json_object_proxy(T& ref, const String& key)
-	: base_(ref), key_(key) {
+        : base_(ref), key_(key) {
     }
     T &base_;
     String key_;
@@ -1266,27 +1322,27 @@ template <typename T>
 class Json_object_str_proxy : public Json_proxy_base<Json_object_str_proxy<T> > {
   public:
     const Json& cvalue() const {
-	return base_.get(key_);
+        return base_.get(key_);
     }
     Json& value() {
-	return base_.get_insert(key_);
+        return base_.get_insert(key_);
     }
     Json& operator=(const Json& x) {
-	return value() = x;
+        return value() = x;
     }
 #if HAVE_CXX_RVALUE_REFERENCES
     Json& operator=(Json&& x) {
-	return value() = std::move(x);
+        return value() = std::move(x);
     }
 #endif
     Json& operator=(const Json_object_str_proxy<T>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     template <typename P> Json& operator=(const Json_proxy_base<P>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     Json_object_str_proxy(T& ref, Str key)
-	: base_(ref), key_(key) {
+        : base_(ref), key_(key) {
     }
     T &base_;
     Str key_;
@@ -1296,27 +1352,27 @@ template <typename T>
 class Json_array_proxy : public Json_proxy_base<Json_array_proxy<T> > {
   public:
     const Json& cvalue() const {
-	return base_.get(key_);
+        return base_.get(key_);
     }
     Json& value() {
-	return base_.get_insert(key_);
+        return base_.get_insert(key_);
     }
     Json& operator=(const Json& x) {
-	return value() = x;
+        return value() = x;
     }
 #if HAVE_CXX_RVALUE_REFERENCES
     Json& operator=(Json&& x) {
-	return value() = std::move(x);
+        return value() = std::move(x);
     }
 #endif
     Json& operator=(const Json_array_proxy<T>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     template <typename P> Json& operator=(const Json_proxy_base<P>& x) {
-	return value() = x.cvalue();
+        return value() = x.cvalue();
     }
     Json_array_proxy(T& ref, int key)
-	: base_(ref), key_(key) {
+        : base_(ref), key_(key) {
     }
     T &base_;
     int key_;
@@ -1325,23 +1381,23 @@ class Json_array_proxy : public Json_proxy_base<Json_array_proxy<T> > {
 class Json_get_proxy : public Json_proxy_base<Json_get_proxy> {
   public:
     const Json& cvalue() const {
-	return base_;
+        return base_;
     }
     operator Json::unspecified_bool_type() const {
-	return status_ ? &Json::is_null : 0;
+        return status_ ? &Json::is_null : 0;
     }
     bool operator!() const {
-	return !status_;
+        return !status_;
     }
     bool status() const {
-	return status_;
+        return status_;
     }
     const Json_get_proxy& status(bool& x) const {
-	x = status_;
-	return *this;
+        x = status_;
+        return *this;
     }
     Json_get_proxy(const Json& ref, bool status)
-	: base_(ref), status_(status) {
+        : base_(ref), status_(status) {
     }
     const Json& base_;
     bool status_;
@@ -1399,27 +1455,31 @@ inline const Json_get_proxy Json_proxy_base<T>::get(Str key, String& x) const {
 inline Json::Json() {
     memset(&u_, 0, sizeof(u_));
 }
+/** @brief Construct a null Json. */
+inline Json::Json(const null_t&) {
+    memset(&u_, 0, sizeof(u_));
+}
 /** @brief Construct a Json copy of @a x. */
 inline Json::Json(const Json& x)
     : u_(x.u_) {
     if (u_.x.type < 0)
         u_.str.ref();
-    if (u_.x.c && (u_.x.type == j_array || u_.x.type == j_object))
-        u_.x.c->ref();
+    if (u_.x.x && (u_.x.type == j_array || u_.x.type == j_object))
+        u_.x.x->ref();
 }
 /** @overload */
 template <typename P> inline Json::Json(const Json_proxy_base<P>& x)
     : u_(x.cvalue().u_) {
     if (u_.x.type < 0)
         u_.str.ref();
-    if (u_.x.c && (u_.x.type == j_array || u_.x.type == j_object))
-        u_.x.c->ref();
+    if (u_.x.x && (u_.x.type == j_array || u_.x.type == j_object))
+        u_.x.x->ref();
 }
 #if HAVE_CXX_RVALUE_REFERENCES
 /** @overload */
 inline Json::Json(Json&& x)
     : u_(std::move(x.u_)) {
-    x.u_.x.type = 0;
+    memset(&x, 0, sizeof(x));
 }
 #endif
 /** @brief Construct simple Json values. */
@@ -1429,7 +1489,7 @@ inline Json::Json(int x) {
 }
 inline Json::Json(unsigned x) {
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
 }
 inline Json::Json(long x) {
     u_.i.x = x;
@@ -1437,7 +1497,7 @@ inline Json::Json(long x) {
 }
 inline Json::Json(unsigned long x) {
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
 }
 inline Json::Json(long long x) {
     u_.i.x = x;
@@ -1445,7 +1505,7 @@ inline Json::Json(long long x) {
 }
 inline Json::Json(unsigned long long x) {
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
 }
 inline Json::Json(double x) {
     u_.d.x = x;
@@ -1478,11 +1538,11 @@ inline Json::Json(const char* x) {
 template <typename T>
 inline Json::Json(const std::vector<T> &x) {
     u_.a.type = j_array;
-    u_.a.a = ArrayJson::make(int(x.size()));
+    u_.a.x = ArrayJson::make(int(x.size()));
     for (typename std::vector<T>::const_iterator it = x.begin();
          it != x.end(); ++it) {
-	new((void*) &u_.a.a->a[u_.a.a->size]) Json(*it);
-        ++u_.a.a->size;
+        new((void*) &u_.a.x->a[u_.a.x->size]) Json(*it);
+        ++u_.a.x->size;
     }
 }
 
@@ -1514,8 +1574,8 @@ inline Json::Json(T first, T last) {
 inline void Json::deref() {
     if (u_.x.type < 0)
         u_.str.deref();
-    else if (u_.x.c && unsigned(u_.x.type - j_array) < 2)
-        u_.x.c->deref(json_type(u_.x.type));
+    else if (u_.x.x && unsigned(u_.x.type - j_array) < 2)
+        u_.x.x->deref(json_type(u_.x.type));
 }
 /** @endcond never */
 
@@ -1529,32 +1589,34 @@ inline Json Json::make_array() {
     j.u_.x.type = j_array;
     return j;
 }
-/** @brief Return an empty array-valued Json. */
-inline Json Json::array() {
+/** @brief Return an array-valued Json containing @a args. */
+template <typename... Args>
+inline Json Json::array(Args&&... args) {
     Json j;
     j.u_.x.type = j_array;
-    return j;
-}
-/** @brief Return an array-valued Json containing [first, rest...]. */
-template <typename T, typename... U>
-inline Json Json::array(T first, U... rest) {
-    Json j;
-    j.u_.x.type = j_array;
-    j.push_back(first);
-    j.insert_back(rest...);
+    j.reserve(sizeof...(args));
+    j.push_back_list(std::forward<Args>(args)...);
     return j;
 }
 /** @brief Return an empty array-valued Json with reserved space for @a n items. */
 inline Json Json::make_array_reserve(int n) {
     Json j;
     j.u_.a.type = j_array;
-    j.u_.a.a = n ? ArrayJson::make(n) : 0;
+    j.u_.a.x = n ? ArrayJson::make(n) : 0;
     return j;
 }
 /** @brief Return an empty object-valued Json. */
 inline Json Json::make_object() {
     Json j;
     j.u_.o.type = j_object;
+    return j;
+}
+/** @brief Return an empty object-valued Json. */
+template <typename... Args>
+inline Json Json::object(Args&&... rest) {
+    Json j;
+    j.u_.o.type = j_object;
+    j.set_list(std::forward<Args>(rest)...);
     return j;
 }
 /** @brief Return a string-valued Json. */
@@ -1568,86 +1630,97 @@ inline Json Json::make_string(const char *s, int len) {
 
 /** @brief Test if this Json is truthy. */
 inline bool Json::truthy() const {
-    return (u_.x.c ? u_.x.type >= 0 || u_.str.length
+    return (u_.x.x ? u_.x.type >= 0 || u_.str.length
             : (unsigned) (u_.x.type - 1) < (unsigned) (j_int - 1));
+}
+/** @brief Test if this Json is falsy. */
+inline bool Json::falsy() const {
+    return !truthy();
 }
 /** @brief Test if this Json is truthy.
     @sa empty() */
 inline Json::operator unspecified_bool_type() const {
     return truthy() ? &Json::is_null : 0;
 }
-/** @brief Return true if this Json is null. */
+/** @brief Return true if this Json is falsy. */
 inline bool Json::operator!() const {
     return !truthy();
 }
 
 /** @brief Test this Json's type. */
 inline bool Json::is_null() const {
-    return !u_.x.c && u_.x.type == j_null;
+    return !u_.x.x && u_.x.type == j_null;
 }
 inline bool Json::is_int() const {
-    return u_.x.type == j_int;
+    return unsigned(u_.x.type - j_int) <= unsigned(j_unsigned - j_int);
 }
 inline bool Json::is_i() const {
-    return u_.x.type == j_int;
+    return is_int();
+}
+inline bool Json::is_unsigned() const {
+    return u_.x.type == j_unsigned
+        || (u_.x.type == j_int && u_.i.x >= 0);
+}
+inline bool Json::is_u() const {
+    return is_unsigned();
 }
 inline bool Json::is_double() const {
     return u_.x.type == j_double;
 }
 inline bool Json::is_d() const {
-    return u_.x.type == j_double;
+    return is_double();
 }
 inline bool Json::is_number() const {
-    return is_int() || is_double();
+    return unsigned(u_.x.type - j_int) <= unsigned(j_double - j_int);
 }
 inline bool Json::is_n() const {
-    return is_int() || is_double();
+    return is_number();
 }
 inline bool Json::is_bool() const {
     return u_.x.type == j_bool;
 }
 inline bool Json::is_b() const {
-    return u_.x.type == j_bool;
+    return is_bool();
 }
 inline bool Json::is_string() const {
-    return u_.x.c && u_.x.type <= 0;
+    return u_.x.x && u_.x.type <= 0;
 }
 inline bool Json::is_s() const {
-    return u_.x.c && u_.x.type <= 0;
+    return is_string();
 }
 inline bool Json::is_array() const {
     return u_.x.type == j_array;
 }
 inline bool Json::is_a() const {
-    return u_.x.type == j_array;
+    return is_array();
 }
 inline bool Json::is_object() const {
     return u_.x.type == j_object;
 }
 inline bool Json::is_o() const {
-    return u_.x.type == j_object;
+    return is_object();
 }
 /** @brief Test if this Json is a primitive value, not including null. */
 inline bool Json::is_primitive() const {
-    return u_.x.type >= j_int || (u_.x.c && u_.x.type <= 0);
+    return u_.x.type >= j_int || (u_.x.x && u_.x.type <= 0);
 }
 
 /** @brief Return true if this Json is null, an empty array, or an empty
     object. */
 inline bool Json::empty() const {
     return unsigned(u_.x.type) < unsigned(j_int)
-        && (!u_.x.c || u_.x.c->size == 0);
+        && (!u_.x.x || u_.x.x->size == 0);
 }
 /** @brief Return the number of elements in this complex Json.
     @pre is_array() || is_object() || is_null() */
 inline Json::size_type Json::size() const {
     precondition(unsigned(u_.x.type) < unsigned(j_int));
-    return u_.x.c ? u_.x.c->size : 0;
+    return u_.x.x ? u_.x.x->size : 0;
 }
 /** @brief Test if this complex Json is shared. */
 inline bool Json::shared() const {
-    return u_.x.c && (u_.x.type == j_array || u_.x.type == j_object)
-        && u_.x.c->refcount != 1;
+    return u_.x.x && (u_.x.type == j_array || u_.x.type == j_object)
+        && u_.x.x->refcount != 1;
 }
 
 // Primitive methods
@@ -1659,11 +1732,18 @@ inline bool Json::shared() const {
     boolean Jsons to 1; string Jsons to a number parsed from their initial
     portions; and array and object Jsons to size().
     @sa as_i() */
-inline long Json::to_i() const {
+inline int64_t Json::to_i() const {
     if (is_int())
-	return u_.i.x;
+        return u_.i.x;
     else
-	return hard_to_i();
+        return hard_to_i();
+}
+
+inline uint64_t Json::to_u() const {
+    if (is_int())
+        return u_.u.x;
+    else
+        return hard_to_u();
 }
 
 /** @brief Extract this integer Json's value into @a x.
@@ -1672,7 +1752,7 @@ inline long Json::to_i() const {
 
     If false is returned (!is_number() or the number is not parseable as a
     pure integer), @a x remains unchanged. */
-inline bool Json::to_i(int &x) const {
+inline bool Json::to_i(int& x) const {
     if (is_int()) {
         x = u_.i.x;
         return true;
@@ -1747,22 +1827,19 @@ inline bool Json::to_i(unsigned long long& x) const {
 
     See to_i() for the conversion rules. */
 inline uint64_t Json::to_u64() const {
-    if (is_int())
-	return u_.i.x;
-    else
-	return hard_to_u64();
+    return to_u();
 }
 
 /** @brief Return the integer value of this numeric Json.
     @pre is_number()
     @sa to_i() */
-inline long Json::as_i() const {
+inline int64_t Json::as_i() const {
     precondition(is_int() || is_double());
-    return is_int() ? u_.i.x : long(u_.d.x);
+    return is_int() ? u_.i.x : int64_t(u_.d.x);
 }
 
 /** @brief Return the integer value of this numeric Json or @a default_value. */
-inline long Json::as_i(long default_value) const {
+inline int64_t Json::as_i(int64_t default_value) const {
     if (is_int() || is_double())
         return as_i();
     else
@@ -1772,13 +1849,13 @@ inline long Json::as_i(long default_value) const {
 /** @brief Return the unsigned integer value of this numeric Json.
     @pre is_number()
     @sa to_i() */
-inline unsigned long Json::as_u() const {
+inline uint64_t Json::as_u() const {
     precondition(is_int() || is_double());
-    return is_int() ? u_.u.x : (unsigned long) (u_.d.x);
+    return is_int() ? u_.u.x : uint64_t(u_.d.x);
 }
 
 /** @brief Return the integer value of this numeric Json or @a default_value. */
-inline unsigned long Json::as_u(unsigned long default_value) const {
+inline uint64_t Json::as_u(uint64_t default_value) const {
     if (is_int() || is_double())
         return as_u();
     else
@@ -1806,10 +1883,10 @@ inline double Json::to_d() const {
     If !is_number(), @a x remains unchanged. */
 inline bool Json::to_d(double& x) const {
     if (is_double() || is_int()) {
-	x = to_d();
-	return true;
+        x = to_d();
+        return true;
     } else
-	return false;
+        return false;
 }
 
 /** @brief Return the double value of this numeric Json.
@@ -1817,7 +1894,12 @@ inline bool Json::to_d(double& x) const {
     @sa to_d() */
 inline double Json::as_d() const {
     precondition(is_double() || is_int());
-    return is_double() ? u_.d.x : double(u_.i.x);
+    if (is_double())
+        return u_.d.x;
+    else if (u_.x.type == j_int)
+        return u_.i.x;
+    else
+        return u_.u.x;
 }
 
 /** @brief Return the double value of this numeric Json or @a default_value. */
@@ -1837,9 +1919,9 @@ inline double Json::as_d(double default_value) const {
     @sa as_b() */
 inline bool Json::to_b() const {
     if (is_bool())
-	return u_.i.x;
+        return u_.i.x;
     else
-	return hard_to_b();
+        return hard_to_b();
 }
 
 /** @brief Extract this boolean Json's value into @a x.
@@ -1849,10 +1931,10 @@ inline bool Json::to_b() const {
     If !is_bool(), @a x remains unchanged. */
 inline bool Json::to_b(bool& x) const {
     if (is_bool()) {
-	x = u_.i.x;
-	return true;
+        x = u_.i.x;
+        return true;
     } else
-	return false;
+        return false;
 }
 
 /** @brief Return the value of this boolean Json.
@@ -1879,10 +1961,10 @@ inline bool Json::as_b(bool default_value) const {
     "[Array]" and "[Object]", respectively.
     @sa as_s() */
 inline String Json::to_s() const {
-    if (u_.x.type <= 0 && u_.x.c)
-	return String(u_.str);
+    if (u_.x.type <= 0 && u_.x.x)
+        return String(u_.str);
     else
-	return hard_to_s();
+        return hard_to_s();
 }
 
 /** @brief Extract this string Json's value into @a x.
@@ -1891,11 +1973,11 @@ inline String Json::to_s() const {
 
     If !is_string(), @a x remains unchanged. */
 inline bool Json::to_s(Str& x) const {
-    if (u_.x.type <= 0 && u_.x.c) {
-	x.assign(u_.str.data, u_.str.length);
-	return true;
+    if (u_.x.type <= 0 && u_.x.x) {
+        x.assign(u_.str.data, u_.str.length);
+        return true;
     } else
-	return false;
+        return false;
 }
 
 /** @brief Extract this string Json's value into @a x.
@@ -1904,33 +1986,46 @@ inline bool Json::to_s(Str& x) const {
 
     If !is_string(), @a x remains unchanged. */
 inline bool Json::to_s(String& x) const {
-    if (u_.x.type <= 0 && u_.x.c) {
+    if (u_.x.type <= 0 && u_.x.x) {
         x.assign(u_.str);
-	return true;
+        return true;
     } else
-	return false;
+        return false;
 }
 
 /** @brief Return the value of this string Json.
     @pre is_string()
     @sa to_s() */
 inline const String& Json::as_s() const {
-    precondition(u_.x.type <= 0 && u_.x.c);
+    precondition(u_.x.type <= 0 && u_.x.x);
     return reinterpret_cast<const String&>(u_.str);
 }
 
 /** @brief Return the value of this string Json or @a default_value. */
 inline const String& Json::as_s(const String& default_value) const {
-    if (u_.x.type > 0 || !u_.x.c)
+    if (u_.x.type > 0 || !u_.x.x)
         return default_value;
     else
         return as_s();
 }
 
 inline void Json::force_number() {
-    precondition((u_.x.type == j_null && !u_.x.c) || u_.x.type == j_int || u_.x.type == j_double);
-    if (u_.x.type == j_null && !u_.x.c)
-	u_.x.type = j_int;
+    precondition((u_.x.type == j_null && !u_.x.x) || u_.x.type == j_int || u_.x.type == j_double);
+    if (u_.x.type == j_null && !u_.x.x)
+        u_.x.type = j_int;
+}
+
+inline void Json::force_double() {
+    precondition((u_.x.type == j_null && !u_.x.x) || u_.x.type == j_int || u_.x.type == j_double);
+    if (u_.x.type == j_null && !u_.x.x)
+        u_.x.type = j_double;
+    else if (u_.x.type == j_int) {
+        u_.d.x = u_.i.x;
+        u_.d.type = j_double;
+    } else if (u_.x.type == j_unsigned) {
+        u_.d.x = u_.u.x;
+        u_.d.type = j_double;
+    }
 }
 
 
@@ -1941,7 +2036,7 @@ inline void Json::force_number() {
     Returns 0 if this is not an object Json. */
 inline Json::size_type Json::count(Str key) const {
     precondition(u_.x.type == j_null || u_.x.type == j_object);
-    return u_.o.o ? ojson()->find(key.data(), key.length()) >= 0 : 0;
+    return u_.o.x ? ojson()->find(key.data(), key.length()) >= 0 : 0;
 }
 
 /** @brief Return the value at @a key in an object or array Json.
@@ -1953,10 +2048,10 @@ inline const Json& Json::get(Str key) const {
     int i;
     ObjectJson *oj;
     if (is_object() && (oj = ojson())
-	&& (i = oj->find(key.data(), key.length())) >= 0)
-	return oj->item(i).v_.second;
+        && (i = oj->find(key.data(), key.length())) >= 0)
+        return oj->item(i).v_.second;
     else
-	return hard_get(key);
+        return hard_get(key);
 }
 
 /** @brief Return a reference to the value of @a key in an object Json.
@@ -2047,11 +2142,11 @@ inline const Json_get_proxy Json::get(Str key, Json& x) const {
     int i;
     ObjectJson *oj;
     if (is_object() && (oj = ojson())
-	&& (i = oj->find(key.data(), key.length())) >= 0) {
-	x = oj->item(i).v_.second;
-	return Json_get_proxy(*this, true);
+        && (i = oj->find(key.data(), key.length())) >= 0) {
+        x = oj->item(i).v_.second;
+        return Json_get_proxy(*this, true);
     } else
-	return Json_get_proxy(*this, false);
+        return Json_get_proxy(*this, false);
 }
 
 /** @overload */
@@ -2134,7 +2229,7 @@ inline Json_object_str_proxy<Json> Json::operator[](const char* key) {
 /** @brief Return the value at @a key in an object Json.
     @pre is_object() && count(@a key) */
 inline const Json& Json::at(Str key) const {
-    precondition(is_object() && u_.o.o);
+    precondition(is_object() && u_.o.x);
     ObjectJson *oj = ojson();
     int i = oj->find(key.data(), key.length());
     precondition(i >= 0);
@@ -2167,29 +2262,45 @@ inline Json& Json::at_insert(const char *key) {
 
     An array Json is converted to an object Json with numeric keys. Other
     non-object Jsons are converted to empty objects. */
-template <typename T> inline Json& Json::set(const String& key, T value) {
-    uniqueify_object(true);
-    ojson()->get_insert(key) = Json(value);
-    return *this;
-}
-
-#if HAVE_CXX_RVALUE_REFERENCES
-/** @overload */
-inline Json& Json::set(const String& key, Json&& value) {
+inline Json& Json::set(const String& key, Json value) {
     uniqueify_object(true);
     ojson()->get_insert(key) = std::move(value);
     return *this;
 }
-#endif
+
+/** @overload */
+template <typename P>
+inline Json& Json::set(const String& key, const Json_proxy_base<P>& value) {
+    uniqueify_object(true);
+    ojson()->get_insert(key) = value.cvalue();
+    return *this;
+}
 
 /** @brief Remove the value of @a key from an object Json.
     @return this Json
     @sa erase() */
 inline Json& Json::unset(Str key) {
     if (is_object()) {
-	uniqueify_object(true);
-	ojson()->erase(key);
+        uniqueify_object(true);
+        ojson()->erase(key);
     }
+    return *this;
+}
+
+/** @brief Add the key-value pairs [key, value, ...] to the object.
+    @return this Json
+
+    An array Json is converted to an object Json with numeric keys. Other
+    non-object Jsons are converted to empty objects. */
+template <typename T, typename... Args>
+inline Json& Json::set_list(const String& key, T value, Args&&... rest) {
+    set(key, std::move(value));
+    set_list(std::forward<Args>(rest)...);
+    return *this;
+}
+
+/** @overload */
+inline Json& Json::set_list() {
     return *this;
 }
 
@@ -2251,13 +2362,13 @@ inline Json::size_type Json::erase(Str key) {
 inline Json& Json::merge(const Json& x) {
     precondition(is_object() || is_null());
     precondition(x.is_object() || x.is_null());
-    if (x.u_.o.o) {
-	uniqueify_object(false);
-	ObjectJson *oj = ojson(), *xoj = x.ojson();
-	const ObjectItem *xb = xoj->os_, *xe = xb + xoj->n_;
-	for (; xb != xe; ++xb)
-	    if (xb->next_ > -2)
-		oj->get_insert(xb->v_.first) = xb->v_.second;
+    if (x.u_.o.x) {
+        uniqueify_object(false);
+        ObjectJson *oj = ojson(), *xoj = x.ojson();
+        const ObjectItem *xb = xoj->os_, *xe = xb + xoj->n_;
+        for (; xb != xe; ++xb)
+            if (xb->next_ > -2)
+                oj->get_insert(xb->v_.first) = xb->v_.second;
     }
     return *this;
 }
@@ -2280,9 +2391,9 @@ inline Json& Json::merge(const Json_proxy_base<U>& x) {
 inline const Json& Json::get(size_type x) const {
     ArrayJson *aj;
     if (u_.x.type == j_array && (aj = ajson()) && unsigned(x) < unsigned(aj->size))
-	return aj->a[x];
+        return aj->a[x];
     else
-	return hard_get(x);
+        return hard_get(x);
 }
 
 /** @brief Return a reference to the @a x th array element.
@@ -2293,10 +2404,10 @@ inline const Json& Json::get(size_type x) const {
 inline Json& Json::get_insert(size_type x) {
     ArrayJson *aj;
     if (u_.x.type == j_array && (aj = ajson()) && aj->refcount == 1
-	&& unsigned(x) < unsigned(aj->size))
-	return aj->a[x];
+        && unsigned(x) < unsigned(aj->size))
+        return aj->a[x];
     else
-	return hard_get_insert(x);
+        return hard_get_insert(x);
 }
 
 /** @brief Return the @a x th element in an array Json.
@@ -2340,16 +2451,16 @@ inline Json_array_proxy<Json> Json::operator[](size_type x) {
 /** @brief Return the last array element.
     @pre is_array() && !empty() */
 inline const Json& Json::back() const {
-    precondition(is_array() && u_.a.a && u_.a.a->size > 0);
-    return u_.a.a->a[u_.a.a->size - 1];
+    precondition(is_array() && u_.a.x && u_.a.x->size > 0);
+    return u_.a.x->a[u_.a.x->size - 1];
 }
 
 /** @brief Return a reference to the last array element.
     @pre is_array() && !empty() */
 inline Json& Json::back() {
-    precondition(is_array() && u_.a.a && u_.a.a->size > 0);
+    precondition(is_array() && u_.a.x && u_.a.x->size > 0);
     uniqueify_array(false, 0);
-    return u_.a.a->a[u_.a.a->size - 1];
+    return u_.a.x->a[u_.a.x->size - 1];
 }
 
 /** @brief Push an element onto the back of the array.
@@ -2357,41 +2468,27 @@ inline Json& Json::back() {
     @return this Json
 
     A null Json is promoted to an array. */
-template <typename T> inline Json& Json::push_back(T x) {
-    uniqueify_array(false, u_.a.a ? u_.a.a->size + 1 : 1);
-    new((void*) &u_.a.a->a[u_.a.a->size]) Json(x);
-    ++u_.a.a->size;
+inline Json& Json::push_back(Json x) {
+    new(uniqueify_array_insert(false, -1)) Json(std::move(x));
     return *this;
 }
 
 /** @overload */
 template <typename P> inline Json& Json::push_back(const Json_proxy_base<P>& x) {
-    uniqueify_array(false, u_.a.a ? u_.a.a->size + 1 : 1);
-    new((void*) &u_.a.a->a[u_.a.a->size]) Json(x.cvalue());
-    ++u_.a.a->size;
+    new(uniqueify_array_insert(false, -1)) Json(x.cvalue());
     return *this;
 }
-
-#if HAVE_CXX_RVALUE_REFERENCES
-/** @overload */
-inline Json& Json::push_back(Json&& x) {
-    uniqueify_array(false, u_.a.a ? u_.a.a->size + 1 : 1);
-    new((void*) &u_.a.a->a[u_.a.a->size]) Json(std::move(x));
-    ++u_.a.a->size;
-    return *this;
-}
-#endif
 
 /** @brief Remove the last element from an array.
     @pre is_array() && !empty() */
 inline void Json::pop_back() {
-    precondition(is_array() && u_.a.a && u_.a.a->size > 0);
+    precondition(is_array() && u_.a.x && u_.a.x->size > 0);
     uniqueify_array(false, 0);
-    --u_.a.a->size;
-    u_.a.a->a[u_.a.a->size].~Json();
+    --u_.a.x->size;
+    u_.a.x->a[u_.a.x->size].~Json();
 }
 
-inline Json& Json::insert_back() {
+inline Json& Json::push_back_list() {
     return *this;
 }
 
@@ -2400,32 +2497,69 @@ inline Json& Json::insert_back() {
     @return this Json
 
     A null Json is promoted to an array. */
-template <typename T, typename... U>
-inline Json& Json::insert_back(T first, U... rest) {
-    push_back(first);
-    insert_back(rest...);
+template <typename T, typename... Args>
+inline Json& Json::push_back_list(T first, Args&&... rest) {
+    push_back(std::move(first));
+    push_back_list(std::forward<Args>(rest)...);
     return *this;
+}
+
+
+/** @brief Insert an element into the array.
+    @pre is_array() || is_null()
+    @return this Json
+
+    A null Json is promoted to an array. */
+inline Json::array_iterator Json::insert(array_iterator position, Json x) {
+    precondition(position >= abegin() && position <= aend());
+    size_type pos = position - abegin();
+    new(uniqueify_array_insert(false, pos)) Json(std::move(x));
+    return abegin() + pos;
+}
+
+/** @overload */
+template <typename P> inline Json::array_iterator Json::insert(array_iterator position, const Json_proxy_base<P>& x) {
+    precondition(position >= abegin() && position <= aend());
+    size_type pos = position - abegin();
+    new(uniqueify_array_insert(false, pos)) Json(x.cvalue());
+    return abegin() + pos;
+}
+
+inline Json::array_iterator Json::erase(array_iterator position) {
+    return erase(position, position + 1);
 }
 
 
 inline Json* Json::array_data() {
     precondition(is_null() || is_array());
-    return u_.a.a ? u_.a.a->a : 0;
+    uniqueify_array(false, 0);
+    return u_.a.x ? u_.a.x->a : 0;
 }
 
 inline const Json* Json::array_data() const {
     precondition(is_null() || is_array());
-    return u_.a.a ? u_.a.a->a : 0;
+    return u_.a.x ? u_.a.x->a : 0;
+}
+
+inline const Json* Json::array_cdata() const {
+    precondition(is_null() || is_array());
+    return u_.a.x ? u_.a.x->a : 0;
 }
 
 inline Json* Json::end_array_data() {
     precondition(is_null() || is_array());
-    return u_.a.a ? u_.a.a->a + u_.a.a->size : 0;
+    uniqueify_array(false, 0);
+    return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
 }
 
 inline const Json* Json::end_array_data() const {
     precondition(is_null() || is_array());
-    return u_.a.a ? u_.a.a->a + u_.a.a->size : 0;
+    return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
+}
+
+inline const Json* Json::end_array_cdata() const {
+    precondition(is_null() || is_array());
+    return u_.a.x ? u_.a.x->a + u_.a.x->size : 0;
 }
 
 
@@ -2516,24 +2650,24 @@ inline Json::const_iterator Json::end() const {
 class Json::unparse_manipulator {
   public:
     unparse_manipulator()
-	: indent_depth_(0), tab_width_(0), newline_terminator_(false),
+        : indent_depth_(0), tab_width_(0), newline_terminator_(false),
           space_separator_(false) {
     }
     int indent_depth() const {
-	return indent_depth_;
+        return indent_depth_;
     }
     unparse_manipulator indent_depth(int x) const {
-	unparse_manipulator m(*this);
-	m.indent_depth_ = x;
-	return m;
+        unparse_manipulator m(*this);
+        m.indent_depth_ = x;
+        return m;
     }
     int tab_width() const {
-	return tab_width_;
+        return tab_width_;
     }
     unparse_manipulator tab_width(int x) const {
-	unparse_manipulator m(*this);
-	m.tab_width_ = x;
-	return m;
+        unparse_manipulator m(*this);
+        m.tab_width_ = x;
+        return m;
     }
     bool newline_terminator() const {
         return newline_terminator_;
@@ -2630,7 +2764,7 @@ class Json::streaming_parser {
         st_partlenmask = 0x0F, st_partmask = 0xFF,
         st_stringpart = 0x10, st_primitivepart = 0x20, st_numberpart = 0x40,
 
-	st_initial = 0x000,
+        st_initial = 0x000,
         st_array_initial = 0x100,
         st_array_value = 0x200,
         st_object_value = 0x300,
@@ -2744,8 +2878,8 @@ inline Json Json::parse(const char *first, const char *last) {
 inline Json& Json::operator=(const Json& x) {
     if (x.u_.x.type < 0)
         x.u_.str.ref();
-    else if (x.u_.x.c && (x.u_.x.type == j_array || x.u_.x.type == j_object))
-        x.u_.x.c->ref();
+    else if (x.u_.x.x && (x.u_.x.type == j_array || x.u_.x.type == j_object))
+        x.u_.x.x->ref();
     deref();
     u_ = x.u_;
     return *this;
@@ -2775,7 +2909,7 @@ inline Json& Json::operator=(int x) {
 inline Json& Json::operator=(unsigned x) {
     deref();
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
     return *this;
 }
 
@@ -2789,7 +2923,7 @@ inline Json& Json::operator=(long x) {
 inline Json& Json::operator=(unsigned long x) {
     deref();
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
     return *this;
 }
 
@@ -2803,7 +2937,7 @@ inline Json& Json::operator=(long long x) {
 inline Json& Json::operator=(unsigned long long x) {
     deref();
     u_.u.x = x;
-    u_.u.type = j_int;
+    u_.u.type = j_unsigned;
     return *this;
 }
 
@@ -2841,20 +2975,30 @@ inline Json& Json::operator--() {
 inline void Json::operator--(int) {
     --(*this);
 }
+inline Json& Json::add(double x) {
+    force_double();
+    u_.d.x += x;
+    return *this;
+}
 template <typename T>
 inline Json& Json::add(T x) {
     force_number();
-    if (u_.x.type == j_int)
-        u_.i.x += x;
+    if (is_int())
+        u_.u.x += x;
     else
         u_.d.x += x;
+    return *this;
+}
+inline Json& Json::subtract(double x) {
+    force_double();
+    u_.d.x -= x;
     return *this;
 }
 template <typename T>
 inline Json& Json::subtract(T x) {
     force_number();
-    if (u_.x.type == j_int)
-        u_.i.x -= x;
+    if (is_int())
+        u_.u.x -= x;
     else
         u_.d.x -= x;
     return *this;
@@ -2919,6 +3063,18 @@ inline Json& Json::operator-=(const Json& x) {
     }
     return *this;
 }
+inline Json operator+(Json x) {
+    x.force_number();
+    return x;
+}
+inline Json operator-(Json x) {
+    x.force_number();
+    if (x.is_int())
+        x.u_.u.x = -x.u_.u.x;
+    else
+        x.u_.d.x = -x.u_.d.x;
+    return x;
+}
 
 /** @brief Swap this Json with @a x. */
 inline void Json::swap(Json& x) {
@@ -2962,7 +3118,7 @@ inline bool operator==(const Json& a, const Json_proxy_base<T>& b) {
 
 template <typename T, typename U>
 inline bool operator==(const Json_proxy_base<T>& a,
-		       const Json_proxy_base<U>& b) {
+                       const Json_proxy_base<U>& b) {
     return a.cvalue() == b.cvalue();
 }
 
@@ -2982,7 +3138,7 @@ inline bool operator!=(const Json& a, const Json_proxy_base<T>& b) {
 
 template <typename T, typename U>
 inline bool operator!=(const Json_proxy_base<T>& a,
-		       const Json_proxy_base<U>& b) {
+                       const Json_proxy_base<U>& b) {
     return !(a == b);
 }
 

@@ -76,13 +76,13 @@ class String : public String_base<String> {
     String to_hex() const;
 
     enum {
-	utf_strip_bom = 1,
-	utf_replacement = 2,
-	utf_prefer_le = 4
+        utf_strip_bom = 1,
+        utf_replacement = 2,
+        utf_prefer_le = 4
     };
 
     enum {
-	u_replacement = 0xFFFD
+        u_replacement = 0xFFFD
     };
 
     String windows1252_to_utf8() const;
@@ -93,7 +93,13 @@ class String : public String_base<String> {
     String utf8_to_utf8(int flags = 0) const;
     String to_utf8(int flags = 0) const;
 
+    using String_base<String>::encode_json;
     String encode_json() const;
+
+    using String_base<String>::encode_base64;
+    String encode_base64(bool pad = false) const;
+    using String_base<String>::decode_base64;
+    String decode_base64() const;
 
     inline String& operator=(const String& x);
 #if HAVE_CXX_RVALUE_REFERENCES
@@ -138,7 +144,7 @@ class String : public String_base<String> {
     inline bool is_stable() const;
 
     inline String unique() const;
-    inline String compact() const;
+    inline void shrink_to_fit();
 
     char* mutable_data();
     inline unsigned char* mutable_udata();
@@ -147,16 +153,16 @@ class String : public String_base<String> {
     void align(int);
 
     static const unsigned char* skip_utf8_char(const unsigned char* first,
-					       const unsigned char* last);
+                                               const unsigned char* last);
     static const char* skip_utf8_char(const char* first, const char* last);
     static const unsigned char* skip_utf8_bom(const unsigned char* first,
-					      const unsigned char* last);
+                                              const unsigned char* last);
     static const char* skip_utf8_bom(const char* first, const char* last);
 
     /** @cond never */
     struct rep_type {
-	const char* data;
-	int length;
+        const char* data;
+        int length;
         int memo_offset;
 
         inline void ref() const {
@@ -213,14 +219,14 @@ class String : public String_base<String> {
   private:
     /** @cond never */
     struct memo_type {
-	volatile uint32_t refcount;
-	uint32_t capacity;
-	volatile uint32_t dirty;
+        volatile uint32_t refcount;
+        uint32_t capacity;
+        volatile uint32_t dirty;
 #if HAVE_STRING_PROFILING > 1
-	memo_type** pprev;
-	memo_type* next;
+        memo_type** pprev;
+        memo_type* next;
 #endif
-	char real_data[8];	// but it might be more or less
+        char real_data[8];      // but it might be more or less
 
         inline void initialize(uint32_t capacity, uint32_t dirty);
 #if HAVE_STRING_PROFILING
@@ -239,7 +245,7 @@ class String : public String_base<String> {
     };
     /** @endcond never */
 
-    mutable rep_type _r;	// mutable for c_str()
+    mutable rep_type _r;        // mutable for c_str()
 
 #if HAVE_STRING_PROFILING
     static uint64_t live_memo_count;
@@ -251,44 +257,44 @@ class String : public String_base<String> {
 # endif
 
     static inline int profile_memo_size_bucket(uint32_t dirty, uint32_t capacity) {
-	if (capacity <= 16)
-	    return dirty;
-	else if (capacity <= 32)
-	    return 17 + (capacity - 17) / 2;
-	else if (capacity <= 64)
-	    return 25 + (capacity - 33) / 8;
-	else
-	    return 29 + 26 - ffs_msb(capacity - 1);
+        if (capacity <= 16)
+            return dirty;
+        else if (capacity <= 32)
+            return 17 + (capacity - 17) / 2;
+        else if (capacity <= 64)
+            return 25 + (capacity - 33) / 8;
+        else
+            return 29 + 26 - ffs_msb(capacity - 1);
     }
 
     static void profile_update_memo_dirty(memo_type* memo, uint32_t old_dirty, uint32_t new_dirty, uint32_t capacity) {
-	if (capacity <= 16 && new_dirty != old_dirty) {
-	    ++memo_sizes[new_dirty];
-	    ++live_memo_sizes[new_dirty];
-	    live_memo_bytes[new_dirty] += capacity;
-	    --live_memo_sizes[old_dirty];
-	    live_memo_bytes[old_dirty] -= capacity;
+        if (capacity <= 16 && new_dirty != old_dirty) {
+            ++memo_sizes[new_dirty];
+            ++live_memo_sizes[new_dirty];
+            live_memo_bytes[new_dirty] += capacity;
+            --live_memo_sizes[old_dirty];
+            live_memo_bytes[old_dirty] -= capacity;
 # if HAVE_STRING_PROFILING > 1
-	    if ((*memo->pprev = memo->next))
-		memo->next->pprev = memo->pprev;
-	    memo->pprev = &live_memos[new_dirty];
-	    if ((memo->next = *memo->pprev))
-		memo->next->pprev = &memo->next;
-	    *memo->pprev = memo;
+            if ((*memo->pprev = memo->next))
+                memo->next->pprev = memo->pprev;
+            memo->pprev = &live_memos[new_dirty];
+            if ((memo->next = *memo->pprev))
+                memo->next->pprev = &memo->next;
+            *memo->pprev = memo;
 # else
-	    (void) memo;
+            (void) memo;
 # endif
-	}
+        }
     }
 
     static void one_profile_report(StringAccum &sa, int i, int examples);
 #endif
 
     inline String(const char* data, int length, memo_type* memo) {
-	_r.assign_noref(data, length, memo);
+        _r.assign_noref(data, length, memo);
     }
     inline String(const char* data, int length, const null_memo&)
-	: _r{data, length, 0} {
+        : _r{data, length, 0} {
     }
 
     inline void deref() const {
@@ -300,7 +306,7 @@ class String : public String_base<String> {
     void append(const char* s, int len, memo_type* memo);
     static String hard_make_stable(const char *s, int len);
     static inline memo_type* absent_memo() {
-	return reinterpret_cast<memo_type*>(uintptr_t(1));
+        return reinterpret_cast<memo_type*>(uintptr_t(1));
     }
     static inline memo_type* create_memo(int capacity, int dirty);
     static void delete_memo(memo_type* memo);
@@ -313,7 +319,7 @@ class String : public String_base<String> {
     static const rep_type zero_string_rep;
 
     static int parse_cesu8_char(const unsigned char* s,
-				const unsigned char* end);
+                                const unsigned char* end);
 
     friend struct rep_type;
     friend class StringAccum;
@@ -362,9 +368,9 @@ inline String::String(const String_base<T> &str) {
     including the terminating null character. */
 inline String::String(const char* cstr) {
     if (LCDF_CONSTANT_CSTR(cstr))
-	_r.assign(cstr, strlen(cstr), 0);
+        _r.assign(cstr, strlen(cstr), 0);
     else
-	assign(cstr, -1, false);
+        assign(cstr, -1, false);
 }
 
 /** @brief Construct a String containing the first @a len characters of
@@ -396,7 +402,7 @@ inline String::String(const char *first, const char *last) {
 /** @overload */
 inline String::String(const unsigned char* first, const unsigned char* last) {
     assign(reinterpret_cast<const char*>(first),
-	   (first < last ? last - first : 0), false);
+           (first < last ? last - first : 0), false);
 }
 
 /** @brief Construct a String from a std::string. */
@@ -459,9 +465,9 @@ inline const String& String::make_zero() {
     character. */
 inline String String::make_stable(const char *cstr) {
     if (LCDF_CONSTANT_CSTR(cstr))
-	return String(cstr, strlen(cstr), null_memo());
+        return String(cstr, strlen(cstr), null_memo());
     else
-	return hard_make_stable(cstr, -1);
+        return hard_make_stable(cstr, -1);
 }
 
 /** @brief Return a String that directly references the first @a len
@@ -473,9 +479,9 @@ inline String String::make_stable(const char *cstr) {
     should remain constant even though it's not part of the String. */
 inline String String::make_stable(const char* s, int len) {
     if (__builtin_constant_p(len) && len >= 0)
-	return String(s, len, null_memo());
+        return String(s, len, null_memo());
     else
-	return hard_make_stable(s, len);
+        return hard_make_stable(s, len);
 }
 
 /** @brief Return a String that directly references the character data in
@@ -531,11 +537,11 @@ inline const char* String::c_str() const {
     const char* end_data = _r.data + _r.length;
     memo_type* m = _r.memo();
     if ((m && end_data >= m->real_data + m->dirty)
-	|| *end_data != '\0') {
-	if (char *x = const_cast<String*>(this)->append_uninitialized(1)) {
-	    *x = '\0';
-	    --_r.length;
-	}
+        || *end_data != '\0') {
+        if (char *x = const_cast<String*>(this)->append_uninitialized(1)) {
+            *x = '\0';
+            --_r.length;
+        }
     }
     return _r.data;
 #endif
@@ -554,9 +560,9 @@ inline const char* String::c_str() const {
 inline String String::substring(const char* first, const char* last) const {
     if (first < last && first >= _r.data && last <= _r.data + _r.length) {
         _r.ref();
-	return String(first, last - first, _r.memo());
+        return String(first, last - first, _r.memo());
     } else
-	return String();
+        return String();
 }
 /** @overload */
 inline String String::substring(const unsigned char* first, const unsigned char* last) const {
@@ -630,10 +636,10 @@ inline String& String::operator=(String&& x) {
 /** @brief Assign this string to the C string @a cstr. */
 inline void String::assign(const char* cstr) {
     if (LCDF_CONSTANT_CSTR(cstr)) {
-	deref();
-	_r.assign(cstr, strlen(cstr), 0);
+        deref();
+        _r.assign(cstr, strlen(cstr), 0);
     } else
-	assign(cstr, -1, true);
+        assign(cstr, -1, true);
 }
 
 /** @brief Assign this string to the C string @a cstr. */
@@ -686,9 +692,9 @@ inline void String::append(const String &x) {
     @param cstr data to append */
 inline void String::append(const char *cstr) {
     if (LCDF_CONSTANT_CSTR(cstr))
-	append(cstr, strlen(cstr), absent_memo());
+        append(cstr, strlen(cstr), absent_memo());
     else
-	append(cstr, -1, absent_memo());
+        append(cstr, -1, absent_memo());
 }
 
 /** @brief Append the first @a len characters of @a s to this string.
@@ -705,13 +711,13 @@ inline void String::append(const char *s, int len) {
     Does nothing if @a first @>= @a last. */
 inline void String::append(const char *first, const char *last) {
     if (first < last)
-	append(first, last - first);
+        append(first, last - first);
 }
 /** @overload */
 inline void String::append(const unsigned char* first,
                            const unsigned char* last) {
     if (first < last)
-	append(reinterpret_cast<const char*>(first), last - first);
+        append(reinterpret_cast<const char*>(first), last - first);
 }
 
 /** @brief Append @a x to this string.
@@ -760,21 +766,19 @@ inline bool String::is_stable() const {
 inline String String::unique() const {
     memo_type* m = _r.memo();
     if (!m || m->refcount == 1)
-	return *this;
+        return *this;
     else
-	return String(_r.data, _r.data + _r.length);
+        return String(_r.data, _r.data + _r.length);
 }
 
-/** @brief Return a compact version of this String.
+/** @brief Reduce the memory allocation for this String.
 
-    The return value shares no more than 256 bytes of data with any other
-    non-stable String. */
-inline String String::compact() const {
+    After calling this function, this String shares no more than 256 bytes
+    of data with any other non-stable String. */
+inline void String::shrink_to_fit() {
     memo_type* m = _r.memo();
-    if (!m || m->refcount == 1 || (uint32_t) _r.length + 256 >= m->capacity)
-	return *this;
-    else
-	return String(_r.data, _r.data + _r.length);
+    if (m && m->refcount > 1 && (uint32_t) _r.length + 256 < m->capacity)
+        *this = String(_r.data, _r.data + _r.length);
 }
 
 /** @brief Return the unsigned char * version of mutable_data(). */
@@ -793,23 +797,23 @@ inline const String &String::make_out_of_memory() {
     If @a first doesn't point at a valid UTF-8 character, returns @a first. */
 inline const char *String::skip_utf8_char(const char *first, const char *last) {
     return reinterpret_cast<const char *>(
-	skip_utf8_char(reinterpret_cast<const unsigned char *>(first),
-		       reinterpret_cast<const unsigned char *>(last)));
+        skip_utf8_char(reinterpret_cast<const unsigned char *>(first),
+                       reinterpret_cast<const unsigned char *>(last)));
 }
 
 inline const unsigned char *String::skip_utf8_bom(const unsigned char *first,
-						  const unsigned char *last) {
+                                                  const unsigned char *last) {
     if (last - first >= 3
-	&& first[0] == 0xEF && first[1] == 0xBB && first[2] == 0xBF)
-	return first + 3;
+        && first[0] == 0xEF && first[1] == 0xBB && first[2] == 0xBF)
+        return first + 3;
     else
-	return first;
+        return first;
 }
 
 inline const char *String::skip_utf8_bom(const char *first, const char *last) {
     return reinterpret_cast<const char *>(
-	skip_utf8_bom(reinterpret_cast<const unsigned char *>(first),
-		      reinterpret_cast<const unsigned char *>(last)));
+        skip_utf8_bom(reinterpret_cast<const unsigned char *>(first),
+                      reinterpret_cast<const unsigned char *>(last)));
 }
 
 
@@ -854,4 +858,5 @@ inline void swap(String& a, String& b) {
     a.swap(b);
 }
 
+LCDF_MAKE_STRING_HASH(String)
 #endif
