@@ -3,7 +3,7 @@
  * jsontest.{cc,hh} -- regression test element for Json
  * Eddie Kohler
  *
- * Copyright (c) 2012 Eddie Kohler
+ * Copyright (c) 2012-2014 Eddie Kohler
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -17,8 +17,11 @@
  */
 
 #include "json.hh"
+#include <unordered_map>
 
 #define CHECK(x) do { if (!(x)) { std::cerr << __FILE__ << ":" << __LINE__ << ": test '" << #x << "' failed\n"; exit(1); } } while (0)
+#define CHECK_JUP(x, str) do { if ((x).unparse() != (str)) { std::cerr << __FILE__ << ":" << __LINE__ << ": '" #x "' is '" << (x) << "', not '" << (str) << "'\n"; exit(1); } } while (0)
+
 
 #if 0
 template <typename T> void incr(T& x) __attribute__((noinline));
@@ -234,7 +237,7 @@ int main(int argc, char** argv) {
     }
 
     {
-        Json j = Json::make_array(1, 2, 3, 4, 5, 6, 7, 8);
+        Json j = Json::array(1, 2, 3, 4, 5, 6, 7, 8);
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
         Json jcopy = j;
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
@@ -249,7 +252,7 @@ int main(int argc, char** argv) {
 
 #if 0
     {
-        Json j = Json::make_array(1, 2, 3);
+        Json j = Json::array(1, 2, 3);
         //int j[3] = {1, 2, 3};
         for (int i = 0; i < 1000000; ++i)
             incr(j[1].value());
@@ -488,6 +491,94 @@ int main(int argc, char** argv) {
         CHECK(r == x + 18);
         CHECK(jsp.success());
         CHECK(jsp.result().unparse() == "[0,1,2,3,400000,10.2]");
+    }
+
+    {
+        unsigned long s = 77;
+        Json j = Json::array(0, s, "foo");
+        CHECK(j.is_a());
+        CHECK(j[1].is_u());
+        CHECK(j[1] == s);
+        CHECK(j[1] == 77);
+
+        j = Json::array((uint64_t) -1, (int64_t) -1,
+                        (uint64_t) 1, (int64_t) 1,
+                        (uint64_t) 2, (int64_t) 2);
+        CHECK(j[0] != j[1]);
+        CHECK(j[2] == j[3]);
+        CHECK(j[4] == j[5]);
+        CHECK(j[0] != j[2]);
+        CHECK(j[2] != j[4]);
+        CHECK_JUP(j, "[18446744073709551615,-1,1,1,2,2]");
+    }
+
+    {
+        std::vector<int> v = {1, 2, 3, 4, 5};
+        Json j(v.begin(), v.end());
+        CHECK(j.unparse() == "[1,2,3,4,5]");
+    }
+
+    {
+        std::unordered_map<String, String> h;
+        h["a"] = "b";
+        h["c"] = "d";
+        h["x"] = "e";
+        Json j(h.begin(), h.end());
+        CHECK(j.is_o());
+        CHECK(j.size() == 3);
+        CHECK(j["a"] == "b");
+        CHECK(j["c"] == "d");
+        CHECK(j["x"] == "e");
+    }
+
+    {
+        Json j = Json::array(1, 2, 3, 4, 5, 6, 7, 8);
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        Json jcopy = j;
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8]");
+        auto it = j.erase(j.abegin() + 4);
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK_JUP(jcopy, "[1,2,3,4,5,6,7,8]");
+        CHECK(it == j.abegin() + 4);
+        it = j.erase(j.aend(), j.aend());
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK(it == j.aend());
+        it = j.erase(j.abegin(), j.abegin());
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK(it == j.abegin());
+        it = j.erase(j.abegin(), j.abegin() + 3);
+        CHECK_JUP(j, "[4,6,7,8]");
+        CHECK(it == j.abegin());
+    }
+
+    {
+        Json j((uint64_t) 1 << 63);
+        CHECK(j.is_u());
+        CHECK(j.unparse() == "9223372036854775808");
+        j = Json::parse("9223372036854775808");
+        CHECK(j.is_u());
+        CHECK(j.to_u() == (uint64_t) 1 << 63);
+    }
+
+    {
+        Json j = Json::object("a", 1, "b", Json(2), "c", "9137471");
+        CHECK(j.unparse() == "{\"a\":1,\"b\":2,\"c\":\"9137471\"}");
+    }
+
+    {
+        Json a = Json::parse("[{\"a\":1},{\"b\":2},{\"c\":3},{\"d\":4}]");
+        Json b = Json::array(a[1], a[3], a[2], a[0]);
+        CHECK(&a[0]["a"].cvalue() == &b[3]["a"].cvalue());
+        b.push_back(a[5]);
+        CHECK(b[4] == Json());
+        CHECK(a.size() == 4);
+        b = Json::object("a5", a[5], "a3", a[3]);
+        CHECK(b.unparse() == "{\"a5\":null,\"a3\":{\"d\":4}}");
+        CHECK(a.size() == 4);
+        b.set_list("a6", a[6], "a2", a[2]);
+        CHECK(b.unparse() == "{\"a5\":null,\"a3\":{\"d\":4},\"a6\":null,\"a2\":{\"c\":3}}");
+        CHECK(a.size() == 4);
     }
 
     std::cout << "All tests pass!\n";
