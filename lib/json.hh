@@ -103,6 +103,7 @@ class Json {
     inline bool is_i() const;
     inline bool is_unsigned() const;
     inline bool is_u() const;
+    inline bool is_posint() const;
     inline bool is_double() const;
     inline bool is_d() const;
     inline bool is_number() const;
@@ -883,6 +884,9 @@ class Json_proxy_base {
     bool is_u() const {
         return cvalue().is_u();
     }
+    bool is_posint() const {
+        return cvalue().is_posint();
+    }
     bool is_double() const {
         return cvalue().is_double();
     }
@@ -1662,6 +1666,10 @@ inline bool Json::is_unsigned() const {
 }
 inline bool Json::is_u() const {
     return is_unsigned();
+}
+inline bool Json::is_posint() const {
+    return u_.x.type == j_unsigned
+        || (u_.x.type == j_int && u_.i.x >= 0);
 }
 inline bool Json::is_double() const {
     return u_.x.type == j_double;
