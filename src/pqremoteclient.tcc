@@ -46,8 +46,7 @@ tamed void RemoteClient::insert(const String& key, const String& value,
         fd_->call(Json::array(pq_insert, seq_, key, value), make_event(j));
         ++seq_;
     }
-    if (j[0] != -pq_insert || j[1] != seq)
-        std::cerr << "expected insert " << seq << ", got " << j << "\n";
+    assert(j[0] == -pq_insert && j[1] == seq);
     e();
 }
 
