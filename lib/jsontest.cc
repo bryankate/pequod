@@ -1,9 +1,9 @@
 // -*- c-basic-offset: 4 -*-
 /*
- * jsontest.{cc,hh} -- regression test element for Json
+ * jsontest.{cc,hh} -- regression tests for Json
  * Eddie Kohler
  *
- * Copyright (c) 2012 Eddie Kohler
+ * Copyright (c) 2012-2014 Eddie Kohler
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -17,8 +17,11 @@
  */
 
 #include "json.hh"
+#include <unordered_map>
 
 #define CHECK(x) do { if (!(x)) { std::cerr << __FILE__ << ":" << __LINE__ << ": test '" << #x << "' failed\n"; exit(1); } } while (0)
+#define CHECK_JUP(x, str) do { if ((x).unparse() != (str)) { std::cerr << __FILE__ << ":" << __LINE__ << ": '" #x "' is '" << (x) << "', not '" << (str) << "'\n"; exit(1); } } while (0)
+
 
 #if 0
 template <typename T> void incr(T& x) __attribute__((noinline));
@@ -115,29 +118,29 @@ int main(int argc, char** argv) {
     CHECK(j["x22"]["time"] == "Tue Feb  7 20:20:33 2012");
     CHECK(j["x22"]["cores"] == 2);
     {
-	Json::object_iterator it = j.obegin();
-	CHECK(it.key() == "x22");
-	++it;
-	CHECK(it.key() == "x23");
-	++it;
-	CHECK(it.key() == "x24");
-	++it;
-	CHECK(it.key() == "b");
-	++it;
-	CHECK(it.key() == "c");
+        Json::object_iterator it = j.obegin();
+        CHECK(it.key() == "x22");
+        ++it;
+        CHECK(it.key() == "x23");
+        ++it;
+        CHECK(it.key() == "x24");
+        ++it;
+        CHECK(it.key() == "b");
+        ++it;
+        CHECK(it.key() == "c");
     }
 
     {
-	Json jcopy = j;
-	CHECK(j.size() == 5);
-	int count = 0;
-	for (Json::iterator it = jcopy.begin(); it != jcopy.end(); ++it) {
-	    it->second = Json();
-	    ++count;
-	}
-	CHECK(!jcopy["x22"]);
-	CHECK(j["x22"]["cores"] == 2);
-	CHECK(count == jcopy.size());
+        Json jcopy = j;
+        CHECK(j.size() == 5);
+        int count = 0;
+        for (Json::iterator it = jcopy.begin(); it != jcopy.end(); ++it) {
+            it->second = Json();
+            ++count;
+        }
+        CHECK(!jcopy["x22"]);
+        CHECK(j["x22"]["cores"] == 2);
+        CHECK(count == jcopy.size());
     }
 
     CHECK(!j["x49"]);
@@ -161,9 +164,9 @@ int main(int argc, char** argv) {
 
     Json k = Json::make_array();
     {
-	CHECK(k.size() == 0);
-	Json::array_iterator it = k.abegin();
-	CHECK(!it.live());
+        CHECK(k.size() == 0);
+        Json::array_iterator it = k.abegin();
+        CHECK(!it.live());
     }
     j = Json::make_object();
     j["a"] = k[2];
@@ -177,19 +180,19 @@ int main(int argc, char** argv) {
 
     j.assign_parse("{\"a\":1,\"b\":true,\"c\":\"\"}");
     {
-	int i = 0;
-	bool b = false;
-	String s;
-	CHECK(j.get("a", i));
-	CHECK(i == 1);
-	CHECK(j.get("a", i).get("b", b));
-	CHECK(b == true);
-	CHECK(!j.get("a", s).status());
-	CHECK(!j.get("a", s).status(b));
-	CHECK(b == false);
-	CHECK(j.get("a", k));
-	CHECK(k == Json(1));
-	CHECK(!j.get("cc", k));
+        int i = 0;
+        bool b = false;
+        String s;
+        CHECK(j.get("a", i));
+        CHECK(i == 1);
+        CHECK(j.get("a", i).get("b", b));
+        CHECK(b == true);
+        CHECK(!j.get("a", s).status());
+        CHECK(!j.get("a", s).status(b));
+        CHECK(b == false);
+        CHECK(j.get("a", k));
+        CHECK(k == Json(1));
+        CHECK(!j.get("cc", k));
     }
 
     j["a"] = Json(5);
@@ -197,44 +200,44 @@ int main(int argc, char** argv) {
     j["b"] = Json::parse("[]");
 
     {
-	Json j1 = Json::make_object(), j2 = Json::make_object();
-	j1.set("a", j2); // stores a COPY of j2 in j1
-	j2.set("b", 1);
-	CHECK(j1.unparse() == "{\"a\":{}}");
-	CHECK(j2.unparse() == "{\"b\":1}");
+        Json j1 = Json::make_object(), j2 = Json::make_object();
+        j1.set("a", j2); // stores a COPY of j2 in j1
+        j2.set("b", 1);
+        CHECK(j1.unparse() == "{\"a\":{}}");
+        CHECK(j2.unparse() == "{\"b\":1}");
     }
 
     {
-	Json j = Json::parse("{\"a\":true}");
-	if (j["foo"]["bar"])
-	    CHECK(false);
-	CHECK(j.unparse() == "{\"a\":true}");
-	j["foo"]["bar"] = true;
-	CHECK(j.unparse() == "{\"a\":true,\"foo\":{\"bar\":true}}");
-	j["a"]["2"] = false;
-	CHECK(j.unparse() == "{\"a\":{\"2\":false},\"foo\":{\"bar\":true}}");
-	j[3] = true;
-	CHECK(j.unparse() == "{\"a\":{\"2\":false},\"foo\":{\"bar\":true},\"3\":true}");
-	CHECK(j[3] == Json(true));
-	j = Json::parse("[1,2,3,4]");
-	CHECK(j["2"] == Json(3));
-	CHECK(j.unparse() == "[1,2,3,4]");
-	j["a"] = true;
-	CHECK(j.unparse() == "{\"0\":1,\"1\":2,\"2\":3,\"3\":4,\"a\":true}");
-	CHECK(j["2"] == Json(3));
+        Json j = Json::parse("{\"a\":true}");
+        if (j["foo"]["bar"])
+            CHECK(false);
+        CHECK(j.unparse() == "{\"a\":true}");
+        j["foo"]["bar"] = true;
+        CHECK(j.unparse() == "{\"a\":true,\"foo\":{\"bar\":true}}");
+        j["a"]["2"] = false;
+        CHECK(j.unparse() == "{\"a\":{\"2\":false},\"foo\":{\"bar\":true}}");
+        j[3] = true;
+        CHECK(j.unparse() == "{\"a\":{\"2\":false},\"foo\":{\"bar\":true},\"3\":true}");
+        CHECK(j[3] == Json(true));
+        j = Json::parse("[1,2,3,4]");
+        CHECK(j["2"] == Json(3));
+        CHECK(j.unparse() == "[1,2,3,4]");
+        j["a"] = true;
+        CHECK(j.unparse() == "{\"0\":1,\"1\":2,\"2\":3,\"3\":4,\"a\":true}");
+        CHECK(j["2"] == Json(3));
     }
 
     {
-	Json j = Json::parse("{}");
-	j.set("foo", String::make_out_of_memory()).set(String::make_out_of_memory(), 2);
-	CHECK(j.unparse() == "{\"foo\":\"\360\237\222\243ENOMEM\360\237\222\243\",\"\360\237\222\243ENOMEM\360\237\222\243\":2}");
+        Json j = Json::parse("{}");
+        j.set("foo", String::make_out_of_memory()).set(String::make_out_of_memory(), 2);
+        CHECK(j.unparse() == "{\"foo\":\"\360\237\222\243ENOMEM\360\237\222\243\",\"\360\237\222\243ENOMEM\360\237\222\243\":2}");
         j.clear();
         CHECK(j.unparse() == "{}");
         CHECK(j.get("foo") == Json());
     }
 
     {
-        Json j = Json::make_array(1, 2, 3, 4, 5, 6, 7, 8);
+        Json j = Json::array(1, 2, 3, 4, 5, 6, 7, 8);
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
         Json jcopy = j;
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
@@ -247,9 +250,19 @@ int main(int argc, char** argv) {
         CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8,10]");
     }
 
+    {
+        unsigned long s = 77;
+        Json j = Json::array(0, 0, 0);
+        Json k = Json::array(0, s, "foo");
+        CHECK(j[1].is_i());
+        CHECK(k[1].is_u());
+        j[1] = k[1];
+        CHECK(j[1].is_u());
+    }
+
 #if 0
     {
-        Json j = Json::make_array(1, 2, 3);
+        Json j = Json::array(1, 2, 3);
         //int j[3] = {1, 2, 3};
         for (int i = 0; i < 1000000; ++i)
             incr(j[1].value());
@@ -488,6 +501,100 @@ int main(int argc, char** argv) {
         CHECK(r == x + 18);
         CHECK(jsp.success());
         CHECK(jsp.result().unparse() == "[0,1,2,3,400000,10.2]");
+    }
+
+    {
+        unsigned long s = 77;
+        Json j = Json::array(0, s, "foo");
+        CHECK(j.is_a());
+        CHECK(j[1].is_u());
+        CHECK(j[1] == s);
+        CHECK(j[1] == 77);
+
+        j = Json::array((uint64_t) -1, (int64_t) -1,
+                        (uint64_t) 1, (int64_t) 1,
+                        (uint64_t) 2, (int64_t) 2);
+        CHECK(j[0] != j[1]);
+        CHECK(j[2] == j[3]);
+        CHECK(j[4] == j[5]);
+        CHECK(j[0] != j[2]);
+        CHECK(j[2] != j[4]);
+        CHECK_JUP(j, "[18446744073709551615,-1,1,1,2,2]");
+    }
+
+    {
+        std::vector<int> v = {1, 2, 3, 4, 5};
+        Json j(v.begin(), v.end());
+        CHECK(j.unparse() == "[1,2,3,4,5]");
+    }
+
+    {
+        std::unordered_map<String, String> h;
+        h["a"] = "b";
+        h["c"] = "d";
+        h["x"] = "e";
+        Json j(h.begin(), h.end());
+        CHECK(j.is_o());
+        CHECK(j.size() == 3);
+        CHECK(j["a"] == "b");
+        CHECK(j["c"] == "d");
+        CHECK(j["x"] == "e");
+    }
+
+    {
+        Json j = Json::array(1, 2, 3, 4, 5, 6, 7, 8);
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        Json jcopy = j;
+        CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
+        CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8]");
+        auto it = j.erase(j.abegin() + 4);
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK_JUP(jcopy, "[1,2,3,4,5,6,7,8]");
+        CHECK(it == j.abegin() + 4);
+        it = j.erase(j.aend(), j.aend());
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK(it == j.aend());
+        it = j.erase(j.abegin(), j.abegin());
+        CHECK_JUP(j, "[1,2,3,4,6,7,8]");
+        CHECK(it == j.abegin());
+        it = j.erase(j.abegin(), j.abegin() + 3);
+        CHECK_JUP(j, "[4,6,7,8]");
+        CHECK(it == j.abegin());
+    }
+
+    {
+        Json j((uint64_t) 1 << 63);
+        CHECK(j.is_u());
+        CHECK(j.unparse() == "9223372036854775808");
+        j = Json::parse("9223372036854775808");
+        CHECK(j.is_u());
+        CHECK(j.to_u() == (uint64_t) 1 << 63);
+    }
+
+    {
+        Json j = Json::object("a", 1, "b", Json(2), "c", "9137471");
+        CHECK(j.unparse() == "{\"a\":1,\"b\":2,\"c\":\"9137471\"}");
+    }
+
+    {
+        Json a = Json::parse("[{\"a\":1},{\"b\":2},{\"c\":3},{\"d\":4}]");
+        Json b = Json::array(a[1], a[3], a[2], a[0]);
+        CHECK(&a[0]["a"].cvalue() == &b[3]["a"].cvalue());
+        b.push_back(a[5]);
+        CHECK(b[4] == Json());
+        CHECK(a.size() == 4);
+        b = Json::object("a5", a[5], "a3", a[3]);
+        CHECK(b.unparse() == "{\"a5\":null,\"a3\":{\"d\":4}}");
+        CHECK(a.size() == 4);
+        b.set_list("a6", a[6], "a2", a[2]);
+        CHECK(b.unparse() == "{\"a5\":null,\"a3\":{\"d\":4},\"a6\":null,\"a2\":{\"c\":3}}");
+        CHECK(a.size() == 4);
+    }
+
+    {
+        Json a = Json::parse("[{\"a\":\"\\\"\\\\\\/\"}]");
+        CHECK(a[0]["a"] == "\"\\/");
+        CHECK(a.unparse() == "[{\"a\":\"\\\"\\\\\\/\"}]");
     }
 
     std::cout << "All tests pass!\n";
