@@ -234,7 +234,7 @@ int main(int argc, char** argv) {
     }
 
     {
-        Json j = Json::make_array(1, 2, 3, 4, 5, 6, 7, 8);
+        Json j = Json::array(1, 2, 3, 4, 5, 6, 7, 8);
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
         Json jcopy = j;
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8]");
@@ -245,6 +245,15 @@ int main(int argc, char** argv) {
         jcopy.push_back(10);
         CHECK(j.unparse() == "[1,2,3,4,5,6,7,8,9]");
         CHECK(jcopy.unparse() == "[1,2,3,4,5,6,7,8,10]");
+    }
+
+    {
+        unsigned long s = 77;
+        Json j = Json::array(0, s, "foo");
+        CHECK(j.is_a());
+        CHECK(j[1].is_u());
+        CHECK(j[1] == s);    // will equate due to matched types
+        CHECK(j[1] != 77);   // signed and unsigned comparison without explicit conversion
     }
 
 #if 0
