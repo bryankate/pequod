@@ -1,6 +1,6 @@
 // -*- c-basic-offset: 4 -*-
 /*
- * jsontest.{cc,hh} -- regression test element for Json
+ * jsontest.{cc,hh} -- regression tests for Json
  * Eddie Kohler
  *
  * Copyright (c) 2012-2014 Eddie Kohler
