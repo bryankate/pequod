@@ -252,15 +252,6 @@ int main(int argc, char** argv) {
 
     {
         unsigned long s = 77;
-        Json j = Json::array(0, s, "foo");
-        CHECK(j.is_a());
-        CHECK(j[1].is_u());
-        CHECK(j[1] == s);    // will equate due to matched types
-        CHECK(j[1] != 77);   // signed and unsigned comparison without explicit conversion
-    }
-
-    {
-        unsigned long s = 77;
         Json j = Json::array(0, 0, 0);
         Json k = Json::array(0, s, "foo");
         CHECK(j[1].is_i());
