@@ -256,6 +256,16 @@ int main(int argc, char** argv) {
         CHECK(j[1] != 77);   // signed and unsigned comparison without explicit conversion
     }
 
+    {
+        unsigned long s = 77;
+        Json j = Json::array(0, 0, 0);
+        Json k = Json::array(0, s, "foo");
+        CHECK(j[1].is_i());
+        CHECK(k[1].is_u());
+        j[1] = k[1];
+        CHECK(j[1].is_u());
+    }
+
 #if 0
     {
         Json j = Json::make_array(1, 2, 3);
