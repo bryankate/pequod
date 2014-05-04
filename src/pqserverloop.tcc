@@ -72,7 +72,7 @@ tamed void read_and_process_one(msgpack_fd* mpfd, pq::Server& server,
 
     twait { mpfd->read_request(make_event(j)); }
 
-    if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i() || !j[1].is_u()) {
+    if (!j || !j.is_a() || j.size() < 2 || !j[0].is_i()) {
         std::cerr << "bad rpc: " << j << std::endl;
         done(false);
         return;
