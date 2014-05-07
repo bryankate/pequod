@@ -296,6 +296,7 @@ class TwitterNewRunner {
     msgpack_fd* master_sync_;
 
 #if TIMELINE_LATENCY
+    bool log_rtt_;
     std::vector<std::pair<uint64_t, bool>> latency_log_;
 #endif
 
@@ -323,6 +324,11 @@ template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
     : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()), nrpc_(0),
       barrier_(0), master_sync_(nullptr) {
+
+#if TIMELINE_LATENCY
+    log_rtt_ = true;
+#endif
+
 }
 
 tamed template <typename S>
@@ -550,7 +556,8 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
     if (aftersub)
         user->last_subscribe_ = 0;
 
-    latency_log_.emplace_back(rtt, aftersub);
+    if (log_rtt_)
+        latency_log_.emplace_back(rtt, aftersub);
 #endif
 
     ++nrpc_;
@@ -987,6 +994,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         }
     }
     twait { drain(gr, make_event()); }
+
+#if TIMELINE_LATENCY
+    log_rtt_ = false;
+#endif
 
     // do a final scan for every loggedin user. this helps to ensure that
     // each distributed experiment does roughly the same amount of work
