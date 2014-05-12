@@ -143,6 +143,7 @@ class Join {
     Json unparse_match(const Match& m) const;
 
     inline bool source_is_filter(int si) const;
+    inline bool source_is_lazy(int si) const;
 
     inline void expand_sink_key_context(Str context) const;
     inline void expand_sink_key_source(Str source_key, unsigned sink_mask) const;
@@ -181,6 +182,7 @@ class Join {
                         // staleness_ > 0 implies maintained_ == false
     bool maintained_;   // if the output is kept up to date with changes to the input
     uint8_t filters_;
+    uint8_t lazy_;
     uint8_t slotlen_[slot_capacity];
     uint8_t pat_mask_[pcap];
     Server* server_;
@@ -338,8 +340,8 @@ inline void Pattern::assign_optimized_match(Str str, int mopt, Match& m) const {
 }
 
 inline Join::Join()
-    : npat_(0), staleness_(0), maintained_(true), refcount_(0),
-      jvt_(jvt_copy_last), jvtparam_() {
+    : npat_(0), staleness_(0), maintained_(true), filters_(0), lazy_(0), 
+      refcount_(0), jvt_(jvt_copy_last), jvtparam_() {
 }
 
 inline void Join::ref() {
@@ -402,6 +404,10 @@ inline Server& Join::server() const {
 
 inline bool Join::source_is_filter(int si) const {
     return filters_ & (1 << si);
+}
+
+inline bool Join::source_is_lazy(int si) const {
+    return lazy_ & (1 << si);
 }
 
 inline int Join::slot(Str name) const {

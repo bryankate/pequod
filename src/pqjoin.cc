@@ -152,6 +152,7 @@ void Join::clear() {
     jvt_ = 0;
     maintained_ = true;
     filters_ = 0;
+    lazy_ = 0;
 }
 
 void Join::attach(Server& server) {
@@ -476,7 +477,7 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
     jvt_ = -1;
     maintained_ = true;
 
-    int op = -1, any_op = -1;
+    int op = -1, any_op = -1, lazy = 0;
     for (unsigned i = 2; i != words.size(); ++i) {
         int new_op = -1;
         if (words[i] == "copy")
@@ -490,8 +491,10 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
         else if (words[i] == "sum")
             new_op = jvt_sum_match;
         else if (words[i] == "using") {
-            if (op != jvt_filter)
+            if (op != jvt_filter) {
                 new_op = jvt_using;
+                lazy = 1;  // lazy by default for backward compatibility
+            }
         } else if (words[i] == "filter") {
             if (op == jvt_using)
                 op = -1;
@@ -504,6 +507,11 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             maintained_ = true;
         else if (words[i] == "and")
             /* do nothing */;
+        else if (words[i] == "eager" || words[i] == "lazy") {
+            if (op != jvt_using)
+                return errh->error("syntax error near %<%p{Str}%>: 'eager' and 'lazy' designations only allowed on 'using' operator", &words[i]);
+            lazy = (words[i] == "lazy");
+        }
         else if (op == jvt_slotdef || op == jvt_slotdef1) {
             withstr.push_back(words[i]);
             op = jvt_slotdef1;
@@ -511,8 +519,11 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
             if (op == jvt_filter) {
                 filters_ |= 1 << (sourcestr.size() - 1);
                 sourcestr.push_back(words[i]);
-            } else if (op == jvt_using || op == -1)
+            } else if (op == jvt_using || op == -1) {
+                if (lazy)
+                    lazy_ |= 1 << (sourcestr.size() - 1);
                 sourcestr.push_back(words[i]);
+            }
             else if (lastsourcestr)
                 return errh->error("syntax error near %<%p{Str}%>: transformation already defined", &words[i]);
             else {
@@ -520,6 +531,7 @@ int Join::hard_assign_parse(Str str, ErrorHandler* errh) {
                 jvt_ = op;
             }
             op = -1;
+            lazy = 0;
         }
         if (new_op != -1 && op != -1)
             return errh->error("syntax error near %<%p{Str}%>", &words[i]);

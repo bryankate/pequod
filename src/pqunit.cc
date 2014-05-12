@@ -409,10 +409,24 @@ void test_annotation() {
                     "using d|<d_id>|<e_id> "
                     "copy e|<e_id>|<time>");
     j2.ref();
+
+    CHECK_TRUE(j2.source_is_lazy(0));
+    CHECK_TRUE(!j2.source_is_lazy(1));
+
     // will not re-validate join within T seconds of last validation
     // for the requested range. the store will hold stale results
     j2.set_staleness(0.1);
     server.add_join("f|", "f}", &j2);
+
+    pq::Join j3;
+    j3.assign_parse("h|<g_id>|<time>|<e_id> = "
+                    "using eager g|<g_id>|<e_id> "
+                    "copy e|<e_id>|<time> "
+                    "with g_id:5, e_id:5, time:10");
+    j3.ref();
+
+    CHECK_TRUE(!j3.source_is_lazy(0));
+    CHECK_TRUE(!j3.source_is_lazy(1));
 
     // should NOT have a validrange for c|00001 or a copy for b|00002
     server.validate("c|00001|0000000001", "c|00001}");
