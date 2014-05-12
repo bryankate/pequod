@@ -271,7 +271,7 @@ bool SinkRange::validate_step(validate_args& va, int joinpos) {
         else if (!r) {
             SourceRange::parameters p{*va.server, join, joinpos, va.rm.match,
                     Str(kf, kflen), Str(kl, kllen), va.sink};
-            sourcet->add_source(new InvalidatorRange(p));
+            sourcet->add_source(new UsingRange(p));
         }
     } else if (r)
         delete r;

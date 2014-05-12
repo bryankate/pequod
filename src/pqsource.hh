@@ -90,9 +90,9 @@ class SourceRange {
 };
 
 
-class InvalidatorRange : public SourceRange {
+class UsingRange : public SourceRange {
   public:
-    inline InvalidatorRange(const parameters& p);
+    inline UsingRange(const parameters& p);
     virtual void notify(const Datum* src, const String& old_value, int notifier);
   protected:
     virtual void notify(Str, Sink*, const Datum*, const String&, int) { }
@@ -242,7 +242,7 @@ inline bool SourceRange::purged() const {
     return purged_;
 }
 
-inline InvalidatorRange::InvalidatorRange(const parameters& p)
+inline UsingRange::UsingRange(const parameters& p)
     : SourceRange(p) {
 }
 

@@ -129,7 +129,7 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     return stream << "}";
 }
 
-void InvalidatorRange::notify(const Datum* d, const String&, int notifier) {
+void UsingRange::notify(const Datum* d, const String&, int notifier) {
     using std::swap;
 
     if (!notifier)
