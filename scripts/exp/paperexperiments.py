@@ -244,6 +244,34 @@ def define_experiments():
     exps.append(exp)
 
 
+    # pequod latency experiment.
+    # run with warm and cold caches. need to turn on TIMELINE_LATENCY in the client code
+    # CPU utilization on servers.
+    exp = {'name': "latency", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--no-progress-report --synchronous" % \
+                 (clientCmd, users)
+    
+    exp['defs'].append(
+        {'name': "warm",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s --prevalidate" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "cold",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s --no-prevalidate" % (clientBase)})
+    exps.append(exp)
+
+
     # cache join comparison
     # compute karma as a single table or interleaved with article data
     # can be run on a multiprocessor
