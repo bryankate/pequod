@@ -93,9 +93,14 @@ class SourceRange {
 class UsingRange : public SourceRange {
   public:
     inline UsingRange(const parameters& p);
-    virtual void notify(const Datum* src, const String& old_value, int notifier);
+    tamed virtual void notify(const Datum* src, const String& old_value, int notifier);
   protected:
     virtual void notify(Str, Sink*, const Datum*, const String&, int) { }
+  private:
+    Server& server_;
+    bool lazy_;
+
+    tamed void eager_update(Sink* sink);
 };
 
 
@@ -243,7 +248,8 @@ inline bool SourceRange::purged() const {
 }
 
 inline UsingRange::UsingRange(const parameters& p)
-    : SourceRange(p) {
+    : SourceRange(p), server_(p.server), 
+      lazy_(p.join->source_is_lazy(p.joinpos)) {
 }
 
 inline SubscribedRange::SubscribedRange(const parameters& p)

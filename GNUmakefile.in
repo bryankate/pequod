@@ -99,6 +99,8 @@ $(OBJDIR)/mpfd.cc: $(top_srcdir)/src/mpfd.tcc
 $(OBJDIR)/mpfd.hh: $(top_srcdir)/src/mpfd.thh
 $(OBJDIR)/pqserver.cc: $(top_srcdir)/src/pqserver.tcc
 $(OBJDIR)/pqserver.hh: $(top_srcdir)/src/pqserver.thh
+$(OBJDIR)/pqsource.cc: $(top_srcdir)/src/pqsource.tcc
+$(OBJDIR)/pqsource.hh: $(top_srcdir)/src/pqsource.thh
 $(OBJDIR)/pqpersistent.cc: $(top_srcdir)/src/pqpersistent.tcc
 $(OBJDIR)/pqpersistent.hh: $(top_srcdir)/src/pqpersistent.thh
 $(OBJDIR)/pqclient.cc: $(top_srcdir)/src/pqclient.tcc
@@ -140,7 +142,7 @@ $(OBJDIR)/pqmain.o: $(OBJDIR)/pqserver.hh \
                     $(OBJDIR)/memcacheadapter.hh \
                     $(OBJDIR)/redisadapter.hh
 $(OBJDIR)/pqserver.o: $(OBJDIR)/pqserver.hh $(OBJDIR)/pqinterconnect.hh 
-$(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh
+$(OBJDIR)/pqserver.hh: $(OBJDIR)/pqpersistent.hh $(OBJDIR)/pqsource.hh 
 $(OBJDIR)/pqserverloop.o: $(OBJDIR)/pqinterconnect.hh
 $(OBJDIR)/pqpersistent.o: $(OBJDIR)/pqserver.hh
 $(OBJDIR)/pqpersistent.hh: $(OBJDIR)/pqdbpool.hh

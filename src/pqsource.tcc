@@ -129,7 +129,7 @@ std::ostream& operator<<(std::ostream& stream, const SourceRange& r) {
     return stream << "}";
 }
 
-void UsingRange::notify(const Datum* d, const String&, int notifier) {
+tamed void UsingRange::notify(const Datum* d, const String&, int notifier) {
     using std::swap;
 
     if (!notifier)
@@ -139,6 +139,8 @@ void UsingRange::notify(const Datum* d, const String&, int notifier) {
     for (result* it = results_.begin(); it != endit; ) {
         if (it->sink->valid()) {
             it->sink->add_update(joinpos_, it->context, d->key(), notifier);
+            if (!lazy_)
+                eager_update(it->sink);
             ++it;
         }
         else {
@@ -151,6 +153,22 @@ void UsingRange::notify(const Datum* d, const String&, int notifier) {
 
     if (results_.empty())
         kill();
+}
+
+tamed void UsingRange::eager_update(Sink* sink) {
+    tvars {
+        uint32_t log = 0;
+        tamer::gather_rendezvous gr;
+    }
+
+    do {
+        twait(gr);
+        if (!sink->valid())
+            break;
+        
+        sink->validate(sink->ibegin(), sink->iend(), server_,
+                       server_.next_validate_at(), log, gr);
+    } while (gr.has_waiting());
 }
 
 void SubscribedRange::invalidate() {

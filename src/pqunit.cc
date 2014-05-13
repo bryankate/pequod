@@ -410,23 +410,10 @@ void test_annotation() {
                     "copy e|<e_id>|<time>");
     j2.ref();
 
-    CHECK_TRUE(j2.source_is_lazy(0));
-    CHECK_TRUE(!j2.source_is_lazy(1));
-
     // will not re-validate join within T seconds of last validation
     // for the requested range. the store will hold stale results
     j2.set_staleness(0.1);
     server.add_join("f|", "f}", &j2);
-
-    pq::Join j3;
-    j3.assign_parse("h|<g_id>|<time>|<e_id> = "
-                    "using eager g|<g_id>|<e_id> "
-                    "copy e|<e_id>|<time> "
-                    "with g_id:5, e_id:5, time:10");
-    j3.ref();
-
-    CHECK_TRUE(!j3.source_is_lazy(0));
-    CHECK_TRUE(!j3.source_is_lazy(1));
 
     // should NOT have a validrange for c|00001 or a copy for b|00002
     server.validate("c|00001|0000000001", "c|00001}");
@@ -456,6 +443,52 @@ void test_annotation() {
     // MIGHT have 2 expired validranges for f|00003 we implement cleanup of expired ranges
     server.validate("f|00003|0000000001", "f|00003|0000000015");
     CHECK_EQ(server.count("f|00003|0000000001", "f|00003|0000000015"), size_t(4));
+}
+
+void test_lazy_eager() {
+
+    pq::Server server;
+
+    std::pair<const char*, const char*> values[] = {
+        {"a|00001|00002", "1"},
+        {"b|00002|0000000001", "b1"},
+        {"b|00002|0000000002", "b2"},
+        {"b|00003|0000000002", "b3"},
+        {"b|00003|0000000003", "b4"},
+    };
+    for (auto it = values; it != values + sizeof(values)/sizeof(values[0]); ++it)
+        server.insert(it->first, it->second);
+
+    pq::Join j1;
+    j1.assign_parse("X|<a_id>|<time>|<b_id> = "
+                    "using a|<a_id>|<b_id> "
+                    "copy b|<b_id>|<time> "
+                    "with a_id:5, b_id:5, time:10");
+    j1.ref();
+    server.add_join("X|", "X}", &j1);
+
+    CHECK_TRUE(j1.source_is_lazy(0));
+    CHECK_TRUE(!j1.source_is_lazy(1));
+
+    pq::Join j2;
+    j2.assign_parse("Y|<a_id>|<time>|<b_id> = "
+                    "using eager a|<a_id>|<b_id> "
+                    "copy b|<b_id>|<time> "
+                    "with a_id:5, b_id:5, time:10");
+    j2.ref();
+    server.add_join("Y|", "Y}", &j2);
+
+    CHECK_TRUE(!j2.source_is_lazy(0));
+    CHECK_TRUE(!j2.source_is_lazy(1));
+
+    server.validate("X|00001|0000000001", "X|00001}");
+    server.validate("Y|00001|0000000001", "Y|00001}");
+    CHECK_EQ(server.count("X|00001|0000000001", "X|00001}"), size_t(2));
+    CHECK_EQ(server.count("Y|00001|0000000001", "Y|00001}"), size_t(2));
+
+    server.insert("a|00001|00003", "1");
+    CHECK_EQ(server.count("X|00001|0000000001", "X|00001}"), size_t(2));
+    CHECK_EQ(server.count("Y|00001|0000000001", "Y|00001}"), size_t(4));
 }
 
 void test_join1() {
@@ -1264,6 +1297,7 @@ void unit_tests(const std::set<String> &testcases) {
     ADD_TEST(test_recursive);
     ADD_TEST(test_count);
     ADD_TEST(test_annotation);
+    ADD_TEST(test_lazy_eager);
     ADD_TEST(test_join1);
     ADD_TEST(test_op_count);
     ADD_TEST(test_op_count_validate1);
