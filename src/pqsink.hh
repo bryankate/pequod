@@ -136,10 +136,6 @@ class SinkRange : public ServerRangeBase, public Evictable {
     Table* table_;
     local_vector<Sink*, 4> sinks_;
 
-    inline bool validate_one(Str first, Str last,
-                             Sink* sink, Server& server,
-                             uint64_t now, uint32_t& log,
-                             tamer::gather_rendezvous& gr);
     struct validate_args;
     bool validate_step(validate_args& va, int joinpos);
     bool validate_filters(validate_args& va);
@@ -160,9 +156,7 @@ class Sink {
     inline ::interval<Str> interval() const;
 
     inline bool valid() const;
-    inline void set_valid();
     void invalidate();
-    inline void set_validating(bool validating);
 
     inline Join* join() const;
     inline SinkRange* range() const;
@@ -188,6 +182,9 @@ class Sink {
     bool update(Str first, Str last, Server& server,
                 uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr);
     bool restart(Str first, Str last, Server& server,
+                 uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr);
+
+    bool validate(Str first, Str last, Server& server,
                  uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr);
 
     inline void update_hint(const ServerStore& store, ServerStore::iterator hint) const;
@@ -380,14 +377,6 @@ inline void Sink::deref() {
 
 inline bool Sink::valid() const {
     return valid_;
-}
-
-inline void Sink::set_valid() {
-    valid_ = true;
-}
-
-inline void Sink::set_validating(bool validating) {
-    validating_ = validating;
 }
 
 inline Join* Sink::join() const {

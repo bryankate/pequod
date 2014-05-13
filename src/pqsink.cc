@@ -74,28 +74,19 @@ bool SinkRange::add_sink(JoinRange* jr, Server& server,
                          uint64_t now, uint32_t& log,
                          tamer::gather_rendezvous& gr) {
 
-    //std::cerr << "add_sink " << first << ", " << last << "\n";
+    //std::cerr << "add_sink " << ibegin() << ", " << iend() << "\n";
     Sink* sink = new Sink(jr, this);
     sinks_.push_back(sink);
     sink->ref();
 
-    return validate_one(ibegin(), iend(), sink, server, now, log, gr);
-}
-
-inline bool SinkRange::validate_one(Str first, Str last,
-                                    Sink* sink, Server& server,
-                                    uint64_t now, uint32_t& log,
-                                    tamer::gather_rendezvous& gr) {
-
-    //std::cerr << "validate_one [" << first << ", " << last << ")\n";
-    validate_args va(first, last, server, now,
-                     nullptr, SourceRange::notify_insert, log, gr);
+    validate_args va(ibegin(), iend(), server, now, sink, 
+                     SourceRange::notify_insert, log, gr);    
 
     sink->join()->sink().match_range(va.rm);
-    va.sink = sink;
     sink->set_expiration(now);
 
     log |= ValidateRecord::compute;
+
     return validate_step(va, 0);
 }
 
@@ -105,29 +96,8 @@ bool SinkRange::validate(Str first, Str last, Server& server,
 
     bool complete = true;
 
-    for (auto sit = sinks_.begin(); sit != sinks_.end(); ++sit) {
-        Sink* sink = *sit;
-        sink->set_validating(true);
-
-        if (unlikely(sink->has_expired(now))) {
-            assert(!sink->join()->maintained());
-            sink->clear_updates();
-            sink->add_invalidate(ibegin(), iend());
-            sink->set_expiration(now);
-            sink->set_valid();
-        }
-        else if (!sink->valid()) {
-            sink->add_invalidate(ibegin(), iend());
-            sink->set_valid();
-        }
-
-        if (sink->need_restart())
-            complete &= sink->restart(first, last, server, now, log, gr);
-        if (!sink->need_restart() && sink->need_update())
-            complete &= sink->update(first, last, server, now, log, gr);
-
-        sink->set_validating(false);
-    }
+    for (auto sit = sinks_.begin(); sit != sinks_.end(); ++sit)
+        complete &= (*sit)->validate(first, last, server, now, log, gr);
 
     if (complete)
         server.lru_touch(this);
@@ -454,6 +424,34 @@ bool Sink::restart(Str first, Str last, Server& server,
         delete r;
     }
 
+    return complete;
+}
+
+bool Sink::validate(Str first, Str last, Server& server,
+                    uint64_t now, uint32_t& log, tamer::gather_rendezvous& gr) {
+    bool complete = true;
+
+    assert(!validating_);
+    validating_ = true;
+
+    if (unlikely(has_expired(now))) {
+        assert(!join()->maintained());
+        clear_updates();
+        add_invalidate(ibegin(), iend());
+        set_expiration(now);
+        valid_ = true;
+    }
+    else if (!valid()) {
+        add_invalidate(ibegin(), iend());
+        valid_ = true;
+    }
+
+    if (need_restart())
+        complete &= restart(first, last, server, now, log, gr);
+    if (!need_restart() && need_update())
+        complete &= update(first, last, server, now, log, gr);
+
+    validating_ = false;
     return complete;
 }
 
