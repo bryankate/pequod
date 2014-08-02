@@ -299,7 +299,7 @@ def define_experiments():
     # all eager maintenance experiment.
     # change the incremental maintenance annotation for subscriptions 
     # from lazy (default) to eager
-    exp = {'name': "celeb", 'defs': []}
+    exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
