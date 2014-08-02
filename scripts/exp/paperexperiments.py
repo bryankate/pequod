@@ -275,8 +275,7 @@ def define_experiments():
     exp = {'name': "celeb", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--no-progress-report" % \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -292,8 +291,8 @@ def define_experiments():
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --celebrity=10000" % (clientBase)})
+         'initcmd': "%s --celebrity=1000" % (initCmd),
+         'clientcmd': "%s --celebrity=1000" % (clientBase)})
     exps.append(exp)
 
     # all eager maintenance experiment.
@@ -302,8 +301,7 @@ def define_experiments():
     exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--no-progress-report" % \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -319,7 +317,7 @@ def define_experiments():
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
+         'initcmd': "%s --eager" % (initCmd),
          'clientcmd': "%s --eager" % (clientBase)})
     exps.append(exp)
 
