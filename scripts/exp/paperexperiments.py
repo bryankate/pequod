@@ -284,7 +284,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s" % (clientBase)})
+         'clientcmd': "%s --prevalidate" % (clientBase)})
 
     exp['defs'].append(
         {'name': "celeb",
@@ -292,7 +292,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --celebrity=1000" % (initCmd),
-         'clientcmd': "%s --celebrity=1000" % (clientBase)})
+         'clientcmd': "%s --celebrity=1000 --prevalidate" % (clientBase)})
     exps.append(exp)
 
     # all eager maintenance experiment.
@@ -310,7 +310,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s" % (clientBase)})
+         'clientcmd': "%s --prevalidate" % (clientBase)})
 
     exp['defs'].append(
         {'name': "eager",
@@ -318,7 +318,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --eager" % (initCmd),
-         'clientcmd': "%s --eager" % (clientBase)})
+         'clientcmd': "%s --eager --prevalidate" % (clientBase)})
     exps.append(exp)
 
     # cache join comparison
