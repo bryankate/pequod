@@ -122,6 +122,7 @@ class TwitterNewPopulator {
     inline bool pull_celeb() const { return celebthresh_; }
     inline bool fetch() const { return fetch_; }
     inline bool subtables() const { return subtables_; }
+    inline bool eager() const { return eager_; }
     inline bool prevalidate() const { return prevalidate_; }
     inline bool prevalidate_inactive() const { return prevalidate_inactive_; }
     inline bool prevalidate_before_sub() const { return prevalidate_before_sub_; }
@@ -202,6 +203,7 @@ class TwitterNewPopulator {
     bool pull_;
     bool fetch_;
     bool subtables_;
+    bool eager_;
     bool prevalidate_;
     bool prevalidate_inactive_;
     bool prevalidate_before_sub_;

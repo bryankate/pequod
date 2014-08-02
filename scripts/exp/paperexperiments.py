@@ -8,7 +8,6 @@ def define_experiments():
     binaryflag = "" if binary else "--no-binary"
     partfunc = "twitternew" if binary else "twitternew-text"
     fetch = "--fetch"
-#     fetch = ""
     
     serverCmd = "./obj/pqserver"
     appCmd = "./obj/pqserver --twitternew --verbose"
@@ -271,6 +270,58 @@ def define_experiments():
          'clientcmd': "%s --no-prevalidate" % (clientBase)})
     exps.append(exp)
 
+    # twitter celeb experiment.
+    # users with 10000 or more followers are considered celebs
+    exp = {'name': "celeb", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--no-progress-report" % \
+                 (clientCmd, users)
+    
+    exp['defs'].append(
+        {'name': "base",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "celeb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s --celebrity=10000" % (clientBase)})
+    exps.append(exp)
+
+    # all eager maintenance experiment.
+    # change the incremental maintenance annotation for subscriptions 
+    # from lazy (default) to eager
+    exp = {'name': "celeb", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--no-progress-report" % \
+                 (clientCmd, users)
+    
+    exp['defs'].append(
+        {'name': "lazy",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "eager",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s --eager" % (clientBase)})
+    exps.append(exp)
 
     # cache join comparison
     # compute karma as a single table or interleaved with article data

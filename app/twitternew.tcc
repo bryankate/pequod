@@ -81,6 +81,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       pull_(param["pull"].as_b(false)),
       fetch_(param["fetch"].as_b(false)),
       subtables_(param["subtables"].as_b(true)),
+      eager_(param["eager"].as_b(false)),
       prevalidate_(param["prevalidate"].as_b(true)),
       prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
       prevalidate_before_sub_(param["prevalidate_before_sub"].as_b(false)),
