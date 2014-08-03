@@ -242,7 +242,7 @@ void TwitterNewShim<S,P>::initialize(tamer::event<> done) {
                                  "copy cp|<poster>|<time> " +
                                  String((tp_.binary()) ? "where poster:4n, time:4n"
                                                        : "where poster:8, time:10"),
-                                 make_event(j[3]));
+                                 make_event(j[1]));
 
                 server_.add_join("t|", "t}",
                                  "t|<user>|<time>|<poster> = "
@@ -253,7 +253,7 @@ void TwitterNewShim<S,P>::initialize(tamer::event<> done) {
                                                              : "where user:8t, time:10, poster:8")
                                      : String((tp_.binary()) ? "where user:4n, time:4n, poster:4n"
                                                              : "where user:8, time:10, poster:8")),
-                                 make_event(j[1]));
+                                 make_event(j[2]));
 
                 // server_.add_join("cs|", "cs}",
                 //                  "cs|<user>|<poster> = "
@@ -274,7 +274,7 @@ void TwitterNewShim<S,P>::initialize(tamer::event<> done) {
                 //                                              : "where user:8t, time:10, poster:8")
                 //                      : String((tp_.binary()) ? "where user:4n, time:4n, poster:4n"
                 //                                              : "where user:8, time:10, poster:8")),
-                //                  make_event(j[1]));
+                //                  make_event(j[3]));
             }
         }
 
