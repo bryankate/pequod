@@ -71,7 +71,12 @@ void SourceRange::remove_sink(Sink* sink, Str context) {
 
 bool SourceRange::purge(Server&) {
     purged_ = true;
+
+#if PREVENT_EVICTION_OVERHEAD
     return true;
+#else
+    return false;
+#endif
 }
 
 bool SourceRange::check_match(Str key) const {
@@ -215,10 +220,15 @@ void CopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
 }
 
 bool CountSourceRange::purge(Server& server) {
+    purged_ = true;
+
+#if PREVENT_EVICTION_OVERHEAD
     if (!bloom_)
         bloom_ = make_bloom(server, ibegin(), iend());
-    purged_ = true;
     return true;
+#else
+    return false;
+#endif
 }
 
 void CountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
@@ -295,10 +305,15 @@ void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
 }
 
 bool SumSourceRange::purge(Server& server) {
+    purged_ = true;
+
+#if PREVENT_EVICTION_OVERHEAD
     if (!bloom_)
         bloom_ = make_bloom(server, ibegin(), iend());
-    purged_ = true;
     return true;
+#else
+    return false;
+#endif
 }
 
 void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,

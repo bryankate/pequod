@@ -13,6 +13,11 @@
 #include <iostream>
 
 namespace pq {
+
+#ifndef PREVENT_EVICTION_OVERHEAD
+#define PREVENT_EVICTION_OVERHEAD 1
+#endif
+
 class Server;
 class Match;
 class Datum;
@@ -54,10 +59,10 @@ class SourceRange {
     inline bool purged() const;
 
     enum notify_type {
-	notify_erase_missing = -2,
-	notify_erase = -1,
-	notify_update = 0,
-	notify_insert = 1
+    	notify_erase_missing = -2,
+    	notify_erase = -1,
+    	notify_update = 0,
+    	notify_insert = 1
     };
 
     virtual bool check_match(Str key) const;
