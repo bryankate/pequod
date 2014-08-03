@@ -301,7 +301,7 @@ def define_experiments():
     exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=50 --plogout=5" % \
                  (clientCmd, users)
     
     exp['defs'].append(
