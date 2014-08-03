@@ -45,7 +45,11 @@ class Evictable : public lru_hook {
     Evictable();
     virtual ~Evictable();
 
+#ifdef PREF_EVICT_SINK
     enum { pri_none = 0, pri_persistent, pri_remote, pri_sink, pri_max };
+#else
+    enum { pri_none = 0, pri_sink, pri_persistent, pri_remote, pri_max };
+#endif
 
     virtual void evict() = 0;
     virtual uint32_t priority() const;

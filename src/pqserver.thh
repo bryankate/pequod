@@ -26,7 +26,17 @@ class Interconnect;
 class ValidateRecord;
 
 enum { enable_validation_logging = 0 };
-enum { multilevel_eviction = 1 };
+
+#ifndef MULTILEVEL_EVICTION
+#define MULTILEVEL_EVICTION 1
+#endif
+
+#ifndef RANDOM_EVICTION
+#define RANDOM_EVICTION 0
+#endif
+
+static_assert(!(MULTILEVEL_EVICTION && RANDOM_EVICTION), "Cannot use multi-level eviciton and random eviction simultaneously.");
+
 
 class Table : public Datum {
   public:
@@ -722,7 +732,7 @@ inline void Server::lru_touch(Evictable* e) {
     if (e->is_linked())
         e->unlink();
 
-    if (!multilevel_eviction || e->evicted())
+    if (!MULTILEVEL_EVICTION || RANDOM_EVICTION || e->evicted())
         lru_[Evictable::pri_none].push_back(*e);
     else
         lru_[e->priority()].push_back(*e);
@@ -746,14 +756,26 @@ inline bool Server::evict_one() {
     struct timeval tv[2];
     gettimeofday(&tv[0], NULL);
 
-    bool evicted = false, more = false;
-    for (int i = Evictable::pri_max - 1; i >= 0; --i) {
-        if (!evicted && !lru_[i].empty()) {
-	        lru_[i].front().evict();
-            evicted = true;
+    bool more = false;
+
+    if (RANDOM_EVICTION) {
+        boost::uniform_int<uint32_t> rng(0, lru_[Evictable::pri_none].size() - 1);
+        auto r = lru_[Evictable::pri_none].begin();
+        std::advance(r, rng(gen_)); // todo: don't use a list
+        r->evict();
+        more = !lru_[Evictable::pri_none].empty();
+    }
+    else {
+        bool evicted = false;
+
+        for (int i = Evictable::pri_max - 1; i >= 0; --i) {
+            if (!evicted && !lru_[i].empty()) {
+                lru_[i].front().evict();
+                evicted = true;
+            }
+            if ((more = !lru_[i].empty()))
+                break;
         }
-        if ((more = !lru_[i].empty()))
-            break;
     }
 
     gettimeofday(&tv[1], NULL);
