@@ -12,13 +12,13 @@ def define_experiments():
     serverCmd = "./obj/pqserver"
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s %s %s --no-initialize" % (appCmd, binaryflag, fetch, users)
+    clientCmd = "%s %s %s --no-initialize" % (appCmd, binaryflag, fetch)
 
     # remote eviction experiment
     # run on a real network using a two-tier deployment.
     # change compilation settings to test different policies
     # that prefer sink vs. remote range eviction, random eviction, etc.
-    exp = {'name': "remote-eviction", 'defs': []}
+    exp = {'name': "remote", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     # evict = "--evict-periodic --mem-lo=250 --mem-hi=300"
     evict = ""
