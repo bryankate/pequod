@@ -274,7 +274,7 @@ def define_experiments():
     # users with 10000 or more followers are considered celebs
     exp = {'name': "celeb", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+    clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
@@ -291,8 +291,8 @@ def define_experiments():
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s --celebrity=1000" % (initCmd),
-         'clientcmd': "%s --celebrity=1000 --prevalidate" % (clientBase)})
+         'initcmd': "%s --celebrity=10000" % (initCmd),
+         'clientcmd': "%s --celebrity=10000 --prevalidate" % (clientBase)})
     exps.append(exp)
 
     # all eager maintenance experiment.
@@ -300,7 +300,7 @@ def define_experiments():
     # from lazy (default) to eager
     exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+    clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
                  (clientCmd, users)
     
