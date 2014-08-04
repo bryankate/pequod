@@ -69,15 +69,14 @@ void SourceRange::remove_sink(Sink* sink, Str context) {
         kill();
 }
 
-bool SourceRange::purge(Server&) {
+bool SourceRange::purge(Server& srv) {
     purged_ = true;
 
-#if PREVENT_EVICTION_OVERHEAD
-    return true;
-#else
+    if (srv.use_tombstones())
+        return true;
+    
     invalidate();
     return false;
-#endif
 }
 
 bool SourceRange::check_match(Str key) const {
@@ -220,17 +219,17 @@ void CopySourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
 #endif
 }
 
-bool CountSourceRange::purge(Server& server) {
+bool CountSourceRange::purge(Server& srv) {
     purged_ = true;
 
-#if PREVENT_EVICTION_OVERHEAD
-    if (!bloom_)
-        bloom_ = make_bloom(server, ibegin(), iend());
-    return true;
-#else
+    if (srv.use_tombstones()) {
+        if (!bloom_)
+            bloom_ = make_bloom(srv, ibegin(), iend());
+        return true;
+    }
+
     invalidate();
     return false;
-#endif
 }
 
 void CountSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
@@ -306,17 +305,17 @@ void MaxSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,
         });
 }
 
-bool SumSourceRange::purge(Server& server) {
+bool SumSourceRange::purge(Server& srv) {
     purged_ = true;
 
-#if PREVENT_EVICTION_OVERHEAD
-    if (!bloom_)
-        bloom_ = make_bloom(server, ibegin(), iend());
-    return true;
-#else
+    if (srv.use_tombstones()) {
+        if (!bloom_)
+            bloom_ = make_bloom(srv, ibegin(), iend());
+        return true;
+    }
+
     invalidate();
     return false;
-#endif
 }
 
 void SumSourceRange::notify(Str sink_key, Sink* sink, const Datum* src,

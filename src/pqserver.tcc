@@ -821,7 +821,9 @@ Server::Server()
       supertable_(Str(), nullptr, this),
       last_validate_at_(0), validate_time_(0), insert_time_(0), evict_time_(0),
       part_(nullptr), me_(-1),
-      prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0) {
+      prob_rng_(0,1), evict_lo_(0), evict_hi_(0), evict_scale_(0),
+      evict_tomb_(true), evict_rand_(false), evict_multi_(true), 
+      evict_multi_perm_({0, 1, 2, 3}) {
 
     gettimeofday(&start_tv_, NULL);
     gen_.seed(112181);
@@ -912,6 +914,69 @@ tamed void Server::validate(Str first, Str last, tamer::event<Table::iterator> d
 
     maybe_evict();
     done(it.second);
+}
+
+tamed void Server::periodic_eviction() {
+    tvars {
+        uint64_t start;
+    }
+
+    while(true) {
+        // todo: use store size once its allocation is broken out
+        while (mem_other_size >= evict_hi_) {
+            start = tstamp();
+            if (!evict_one())
+                break;
+
+            // let other stuff happen to avoid huge latency spikes
+            //if (tstamp() - start > 1000)
+            //    twait volatile { tamer::at_delay_msec(1, make_event()); }
+        }
+
+        twait volatile { tamer::at_delay_msec(250, make_event()); }
+    }
+}
+
+tamed void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb,
+                                        bool etomb, bool erand, bool emulti, bool epref_sink, 
+                                        bool einline, bool eperiodic) {
+    if (!enable_memory_tracking)
+        mandatory_assert(!low_mb && !high_mb, "Enable memory tracking to use eviction!");
+    if (low_mb || high_mb) {
+        mandatory_assert(low_mb && high_mb, "Set both low and high water marks for eviction.");
+        mandatory_assert(low_mb < high_mb, "Low and high water marks don't make sense!");
+    }
+
+    evict_lo_ = low_mb << 20;
+    evict_hi_ = high_mb << 20;
+
+    if (einline)
+        evict_scale_ = 1.0 / ((evict_hi_ - evict_lo_) / 12.0);
+
+    evict_tomb_ = etomb;
+    evict_rand_ = erand;
+    evict_multi_ = emulti;
+
+    if (epref_sink)
+        evict_multi_perm_ = {0, 1, 3, 2};
+
+    if (enable_memory_tracking && evict_lo_) {
+        std::cerr << "=== Eviction settings ===" << std::endl
+                  << "     low_mb: " << low_mb << std::endl
+                  << "    high_mb: " << high_mb << std::endl
+                  << "       mode: " << String((einline) ? "inline " : "") + String((eperiodic) ? "periodic" : "") << std::endl
+                  << " tombstones: " << etomb << std::endl
+                  << "     policy: " 
+                  << ((erand) ? "random" 
+                              : ((emulti) ? "multi-LRU +" + String(((epref_sink) ? "sink" : "remote"))
+                                         : "LRU")) << std::endl
+                  << "=========================" << std::endl;
+    }
+    else
+        std::cerr << "Eviction disabled." << std::endl;
+
+    if (eperiodic)
+        periodic_eviction();
 }
 
 void add_evict_stats(Json& j, String label, Table::evict_log& log) {

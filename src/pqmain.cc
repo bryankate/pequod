@@ -70,9 +70,13 @@ static Clp_Option options[] = {
     { "mem-hi", 0, 3025, Clp_ValInt, 0 },
     { "evict-inline", 0, 3026, 0, Clp_Negate },
     { "evict-periodic", 0, 3027, 0, Clp_Negate },
-    { "print-table", 0, 3028, Clp_ValStringNotOption, 0 },
-    { "progress-report", 0, 3029, 0, Clp_Negate },
-    { "eager", 0, 3030, 0, Clp_Negate },
+    { "evict-tomb", 0, 3028, 0, Clp_Negate },
+    { "evict-rand", 0, 3029, 0, Clp_Negate },
+    { "evict-multi", 0, 3030, 0, Clp_Negate },
+    { "evict-pref-sink", 0, 3031, 0, Clp_Negate },
+    { "print-table", 0, 3032, Clp_ValStringNotOption, 0 },
+    { "progress-report", 0, 3033, 0, Clp_Negate },
+    { "eager", 0, 3034, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -125,7 +129,8 @@ int main(int argc, char** argv) {
     bool monitordb = false;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     uint32_t round_robin = 0;
-    bool evict_inline = false, evict_periodic = false;
+    bool evict_inline = false, evict_periodic = true; 
+    bool evict_rand = false, evict_tomb = true, evict_multi = true, evict_pref_sink = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
     int32_t block_report = 0;
@@ -229,6 +234,14 @@ int main(int argc, char** argv) {
             evict_inline = !clp->negated;
         else if (clp->option->long_name == String("evict-periodic"))
             evict_periodic = !clp->negated;
+        else if (clp->option->long_name == String("evict-tomb"))
+            evict_tomb = !clp->negated;
+        else if (clp->option->long_name == String("evict-rand"))
+            evict_rand = !clp->negated;
+        else if (clp->option->long_name == String("evict-multi"))
+            evict_multi = !clp->negated;
+        else if (clp->option->long_name == String("evict-pref-sink"))
+            evict_pref_sink = !clp->negated;
         else if (clp->option->long_name == String("print-table"))
             tp_param.set("print_table", clp->val.s);
         else if (clp->option->long_name == String("progress-report"))
@@ -334,10 +347,9 @@ int main(int argc, char** argv) {
             pstore->run_monitor(server);
     }
 
-    if (evict_inline && mem_hi_mb) {
-        mandatory_assert(mem_lo_mb && "Need to set a low water mark.");
-        server.set_eviction_details(mem_lo_mb, mem_hi_mb);
-    }
+    server.set_eviction_details(mem_lo_mb, mem_hi_mb,
+                                evict_tomb, evict_rand, evict_multi, evict_pref_sink,
+                                evict_inline, evict_periodic);
 
     if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);
@@ -351,7 +363,8 @@ int main(int argc, char** argv) {
     if (mode == mode_tests || !testcases.empty()) {
         extern void unit_tests(const std::set<String> &);
         unit_tests(testcases);
-    } else if (mode == mode_listen) {
+    } 
+    else if (mode == mode_listen) {
         const pq::Host* me = nullptr;
         if (hosts) {
             mandatory_assert(partfunc && "Need to specify a partition function!");
@@ -361,47 +374,36 @@ int main(int argc, char** argv) {
             me = hosts->get_by_uid(pq::sock_helper::get_uid(hostname, listen_port));
         }
 
-        if (evict_periodic && mem_hi_mb)
-            mandatory_assert(mem_lo_mb && "Need to set a low water mark.");
-        else
-            mem_hi_mb = 0;
-
         extern void server_loop(pq::Server& server, int port, bool kill,
                                 const pq::Hosts* hosts, const pq::Host* me,
-                                const pq::Partitioner* part,
-                                uint64_t mem_lo_mb, uint64_t mem_hi_mb,
-                                uint32_t round_robin);
+                                const pq::Partitioner* part, uint32_t round_robin);
         server_loop(server, listen_port, kill_old_server,
-                    hosts, me, part, mem_lo_mb, mem_hi_mb, round_robin);
-    } else if (mode == mode_twitter || mode == mode_unknown) {
+                    hosts, me, part, round_robin);
+    } 
+    else if (mode == mode_twitter) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
 
-        pq::TwitterPopulator tp(tp_param);
+        pq::TwitterPopulator *tp = new pq::TwitterPopulator(tp_param);
         if (hosts)
             part = pq::Partitioner::make("twitter", nbacking, hosts->count(), -1);
 
         if (tp_param.get("memcached").as_b(false)) {
             mandatory_assert(hosts && part);
             mandatory_assert(tp_param["push"], "memcached pull is not supported");
-            run_twitter_memcache(tp, hosts, part);
+            run_twitter_memcache(*tp, hosts, part);
         } else if (tp_param["builtinhash"]) {
             mandatory_assert(tp_param["push"], "builtinhash pull is not supported");
             pq::BuiltinHashClient client;
             pq::TwitterHashShim<pq::BuiltinHashClient> shim(client);
-            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
+            pq::TwitterRunner<decltype(shim)> tr(shim, *tp);
             tr.populate(tamer::event<>());
             tr.run(tamer::event<>());
         } else if (client_port >= 0 || hosts) {
-            run_twitter_remote(tp, client_port, hosts, dbhosts, part);
-        } else {
-            pq::DirectClient dc(server);
-            pq::TwitterShim<pq::DirectClient> shim(dc);
-            pq::TwitterRunner<decltype(shim)> tr(shim, tp);
-            tr.populate(tamer::event<>());
-            tr.run(tamer::event<>());
-        }
-    } else if (mode == mode_twitternew) {
+            run_twitter_remote(*tp, client_port, hosts, dbhosts, part);
+        } else
+            run_twitter_local(*tp, server);
+    } else if (mode == mode_twitternew || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
         pq::TwitterNewPopulator *tp = new pq::TwitterNewPopulator(tp_param);
@@ -425,7 +427,8 @@ int main(int argc, char** argv) {
         else
             run_twitter_new_local(*tp, server);
 
-    } else if (mode == mode_hn) {
+    } 
+    else if (mode == mode_hn) {
         if (tp_param["large"]) {
             tp_param.set("narticles", 100000);
             tp_param.set("hnusers", 50000);
@@ -443,21 +446,16 @@ int main(int argc, char** argv) {
             run_hn_remote_db(*hp, db_param);
         } else if (tp_param["redis"])
             run_hn_remote_redis(*hp);
-	else {
-	    if (client_port >= 0 || hosts) {
-	        if (hosts)
-	            part = pq::Partitioner::make("hackernews", nbacking, hosts->count(), -1);
-	        if (tp_param.get("writearound").as_b(false))
-	            mandatory_assert(dbhosts && part);
-	        run_hn_remote(*hp, client_port, hosts, dbhosts, part);
-	    }
-	    else {
-	        pq::DirectClient dc(server);
-	        pq::PQHackerNewsShim<pq::DirectClient> shim(dc, hp->writearound());
-	        pq::HackernewsRunner<decltype(shim)> hr(shim, *hp);
-	        hr.populate(tamer::event<>());
-	        hr.run(tamer::event<>());
-	    }
+    	else {
+    	    if (client_port >= 0 || hosts) {
+    	        if (hosts)
+    	            part = pq::Partitioner::make("hackernews", nbacking, hosts->count(), -1);
+    	        if (tp_param.get("writearound").as_b(false))
+    	            mandatory_assert(dbhosts && part);
+    	        run_hn_remote(*hp, client_port, hosts, dbhosts, part);
+    	    }
+    	    else
+                run_hn_local(*hp, server);
         }
     }
 

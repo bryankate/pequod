@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "pqserver.hh"
-#include "pqmemory.hh"
 #include "mpfd.hh"
 #include "pqrpc.hh"
 #include "error.hh"
@@ -411,35 +410,11 @@ tamed void periodic_logger() {
     }
 }
 
-tamed void periodic_eviction(pq::Server& server, uint64_t low, uint64_t high) {
-    tvars {
-        uint64_t start;
-    }
-    mandatory_assert(pq::enable_memory_tracking && "Cannot evict without memory tracking.");
-
-    while(true) {
-        // todo: use store size once its allocation is broken out
-        while (pq::mem_other_size >= high) {
-            start = tstamp();
-            if (!server.evict_one())
-                break;
-
-            // let other stuff happen to avoid huge latency spikes
-            //if (tstamp() - start > 1000)
-            //    twait volatile { tamer::at_delay_msec(1, make_event()); }
-        }
-
-        twait volatile { tamer::at_delay_msec(250, make_event()); }
-    }
-}
-
 } // namespace
 
 tamed void server_loop(pq::Server& server, int port, bool kill,
                        const pq::Hosts* hosts, const pq::Host* me,
-                       const pq::Partitioner* part,
-                       uint64_t mem_lo_mb, uint64_t mem_hi_mb,
-                       uint32_t round_robin) {
+                       const pq::Partitioner* part, uint32_t round_robin) {
     tvars {
         tamer::fd killer;
         bool connected = false;
@@ -448,11 +423,6 @@ tamed void server_loop(pq::Server& server, int port, bool kill,
 
     memset(&diff_, 0, sizeof(nrpc));
     periodic_logger();
-
-    if (mem_hi_mb) {
-        assert(mem_lo_mb < mem_hi_mb);
-        periodic_eviction(server, mem_lo_mb << 20, mem_hi_mb << 20);
-    }
 
     round_robin_ = round_robin;
 

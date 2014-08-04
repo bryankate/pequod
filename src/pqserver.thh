@@ -27,16 +27,6 @@ class ValidateRecord;
 
 enum { enable_validation_logging = 0 };
 
-#ifndef MULTILEVEL_EVICTION
-#define MULTILEVEL_EVICTION 1
-#endif
-
-#ifndef RANDOM_EVICTION
-#define RANDOM_EVICTION 0
-#endif
-
-static_assert(!(MULTILEVEL_EVICTION && RANDOM_EVICTION), "Cannot use multi-level eviciton and random eviction simultaneously.");
-
 
 class Table : public Datum {
   public:
@@ -274,7 +264,11 @@ class Server {
     inline void lru_touch(Evictable* e);
     inline void maybe_evict();
     inline bool evict_one();
-    inline void set_eviction_details(uint64_t low_water_mb, uint64_t high_water_mb);
+    inline bool use_tombstones() const;
+    tamed void periodic_eviction();
+    tamed void set_eviction_details(uint64_t low_water_mb, uint64_t high_water_mb,
+                                    bool etomb, bool erand, bool emulti, bool epref_sink,
+                                    bool einline, bool eperiodic);
 
     Json stats() const;
     Json logs() const;
@@ -287,21 +281,31 @@ class Server {
     bool writethrough_;
     mutable Table supertable_;
     uint64_t last_validate_at_;
+
+    // logging
     struct timeval start_tv_;
     std::vector<ValidateRecord> validate_log_;
     double validate_time_;
     double insert_time_;
     double evict_time_;
+
+    // cluster stuff
     const Partitioner* part_;
     int32_t me_;
     std::vector<Interconnect*> interconnect_;
     std::vector<RemoteSink*> remote_sinks_;
+
+    // eviction stuff
     lru_type lru_[Evictable::pri_max];
     boost::mt19937 gen_;
     boost::uniform_real<> prob_rng_;
     uint64_t evict_lo_;
     uint64_t evict_hi_;
     double evict_scale_;
+    bool evict_tomb_;
+    bool evict_rand_;
+    bool evict_multi_;
+    std::vector<uint32_t> evict_multi_perm_;
 
     Table::local_iterator create_table(Str tname);
     friend class const_iterator;
@@ -725,6 +729,10 @@ inline bool Server::writethrough() const {
     return writethrough_;
 }
 
+inline bool Server::use_tombstones() const {
+    return evict_tomb_;
+}
+
 inline void Server::lru_touch(Evictable* e) {
     assert(e->priority() < Evictable::pri_max);
 
@@ -732,14 +740,14 @@ inline void Server::lru_touch(Evictable* e) {
     if (e->is_linked())
         e->unlink();
 
-    if (!MULTILEVEL_EVICTION || RANDOM_EVICTION || e->evicted())
+    if (!evict_multi_ || evict_rand_ || e->evicted())
         lru_[Evictable::pri_none].push_back(*e);
     else
-        lru_[e->priority()].push_back(*e);
+        lru_[evict_multi_perm_[e->priority()]].push_back(*e);
 }
 
 inline void Server::maybe_evict() {
-    if (!enable_memory_tracking || !evict_hi_ || (mem_other_size <= evict_lo_))
+    if (!enable_memory_tracking || !evict_scale_ || (mem_other_size <= evict_lo_))
         return;
 
     if (mem_other_size >= evict_hi_)
@@ -758,7 +766,7 @@ inline bool Server::evict_one() {
 
     bool more = false;
 
-    if (RANDOM_EVICTION) {
+    if (evict_rand_) {
         boost::uniform_int<uint32_t> rng(0, lru_[Evictable::pri_none].size() - 1);
         auto r = lru_[Evictable::pri_none].begin();
         std::advance(r, rng(gen_)); // todo: don't use a list
@@ -782,13 +790,6 @@ inline bool Server::evict_one() {
     evict_time_ += to_real(tv[1] - tv[0]);
 
     return more;
-}
-
-inline void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb) {
-    assert(!high_mb || (high_mb && low_mb < high_mb));
-    evict_lo_ = low_mb << 20;
-    evict_hi_ = high_mb << 20;
-    evict_scale_ = 1.0 / ((evict_hi_ - evict_lo_) / 12.0);
 }
 
 inline void Server::subscribe(Str first, Str last, int32_t peer) {

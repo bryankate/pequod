@@ -13,11 +13,6 @@
 #include <iostream>
 
 namespace pq {
-
-#ifndef PREVENT_EVICTION_OVERHEAD
-#define PREVENT_EVICTION_OVERHEAD 1
-#endif
-
 class Server;
 class Match;
 class Datum;
