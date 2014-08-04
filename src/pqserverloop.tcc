@@ -425,8 +425,8 @@ tamed void periodic_eviction(pq::Server& server, uint64_t low, uint64_t high) {
                 break;
 
             // let other stuff happen to avoid huge latency spikes
-            if (tstamp() - start > 1000)
-                twait volatile { tamer::at_delay_msec(1, make_event()); }
+            //if (tstamp() - start > 1000)
+            //    twait volatile { tamer::at_delay_msec(1, make_event()); }
         }
 
         twait volatile { tamer::at_delay_msec(250, make_event()); }
