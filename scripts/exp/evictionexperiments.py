@@ -11,27 +11,74 @@ def define_experiments():
 
     serverCmd = "./obj/pqserver"
     appCmd = "./obj/pqserver --twitternew --verbose"
-    initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
-    clientCmd = "%s %s %s --no-initialize" % (appCmd, binaryflag, fetch)
+    clientCmd = "%s %s %s" % (appCmd, binaryflag, fetch)
 
     # remote eviction experiment
-    # run on a real network using a two-tier deployment.
-    # change compilation settings to test different policies
-    # that prefer sink vs. remote range eviction, random eviction, etc.
-    exp = {'name': "remote", 'defs': []}
+    # run on a real network using a two-tier deployment (1 cache, 1 backing, 1 client).
+    exp = {'name': "evict-policy", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    evict = "--evict-periodic --mem-lo=20000 --mem-hi=22500" # 1 cache, 1 backing
+    evict = "--evict-periodic --mem-lo=20000 --mem-hi=22500"
     clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=0 --plogout=0" % \
-                 (clientCmd, users)
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=0 --plogout=0 " \
+                 "--prevalidate" % (clientCmd, users)
     
+    '''
     exp['defs'].append(
-        {'name': "evict",
+        {'name': "rand-tomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s %s" % (serverCmd, evict),
-         'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate" % (clientBase)})
+         'clientcmd': "%s --evict-rand --evict-tomb" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "rand-notomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --evict-rand --no-evict-tomb" % (clientBase)})
+    '''
+
+    exp['defs'].append(
+        {'name': "lru-tomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --no-evict-multi --evict-tomb" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "lru-notomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --no-evict-multi --no-evict-tomb" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "multi-sink-tomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --evict-multi --evict-tomb --evict-pref-sink" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "multi-sink-notomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --evict-multi --no-evict-tomb --evict-pref-sink" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "multi-remote-tomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --evict-multi --evict-tomb --no-evict-pref-sink" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "multi-remote-notomb",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd, evict),
+         'clientcmd': "%s --evict-multi --no-evict-tomb --no-evict-pref-sink" % (clientBase)})
     exps.append(exp)
 
 define_experiments()
