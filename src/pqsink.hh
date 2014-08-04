@@ -11,6 +11,11 @@
 #include <list>
 
 namespace pq {
+
+#ifndef PREF_EVICT_SINK
+#define PREF_EVICT_SINK 0
+#endif
+
 class Server;
 class Match;
 class RangeMatch;
@@ -45,10 +50,10 @@ class Evictable : public lru_hook {
     Evictable();
     virtual ~Evictable();
 
-#ifdef PREF_EVICT_SINK
+#if PREF_EVICT_SINK
     enum { pri_none = 0, pri_persistent, pri_remote, pri_sink, pri_max };
 #else
-    enum { pri_none = 0, pri_sink, pri_persistent, pri_remote, pri_max };
+    enum { pri_none = 0, pri_persistent, pri_sink, pri_remote, pri_max };
 #endif
 
     virtual void evict() = 0;
