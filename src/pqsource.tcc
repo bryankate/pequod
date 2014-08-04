@@ -75,6 +75,7 @@ bool SourceRange::purge(Server&) {
 #if PREVENT_EVICTION_OVERHEAD
     return true;
 #else
+    invalidate();
     return false;
 #endif
 }
@@ -227,6 +228,7 @@ bool CountSourceRange::purge(Server& server) {
         bloom_ = make_bloom(server, ibegin(), iend());
     return true;
 #else
+    invalidte();
     return false;
 #endif
 }
@@ -312,6 +314,7 @@ bool SumSourceRange::purge(Server& server) {
         bloom_ = make_bloom(server, ibegin(), iend());
     return true;
 #else
+    invalidate();
     return false;
 #endif
 }
