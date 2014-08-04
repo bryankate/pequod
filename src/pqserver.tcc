@@ -976,7 +976,7 @@ tamed void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb,
     else
         std::cerr << "Eviction disabled." << std::endl;
 
-    if (eperiodic)
+    if (eperiodic && evict_lo_)
         periodic_eviction();
 }
 
