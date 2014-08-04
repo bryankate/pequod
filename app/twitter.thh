@@ -354,6 +354,8 @@ void TwitterRunner<S>::run(tamer::event<> done) {
     done();
 }
 
+class Server;
+tamed void run_twitter_local(TwitterPopulator& tp, Server& server);
 
 tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
                               const Hosts* hosts, const Hosts* dbhosts,

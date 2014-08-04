@@ -319,6 +319,7 @@ tamed void run_twitter_new_local(TwitterNewPopulator& tp, Server& server) {
     delete tr;
     delete shim;
     delete client;
+    server.control(Json().set("quit", true));
 }
 
 typedef pq::TwitterNewShim<pq::MultiClient, pq::TwitterNewPopulator> remote_shim_type;

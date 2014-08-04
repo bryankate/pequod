@@ -2,6 +2,7 @@
 #include "twitter.hh"
 #include "json.hh"
 #include "pqjoin.hh"
+#include "pqclient.hh"
 #include "pqmulticlient.hh"
 #include "memcacheadapter.hh"
 #include <boost/accumulators/accumulators.hpp>
@@ -138,13 +139,32 @@ void TwitterPopulator::print_subscription_statistics(std::ostream& stream) const
     delete[] num_followers;
 }
 
+typedef TwitterShim<DirectClient> local_shim_type;
+
+tamed void run_twitter_local(TwitterPopulator& tp, Server& server) {
+    tvars {
+        DirectClient* client = new DirectClient(server);
+        local_shim_type* shim = new local_shim_type(*client);
+        TwitterRunner<local_shim_type>* tr = new TwitterRunner<local_shim_type>(*shim, tp);
+    }
+  
+    twait { tr->populate(make_event()); }
+    twait { tr->run(make_event()); }
+    delete tr;
+    delete shim;
+    delete client;
+    server.control(Json().set("quit", true));
+}
+
+typedef TwitterShim<MultiClient> remote_shim_type;
+
 tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
                               const Hosts* hosts, const Hosts* dbhosts,
                               const Partitioner* part) {
     tvars {
         MultiClient* mc = new MultiClient(hosts, part, client_port);
-        TwitterShim<MultiClient>* shim = new TwitterShim<MultiClient>(*mc);
-        TwitterRunner<TwitterShim<MultiClient>>* tr = new TwitterRunner<TwitterShim<MultiClient> >(*shim, tp);
+        remote_shim_type* shim = new remote_shim_type(*mc);
+        TwitterRunner<remote_shim_type>* tr = new TwitterRunner<remote_shim_type>(*shim, tp);
     }
     twait { mc->connect(make_event()); }
     twait { tr->populate(make_event()); }
@@ -154,12 +174,15 @@ tamed void run_twitter_remote(TwitterPopulator& tp, int client_port,
     delete mc;
 }
 
+#if HAVE_MEMCACHED_PROTOCOL_BINARY_H
+typedef pq::TwitterHashShim<pq::MemcacheMultiClient> memcache_shim_type;
+
 tamed void run_twitter_memcache(TwitterPopulator& tp,
                                 const Hosts* hosts, const Partitioner* part) {
     tvars {
         MemcacheMultiClient* mc = new MemcacheMultiClient(hosts, part);
-        TwitterHashShim<MemcacheMultiClient>* shim = new TwitterHashShim<MemcacheMultiClient>(*mc);
-        TwitterRunner<TwitterHashShim<MemcacheMultiClient>>* tr = new TwitterRunner<TwitterHashShim<MemcacheMultiClient> >(*shim, tp);
+        memcache_shim_type* shim = new memcache_shim_type(*mc);
+        TwitterRunner<memcache_shim_type>* tr = new TwitterRunner<memcache_shim_type>(*shim, tp);
     }
     twait { mc->connect(make_event()); }
     twait { tr->populate(make_event()); }
@@ -168,5 +191,10 @@ tamed void run_twitter_memcache(TwitterPopulator& tp,
     delete shim;
     delete mc;
 }
+#else
+void run_twitter_memcache(TwitterPopulator&, const Hosts*, const Partitioner*) {
+    mandatory_assert(false && "Not configured for Memcache!");
+}
+#endif
 
 } // namespace pq
