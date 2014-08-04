@@ -27,58 +27,58 @@ def define_experiments():
         {'name': "rand-tomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-rand --evict-tomb" % (clientBase)})
+         'cachecmd': "%s %s --evict-rand --evict-tomb" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "rand-notomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-rand --no-evict-tomb" % (clientBase)})
+         'cachecmd': "%s %s --evict-rand --no-evict-tomb" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
     '''
 
     exp['defs'].append(
         {'name': "lru-tomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --no-evict-multi --evict-tomb" % (clientBase)})
+         'cachecmd': "%s %s --no-evict-multi --evict-tomb" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "lru-notomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --no-evict-multi --no-evict-tomb" % (clientBase)})
+         'cachecmd': "%s %s --no-evict-multi --no-evict-tomb" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "multi-sink-tomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-multi --evict-tomb --evict-pref-sink" % (clientBase)})
+         'cachecmd': "%s %s --evict-multi --evict-tomb --evict-pref-sink" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "multi-sink-notomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-multi --no-evict-tomb --evict-pref-sink" % (clientBase)})
+         'cachecmd': "%s %s --evict-multi --no-evict-tomb --evict-pref-sink" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "multi-remote-tomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-multi --evict-tomb --no-evict-pref-sink" % (clientBase)})
+         'cachecmd': "%s %s --evict-multi --evict-tomb --no-evict-pref-sink" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "multi-remote-notomb",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd, evict),
-         'clientcmd': "%s --evict-multi --no-evict-tomb --no-evict-pref-sink" % (clientBase)})
+         'cachecmd': "%s %s --evict-multi --no-evict-tomb --no-evict-pref-sink" % (serverCmd, evict),
+         'clientcmd': "%s" % (clientBase)})
     exps.append(exp)
 
 define_experiments()
