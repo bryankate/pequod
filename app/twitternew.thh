@@ -35,7 +35,6 @@ class TwitterNewPopulator;
 #define SKEW            100000     // subtracted from now to define end_scan
 
 #define TIMELINE_SANITY_CHECK 0
-#define TIMELINE_LATENCY 0
 
 #define PROG_REPORT_PERIOD 1000
 #define RATE_LIMIT_PERIOD  10
@@ -129,6 +128,7 @@ class TwitterNewPopulator {
     inline bool writearound() const { return writearound_; }
     inline bool report() const { return report_ && ngroups_ > 1; }
     inline bool log() const { return log_; }
+    inline bool log_rtt() const { return log_rtt_; }
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
@@ -210,6 +210,7 @@ class TwitterNewPopulator {
     bool writearound_;
     bool report_;
     bool log_;
+    bool log_rtt_;
     bool synchronous_;
     bool visualize_;
     bool binary_;
@@ -296,11 +297,8 @@ class TwitterNewRunner {
     std::vector<tamer::event<>> at_barrier_;
     tamer::fd master_fd_;
     msgpack_fd* master_sync_;
-
-#if TIMELINE_LATENCY
-    bool log_rtt_;
-    std::vector<std::pair<uint64_t, bool>> latency_log_;
-#endif
+    Json latency_log_;
+    bool rtt_log_enabled_;
 
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
@@ -325,12 +323,7 @@ class TwitterNewRunner {
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
     : server_(server), tp_(tp), currtime_(BASE_TIME), log_(tstamp()), nrpc_(0),
-      barrier_(0), master_sync_(nullptr) {
-
-#if TIMELINE_LATENCY
-    log_rtt_ = true;
-#endif
-
+      barrier_(0), master_sync_(nullptr), rtt_log_enabled_(false) {
 }
 
 tamed template <typename S>
@@ -506,9 +499,8 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
 
     user->checking_ = done;
 
-#if TIMELINE_LATENCY
-    rtt = tstamp();
-#endif
+    if (tp_.log_rtt() && rtt_log_enabled_)
+        rtt = tstamp();
 
     buf << "twtl " << user->uid() << " " << beg_scan << " " << end_scan;
     if (tp_.fetch() || tp_.log() || TIMELINE_SANITY_CHECK) {
@@ -552,15 +544,19 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
                                        make_event(count));
         }
 
-#if TIMELINE_LATENCY
-    rtt = tstamp() - rtt;
-    bool aftersub = (user->last_subscribe_ && user->last_subscribe_ < time);
-    if (aftersub)
-        user->last_subscribe_ = 0;
+    if (tp_.log_rtt()) {
+        bool aftersub = (user->last_subscribe_ && user->last_subscribe_ < time);
+        if (aftersub)
+            user->last_subscribe_ = 0;
 
-    if (log_rtt_)
-        latency_log_.emplace_back(rtt, aftersub);
-#endif
+        if (rtt_log_enabled_) {
+            uint64_t t = tstamp();
+            latency_log_["timeline"]["rtt"].push_back(t - rtt);
+            latency_log_["timeline"]["time"].push_back(t);
+            latency_log_["timeline"]["vtime"].push_back(time);
+            latency_log_["timeline"]["aftersub"].push_back(aftersub);
+        }
+    }
 
     ++nrpc_;
     done(done.result() + count);
@@ -571,11 +567,15 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
     tvars {
         uint32_t s;
         typename S::scan_result sr;
+        uint64_t rtt;
         tamer::gather_rendezvous gr;
     }
 
     if (tp_.log())
         fprintf(stderr, "%d: post p|%08d|%010d\n", time, u, time);
+
+    if (tp_.log_rtt() && rtt_log_enabled_)
+        rtt = tstamp();
 
     server_.post(u, time, value, tp_.is_celebrity(u), gr.make_event());
     ++nrpc_;
@@ -612,6 +612,14 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
 #endif
 
     twait ["twpush"] (gr);
+
+    if (tp_.log_rtt() && rtt_log_enabled_) {
+        uint64_t t = tstamp();
+        latency_log_["post"]["rtt"].push_back(t - rtt);
+        latency_log_["post"]["time"].push_back(t);
+        latency_log_["post"]["vtime"].push_back(time);
+    }
+
     e();
 }
 
@@ -858,6 +866,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     log_.clear();
     periodic_logger(done);
     gen.seed(13 + tp_.groupid());
+    rtt_log_enabled_ = true;
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
@@ -997,9 +1006,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     }
     twait { drain(gr, make_event()); }
 
-#if TIMELINE_LATENCY
-    log_rtt_ = false;
-#endif
+    rtt_log_enabled_ = false;
 
     // do a final scan for every loggedin user. this helps to ensure that
     // each distributed experiment does roughly the same amount of work
@@ -1058,11 +1065,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     getrusage(RUSAGE_SELF, &ru[1]);
     gettimeofday(&tv[1], 0);
 
-#if TIMELINE_LATENCY
-    for (auto rtt : latency_log_)
-        std::cerr << "rtt (us): " << rtt.first << " " << rtt.second << std::endl;
-#endif
-
     if (!tp_.groupid()) {
         server_.stats(gr.make_event(stats));
         twait { drain(gr, make_event()); }
@@ -1098,6 +1100,9 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     }
     else
         stats = Json().set("log", log_.as_json());
+
+    if (tp_.log_rtt())
+        stats.set("latency", latency_log_);
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)

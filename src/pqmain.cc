@@ -77,6 +77,7 @@ static Clp_Option options[] = {
     { "print-table", 0, 3032, Clp_ValStringNotOption, 0 },
     { "progress-report", 0, 3033, 0, Clp_Negate },
     { "eager", 0, 3034, 0, Clp_Negate },
+    { "log-rtt", 0, 3035, 0, Clp_Negate },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -192,6 +193,8 @@ int main(int argc, char** argv) {
             tp_param.set("seed", clp->val.i);
         else if (clp->option->long_name == String("log"))
             tp_param.set("log", !clp->negated);
+        else if (clp->option->long_name == String("log-rtt"))
+            tp_param.set("log_rtt", !clp->negated);
         else if (clp->option->long_name == String("nops"))
             tp_param.set("nops", clp->val.i);
         else if (clp->option->long_name == String("verbose"))

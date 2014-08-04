@@ -88,6 +88,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       writearound_(param["writearound"].as_b(false)),
       report_(param["progress_report"].as_b(true)),
       log_(param["log"].as_b(false)),
+      log_rtt_(param["log_rtt"].as_b(false)),
       synchronous_(param["synchronous"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       binary_(param["binary"].as_b(true)),
