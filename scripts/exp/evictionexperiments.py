@@ -20,8 +20,7 @@ def define_experiments():
     # that prefer sink vs. remote range eviction, random eviction, etc.
     exp = {'name': "remote", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    # evict = "--evict-periodic --mem-lo=250 --mem-hi=300"
-    evict = ""
+    evict = "--evict-periodic --mem-lo=20000 --mem-hi=22500" # 1 cache, 1 backing
     clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=0 --plogout=0" % \
                  (clientCmd, users)
