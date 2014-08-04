@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     bool monitordb = false;
     uint64_t mem_hi_mb = 0, mem_lo_mb = 0;
     uint32_t round_robin = 0;
-    bool evict_inline = false, evict_periodic = true; 
+    bool evict_inline = false, evict_periodic = false; 
     bool evict_rand = false, evict_tomb = true, evict_multi = true, evict_pref_sink = false;
     Clp_Parser* clp = Clp_NewParser(argc, argv, sizeof(options) / sizeof(options[0]), options);
     Json tp_param = Json().set("nusers", 5000);
