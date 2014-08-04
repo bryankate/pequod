@@ -945,12 +945,13 @@ tamed void Server::set_eviction_details(uint64_t low_mb, uint64_t high_mb,
     if (low_mb || high_mb) {
         mandatory_assert(low_mb && high_mb, "Set both low and high water marks for eviction.");
         mandatory_assert(low_mb < high_mb, "Low and high water marks don't make sense!");
+        mandatory_assert(einline || eperiodic, "Inline or periodic eviction must be enabled for any eviction to happen!");
     }
 
     evict_lo_ = low_mb << 20;
     evict_hi_ = high_mb << 20;
 
-    if (einline)
+    if (einline && evict_lo_)
         evict_scale_ = 1.0 / ((evict_hi_ - evict_lo_) / 12.0);
 
     evict_tomb_ = etomb;
