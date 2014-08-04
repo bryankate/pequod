@@ -347,10 +347,6 @@ int main(int argc, char** argv) {
             pstore->run_monitor(server);
     }
 
-    server.set_eviction_details(mem_lo_mb, mem_hi_mb,
-                                evict_tomb, evict_rand, evict_multi, evict_pref_sink,
-                                evict_inline, evict_periodic);
-
     if (hostfile)
         hosts = pq::Hosts::get_instance(hostfile);
     if (dbhostfile)
@@ -373,6 +369,10 @@ int main(int argc, char** argv) {
             gethostname(hostname, sizeof(hostname));
             me = hosts->get_by_uid(pq::sock_helper::get_uid(hostname, listen_port));
         }
+
+        server.set_eviction_details(mem_lo_mb, mem_hi_mb,
+                                        evict_tomb, evict_rand, evict_multi, evict_pref_sink,
+                                        evict_inline, evict_periodic);
 
         extern void server_loop(pq::Server& server, int port, bool kill,
                                 const pq::Hosts* hosts, const pq::Host* me,
@@ -401,8 +401,12 @@ int main(int argc, char** argv) {
             tr.run(tamer::event<>());
         } else if (client_port >= 0 || hosts) {
             run_twitter_remote(*tp, client_port, hosts, dbhosts, part);
-        } else
+        } else {
+            server.set_eviction_details(mem_lo_mb, mem_hi_mb,
+                                        evict_tomb, evict_rand, evict_multi, evict_pref_sink,
+                                        evict_inline, evict_periodic);
             run_twitter_local(*tp, server);
+        }
     } else if (mode == mode_twitternew || mode == mode_unknown) {
         if (!tp_param.count("shape"))
             tp_param.set("shape", 8);
@@ -424,8 +428,12 @@ int main(int argc, char** argv) {
 
             run_twitter_new_remote(*tp, client_port, hosts, part, dbhosts, &db_param);
         }
-        else
+        else {
+            server.set_eviction_details(mem_lo_mb, mem_hi_mb,
+                                        evict_tomb, evict_rand, evict_multi, evict_pref_sink,
+                                        evict_inline, evict_periodic);
             run_twitter_new_local(*tp, server);
+        }
 
     } 
     else if (mode == mode_hn) {
@@ -454,8 +462,12 @@ int main(int argc, char** argv) {
     	            mandatory_assert(dbhosts && part);
     	        run_hn_remote(*hp, client_port, hosts, dbhosts, part);
     	    }
-    	    else
+    	    else {
+                server.set_eviction_details(mem_lo_mb, mem_hi_mb,
+                                        evict_tomb, evict_rand, evict_multi, evict_pref_sink,
+                                        evict_inline, evict_periodic);
                 run_hn_local(*hp, server);
+            }
         }
     }
 
