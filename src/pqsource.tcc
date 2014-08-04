@@ -228,7 +228,7 @@ bool CountSourceRange::purge(Server& server) {
         bloom_ = make_bloom(server, ibegin(), iend());
     return true;
 #else
-    invalidte();
+    invalidate();
     return false;
 #endif
 }
