@@ -22,6 +22,13 @@ def define_experiments():
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=0 --plogout=0 " \
                  "--prevalidate" % (clientCmd, users)
     
+    exp['defs'].append(
+        {'name': "no-evict",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s %s" % (serverCmd),
+         'clientcmd': "%s" % (clientBase)})
+
     '''
     exp['defs'].append(
         {'name': "rand-tomb",
