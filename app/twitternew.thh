@@ -181,6 +181,7 @@ class TwitterNewPopulator {
     void make_subscriptions(generator_type& gen, std::vector<std::pair<uint32_t, uint32_t>>& subs);
     void print_subscription_statistics(std::ostream& stream);
 
+    inline std::vector<double> op_probabilities() const { return op_dist_.probabilities(); }
     inline uint32_t rand_op(generator_type& gen) { return op_dist_(gen); }
     inline uint32_t rand_user_all(generator_type& gen) { return uni_dist_(gen); }
     inline uint32_t rand_user_post(generator_type& gen) { return post_dist_(gen); }
@@ -275,6 +276,44 @@ class RandomAdapter {
     boost::mt19937& gen_;
 };
 
+class RttLog {
+  public:
+    RttLog(uint32_t tsz, uint32_t psz) {
+        tline_rtt.reserve(tsz);
+        tline_vtime.reserve(tsz);
+        tline_aftersub.reserve(tsz);
+        post_rtt.reserve(psz);
+        post_vtime.reserve(psz);
+    }
+
+    inline void log_check(uint32_t rtt, uint32_t vtime, bool aftersub) {
+        tline_rtt.push_back(rtt);
+        tline_vtime.push_back(vtime);
+        tline_aftersub.push_back(aftersub);
+    }
+
+    inline void log_post(int32_t rtt, int32_t vtime) {
+        post_rtt.push_back(rtt);
+        post_vtime.push_back(vtime);
+    }
+
+    inline Json to_json() {
+        return Json().set("timeline", Json().set("rtt", Json(tline_rtt))
+                                            .set("vtime", Json(tline_vtime))
+                                            .set("aftersub", Json(tline_aftersub)))
+                     .set("post", Json().set("rtt", Json(post_rtt))
+                                        .set("vtime", Json(post_vtime)));
+    }
+
+  private:
+    std::vector<uint32_t> tline_rtt;
+    std::vector<uint32_t> tline_vtime;
+    std::vector<bool> tline_aftersub;
+    std::vector<uint32_t> post_rtt;
+    std::vector<uint32_t> post_vtime;
+};
+
+
 template <typename S>
 class TwitterNewRunner {
   public:
@@ -298,7 +337,7 @@ class TwitterNewRunner {
     std::vector<tamer::event<>> at_barrier_;
     tamer::fd master_fd_;
     msgpack_fd* master_sync_;
-    Json latency_log_;
+    RttLog rtt_log_;
     bool rtt_log_enabled_;
 
     template <typename R>
@@ -324,15 +363,14 @@ class TwitterNewRunner {
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
     : server_(server), tp_(tp), currtime_(BASE_TIME), starttime_(0), 
-      log_(tstamp()), nrpc_(0),
-      barrier_(0), master_sync_(nullptr), rtt_log_enabled_(false) {
+      log_(tstamp()), nrpc_(0), barrier_(0), master_sync_(nullptr), 
+      rtt_log_(0, 0), rtt_log_enabled_(false) {
 
-    if (tp_.log_rtt())
-        latency_log_ = Json().set("timeline", Json().set("rtt", Json::make_array_reserve(tp_.duration()))
-                                                    .set("vtime", Json::make_array_reserve(tp_.duration()))
-                                                    .set("aftersub", Json::make_array_reserve(tp_.duration())))
-                            .set("post", Json().set("rtt", Json::make_array_reserve(tp_.duration()))
-                                               .set("vtime", Json::make_array_reserve(tp_.duration())));
+    if (tp_.log_rtt()) {
+        std::vector<double> prob = tp_.op_probabilities();
+        rtt_log_ = RttLog(tp_.duration() * prob[op_check],
+                          tp_.duration() * prob[op_post]);
+    }
 }
 
 tamed template <typename S>
@@ -558,12 +596,8 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
         if (aftersub)
             user->last_subscribe_ = 0;
 
-        if (rtt_log_enabled_) {
-            uint32_t slot = time - starttime_;
-            latency_log_["timeline"]["rtt"][slot] = tstamp() - rtt;
-            latency_log_["timeline"]["vtime"][slot] = time;
-            latency_log_["timeline"]["aftersub"][slot] = aftersub;
-        }
+        if (rtt_log_enabled_)
+            rtt_log_.log_check(tstamp() - rtt, time, aftersub);
     }
 
     ++nrpc_;
@@ -621,11 +655,8 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
 
     twait ["twpush"] (gr);
 
-    if (tp_.log_rtt() && rtt_log_enabled_) {
-        uint32_t slot = time - starttime_;
-        latency_log_["post"]["rtt"][slot] = tstamp() - rtt;
-        latency_log_["post"]["vtime"][slot] = time;
-    }
+    if (tp_.log_rtt() && rtt_log_enabled_)
+        rtt_log_.log_post(tstamp() - rtt, time);
 
     e();
 }
@@ -1109,32 +1140,8 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     else
         stats = Json().set("log", log_.as_json());
 
-    if (tp_.log_rtt()) {
-        // filter out null log entries
-        Json filtered = Json().set("timeline", Json().set("rtt", Json::make_array_reserve(ncheck))
-                                                     .set("vtime", Json::make_array_reserve(ncheck))
-                                                     .set("aftersub", Json::make_array_reserve(ncheck)))
-                              .set("post", Json().set("rtt", Json::make_array_reserve(npost))
-                                                 .set("vtime", Json::make_array_reserve(npost)));
-
-        uint32_t i = 0, j = 0;
-        for (uint32_t a = 0; a < tp_.duration(); ++a) {
-            if (!latency_log_["timeline"]["rtt"][a].is_null()) {
-                filtered["timeline"]["rtt"][i] = latency_log_["timeline"]["rtt"][a];
-                filtered["timeline"]["vtime"][i] = latency_log_["timeline"]["vtime"][a];
-                filtered["timeline"]["aftersub"][i] = latency_log_["timeline"]["aftersub"][a];
-                ++i;
-            }
-
-            if (!latency_log_["post"]["rtt"][a].is_null()) {
-                filtered["post"]["rtt"][j] = latency_log_["post"]["rtt"][a];
-                filtered["post"]["vtime"][j] = latency_log_["post"]["vtime"][a];
-                ++j;
-            }
-        }
-
-        stats.set("latency", filtered);
-    }
+    if (tp_.log_rtt())
+        stats.set("latency", rtt_log_.to_json());
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
