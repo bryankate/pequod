@@ -395,11 +395,13 @@ dnl check for presence of required libraries
 AC_CHECK_HEADER([boost/accumulators/accumulators.hpp], [:], [AC_MSG_ERROR([<boost/accumulators/accumulators.hpp> not found])])
 AC_CHECK_HEADER([boost/random.hpp], [:], [AC_MSG_ERROR([<boost/random.hpp> not found])])
 AC_CHECK_HEADER([boost/intrusive/set.hpp], [:], [AC_MSG_ERROR([<boost/intrusive/set.hpp> not found])])
+AC_CHECK_HEADER([boost/iostreams/filter/gzip.hpp], [:], [AC_MSG_ERROR([<boost/iostreams/filter/gzip.hpp> not found])])
+AC_CHECK_HEADER([boost/filesystem.hpp], [:], [AC_MSG_ERROR([<boost/filesystem.hpp> not found])])
 
 AC_CHECK_LIB([boost_system-mt], [_ZTIN5boost6system14error_categoryE],
-	[BOOST_LIBS="-lboost_system-mt -lboost_thread-mt"],
+	[BOOST_LIBS="-lboost_system-mt -lboost_thread-mt -lboost_filesystem-mt -lboost_iostreams-mt"],
   [AC_CHECK_LIB([boost_system], [_ZTIN5boost6system14error_categoryE],
-	[BOOST_LIBS="-lboost_system -lboost_thread"],
+	[BOOST_LIBS="-lboost_system -lboost_thread -lboost_filesystem -lboost_iostreams"],
         [AC_MSG_ERROR([Usable -lboost_system not found])])])
 AC_SUBST([BOOST_LIBS])
 
