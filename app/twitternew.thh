@@ -329,11 +329,9 @@ inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
 
     if (tp_.log_rtt())
         latency_log_ = Json().set("timeline", Json().set("rtt", Json::make_array_reserve(tp_.duration()))
-                                                    .set("time", Json::make_array_reserve(tp_.duration()))
                                                     .set("vtime", Json::make_array_reserve(tp_.duration()))
                                                     .set("aftersub", Json::make_array_reserve(tp_.duration())))
                             .set("post", Json().set("rtt", Json::make_array_reserve(tp_.duration()))
-                                               .set("time", Json::make_array_reserve(tp_.duration()))
                                                .set("vtime", Json::make_array_reserve(tp_.duration())));
 }
 
@@ -561,10 +559,8 @@ void TwitterNewRunner<S>::check(TwitterUser* user, uint32_t time,
             user->last_subscribe_ = 0;
 
         if (rtt_log_enabled_) {
-            uint64_t t = tstamp();
             uint32_t slot = time - starttime_;
-            latency_log_["timeline"]["rtt"][slot] = t - rtt;
-            latency_log_["timeline"]["time"][slot] = t;
+            latency_log_["timeline"]["rtt"][slot] = tstamp() - rtt;
             latency_log_["timeline"]["vtime"][slot] = time;
             latency_log_["timeline"]["aftersub"][slot] = aftersub;
         }
@@ -626,10 +622,8 @@ void TwitterNewRunner<S>::post(uint32_t u, uint32_t time, String value, event<> 
     twait ["twpush"] (gr);
 
     if (tp_.log_rtt() && rtt_log_enabled_) {
-        uint64_t t = tstamp();
         uint32_t slot = time - starttime_;
-        latency_log_["post"]["rtt"][slot] = t - rtt;
-        latency_log_["post"]["time"][slot] = t;
+        latency_log_["post"]["rtt"][slot] = tstamp() - rtt;
         latency_log_["post"]["vtime"][slot] = time;
     }
 
@@ -1118,18 +1112,15 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     if (tp_.log_rtt()) {
         // filter out null log entries
         Json filtered = Json().set("timeline", Json().set("rtt", Json::make_array_reserve(ncheck))
-                                                     .set("time", Json::make_array_reserve(ncheck))
                                                      .set("vtime", Json::make_array_reserve(ncheck))
                                                      .set("aftersub", Json::make_array_reserve(ncheck)))
                               .set("post", Json().set("rtt", Json::make_array_reserve(npost))
-                                                 .set("time", Json::make_array_reserve(npost))
                                                  .set("vtime", Json::make_array_reserve(npost)));
 
         uint32_t i = 0, j = 0;
         for (uint32_t a = 0; a < tp_.duration(); ++a) {
             if (!latency_log_["timeline"]["rtt"][a].is_null()) {
                 filtered["timeline"]["rtt"][i] = latency_log_["timeline"]["rtt"][a];
-                filtered["timeline"]["time"][i] = latency_log_["timeline"]["time"][a];
                 filtered["timeline"]["vtime"][i] = latency_log_["timeline"]["vtime"][a];
                 filtered["timeline"]["aftersub"][i] = latency_log_["timeline"]["aftersub"][a];
                 ++i;
@@ -1137,7 +1128,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
 
             if (!latency_log_["post"]["rtt"][a].is_null()) {
                 filtered["post"]["rtt"][j] = latency_log_["post"]["rtt"][a];
-                filtered["post"]["time"][j] = latency_log_["post"]["time"][a];
                 filtered["post"]["vtime"][j] = latency_log_["post"]["vtime"][a];
                 ++j;
             }
