@@ -10,12 +10,17 @@
 #include <iostream>
 #include <fstream>
 #include <stdint.h>
+#include <tuple>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <tamer/tamer.hh>
 #include <sys/resource.h>
 #include <boost/random.hpp>
 #include <boost/iostreams/filtering_stream.hpp>    
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/copy.hpp>
 #include <boost/filesystem.hpp>
 #include "time.hh"
 #include "json.hh"
@@ -34,6 +39,10 @@ namespace pq {
 using tamer::event;
 using tamer::preevent;
 using tamer::gather_rendezvous;
+using std::mutex;
+using std::unique_lock;
+using std::condition_variable;
+using std::thread;
 
 class TwitterNewPopulator;
 
@@ -289,35 +298,26 @@ class RandomAdapter {
 
 class RttLog {
   public:
-    RttLog(uint32_t tsz, uint32_t psz) {
-        log_.set("timeline", Json().set("rtt", Json::make_array_reserve(tsz))
-                                   .set("vtime", Json::make_array_reserve(tsz))
-                                   .set("aftersub", Json::make_array_reserve(tsz)))
-            .set("post", Json().set("rtt", Json::make_array_reserve(psz))
-                               .set("vtime", Json::make_array_reserve(psz)));
+    RttLog() {
+        log_.reserve(16384);
     }
 
     inline void log_check(uint32_t rtt, uint32_t vtime, bool aftersub) {
-        log_["timeline"]["rtt"].push_back(rtt);
-        log_["timeline"]["vtime"].push_back(vtime);
-        log_["timeline"]["aftersub"].push_back(aftersub);
+        log_.push_back(std::make_tuple('c', rtt, vtime, aftersub));
     }
 
     inline void log_post(int32_t rtt, int32_t vtime) {
-        log_["timeline"]["post"].push_back(rtt);
-        log_["timeline"]["post"].push_back(vtime);
+        log_.push_back(std::make_tuple('p', rtt, vtime, false));
     }
 
-    inline void write_json_to_path(String opath) const {
-        std::ofstream ofile(opath, std::ios_base::out | std::ios_base::binary);
-        bio::filtering_ostream out;
-        out.push(bio::gzip_compressor()); 
-        out.push(ofile);
-        out << log_;
+    inline void flush(std::ostream& out) const {
+        for (auto i : log_)
+            out << std::get<0>(i) << " " << std::get<1>(i) 
+                << " " << std::get<2>(i) << " " << std::get<3>(i) << "\n";
     }
 
   private:
-    Json log_;
+    std::vector<std::tuple<char, int32_t, int32_t, bool>> log_;
 };
 
 
@@ -345,6 +345,11 @@ class TwitterNewRunner {
     msgpack_fd* master_sync_;
     RttLog rtt_log_;
     bool rtt_log_enabled_;
+    bool rtt_log_writer_ready_;
+    bool rtt_log_transferred_;
+    bool rtt_log_writer_running_;
+    mutex rtt_log_mutex_;
+    condition_variable rtt_log_cond_;
 
     template <typename R>
     void subscribe(uint32_t s, uint32_t p, uint32_t time, preevent<R> e);
@@ -356,7 +361,6 @@ class TwitterNewRunner {
     tamed void select_active(event<> e);
 
     tamed void wait_for_server_ready(event<> e);
-    tamed void periodic_logger(event<> e);
     tamed void drain(gather_rendezvous& r, event<> e);
 
     tamed void registrar();
@@ -364,19 +368,18 @@ class TwitterNewRunner {
     tamed void register_with_master(event<> e);
     tamed void wait_at_barrier(event<> e);
     tamed void check_barrier(event<> e);
+
+    tamed void periodic_logger(event<> running, event<> done);
+    tamed void periodic_rtt_log_sync(event<> running, event<> done);
+    void rtt_log_writer();
 };
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
     : server_(server), tp_(tp), currtime_(BASE_TIME),
       log_(tstamp()), nrpc_(0), barrier_(0), master_sync_(nullptr), 
-      rtt_log_(0, 0), rtt_log_enabled_(false) {
-
-    if (tp_.log_rtt()) {
-        std::vector<double> prob = tp_.op_probabilities();
-        rtt_log_ = RttLog(tp_.duration() * prob[op_check],
-                          tp_.duration() * prob[op_post]);
-    }
+      rtt_log_enabled_(false), rtt_log_writer_ready_(false),
+      rtt_log_transferred_(true), rtt_log_writer_running_(true) {
 }
 
 tamed template <typename S>
@@ -813,7 +816,7 @@ void TwitterNewRunner<S>::select_active(event<> done) {
 }
 
 tamed template <typename S>
-void TwitterNewRunner<S>::periodic_logger(event<> done) {
+void TwitterNewRunner<S>::periodic_logger(event<> running, event<> done) {
     tvars {
         struct rusage u, lu;
         uint64_t now, before, utime, stime;
@@ -822,7 +825,7 @@ void TwitterNewRunner<S>::periodic_logger(event<> done) {
     before = 0;
     memset(&lu, 0, sizeof(struct rusage));
 
-    while(done) {
+    while(running) {
         mandatory_assert(getrusage(RUSAGE_SELF, &u) == 0, "Failed to getrusage.");
         now = tstamp();
         utime = tv2us(u.ru_utime) - tv2us(lu.ru_utime);
@@ -837,7 +840,91 @@ void TwitterNewRunner<S>::periodic_logger(event<> done) {
         before = now;
         twait volatile { tamer::at_delay_sec(1, make_event()); }
     }
+
+    done();
 }
+
+tamed template <typename S>
+void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
+
+    while(running) {
+        twait volatile { tamer::at_delay_sec(1, make_event()); }
+        {
+            unique_lock<mutex> lck(rtt_log_mutex_);
+
+            // check if the writer is ready, otherwise just try again later
+            if (rtt_log_writer_ready_) {
+                rtt_log_transferred_ = false;
+                lck.unlock();
+                rtt_log_cond_.notify_all();
+
+                // wait for writer to signal log transfer
+                lck.lock();
+                rtt_log_cond_.wait(lck, [&]{ return rtt_log_transferred_; });
+            }
+        }
+    }
+
+    // one last flush
+    {
+        unique_lock<mutex> lck(rtt_log_mutex_);
+        rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
+        rtt_log_transferred_ = false;
+        rtt_log_writer_running_ = false;
+        lck.unlock();
+        rtt_log_cond_.notify_all();
+
+        lck.lock();
+        rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
+    }
+
+    done();
+}
+
+template <typename S>
+void TwitterNewRunner<S>::rtt_log_writer() {
+    bfs::path odir = bfs::canonical(bfs::path(tp_.outpath()));
+    String opath = String(odir.string()) + "/" + ("rtt_log_" + String(tp_.groupid()) + ".txt");
+    std::ofstream out(opath, std::ios_base::out | std::ios_base::binary);
+
+    while(rtt_log_writer_running_) {
+        RttLog newlog;
+
+        {
+            unique_lock<mutex> lck(rtt_log_mutex_);
+            rtt_log_writer_ready_ = true;
+            rtt_log_cond_.wait(lck, [&]{ return !rtt_log_transferred_; });
+
+            std::swap(rtt_log_, newlog);
+            rtt_log_transferred_ = true;
+            rtt_log_writer_ready_ = false;
+        }
+        rtt_log_cond_.notify_all();
+
+        // write out partial log
+        newlog.flush(out);
+    }
+
+    out.close();
+
+    // gzip the file and remove the raw one
+    std::ifstream in(opath, std::ios_base::in);
+    std::ofstream zout(opath + ".gz", std::ios_base::out | std::ios_base::binary);
+    bio::filtering_istream strm;
+
+    strm.push(bio::gzip_compressor());
+    strm.push(in);
+    bio::copy(strm, zout);
+    zout.close();
+    bfs::remove(std::string(opath.c_str()));
+
+    {
+        unique_lock<mutex> lck(rtt_log_mutex_);
+        rtt_log_writer_ready_ = true;
+    }
+    rtt_log_cond_.notify_all();
+}
+
 
 tamed template <typename S>
 void TwitterNewRunner<S>::drain(gather_rendezvous& r, event<> e) {
@@ -873,6 +960,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         typename S::scan_result scan_result;
         Json old_stats, stats, logs, j;
         tamer::gather_rendezvous gr;
+        tamer::gather_rendezvous coroutines;
+        tamer::rendezvous<> r;
+        tamer::event<> running = r.make_event();
+        thread rtt_writer_thread;
     }
 
     if (!tp_.execute()) {
@@ -908,9 +999,14 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         twait { wait_at_barrier(make_event()); }
 
     log_.clear();
-    periodic_logger(done);
+    periodic_logger(running, coroutines.make_event());
     gen.seed(13 + tp_.groupid());
-    rtt_log_enabled_ = true;
+
+    if (tp_.log_rtt()) {
+        rtt_writer_thread = thread(&TwitterNewRunner<S>::rtt_log_writer, this);
+        periodic_rtt_log_sync(running, coroutines.make_event());
+        rtt_log_enabled_ = true;
+    }
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
     getrusage(RUSAGE_SELF, &ru[0]);
@@ -1047,6 +1143,10 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 std::cerr << prog / frac * 10 << "% complete" << std::endl;
             }
         }
+
+        // yield once in a while...
+        if (currtime_ % 1024 == 0)
+            twait{ tamer::at_asap(make_event()); } 
     }
     twait { drain(gr, make_event()); }
 
@@ -1145,12 +1245,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     else
         stats = Json().set("log", log_.as_json());
 
-    if (tp_.log_rtt()) {
-        bfs::path opath = bfs::path(tp_.outpath());
-        opath += ("rtt_log_" + String(tp_.groupid()) + ".json.gz").c_str();
-        rtt_log_.write_json_to_path(opath.string());
-    }
-
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
          .set("nsubscribes", nsubscribe)
@@ -1164,7 +1258,13 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
          .set("wall_time", to_real(tv[1] - tv[0]));
     std::cout << stats.unparse(Json::indent_depth(4)) << std::endl;
 
-    done();
+    running();
+    twait(coroutines);
+
+    if (tp_.log_rtt())
+        rtt_writer_thread.join();
+
+    done(); 
 }
 
 
