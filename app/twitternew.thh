@@ -2,16 +2,21 @@
 #ifndef PQTWITTER_NEW_HH
 #define PQTWITTER_NEW_HH 1
 
-#include <boost/random.hpp>
 #include <utility>
 #include <algorithm>
 #include <vector>
 #include <deque>
 #include <set>
 #include <iostream>
+#include <fstream>
 #include <stdint.h>
 #include <tamer/tamer.hh>
 #include <sys/resource.h>
+#include <boost/random.hpp>
+#include <boost/iostreams/filtering_stream.hpp>    
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/filesystem.hpp>
 #include "time.hh"
 #include "json.hh"
 #include "hosts.hh"
@@ -22,10 +27,14 @@
 #include "pqmemory.hh"
 #include "twitternewshim.hh"
 
+namespace bio = boost::iostreams;
+namespace bfs = boost::filesystem;
+
 namespace pq {
 using tamer::event;
 using tamer::preevent;
 using tamer::gather_rendezvous;
+
 class TwitterNewPopulator;
 
 #define END_TIME        2147483647
@@ -132,6 +141,7 @@ class TwitterNewPopulator {
     inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
+    inline String outpath() const { return outpath_; }
     inline String print_table() const { return print_table_; }
     inline const Host* master() { return master_; }
 
@@ -216,6 +226,7 @@ class TwitterNewPopulator {
     bool visualize_;
     bool binary_;
     bool verbose_;
+    String outpath_;
     String print_table_;
     const Host* master_;
     uint32_t celebthresh_;
@@ -279,38 +290,34 @@ class RandomAdapter {
 class RttLog {
   public:
     RttLog(uint32_t tsz, uint32_t psz) {
-        tline_rtt.reserve(tsz);
-        tline_vtime.reserve(tsz);
-        tline_aftersub.reserve(tsz);
-        post_rtt.reserve(psz);
-        post_vtime.reserve(psz);
+        log_.set("timeline", Json().set("rtt", Json::make_array_reserve(tsz))
+                                   .set("vtime", Json::make_array_reserve(tsz))
+                                   .set("aftersub", Json::make_array_reserve(tsz)))
+            .set("post", Json().set("rtt", Json::make_array_reserve(psz))
+                               .set("vtime", Json::make_array_reserve(psz)));
     }
 
     inline void log_check(uint32_t rtt, uint32_t vtime, bool aftersub) {
-        tline_rtt.push_back(rtt);
-        tline_vtime.push_back(vtime);
-        tline_aftersub.push_back(aftersub);
+        log_["timeline"]["rtt"].push_back(rtt);
+        log_["timeline"]["vtime"].push_back(vtime);
+        log_["timeline"]["aftersub"].push_back(aftersub);
     }
 
     inline void log_post(int32_t rtt, int32_t vtime) {
-        post_rtt.push_back(rtt);
-        post_vtime.push_back(vtime);
+        log_["timeline"]["post"].push_back(rtt);
+        log_["timeline"]["post"].push_back(vtime);
     }
 
-    inline Json to_json() {
-        return Json().set("timeline", Json().set("rtt", Json(tline_rtt))
-                                            .set("vtime", Json(tline_vtime))
-                                            .set("aftersub", Json(tline_aftersub)))
-                     .set("post", Json().set("rtt", Json(post_rtt))
-                                        .set("vtime", Json(post_vtime)));
+    inline void write_json_to_path(String opath) {
+        std::ofstream ofile(opath, std::ios_base::out | std::ios_base::binary);
+        bio::filtering_ostream out;
+        out.push(bio::gzip_compressor()); 
+        out.push(ofile);
+        out << log_.unparse();
     }
 
   private:
-    std::vector<uint32_t> tline_rtt;
-    std::vector<uint32_t> tline_vtime;
-    std::vector<bool> tline_aftersub;
-    std::vector<uint32_t> post_rtt;
-    std::vector<uint32_t> post_vtime;
+    Json log_;
 };
 
 
@@ -330,7 +337,6 @@ class TwitterNewRunner {
     std::vector<uint32_t> inactive_;
     std::deque<uint32_t> loggedin_;
     uint32_t currtime_;
-    uint32_t starttime_;
     Log log_;
     uint64_t nrpc_;
     volatile uint32_t barrier_;
@@ -362,7 +368,7 @@ class TwitterNewRunner {
 
 template <typename S>
 inline TwitterNewRunner<S>::TwitterNewRunner(S& server, TwitterNewPopulator& tp)
-    : server_(server), tp_(tp), currtime_(BASE_TIME), starttime_(0), 
+    : server_(server), tp_(tp), currtime_(BASE_TIME),
       log_(tstamp()), nrpc_(0), barrier_(0), master_sync_(nullptr), 
       rtt_log_(0, 0), rtt_log_enabled_(false) {
 
@@ -904,7 +910,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     log_.clear();
     periodic_logger(done);
     gen.seed(13 + tp_.groupid());
-    starttime_ = currtime_;
     rtt_log_enabled_ = true;
 
     if (tp_.verbose()) { std::cerr << "Starting workload." << std::endl; }
@@ -1140,8 +1145,11 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     else
         stats = Json().set("log", log_.as_json());
 
-    if (tp_.log_rtt())
-        stats.set("latency", rtt_log_.to_json());
+    if (tp_.log_rtt()) {
+        bfs::path opath = bfs::path(tp_.outpath());
+        opath += ("rtt_log_" + String(tp_.groupid()) + ".json.gz").c_str();
+        rtt_log_.write_json_to_path(opath.string());
+    }
 
     stats.set("nposts", npost)
          .set("nbackposts", nbackpost)
