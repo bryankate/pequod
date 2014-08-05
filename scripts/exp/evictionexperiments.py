@@ -26,7 +26,7 @@ def define_experiments():
         {'name': "no-evict",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s %s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
          'clientcmd': "%s" % (clientBase)})
 
     '''
