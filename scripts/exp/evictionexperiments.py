@@ -20,7 +20,7 @@ def define_experiments():
     evict = "--evict-periodic --mem-lo=20000 --mem-hi=22500"
     clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=0 --plogout=0 " \
-                 "--prevalidate" % (clientCmd, users)
+                 "--prevalidate --log-rtt" % (clientCmd, users)
     
     exp['defs'].append(
         {'name': "no-evict",

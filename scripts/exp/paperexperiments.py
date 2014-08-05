@@ -275,8 +275,8 @@ def define_experiments():
     exp = {'name': "celeb", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
-                 (clientCmd, users)
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--prevalidate --log-rtt" % (clientCmd, users)
     
     exp['defs'].append(
         {'name': "base",
@@ -300,9 +300,9 @@ def define_experiments():
     # from lazy (default) to eager
     exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    clientBase = "%s %s --popduration=0 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=50 --plogout=5" % \
-                 (clientCmd, users)
+    clientBase = "%s %s --popduration=2000000 --duration=1000000000 --checklimit=62795845 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=50 --plogout=5 " \
+                 "--prevalidate --log-rtt" % (clientCmd, users)
     
     exp['defs'].append(
         {'name': "lazy",
@@ -310,7 +310,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate" % (clientBase)})
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "eager",
@@ -318,7 +318,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --eager" % (initCmd),
-         'clientcmd': "%s --eager --prevalidate" % (clientBase)})
+         'clientcmd': "%s --eager" % (clientBase)})
     exps.append(exp)
 
     # cache join comparison
