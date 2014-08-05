@@ -9,7 +9,7 @@ def define_experiments():
     partfunc = "twitternew" if binary else "twitternew-text"
     fetch = "--fetch"
 
-    serverCmd = "./obj/pqserver"
+    serverCmd = "./obj/pqserver --round-robin=1024"
     appCmd = "./obj/pqserver --twitternew --verbose"
     clientCmd = "%s %s %s" % (appCmd, binaryflag, fetch)
 
