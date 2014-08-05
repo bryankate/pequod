@@ -78,6 +78,7 @@ static Clp_Option options[] = {
     { "progress-report", 0, 3033, 0, Clp_Negate },
     { "eager", 0, 3034, 0, Clp_Negate },
     { "log-rtt", 0, 3035, 0, Clp_Negate },
+    { "outpath", 0, 3036, Clp_ValString, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -251,6 +252,8 @@ int main(int argc, char** argv) {
             tp_param.set("progress_report", !clp->negated);
         else if (clp->option->long_name == String("eager"))
             tp_param.set("eager", !clp->negated);
+        else if (clp->option->long_name == String("outpath"))
+            tp_param.set("outpath", clp->val.s);
 
         // twitter
         else if (clp->option->long_name == String("shape"))

@@ -474,7 +474,7 @@ for x in exps:
             for c in range(ngroups):
                 outfile = os.path.join(resdir, "output_app_" + str(c) + ".json")
                 fartfile = os.path.join(resdir, "fart_app_" + str(c) + ".txt")
-                clientcmd = e['clientcmd']
+                clientcmd = e['clientcmd'] + " --outpath=" + resdir
                 
                 if dbcompare:
                     if ngroups >= ncaching:

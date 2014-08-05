@@ -401,7 +401,7 @@ for x in exps:
         sleep(5)
 
         print "Starting app clients."
-        clientcmd = e['clientcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking)
+        clientcmd = e['clientcmd'] + " -H=" + remote_hostpath + " -B=" + str(nbacking) + " --outpath=" + remote_resdir
         outfile = os.path.join(remote_resdir, "output_app_")
         fartfile = os.path.join(remote_resdir, "fart_app_")
             
