@@ -868,7 +868,7 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
     // trigger shutdown of log writer thread
     {
         unique_lock<mutex> lck(rtt_log_mutex_);
-        rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
+        rtt_log_cond_.wait(lck, [&]{ return rtt_log_writer_ready_; });
         rtt_log_transferred_ = false;
         rtt_log_writer_running_ = false;
     }
@@ -883,12 +883,13 @@ void TwitterNewRunner<S>::rtt_log_writer() {
     String opath = String(odir.string()) + "/" + ("rtt_log_" + String(tp_.groupid()) + ".txt");
     std::ofstream out(opath, std::ios_base::out | std::ios_base::binary);
 
-    while(rtt_log_writer_running_) {
+    while(true) {
         RttLog newlog;
 
         {
             unique_lock<mutex> lck(rtt_log_mutex_);
             rtt_log_writer_ready_ = true;
+            rtt_log_cond_.notify_all();
             rtt_log_cond_.wait(lck, [&]{ return !rtt_log_transferred_; });
 
             std::swap(rtt_log_, newlog);
@@ -899,6 +900,12 @@ void TwitterNewRunner<S>::rtt_log_writer() {
 
         // write out partial log
         newlog.flush(out);
+
+        {
+            unique_lock<mutex> lck(rtt_log_mutex_);
+            if (!rtt_log_writer_running_)
+                break;
+        }
     }
 
     out.close();
