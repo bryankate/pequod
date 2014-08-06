@@ -871,9 +871,8 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
         rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
         rtt_log_transferred_ = false;
         rtt_log_writer_running_ = false;
-        lck.unlock();
-        rtt_log_cond_.notify_all();
     }
+    rtt_log_cond_.notify_all();
 
     done();
 }
