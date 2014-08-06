@@ -298,25 +298,28 @@ def define_experiments():
     # from lazy (default) to eager
     exp = {'name': "eager", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    clientBase = "%s %s --popduration=2000000 --duration=1000000000 --checklimit=62795845 " \
-                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=50 --plogout=5 " \
-                 "--prevalidate --log-rtt" % (clientCmd, users)
-    
-    exp['defs'].append(
-        {'name': "lazy",
-         'def_part': partfunc,
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s" % (clientBase)})
+    points = [1, 2, 4, 6, 8, 10]
 
-    exp['defs'].append(
-        {'name': "eager",
-         'def_part': partfunc,
-         'backendcmd': "%s" % (serverCmd),
-         'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s --eager" % (initCmd),
-         'clientcmd': "%s --eager" % (clientBase)})
+    for ppost in points:
+        clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+                     "--pactive=70 --ppost=%d --pread=100 --psubscribe=10 --plogout=5 " \
+                     "--prevalidate --log-rtt" % (clientCmd, users, ppost)
+        
+        exp['defs'].append(
+            {'name': "lazy_%d" % (ppost),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'clientcmd': "%s" % (clientBase)})
+
+        exp['defs'].append(
+            {'name': "eager_%d" % (ppost),
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s --eager" % (initCmd),
+             'clientcmd': "%s --eager" % (clientBase)})
     exps.append(exp)
 
     # cache join comparison
