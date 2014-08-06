@@ -36,7 +36,6 @@ INSTANCE_TYPE_CLIENT = 'cr1.8xlarge'
 conn = None
 
 def connect():
-    print AWS_ACCESS_KEY_ID
     global conn
     if conn is None:
         conn = boto.ec2.connect_to_region(REGION, 
