@@ -227,7 +227,7 @@ def define_experiments():
     # scale experiment
     # run on a cluster with a ton of memory
     exp = {'name': "scale", 'defs': []}
-    users = "--graph=/pequod/twitter_graph_40M.dat"
+    users = "--graph=/mnt/pequod/twitter_graph_40M.dat"
     
     clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
                  "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
@@ -244,29 +244,65 @@ def define_experiments():
 
 
     # pequod latency experiment.
+    # run workload in synchronous mode to avoid overload.
     exp = {'name': "latency", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--no-progress-report --synchronous --log-rtt" % \
+                 "--prevalidate --synchronous --log-rtt" % \
                  (clientCmd, users)
     
+        exp['defs'].append(
+            {'name': "lazy",
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s" % (initCmd),
+             'clientcmd': "%s" % (clientBase)})
+
+        exp['defs'].append(
+            {'name': "eager",
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s --eager" % (initCmd),
+             'clientcmd': "%s --eager" % (clientBase)})
+
+        exp['defs'].append(
+            {'name': "pull",
+             'def_part': partfunc,
+             'backendcmd': "%s" % (serverCmd),
+             'cachecmd': "%s" % (serverCmd),
+             'initcmd': "%s --pull" % (initCmd),
+             'clientcmd': "%s --pull" % (clientBase)})
+    exps.append(exp)
+
+
+    # test different incremental maintenance strategies 
+    # run benchmark as fast as possible
+    exp = {'name': "eager", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--prevalidate" % (clientCmd, users)
+    
     exp['defs'].append(
-        {'name': "warm",
+        {'name': "lazy",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate" % (clientBase)})
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
-        {'name': "cold",
+        {'name': "eager",
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
-         'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --no-prevalidate" % (clientBase)})
+         'initcmd': "%s --eager" % (initCmd),
+         'clientcmd': "%s --eager" % (clientBase)})
     exps.append(exp)
+
 
     # twitter celeb experiment.
     # users with 10000 or more followers are considered celebs
@@ -293,34 +329,6 @@ def define_experiments():
          'clientcmd': "%s --celebrity=10000" % (clientBase)})
     exps.append(exp)
 
-    # all eager maintenance experiment.
-    # change the incremental maintenance annotation for subscriptions 
-    # from lazy (default) to eager
-    exp = {'name': "eager", 'defs': []}
-    users = "--graph=twitter_graph_1.8M.dat"
-    points = [1, 2, 4, 6, 8, 10]
-
-    for ppost in points:
-        clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
-                     "--pactive=70 --ppost=%d --pread=100 --psubscribe=10 --plogout=5 " \
-                     "--prevalidate --log-rtt" % (clientCmd, users, ppost)
-        
-        exp['defs'].append(
-            {'name': "lazy_%d" % (ppost),
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s" % (initCmd),
-             'clientcmd': "%s" % (clientBase)})
-
-        exp['defs'].append(
-            {'name': "eager_%d" % (ppost),
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s --eager" % (initCmd),
-             'clientcmd': "%s --eager" % (clientBase)})
-    exps.append(exp)
 
     # cache join comparison
     # compute karma as a single table or interleaved with article data
