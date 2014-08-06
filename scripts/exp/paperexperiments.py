@@ -9,7 +9,7 @@ def define_experiments():
     partfunc = "twitternew" if binary else "twitternew-text"
     fetch = "--fetch"
     
-    serverCmd = "./obj/pqserver"
+    serverCmd = "./obj/pqserver --round-robin=1024"
     appCmd = "./obj/pqserver --twitternew --verbose"
     initCmd = "%s %s --initialize --no-populate --no-execute" % (appCmd, binaryflag)
     clientCmd = "%s %s %s --no-initialize --popduration=0" % (appCmd, binaryflag, fetch)
@@ -248,7 +248,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--no-progress-report --synchronous" % \
+                 "--no-progress-report --synchronous --log-rtt" % \
                  (clientCmd, users)
     
     exp['defs'].append(
@@ -257,7 +257,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate --log-rtt" % (clientBase)})
+         'clientcmd': "%s --prevalidate" % (clientBase)})
 
     exp['defs'].append(
         {'name': "cold",
@@ -265,7 +265,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --no-prevalidate --log-rtt" % (clientBase)})
+         'clientcmd': "%s --no-prevalidate" % (clientBase)})
     exps.append(exp)
 
     # twitter celeb experiment.
@@ -282,7 +282,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate" % (clientBase)})
+         'clientcmd': "%s" % (clientBase)})
 
     exp['defs'].append(
         {'name': "celeb",
@@ -290,7 +290,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s --celebrity=10000" % (initCmd),
-         'clientcmd': "%s --celebrity=10000 --prevalidate" % (clientBase)})
+         'clientcmd': "%s --celebrity=10000" % (clientBase)})
     exps.append(exp)
 
     # all eager maintenance experiment.
