@@ -860,7 +860,7 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
 
                 // wait for writer to signal log transfer
                 lck.lock();
-                rtt_log_cond_.wait(lck, [&]{ return rtt_log_transferred_; });
+                rtt_log_cond_.wait(lck, [&]{ return this->rtt_log_transferred_; });
             }
         }
     }
@@ -868,7 +868,7 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
     // trigger shutdown of log writer thread
     {
         unique_lock<mutex> lck(rtt_log_mutex_);
-        rtt_log_cond_.wait(lck, [&]{ return rtt_log_writer_ready_; });
+        rtt_log_cond_.wait(lck, [&]{ return this->rtt_log_writer_ready_; });
         rtt_log_transferred_ = false;
         rtt_log_writer_running_ = false;
     }
@@ -890,7 +890,7 @@ void TwitterNewRunner<S>::rtt_log_writer() {
             unique_lock<mutex> lck(rtt_log_mutex_);
             rtt_log_writer_ready_ = true;
             rtt_log_cond_.notify_all();
-            rtt_log_cond_.wait(lck, [&]{ return !rtt_log_transferred_; });
+            rtt_log_cond_.wait(lck, [&]{ return !this->rtt_log_transferred_; });
 
             std::swap(rtt_log_, newlog);
             rtt_log_transferred_ = true;
