@@ -266,7 +266,7 @@ if not noprep:
 
     pkgs = ("htop numactl gcc47 gcc47-c++ gdb valgrind autoconf libtool " + 
             "git libevent-devel jemalloc-devel flex bison " +
-            "boost-devel boost-thread boost-system")
+            "boost-devel boost-thread boost-system boost-filesystem boost-iostreams")
 
     installcmd = "sudo mkdir -p " + remote_tmpdir + \
                  "; sudo chown ec2-user:ec2-user " + remote_tmpdir + \
@@ -275,10 +275,11 @@ if not noprep:
                  "; sudo bash -c 'echo " + os.path.join(remote_tmpdir, "cores", "core.%p") + " > /proc/sys/kernel/core_pattern'" + \
                  "; sudo yum -y update; sudo yum -y install " + pkgs
 
-    buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
-               "chmod 600 ~/.ssh/config; " + \
-               "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
-               "cd pequod; git checkout bk-master; ./bootstrap.sh; " + \
+    # buildcmd = "echo -e 'Host am.csail.mit.edu\n\tStrictHostKeyChecking no\n' >> ~/.ssh/config; " + \
+               # "chmod 600 ~/.ssh/config; " + \
+               # "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
+    buildcmd = "git clone https://github.com/bryankate/pequod.git; " + \
+               "cd pequod; git checkout master; ./bootstrap.sh; " + \
                "./bootstrap.sh; ./configure CXX='g++ -std=gnu++0x' --with-malloc=jemalloc --disable-tamer-debug; " + \
                "make NDEBUG=1 -j24; exit"
 
