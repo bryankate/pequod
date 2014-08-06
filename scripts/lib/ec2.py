@@ -10,7 +10,7 @@ import json
 import boto
 from boto.ec2.connection import EC2Connection
 
-REGION = 'us-east-1'
+REGION = 'us-west-2'
 
 with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "aws.json")) as fp:
     cred = json.load(fp)
@@ -22,17 +22,15 @@ SSH_KEY = os.path.join(os.path.dirname(os.path.realpath(__file__)), KEY_NAME + "
 
 # note: instance have 10Gb ethernet only if launched in the same placement group
 INSTANCE_TYPES = {'m1.small':    {'bid': 0.06, 'hvm': False},  # use for script testing
-                  'cc2.8xlarge': {'bid': 2.41, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
-                  'cr1.8xlarge': {'bid': 3.51, 'hvm': True},   # 32 cores, 244GB RAM, 10Gb ethernet
-                  'hi1.4xlarge': {'bid': 0.76, 'hvm': True},   # 16 cores, 60.5GB RAM, 10Gb ethernet, SSDs
-                  'hs1.8xlarge': {'bid': 0.76, 'hvm': True}}   # 16 cores, 117GB RAM, 10Gb ethernet
+                  'cc2.8xlarge': {'bid': 0.76, 'hvm': True},   # 32 cores, 60.5GB RAM, 10Gb ethernet
+                  'cr1.8xlarge': {'bid': 0.76, 'hvm': True}}   # 32 cores, 244GB RAM, 10Gb ethernet
 
 AMI_IDS = {'us-west-2': {'basic': 'ami-ccf297fc', 'hvm': 'ami-f8f297c8'},
            'us-east-1': {'basic': 'ami-bba18dd2', 'hvm': 'ami-e9a18d80'}}
 
 INSTANCE_TYPE_BACKING = 'cr1.8xlarge'
 INSTANCE_TYPE_CACHE = 'cr1.8xlarge'
-INSTANCE_TYPE_CLIENT = 'cc2.8xlarge'
+INSTANCE_TYPE_CLIENT = 'cr1.8xlarge'
 
 
 conn = None
