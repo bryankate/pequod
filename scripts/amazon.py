@@ -206,12 +206,12 @@ def add_server_hosts(hfile, efile, num, cluster, hosts):
 
 def prepare_experiment(xname, ename):
     global topdir, uniquedir, hostpath, serverconns
-    serverconns = []
     
     if topdir is None:
         topdir = "results"
 
     if uniquedir is None:
+        serverconns = []
         expdir = "exp_" + time.strftime("%Y_%m_%d-%H_%M_%S")
         uniquedir = os.path.join(topdir, expdir)
         os.makedirs(uniquedir)
