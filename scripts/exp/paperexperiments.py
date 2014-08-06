@@ -252,29 +252,29 @@ def define_experiments():
                  "--prevalidate --synchronous --log-rtt" % \
                  (clientCmd, users)
     
-        exp['defs'].append(
-            {'name': "lazy",
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s" % (initCmd),
-             'clientcmd': "%s" % (clientBase)})
+    exp['defs'].append(
+        {'name': "lazy",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s" % (clientBase)})
 
-        exp['defs'].append(
-            {'name': "eager",
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s --eager" % (initCmd),
-             'clientcmd': "%s --eager" % (clientBase)})
+    exp['defs'].append(
+        {'name': "eager",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s --eager" % (initCmd),
+         'clientcmd': "%s --eager" % (clientBase)})
 
-        exp['defs'].append(
-            {'name': "pull",
-             'def_part': partfunc,
-             'backendcmd': "%s" % (serverCmd),
-             'cachecmd': "%s" % (serverCmd),
-             'initcmd': "%s --pull" % (initCmd),
-             'clientcmd': "%s --pull" % (clientBase)})
+    exp['defs'].append(
+        {'name': "pull",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s --pull" % (initCmd),
+         'clientcmd': "%s --pull" % (clientBase)})
     exps.append(exp)
 
 
