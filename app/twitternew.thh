@@ -865,7 +865,7 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
         }
     }
 
-    // one last flush
+    // trigger shutdown of log writer thread
     {
         unique_lock<mutex> lck(rtt_log_mutex_);
         rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
@@ -873,9 +873,6 @@ void TwitterNewRunner<S>::periodic_rtt_log_sync(event<> running, event<> done) {
         rtt_log_writer_running_ = false;
         lck.unlock();
         rtt_log_cond_.notify_all();
-
-        lck.lock();
-        rtt_log_cond_.wait(lck, [&]{ return !rtt_log_writer_ready_; });
     }
 
     done();
@@ -917,12 +914,6 @@ void TwitterNewRunner<S>::rtt_log_writer() {
     bio::copy(strm, zout);
     zout.close();
     bfs::remove(std::string(opath.c_str()));
-
-    {
-        unique_lock<mutex> lck(rtt_log_mutex_);
-        rtt_log_writer_ready_ = true;
-    }
-    rtt_log_cond_.notify_all();
 }
 
 
