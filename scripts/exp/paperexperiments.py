@@ -244,8 +244,6 @@ def define_experiments():
 
 
     # pequod latency experiment.
-    # run with warm and cold caches. need to turn on TIMELINE_LATENCY in the client code
-    # CPU utilization on servers.
     exp = {'name': "latency", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
@@ -259,7 +257,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --prevalidate" % (clientBase)})
+         'clientcmd': "%s --prevalidate --log-rtt" % (clientBase)})
 
     exp['defs'].append(
         {'name': "cold",
@@ -267,7 +265,7 @@ def define_experiments():
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --no-prevalidate" % (clientBase)})
+         'clientcmd': "%s --no-prevalidate --log-rtt" % (clientBase)})
     exps.append(exp)
 
     # twitter celeb experiment.
