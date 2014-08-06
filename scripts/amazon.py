@@ -269,7 +269,7 @@ if not noprep:
             "boost-devel boost-thread boost-system boost-filesystem boost-iostreams")
 
     installcmd = "sudo mkdir -p " + remote_tmpdir + \
-                 "; sudo chown ec2-user:ec2-user " + remote_tmpdir + \
+                 "; sudo chown -R ec2-user:ec2-user " + remote_tmpdir + \
                  "; sudo chmod 777 " + remote_tmpdir + \
                  "; mkdir -p " + os.path.join(remote_tmpdir, "cores") + \
                  "; sudo bash -c 'echo " + os.path.join(remote_tmpdir, "cores", "core.%p") + " > /proc/sys/kernel/core_pattern'" + \
@@ -279,19 +279,21 @@ if not noprep:
                # "chmod 600 ~/.ssh/config; " + \
                # "git clone " + user + "@am.csail.mit.edu:/home/am0/eddietwo/pequod.git; " + \
     buildcmd = "git clone https://github.com/bryankate/pequod.git; " + \
-               "cd pequod; git checkout master; ./bootstrap.sh; " + \
-               "./bootstrap.sh; ./configure CXX='g++ -std=gnu++0x' --with-malloc=jemalloc --disable-tamer-debug; " + \
+               "cd pequod; git checkout master; git pull; ./bootstrap.sh; " + \
+               "./configure CXX='g++ -std=gnu++0x' --with-malloc=jemalloc --disable-tamer-debug; " + \
                "make NDEBUG=1 -j24; exit"
 
-    graph = 'twitter_graph_40M.dat'
-    graphcmd = "cd " + remote_tmpdir + "; wget -nv http://www.eecs.harvard.edu/~bkate/tmp/pequod/" + graph + ".tar.gz; " + \
-               "tar -zxf " + graph + ".tar.gz; chmod 666 twitter*; exit"
+    graph_lg = 'twitter_graph_40M.dat'
+    graph_sm = 'twitter_graph_1.8M.dat'
+    graphcmd = "cd " + remote_tmpdir + "; wget -nv http://www.eecs.harvard.edu/~bkate/data/pequod/%s.tar.gz; " + \
+               "tar -zxf " + "%s.tar.gz; chmod 666 twitter*; exit"
 
 
     print "Checking instance preparedness."
     prepare_instances(running, "gcc --version > /dev/null", installcmd, "Installing software", tty=True)
     prepare_instances(running, "[ -x pequod/obj/pqserver ]", buildcmd, "Building pequod")
-    #prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph) + " ]", graphcmd, "Fetching Twitter graph")
+    #prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph_lg) + " ]", graphcmd % (graph_lg), "Fetching large Twitter graph")
+    #prepare_instances(clienthosts, "[ -e " + os.path.join(remote_tmpdir, graph_sm) + " ]", graphcmd % (graph_sm), "Fetching small Twitter graph")
 
     for h in running:
         print "Updating instance " + h.id + " (" + h.public_dns_name + ")."
