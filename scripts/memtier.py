@@ -21,6 +21,7 @@ parser.add_option("-L", "--link", action="store", type="string", dest="symlink",
 parser.add_option("-K", "--killall", action="store_true", dest="killall", default=False)
 parser.add_option("-p", "--port", action="store", type="int", dest="port", default=9000)
 parser.add_option("-t", "--threads", action="store", type="int", dest="threads", default=4)
+parser.add_option("-c", "--clients", action="store", type="int", dest="clients", default=50)
 parser.add_option("-d", "--duration", action="store", type="int", dest="duration", default=30)
 parser.add_option("-x", "--prefix", action="store", type="string", dest="prefix", default="m|")
 parser.add_option("-s", "--valsize", action="store", type="string", dest="valsize", default=256)
@@ -35,6 +36,7 @@ symlink = options.symlink
 killall = options.killall
 port = options.port
 threads = options.threads
+clients = options.clients
 duration = options.duration
 prefix = options.prefix
 valsize = options.valsize
@@ -228,7 +230,8 @@ for x in exps:
         if affinity:
             pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + 1) + "-" + str(startcpu + threads + 1)) + " "
 
-        full_cmd = pin + clientcmd + " -p " + str(port) + " -t " + str(threads) + \
+        full_cmd = pin + clientcmd + " -p " + str(port) + \
+                   " -t " + str(threads) + " -c " + str(clients) + \
                    " --test-time=" + str(duration) + " --key-prefix=" + prefix + \
                    " --data-size=" + str(valsize)
         
