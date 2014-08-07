@@ -32,9 +32,33 @@ def define_experiments():
              'def_memcache_args': "-m 81920 -M",
              'populatecmd': "%s --maxkey=%d --memcached" % (popBase, s),
              'clientcmd': "%s --key-maximum %d -P memcache_binary" % (clientBase, s-1)})
-        
     exps.append(exp)
     
+
+    exp = {'name': "latency", 'defs': []}
+    popBase = "%s --padding=10" % (popCmd)
+    clientBase = "%s --ratio 0:1 --key-padding 10" % (clientCmd)
+    
+    exp['defs'].append(
+        {'name': "pequod",
+         'cachecmd': "%s" % (serverCmd),
+         'populatecmd': "%s --maxkey=1000000" % (popBase),
+         'clientcmd': "%s --key-maximum 999999 -P pequod" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "redis",
+         'def_redis_compare': True,
+         'populatecmd': "%s --maxkey=1000000 --redis" % (popBase),
+         'clientcmd': "%s --key-maximum 999999 -P redis" % (clientBase)})
+    
+    exp['defs'].append(
+        {'name': "memcache",
+         'def_memcache_compare': True,
+         'def_memcache_args': "-m 81920 -M",
+         'populatecmd': "%s --maxkey=1000000 --memcached" % (popBase),
+         'clientcmd': "%s --key-maximum 999999 -P memcache_binary" % (clientBase)})
+    exps.append(exp)
+
     
     exp = {'name': "noop", 'defs': []}
     
