@@ -74,6 +74,8 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       popduration_(param["popduration"].as_i(0)),
       postlimit_(param["postlimit"].as_i(0) / ngroups_),
       checklimit_(param["checklimit"].as_i(0) / ngroups_),
+      postrate_(param["postrate"].as_i(0) / ngroups_),
+      timeout_(param["timeout"].as_i(0)),
       initialize_(param["initialize"].as_b(true)),
       populate_(param["populate"].as_b(true)),
       execute_(param["execute"].as_b(true)),
@@ -106,6 +108,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       shape_(param["shape"].as_d(55)) {
 
     mandatory_assert(!(push_ && pull_));
+    mandatory_assert(!postrate_ == !timeout_);
 
     if (pull_ || push_) {
         prevalidate_ = false;
@@ -114,6 +117,11 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
 
     if (prevalidate_before_sub_)
         mandatory_assert(prevalidate_ || prevalidate_inactive_);
+
+    if (postrate_) {
+        duration_ = 0;
+        synchronous_ = true;
+    }
 
     vector<double> op_weight(n_op, 0);
 

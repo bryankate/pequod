@@ -62,7 +62,7 @@ static Clp_Option options[] = {
     { "dbhost", 0, 3017, Clp_ValString, 0 },
     { "dbport", 0, 3018, Clp_ValInt, 0 },
     { "dbpool-min", 0, 3019, Clp_ValInt, 0 },
-    { "dbpool-max", 0, 3020, Clp_ValInt, 0 },
+    { "outpath", 0, 3036, Clp_ValString, 0 },
     { "dbpool-depth", 0, 3021, Clp_ValInt, 0 },
     { "postgres", 0, 3022, 0, Clp_Negate },
     { "monitordb", 0, 3023, 0, Clp_Negate },
@@ -79,6 +79,7 @@ static Clp_Option options[] = {
     { "eager", 0, 3034, 0, Clp_Negate },
     { "log-rtt", 0, 3035, 0, Clp_Negate },
     { "outpath", 0, 3036, Clp_ValString, 0 },
+    { "timeout", 0, 3037, Clp_ValInt, 0 },
 
     // mostly twitter params
     { "shape", 0, 4000, Clp_ValDouble, 0 },
@@ -104,6 +105,7 @@ static Clp_Option options[] = {
     { "dbshim", 0, 4021, 0, Clp_Negate },
     { "master-host", 0, 4022, Clp_ValStringNotOption, 0 },
     { "master-port", 0, 4023, Clp_ValInt, 0 },
+    { "postrate", 0, 4024, Clp_ValInt, 0 },
 
     // mostly HN params
     { "narticles", 'a', 5000, Clp_ValInt, 0 },
@@ -254,6 +256,8 @@ int main(int argc, char** argv) {
             tp_param.set("eager", !clp->negated);
         else if (clp->option->long_name == String("outpath"))
             tp_param.set("outpath", clp->val.s);
+        else if (clp->option->long_name == String("timeout"))
+            tp_param.set("timeout", clp->val.i);
 
         // twitter
         else if (clp->option->long_name == String("shape"))
@@ -302,6 +306,8 @@ int main(int argc, char** argv) {
             tp_param.set("master_host", clp->val.s);
         else if (clp->option->long_name == String("master-port"))
             tp_param.set("master_port", clp->val.i);
+        else if (clp->option->long_name == String("postrate"))
+            tp_param.set("postrate", clp->val.i);
 
         // hn
     	else if (clp->option->long_name == String("narticles"))
