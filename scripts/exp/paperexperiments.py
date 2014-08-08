@@ -231,7 +231,7 @@ def define_experiments():
     postrate = 500 # change this to scale up experiment
     
     clientBase = "%s %s --pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--prevalidate --no-progress-report --log-rtt --postrate=%d" % \
+                 "--prevalidate --no-progress-report --log-rtt --postrate=%d --timeout=300" % \
                  (clientCmd, users, postrate)
     
     exp['defs'].append(
@@ -250,7 +250,7 @@ def define_experiments():
     users = "--graph=twitter_graph_1.8M.dat"
     clientBase = "%s %s --popduration=1000000 --duration=1000000000 --checklimit=62795845 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--prevalidate --synchronous --log-rtt" % \
+                 "--prevalidate --synchronous=1 --log-rtt" % \
                  (clientCmd, users)
     
     exp['defs'].append(
