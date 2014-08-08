@@ -225,21 +225,22 @@ def define_experiments():
     
    
     # scale experiment
-    # run on a cluster with a ton of memory
+    # run on a cluster with a ton of memory.
     exp = {'name': "scale", 'defs': []}
     users = "--graph=/mnt/pequod/twitter_graph_40M.dat"
+    postrate = 500 # change this to scale up experiment
     
-    clientBase = "%s %s --pactive=70 --duration=2000000000 --checklimit=1407239015 " \
-                 "--ppost=1 --pread=100 --psubscribe=10 --plogout=5" % \
-                 (clientCmd, users)
+    clientBase = "%s %s --pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--prevalidate --no-progress-report --log-rtt --postrate=%d" % \
+                 (clientCmd, users, postrate)
     
     exp['defs'].append(
-        {'name': "pequod",
+        {'name': "pequod_%d" % (postrate),
          'def_part': partfunc,
          'backendcmd': "%s" % (serverCmd),
          'cachecmd': "%s" % (serverCmd),
          'initcmd': "%s" % (initCmd),
-         'clientcmd': "%s --no-prevalidate --no-progress-report" % (clientBase)})
+         'clientcmd': "%s" % (clientBase)})
     exps.append(exp)
 
 
