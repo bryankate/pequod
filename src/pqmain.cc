@@ -46,7 +46,7 @@ static Clp_Option options[] = {
     { "pull", 0, 3001, 0, Clp_Negate },
     { "duration", 'd', 3002, Clp_ValInt, 0 },
     { "nusers", 'n', 3003, Clp_ValInt, 0 },
-    { "synchronous", 0, 3004, 0, Clp_Negate },
+    { "synchronous", 0, 3004, Clp_ValInt, 0 },
     { "seed", 0, 3005, Clp_ValInt, 0 },
     { "log", 0, 3006, 0, Clp_Negate },
     { "nops", 'o', 3007, Clp_ValInt, 0 },
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
 	    else if (clp->option->long_name == String("nusers"))
 	        tp_param.set("nusers", clp->val.i);
         else if (clp->option->long_name == String("synchronous"))
-            tp_param.set("synchronous", !clp->negated);
+            tp_param.set("synchronous", clp->val.i);
         else if (clp->option->long_name == String("seed"))
             tp_param.set("seed", clp->val.i);
         else if (clp->option->long_name == String("log"))

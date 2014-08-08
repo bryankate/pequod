@@ -76,6 +76,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       checklimit_(param["checklimit"].as_i(0) / ngroups_),
       postrate_(param["postrate"].as_i(0) / ngroups_),
       timeout_(param["timeout"].as_i(0)),
+      synchronous_(param["synchronous"].as_i(0)),
       initialize_(param["initialize"].as_b(true)),
       populate_(param["populate"].as_b(true)),
       execute_(param["execute"].as_b(true)),
@@ -91,7 +92,6 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       report_(param["progress_report"].as_b(true)),
       log_(param["log"].as_b(false)),
       log_rtt_(param["log_rtt"].as_b(false)),
-      synchronous_(param["synchronous"].as_b(false)),
       visualize_(param["visualize"].as_b(false)),
       binary_(param["binary"].as_b(true)),
       verbose_(param["verbose"].as_b(false)),
@@ -120,7 +120,9 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
 
     if (postrate_) {
         duration_ = 0;
-        synchronous_ = true;
+        
+        if (!synchronous_)
+            synchronous_ = 1;
     }
 
     vector<double> op_weight(n_op, 0);

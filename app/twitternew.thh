@@ -132,6 +132,7 @@ class TwitterNewPopulator {
     inline uint32_t checklimit() const { return checklimit_; }
     inline uint32_t postrate() const { return postrate_; }
     inline uint32_t timeout() const { return timeout_; }
+    inline uint32_t synchronous() const { return synchronous_; }
     inline double pct_active() const { return pct_active_; }
     inline bool initialize() const { return initialize_; }
     inline bool populate() const { return populate_; }
@@ -149,7 +150,6 @@ class TwitterNewPopulator {
     inline bool report() const { return report_ && ngroups_ > 1; }
     inline bool log() const { return log_; }
     inline bool log_rtt() const { return log_rtt_; }
-    inline bool synchronous() const { return synchronous_; }
     inline bool binary() const { return binary_; }
     inline bool verbose() const { return verbose_; }
     inline String outpath() const { return outpath_; }
@@ -220,6 +220,7 @@ class TwitterNewPopulator {
     uint32_t checklimit_;
     uint32_t postrate_;
     uint32_t timeout_;
+    uint32_t synchronous_;
     bool initialize_;
     bool populate_;
     bool execute_;
@@ -235,7 +236,6 @@ class TwitterNewPopulator {
     bool report_;
     bool log_;
     bool log_rtt_;
-    bool synchronous_;
     bool visualize_;
     bool binary_;
     bool verbose_;
@@ -955,6 +955,7 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
         uint32_t npost = 0, nbackpost = 0, nsubscribe = 0,
                  nlogout = 0, ncheck = 0, nread = 0, nfull = 0, nops;
         uint32_t next_checker = 0;
+        uint32_t batch = 0;
         double oprate = this->tp_.postrate() / this->tp_.op_probabilities()[op_post];
         double trate = 0;
         double tdiff = 0;
@@ -1019,28 +1020,6 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
     while (((tp_.duration()) ? (currtime_ < end_time) : true) &&
            ((postlimit) ? (npost < postlimit) : true) &&
            ((checklimit) ? (ncheck < checklimit) : true)) {
-
-        // rate limit for open loop tests
-        if (tp_.postrate()) {
-            gettimeofday(&tv[1], 0);
-            tdiff = to_real(tv[1] - tv[0]);
-
-            if (tdiff > tp_.timeout()) {
-                if (tp_.verbose())
-                    std::cerr << "Timing out after " << tdiff << " seconds." <<std::endl;
-                break;
-            }
-
-            nops = currtime_ - beg_time;
-            trate = nops / tdiff;
-            // std::cerr << nops << " " << trate << " " << tdiff << std::endl;
-
-            if (trate > oprate) {
-                // std::cerr << "sleeping for " << nops / oprate - tdiff << " seconds" << std::endl;
-                twait { tamer::at_delay(nops / oprate - tdiff, make_event()); }
-            }
-        }
-
         user = nullptr;
 
         switch(tp_.rand_op(gen)) {
@@ -1127,8 +1106,31 @@ void TwitterNewRunner<S>::run(tamer::event<> done) {
                 assert(false && "Unknown operation.");
         }
 
-        if (tp_.synchronous())
+        if (++batch == tp_.synchronous()) {
             twait { drain(gr, make_event()); }
+            batch = 0;
+
+            // rate limit for open loop tests
+            if (tp_.postrate()) {
+                gettimeofday(&tv[1], 0);
+                tdiff = to_real(tv[1] - tv[0]);
+
+                if (tdiff > tp_.timeout()) {
+                    if (tp_.verbose())
+                        std::cerr << "Timing out after " << tdiff << " seconds." <<std::endl;
+                    break;
+                }
+
+                nops = currtime_ - beg_time;
+                trate = nops / tdiff;
+                // std::cerr << nops << " " << trate << " " << tdiff << std::endl;
+
+                if (trate > oprate) {
+                    // std::cerr << "sleeping for " << nops / oprate - tdiff << " seconds" << std::endl;
+                    twait { tamer::at_delay(nops / oprate - tdiff, make_event()); }
+                }
+            }
+        }
         else
             twait { server_.pace(make_event()); }
 
