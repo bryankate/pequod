@@ -228,10 +228,10 @@ def define_experiments():
     # run on a cluster with a ton of memory.
     exp = {'name': "scale", 'defs': []}
     users = "--graph=/mnt/pequod/twitter_graph_40M.dat"
-    postrate = 500 # change this to scale up experiment
+    postrate = 14000 # change this to scale up experiment
     
     clientBase = "%s %s --pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
-                 "--prevalidate --no-progress-report --log-rtt --postrate=%d --timeout=300" % \
+                 "--prevalidate --no-progress-report --log-rtt --synchronous=256 --postrate=%d --timeout=300" % \
                  (clientCmd, users, postrate)
     
     exp['defs'].append(
