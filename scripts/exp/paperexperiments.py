@@ -331,6 +331,31 @@ def define_experiments():
     exps.append(exp)
 
 
+    # show difference in request routing
+    exp = {'name': "pkeys", 'defs': []}
+    users = "--graph=twitter_graph_1.8M.dat"
+    clientBase = "%s %s --popduration=0 --duration=1000000000 --postlimit=10000000 " \
+                 "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
+                 "--no-prevalidate --print-table=p" % (clientCmd, users)
+    
+    exp['defs'].append(
+        {'name': "partitioned",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s" % (clientBase)})
+
+    exp['defs'].append(
+        {'name': "random",
+         'def_part': partfunc,
+         'backendcmd': "%s" % (serverCmd),
+         'cachecmd': "%s" % (serverCmd),
+         'initcmd': "%s" % (initCmd),
+         'clientcmd': "%s --rand-cache" % (clientBase)})
+    exps.append(exp)
+
+
     # cache join comparison
     # compute karma as a single table or interleaved with article data
     # can be run on a multiprocessor
