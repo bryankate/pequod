@@ -40,6 +40,8 @@ static Clp_Option options[] = {
     { "writearound", 0, 2007, 0, Clp_Negate },
     { "round-robin", 0, 2008, Clp_ValInt, 0 },
     { "block-report", 0, 2009, Clp_ValInt, 0 },
+    { "rand-cache", 0, 2010, 0, Clp_Negate },
+
 
     // params that are generally useful to multiple apps
     { "push", 'p', 3000, 0, Clp_Negate },
@@ -180,6 +182,8 @@ int main(int argc, char** argv) {
             round_robin = clp->val.i;
         else if (clp->option->long_name == String("block-report"))
             block_report = clp->val.i;
+        else if (clp->option->long_name == String("rand-cache"))
+            tp_param.set("rand_cache", !clp->negated);
 
         // general
         else if (clp->option->long_name == String("push"))

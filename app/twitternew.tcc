@@ -89,6 +89,7 @@ TwitterNewPopulator::TwitterNewPopulator(const Json& param)
       prevalidate_inactive_(param["prevalidate_inactive"].as_b(false)),
       prevalidate_before_sub_(param["prevalidate_before_sub"].as_b(false)),
       writearound_(param["writearound"].as_b(false)),
+      randcache_(param["rand_cache"].as_b(false)),
       report_(param["progress_report"].as_b(true)),
       log_(param["log"].as_b(false)),
       log_rtt_(param["log_rtt"].as_b(false)),
@@ -346,6 +347,7 @@ tamed void run_twitter_new_remote(TwitterNewPopulator& tp, int client_port,
     }
     twait { mc->connect(make_event()); }
     mc->set_wrlowat(1 << 11);
+    mc->set_rand_cache(tp.rand_cache());
     twait { tr->initialize(make_event()); }
     twait { tr->populate(make_event()); }
     twait { tr->run(make_event()); }

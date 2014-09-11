@@ -3,6 +3,8 @@
 #include "keyrange.hh"
 #include "str.hh"
 #include <vector>
+#include <random>
+
 class Json;
 
 namespace pq {
@@ -125,13 +127,14 @@ class partition_iterator {
 
 class Partitioner {
   public:
-    explicit Partitioner(int default_owner, int nbacking = 0);
+    explicit Partitioner(int default_owner, int nhosts, int nbacking = 0);
     virtual inline ~Partitioner();
     inline void analyze(const String &first, const String &last,
                         unsigned limit, std::vector<keyrange> &result) const;
+    
     inline int owner(const String &key) const;
-    /** Return whether the host with sequence id @seqid is a backend server.
-     */
+    inline int rand_cache(std::default_random_engine& gen) const;
+
     inline bool is_backend(int seqid) const;
 
     static Partitioner *make(const String &name, uint32_t nhosts, uint32_t default_owner);
@@ -140,6 +143,7 @@ class Partitioner {
     String unparse() const;
 
   protected:
+    int nhosts_;
     int nbacking_;
     partition_set ps_;
 };
@@ -277,8 +281,8 @@ inline void partition_iterator::operator--() {
 }
 
 
-inline Partitioner::Partitioner(int default_owner, int nbacking)
-    : nbacking_(nbacking), ps_(default_owner) {
+inline Partitioner::Partitioner(int default_owner, int nhosts, int nbacking)
+    : nhosts_(nhosts), nbacking_(nbacking), ps_(default_owner) {
 }
 
 inline Partitioner::~Partitioner() {
@@ -292,6 +296,11 @@ inline void Partitioner::analyze(const String &first, const String &last,
 
 inline int Partitioner::owner(const String &key) const {
     return ps_.find(key).server();
+}
+
+inline int Partitioner::rand_cache(std::default_random_engine& gen) const {
+    std::uniform_int_distribution<int> uni(nbacking_, nhosts_ - 1);
+    return uni(gen);
 }
 
 inline bool Partitioner::is_backend(int seqid) const {

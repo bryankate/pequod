@@ -9,7 +9,7 @@ class DefaultPartitioner : public Partitioner {
 };
 
 DefaultPartitioner::DefaultPartitioner(uint32_t nservers)
-    : Partitioner(0, 0) {
+    : Partitioner(0, nservers, 0) {
     ps_.add(partition1("", partition1::text, 1, 0, nservers));
 }
 
@@ -26,7 +26,7 @@ const char UnitTestPartitioner::prefixes_[] =
     "abcdefghijklmnopqrstuvwxyz{|}";
 
 UnitTestPartitioner::UnitTestPartitioner(uint32_t nservers, int default_owner)
-    : Partitioner(default_owner, 0) {
+    : Partitioner(default_owner, nservers, 0) {
     // make partitions, except leave '~' as default_owner.
     // Keys with the same first character are owned by the same server.
     for (size_t i = 0; prefixes_[i]; ++i)
@@ -43,7 +43,7 @@ class TwitterPartitioner : public Partitioner {
 TwitterPartitioner::TwitterPartitioner(uint32_t nservers, uint32_t nbacking,
                                        uint32_t default_owner,
                                        bool newtwitter, bool binary)
-    : Partitioner(default_owner, nbacking) {
+    : Partitioner(default_owner, nservers, nbacking) {
 
     ps_.add(partition1("c|", partition1::text, 0, 0, 1));
     ps_.add(partition1("prog", partition1::text, 0, 0, 1));
@@ -78,7 +78,7 @@ class HackerNewsPartitioner : public Partitioner {
 
 HackerNewsPartitioner::HackerNewsPartitioner(uint32_t nservers, uint32_t nbacking,
                                              uint32_t default_owner)
-    : Partitioner(default_owner, nbacking) {
+    : Partitioner(default_owner, nservers, nbacking) {
 
     ps_.add(partition1("a|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));
     ps_.add(partition1("c|", partition1::decimal, 5, 0, (nbacking) ? nbacking : nservers));

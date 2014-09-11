@@ -7,6 +7,7 @@
 #include "partitioner.hh"
 #include "sock_helper.hh"
 #include <vector>
+#include <random>
 #include <iostream>
 #include <tamer/tamer.hh>
 
@@ -57,9 +58,10 @@ class MultiClient {
     tamed void flush(tamer::event<> done);
 
     inline void set_wrlowat(size_t limit);
+    inline void set_rand_cache(bool rc);
 
   private:
-    inline RemoteClient* cache_for(const String &key) const;
+    inline RemoteClient* cache_for(const String &key, bool randCache = false);
     inline DBPool* backend_for(const String &key) const;
 
     const Hosts* hosts_;
@@ -70,6 +72,8 @@ class MultiClient {
     const Hosts* dbhosts_;
     const DBPoolParams* dbparams_;
     std::vector<DBPool*> dbclients_;
+    bool rand_cache_;
+    std::default_random_engine gen_;
 };
 
 inline void MultiClient::clear() {
@@ -89,11 +93,15 @@ inline DBPool* MultiClient::backend_for(const String &key) const {
     return dbclients_[owner];
 }
 
-inline RemoteClient* MultiClient::cache_for(const String &key) const {
+inline RemoteClient* MultiClient::cache_for(const String &key, bool randCache) {
     if (colocateCacheServer_ >= 0)
         return localNode_;
     else {
-        int owner = part_->owner(key);
+        int owner;
+        if (randCache)
+            owner = part_->rand_cache(gen_);
+        else
+            owner = part_->owner(key);
         assert(owner >= 0 && owner < (int32_t)clients_.size() && "Make sure the partition function is correct.");
         return clients_[owner];
     }
@@ -104,6 +112,10 @@ inline void MultiClient::set_wrlowat(size_t limit) {
         c->set_wrlowat(limit);
     if (localNode_)
         localNode_->set_wrlowat(limit);
+}
+
+inline void MultiClient::set_rand_cache(bool rc) {
+    rand_cache_ = rc;
 }
 
 }

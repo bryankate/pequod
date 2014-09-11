@@ -147,6 +147,7 @@ class TwitterNewPopulator {
     inline bool prevalidate_inactive() const { return prevalidate_inactive_; }
     inline bool prevalidate_before_sub() const { return prevalidate_before_sub_; }
     inline bool writearound() const { return writearound_; }
+    inline bool rand_cache() const { return randcache_; }
     inline bool report() const { return report_ && ngroups_ > 1; }
     inline bool log() const { return log_; }
     inline bool log_rtt() const { return log_rtt_; }
@@ -233,6 +234,7 @@ class TwitterNewPopulator {
     bool prevalidate_inactive_;
     bool prevalidate_before_sub_;
     bool writearound_;
+    bool randcache_;
     bool report_;
     bool log_;
     bool log_rtt_;

@@ -6,14 +6,16 @@ namespace pq {
 MultiClient::MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer)
     : hosts_(hosts), part_(part), localNode_(nullptr),
       colocateCacheServer_(colocateCacheServer),
-      dbhosts_(nullptr), dbparams_(nullptr) {
+      dbhosts_(nullptr), dbparams_(nullptr), rand_cache_(false) {
+    gen_.seed(112181);
 }
 
 MultiClient::MultiClient(const Hosts* hosts, const Partitioner* part, int colocateCacheServer,
                          const Hosts* dbhosts, const DBPoolParams* dbparams)
     : hosts_(hosts), part_(part), localNode_(nullptr),
       colocateCacheServer_(colocateCacheServer),
-      dbhosts_(dbhosts), dbparams_(dbparams) {
+      dbhosts_(dbhosts), dbparams_(dbparams), rand_cache_(false) {
+    gen_.seed(112181);
 }
 
 MultiClient::~MultiClient() {
@@ -146,32 +148,32 @@ tamed void MultiClient::erase_db(const String& key, event<> e) {
 
 tamed void MultiClient::count(const String& first, const String& last,
                               event<size_t> e) {
-    cache_for(first)->count(first, last, e);
+    cache_for(first, rand_cache_)->count(first, last, e);
 }
 
 tamed void MultiClient::count(const String& first, const String& last,
                               const String& scanlast, event<size_t> e) {
-    cache_for(first)->count(first, last, scanlast, e);
+    cache_for(first, rand_cache_)->count(first, last, scanlast, e);
 }
 
 tamed void MultiClient::add_count(const String& first, const String& last,
                                   event<size_t> e) {
-    cache_for(first)->add_count(first, last, e);
+    cache_for(first, rand_cache_)->add_count(first, last, e);
 }
 
 tamed void MultiClient::add_count(const String& first, const String& last,
                                   const String& scanlast, event<size_t> e) {
-    cache_for(first)->add_count(first, last, scanlast, e);
+    cache_for(first, rand_cache_)->add_count(first, last, scanlast, e);
 }
 
 tamed void MultiClient::scan(const String& first, const String& last,
                              event<scan_result> e) {
-    cache_for(first)->scan(first, last, e);
+    cache_for(first, rand_cache_)->scan(first, last, e);
 }
 
 tamed void MultiClient::scan(const String& first, const String& last,
                              const String& scanlast, event<scan_result> e) {
-    cache_for(first)->scan(first, last, scanlast, e);
+    cache_for(first, rand_cache_)->scan(first, last, scanlast, e);
 }
 
 tamed void MultiClient::stats(event<Json> e) {
