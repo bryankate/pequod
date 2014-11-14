@@ -296,6 +296,8 @@ for x in exps:
             serverprocs = [] 
             dbprocs = []
             
+            nservercpus = min(nprocesses, maxcpus - startcpu - ngroups)
+
             if usedb or rediscompare:
                 dbenvpath = os.path.join(resdir, "store")
                 check_database_env(e)
@@ -358,7 +360,7 @@ for x in exps:
                     fartfile = os.path.join(resdir, "fart_srv_" + str(s) + ".txt")
           
                     if affinity:
-                        pin = "numactl -C " + str(startcpu + s) + " "
+                        pin = "numactl -C " + str(startcpu + (s % nservercpus)) + " "
         
                     full_cmd = pin + servercmd + serverargs + " -kl=" + str(startport + s)
                     serverprocs.append(run_cmd_bg(full_cmd, fartfile, fartfile))
@@ -369,10 +371,10 @@ for x in exps:
             sleep(3)
     
             clientcpulist = ""
-            if startcpu + nprocesses + ngroups > maxcpus:
+            if startcpu + nservercpus + ngroups > maxcpus:
                 # if we want to run more clients than we have processors left, 
                 # just run them all on the set of remaining cpus
-                clientcpulist = ",".join([str(startcpu + nprocesses + c) for c in range(maxcpus - (startcpu + nprocesses))])
+                clientcpulist = ",".join([str(startcpu + nservercpus + c) for c in range(maxcpus - (startcpu + nservercpus))])
     
             if 'initcmd' in e:
                 print "Initializing cache servers."
@@ -385,7 +387,7 @@ for x in exps:
                     initcmd = initcmd + " -H=" + hostpath + " -B=" + str(nbacking)
                 
                 if affinity:
-                    pin = "numactl -C " + str(startcpu + nprocesses) + " "
+                    pin = "numactl -C " + str(startcpu + nservercpus) + " "
                 
                 full_cmd = pin + initcmd
                 run_cmd(full_cmd, fartfile, fartfile)
@@ -426,7 +428,7 @@ for x in exps:
                                 
                     if affinity:
                         pin = "numactl -C " + (clientcpulist if clientcpulist and npop > 1 \
-                                                             else str(startcpu + nprocesses + c)) + " "
+                                                             else str(startcpu + nservercpus + c)) + " "
                                 
                     if npop > 1:
                         grouparg = " --ngroups=" + str(npop) + " --groupid=" + str(c) + \
@@ -491,7 +493,7 @@ for x in exps:
                     clientcmd = clientcmd + " --writearound --dbhostfile=" + dbhostpath
                 
                 if affinity:
-                    pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nprocesses + c)) + " "
+                    pin = "numactl -C " + (clientcpulist if clientcpulist else str(startcpu + nservercpus + c)) + " "
     
                 if ngroups > 1:
                     grouparg = " --ngroups=" + str(ngroups) + " --groupid=" + str(c) + \

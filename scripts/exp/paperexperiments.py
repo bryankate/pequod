@@ -334,7 +334,7 @@ def define_experiments():
     # show difference in request routing
     exp = {'name': "pkeys", 'defs': []}
     users = "--graph=twitter_graph_1.8M.dat"
-    clientBase = "%s %s --popduration=0 --duration=1000000000 --postlimit=10000000 " \
+    clientBase = "%s %s --popduration=0 --duration=1000000000 --postlimit=1000000 " \
                  "--pactive=70 --ppost=1 --pread=100 --psubscribe=10 --plogout=5 " \
                  "--no-prevalidate --print-table=p" % (clientCmd, users)
     
